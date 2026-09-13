@@ -30,7 +30,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_pretest_widget", {
     title: "Open Interactive Pretest",
-    description: "Render one interactive card for a complete 1–7 item pretest round. Put every item for the round in this single call; the widget advances locally one question at a time. After each answer arrives through ui/message, grade it and call record_pretest_result. Do not call this render tool again for the next item in the same round.",
+    description: "Render one self-contained interactive card for a complete 1–7 item pretest round. Put every item in this single call. The widget uses host sampling for inline feedback, records results with tools/call, and advances locally; do not send per-question chat feedback or call this render tool again within the round.",
     inputSchema: z.object({
       items: z.array(pretestItem).min(1).max(7),
       current_index: z.number().int().min(0).max(6).default(0),
