@@ -2,6 +2,7 @@ import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ActiveErrorLayer, UserWordRow, VocabularyItem } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
 import { getAllUserWords, getTodayWords, getUserTimeZone } from "./words.js";
+import { fsrsForecast } from "./progress.js";
 
 function byReviewPriority(a: VocabularyItem, b: VocabularyItem): number {
   const aError = a.error_layers.length > 0 ? 0 : 1;
@@ -12,25 +13,20 @@ function byReviewPriority(a: VocabularyItem, b: VocabularyItem): number {
   return aTime - bTime;
 }
 
+export function selectReviewWords(all: VocabularyItem[], limit: number, now = new Date()): VocabularyItem[] {
+  return all
+    .filter((word) => word.error_layers.length > 0 || (word.next_review_at !== null && Date.parse(word.next_review_at) <= now.getTime()))
+    .sort(byReviewPriority)
+    .slice(0, limit);
+}
+
 export async function getReviewSelection(limit = 5): Promise<{
   rollingReview: VocabularyItem[];
   oldRandomReview: VocabularyItem[];
 }> {
   const all = await getAllUserWords(getDatabase(), getAuthenticatedUserId());
-  const now = Date.now();
-  const eligible = all.filter((word) => !word.mastered && word.status !== "new");
-  const priority = eligible
-    .filter((word) => word.error_layers.length > 0 || (word.next_review_at !== null && Date.parse(word.next_review_at) <= now))
-    .sort(byReviewPriority)
-    .slice(0, limit);
-  const selected = new Set(priority.map((word) => word.word));
-  const remaining = eligible.filter((word) => !selected.has(word.word));
-  const oldRandomReview = remaining
-    .map((word) => ({ word, random: Math.random() }))
-    .sort((a, b) => a.random - b.random)
-    .slice(0, Math.max(0, limit - priority.length))
-    .map(({ word }) => word);
-  return { rollingReview: priority, oldRandomReview };
+  const priority = selectReviewWords(all, limit);
+  return { rollingReview: priority, oldRandomReview: [] };
 }
 
 export async function getLearningContext(): Promise<{
@@ -40,23 +36,31 @@ export async function getLearningContext(): Promise<{
   old_random_review: VocabularyItem[];
   recent_activity: Array<{ word: string; activity_type: string; is_correct: boolean; result: string; created_at: string }>;
   stats: { today_total: number; today_completed: number; total_learned: number; error_book: number };
+  fsrs: { due_now: number; due_today: number; due_next_7_days: number };
   session_rules: { initial_review_count: number; round_size_min: number; round_size_max: number; error_clear_after_consecutive_correct: number };
 }> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
-  const date = dateInTimeZone(await getUserTimeZone(db, userId));
-  const [todayWords, reviews, all, recentActivity] = await Promise.all([
+  const timeZone = await getUserTimeZone(db, userId);
+  const date = dateInTimeZone(timeZone);
+  const [todayWords, all, recentActivity] = await Promise.all([
     getTodayWords(date, db, userId),
-    getReviewSelection(5),
     getAllUserWords(db, userId),
     getRecentActivity(db, userId),
   ]);
+  const reviews = { rollingReview: selectReviewWords(all, 5), oldRandomReview: [] as VocabularyItem[] };
+  const forecast = fsrsForecast(all, timeZone);
   return {
     date,
     today_words: todayWords,
     rolling_review: reviews.rollingReview,
     old_random_review: reviews.oldRandomReview,
     recent_activity: recentActivity,
+    fsrs: {
+      due_now: forecast.due_now,
+      due_today: forecast.due_today,
+      due_next_7_days: forecast.due_next_7_days,
+    },
     stats: {
       today_total: todayWords.length,
       today_completed: todayWords.filter((word) => word.status !== "new").length,

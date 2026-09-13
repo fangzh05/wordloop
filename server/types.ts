@@ -12,6 +12,16 @@ export const ERROR_LAYERS = ["meaning", "collocation", "grammar", "pronunciation
 export type ErrorLayer = (typeof ERROR_LAYERS)[number];
 export type ActiveErrorLayer = Exclude<ErrorLayer, "none">;
 
+export const FSRS_RATINGS = ["again", "hard", "good", "easy"] as const;
+export type FsrsRating = (typeof FSRS_RATINGS)[number];
+export const REVIEW_SOURCES = ["pretest", "review", "session_checkpoint"] as const;
+export type ReviewSource = (typeof REVIEW_SOURCES)[number];
+
+export interface LexicalSense {
+  pos: string;
+  definition_cn: string;
+}
+
 export interface UserWordRow {
   id: string;
   user_id: string;
@@ -31,6 +41,14 @@ export interface UserWordRow {
   spelling_error: boolean;
   mastered: boolean;
   next_review_at: string | null;
+  fsrs_stability: number;
+  fsrs_difficulty: number;
+  fsrs_elapsed_days: number;
+  fsrs_scheduled_days: number;
+  fsrs_learning_steps: number;
+  fsrs_reps: number;
+  fsrs_lapses: number;
+  fsrs_state: number;
 }
 
 export interface VocabularyItem {
@@ -43,10 +61,17 @@ export interface VocabularyItem {
   mastered: boolean;
   next_review_at: string | null;
   error_layers: ActiveErrorLayer[];
+  fsrs_stability: number;
+  fsrs_difficulty: number;
+  fsrs_scheduled_days: number;
+  fsrs_state: number;
+  ipa_us?: string | null;
+  ipa_uk?: string | null;
+  senses?: LexicalSense[];
 }
 
 export interface ProgressResult {
   today: { total: number; known: number; uncertain: number; unknown: number; completed: number };
   all_time: { total_words: number; mastered: number; learning: number; error_book: number };
+  fsrs: { due_now: number; due_today: number; tomorrow: number; due_next_7_days: number; average_stability: number };
 }
-

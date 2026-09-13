@@ -10,7 +10,7 @@ type Listener = (event: AppEvent) => void;
 
 declare global {
   interface Window {
-    __WORDLOOP_PREVIEW__?: { theme?: "light" | "dark"; payload?: Record<string, unknown> };
+    __WORDLOOP_PREVIEW__?: { theme?: "light" | "dark"; payload?: Record<string, unknown>; toolResults?: Record<string, Record<string, unknown>> };
     openai?: {
       callTool?: (name: string, args: Record<string, unknown>) => Promise<CallToolResult>;
       sendFollowUpMessage?: (input: { prompt: string }) => Promise<void>;
@@ -62,6 +62,8 @@ export async function connectApp(): Promise<void> {
 }
 
 export async function callServerTool(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
+  const previewResult = window.__WORDLOOP_PREVIEW__?.toolResults?.[name];
+  if (previewResult) return { content: [], structuredContent: previewResult };
   try {
     await connectApp();
     if (app.getHostCapabilities()?.serverTools) {

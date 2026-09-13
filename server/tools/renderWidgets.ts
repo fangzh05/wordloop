@@ -30,7 +30,7 @@ const pretestItem = z.object({
 export function registerRenderTools(server: McpServer): void {
   registerAppTool(server, "render_word_import", {
     title: "Open Word Import",
-    description: "Render the manual Shanbay word import widget. Call this when the user asks to import or paste a word list.",
+    description: "Render the one-time Shanbay book migration UI with current-book, materialbook ID, preview, full import, and manual fallback.",
     inputSchema: z.object({}),
     _meta: { ui: { resourceUri: WIDGET_URIS.import } },
     annotations: { readOnlyHint: true, openWorldHint: false },

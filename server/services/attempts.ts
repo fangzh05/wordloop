@@ -13,7 +13,7 @@ export interface RecordAttemptInput {
 }
 
 export async function recordAttempt(input: RecordAttemptInput): Promise<Record<string, unknown>> {
-  const { data, error } = await getDatabase().rpc("record_attempt_v1", {
+  const { data, error } = await getDatabase().rpc("record_attempt_v2", {
     p_user_id: getAuthenticatedUserId(),
     p_normalized_word: normalizeWord(input.word),
     p_session_id: input.session_id ?? null,
@@ -25,4 +25,3 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<Record<s
   assertDatabaseResult(error);
   return data as Record<string, unknown>;
 }
-

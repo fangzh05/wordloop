@@ -1,15 +1,3 @@
-export interface ReviewScheduleInput {
-  isCorrect: boolean;
-  consecutiveCorrect: number;
-}
-
-export function reviewDelayDays(input: ReviewScheduleInput): number {
-  if (!input.isCorrect) return 1;
-  if (input.consecutiveCorrect <= 1) return 3;
-  if (input.consecutiveCorrect === 2) return 7;
-  return 14;
-}
-
 export function isMastered(input: {
   correctCount: number;
   consecutiveCorrect: number;

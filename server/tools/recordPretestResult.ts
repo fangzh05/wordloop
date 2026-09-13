@@ -6,7 +6,7 @@ import { safeTool } from "./helpers.js";
 export function registerRecordPretestResultTool(server: McpServer): void {
   server.registerTool("record_pretest_result", {
     title: "Record pretest result",
-    description: "Classify one imported word as known, uncertain, or unknown after a pretest.",
+    description: "Classify one word after its first real retrieval and advance its FSRS card once: known=Good, uncertain=Hard, unknown=Again.",
     inputSchema: z.object({
       word: z.string().trim().min(1).max(100),
       result: z.enum(["known", "uncertain", "unknown"]),

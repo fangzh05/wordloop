@@ -41,6 +41,15 @@ export function getAuthenticatedUserId(): string {
   return parsed.data;
 }
 
+export function getShanbayCookie(): string {
+  const env = activeEnv();
+  const fullCookie = z.string().trim().min(1).safeParse(env.SHANBAY_COOKIE);
+  if (fullCookie.success) return fullCookie.data;
+  const token = z.string().trim().min(1).safeParse(env.SHANBAY_AUTH_TOKEN);
+  if (token.success) return `auth_token=${encodeURIComponent(token.data)}`;
+  throw new Error("Shanbay authentication is not configured.");
+}
+
 export function resetDatabaseForTests(): void {
   client = undefined;
   runtimeEnv = undefined;

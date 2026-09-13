@@ -47,6 +47,7 @@ export function createHttpApp() {
           progress: {
             today: { total: 50, known: 13, uncertain: 8, unknown: 5, completed: 26 },
             all_time: { total_words: 821, mastered: 574, learning: 230, error_book: 7 },
+            fsrs: { due_now: 4, due_today: 11, tomorrow: 8, due_next_7_days: 38, average_stability: 12.4 },
           },
         },
         pronunciation: {
@@ -60,7 +61,11 @@ export function createHttpApp() {
         dictation: { widget: "dictation", title: "Dictation 1", text: "Rigorous evidence can constrain plausible explanations without eliminating uncertainty." },
       };
       const theme = req.query.theme === "dark" ? "dark" : "light";
-      res.type("html").send(await widgetHtml(kind as "import" | "pretest" | "dashboard" | "pronunciation" | "dictation", { theme, payload: payloads[kind] }));
+      const toolResults = kind === "import" ? {
+        get_current_shanbay_book: { id: "materialbook-2026", name: "考研英语词汇", is_current: true },
+        preview_shanbay_book: { book: { id: "materialbook-2026", name: "考研英语词汇", is_current: true }, unlearned: 3812, learning: 624, simple_learned: 1046, estimated_unique_total: 5482 },
+      } : undefined;
+      res.type("html").send(await widgetHtml(kind as "import" | "pretest" | "dashboard" | "pronunciation" | "dictation", { theme, payload: payloads[kind], toolResults }));
     });
   }
 

@@ -7,7 +7,7 @@ import { safeTool } from "./helpers.js";
 export function registerRecordAttemptTool(server: McpServer): void {
   server.registerTool("record_attempt", {
     title: "Record vocabulary attempt",
-    description: "Persist one scored vocabulary output. For a correct repair attempt, pass the error layer being tested so its 2-correct streak can be tracked.",
+    description: "Persist one ordinary exercise attempt and update error-layer repair streaks. This never advances FSRS or changes review dates. For a correct repair attempt, pass the tested error layer.",
     inputSchema: z.object({
       word: z.string().trim().min(1).max(100),
       session_id: z.string().uuid().optional(),
@@ -23,4 +23,3 @@ export function registerRecordAttemptTool(server: McpServer): void {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, (input) => safeTool(() => recordAttempt(input)));
 }
-

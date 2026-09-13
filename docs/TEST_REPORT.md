@@ -8,9 +8,9 @@ Run date: 2026-09-13 (Asia/Shanghai)
 | --- | --- |
 | `npm run typecheck` | Passed |
 | `npm run build` | Passed |
-| `npm test` | 18 passed, 1 Supabase integration test skipped because credentials were not available |
+| `npm test` | 34 passed, 1 Supabase integration test skipped because credentials were not available |
 | Plugin manifest validator | Passed |
-| MCP Inspector strict `tools/list` | Passed; 13 tools, no strict schema failure |
+| MCP Inspector strict `tools/list` | Passed; 19 tools, no strict schema failure |
 | MCP App metadata probe | Passed; 5 render tools resolved their UI resources |
 
 The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`, and modern nested `_meta.ui.resourceUri`; the compatibility key is added by the official helper.
@@ -21,20 +21,23 @@ The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`
 - Empty imports fail clearly.
 - Malformed word entries fail validation.
 - Newline, space, comma, English semicolon, Chinese comma, and Chinese semicolon paste delimiters are parsed.
-- An incorrect attempt increments `wrong_count`, resets the global streak, activates its layer, and schedules +1 day.
+- An incorrect exercise increments `wrong_count`, resets the global streak, and activates its layer without changing any FSRS field or review timestamp.
 - One correct repair leaves an error active; the second consecutive correct repair clears that layer.
 - Mastery requires at least three correct attempts, two consecutive correct attempts, and no active error flag.
+- FSRS v6 covers all four New-card ratings, deterministic due advancement, lapse handling, and DB ↔ Card conversion.
+- Due mastered cards remain eligible, future cards stay out of the queue, and no random filler is added.
+- Shanbay fixture tests cover current-book parsing, all three states, structured IPA/senses, safe 401/invalid-payload errors, and multi-state/multi-book deduplication.
 - Progress calculations separate mastered, learning, and error-book counts.
 - GET `/` returns health status.
 - POST `/mcp` initializes over local Streamable HTTP and lists all data/render tools; the deployed GPT Site uses `/api/mcp` because `/mcp` is reserved by the Sites gateway.
-- The GPT Sites Worker serves `/health` and exposes all 13 tools over stateless Web Standard Streamable HTTP.
+- The GPT Sites Worker serves `/health` and exposes all 19 tools over stateless Web Standard Streamable HTTP.
 - The optional Supabase integration test verifies persistence across independent context reads and cleans up its temporary user when credentials and the migration are present.
 
 ## Visual QA
 
 The accepted design reference is `docs/design/wordloop-concept.png` at 1536 × 1024. The implementation now uses an Apple-inspired material system: platform typography, translucent functional layers, immediate press feedback, restrained blue controls and green progress, desktop and mobile layouts, plus dark, reduced-motion, reduced-transparency, and increased-contrast modes.
 
-An implementation screenshot could not be captured in this execution environment: the managed cloud browser blocks workspace localhost, and the permitted local Playwright fallback could not download Chromium because its CDN timed out. This is an explicit verification gap, not reported as a pass. Use the preview routes below on a machine with a browser:
+The supervised Sites preview was opened in the cloud browser. The Shanbay import view loaded the current-book card, materialbook ID field, full-import/preview/refresh actions, and the complete unlearned/learning/learned/unique counts after Preview. The Dashboard rendered Due now, Tomorrow, and Next 7 days. A full-page screenshot timed out, so the verification used the rendered accessibility DOM and interactive controls.
 
 ```bash
 ENABLE_WIDGET_PREVIEW=true npm run dev

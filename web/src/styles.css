@@ -135,7 +135,7 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .button-icon { width: 1.05rem; height: 1.05rem; flex: 0 0 auto; }
 .button-icon.trailing { margin-right: -0.25rem; }
 
-.result-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; padding-top: 0.85rem; }
+.result-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(4rem, 1fr)); gap: 0.5rem; padding-top: 0.85rem; }
 .result-strip span { min-width: 0; padding: 0.72rem; background: var(--control); border-radius: 12px; text-align: center; }
 .result-strip strong { display: block; color: var(--text); font-size: 1.15rem; line-height: 1.15; font-weight: 680; font-variant-numeric: tabular-nums; }
 .result-strip small { display: block; margin-top: 0.18rem; color: var(--muted); font-size: 0.72rem; line-height: 1.2; }
@@ -183,6 +183,20 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .metrics dt { color: var(--muted); }
 .metrics dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .button-row { display: flex; gap: 0.5rem; }
+.button-row { flex-wrap: wrap; }
+.button-row .button { flex: 1 1 8rem; }
+.section-divider { height: 1px; margin: 0.8rem 0 1rem; background: var(--separator); }
+.fsrs-metrics { margin-top: 0.55rem; }
+.source-card { display: flex; flex-direction: column; gap: 0.24rem; margin-bottom: 0.85rem; padding: 0.85rem; border-radius: 14px; background: var(--control); }
+.source-card strong { font-size: 1rem; }
+.source-card small, .helper-text { color: var(--muted); font-size: 0.75rem; line-height: 1.45; }
+.field-label { display: block; margin: 0.7rem 0 0.35rem; color: var(--muted); font-size: 0.78rem; font-weight: 620; }
+input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.7rem 0.8rem; border: 1px solid var(--separator); border-radius: 12px; background: var(--control); color: var(--text); font: inherit; }
+.import-metrics { margin-bottom: 0.75rem; }
+.manual-import { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--separator); }
+.manual-import summary { color: var(--accent); cursor: pointer; font-size: 0.82rem; font-weight: 620; }
+.manual-import textarea { margin-top: 0.75rem; }
+.manual-import .button { width: 100%; margin-top: 0.55rem; }
 .dashboard-actions .button:first-child { flex: 1; }
 .skeleton { min-height: 9rem; display: grid; place-items: center; color: var(--muted); font-size: 0.875rem; }
 

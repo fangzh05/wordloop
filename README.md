@@ -4,14 +4,14 @@ Wordloop is a persistent vocabulary-state MCP App for ChatGPT-led English learni
 
 ## What V1 does
 
-- Imports manually pasted Shanbay word lists while preserving source order.
+- Migrates an entire Shanbay book once (unlearned, learning, and simple-learned), while retaining manual import as a fallback.
 - Keeps one user-specific learning record per normalized word without lemmatization.
 - Records pretest classifications and every scored vocabulary attempt.
 - Tracks meaning, collocation, grammar, pronunciation, and spelling error layers.
 - Clears an individual error layer only after two consecutive correct repairs.
-- Provides a simple 1/3/7/14-day review scheduler and a replaceable scheduler module.
+- Uses `ts-fsrs` FSRS v6 as the only long-term scheduling engine.
 - Returns the next 5–7 unfinished words in `unknown → uncertain → new` order.
-- Returns five review candidates with error-book and due-review priority.
+- Returns up to five active-error or FSRS-due candidates without pulling future cards.
 - Persists difficult sentences plus ChatGPT-extracted words.
 - Renders a Shanbay import card, learning dashboard, pronunciation cards, and dictation player.
 - Uses an Apple-inspired visual system: platform typography, translucent functional layers, immediate press feedback, and light/dark/reduced-motion/reduced-transparency modes.
@@ -60,8 +60,16 @@ wordloop/
 │   ├── worker.ts
 │   ├── db.ts
 │   ├── types.ts
+│   ├── integrations/shanbay/
+│   │   ├── client.ts
+│   │   ├── decode.ts
+│   │   ├── importer.ts
+│   │   ├── mapper.ts
+│   │   └── types.ts
 │   ├── services/
 │   │   ├── attempts.ts
+│   │   ├── fsrsReviews.ts
+│   │   ├── fsrsScheduler.ts
 │   │   ├── progress.ts
 │   │   ├── review.ts
 │   │   ├── reviewScheduler.ts
@@ -76,18 +84,30 @@ wordloop/
 │       ├── getProgress.ts
 │       ├── helpers.ts
 │       ├── importWords.ts
+│       ├── prepareDailyNewWords.ts
 │       ├── recordAttempt.ts
 │       ├── recordPretestResult.ts
+│       ├── recordReviewResult.ts
 │       ├── renderWidgets.ts
+│       ├── setDailyNewWordLimit.ts
+│       ├── shanbay.ts
 │       └── saveSentence.ts
-├── supabase/migrations/202609130001_initial_wordloop.sql
+├── supabase/migrations/
+│   ├── 202609130001_initial_wordloop.sql
+│   └── 202609130002_fsrs_shanbay.sql
 ├── tests/
 │   ├── mcpHttp.test.ts
+│   ├── fsrsReview.test.ts
+│   ├── fsrsScheduler.test.ts
 │   ├── progress.test.ts
 │   ├── reviewScheduler.test.ts
 │   ├── site.test.ts
 │   ├── supabase.integration.test.ts
 │   ├── worker.test.ts
+│   ├── shanbayClient.test.ts
+│   ├── shanbayDecode.test.ts
+│   ├── shanbayImport.test.ts
+│   ├── shanbayMapper.test.ts
 │   └── wordNormalization.test.ts
 ├── web/src/
 │   ├── components/Button.tsx
@@ -116,6 +136,8 @@ Copy `.env.example` to `.env` and set:
 | `SUPABASE_URL` | Yes | Supabase project URL used only by the server runtime. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only database credential. Never expose it to widgets or commit it. |
 | `DEV_USER_ID` | V1 | UUID used as the authenticated identity until OAuth is added. Every query still scopes by this ID. |
+| `SHANBAY_AUTH_TOKEN` | For Shanbay migration | Server-only `auth_token`; never sent to React, ChatGPT, Supabase, logs, or tool arguments. |
+| `SHANBAY_COOKIE` | Optional fallback | Full server-only cookie only when `auth_token` is insufficient. |
 | `PORT` | No | HTTP port; defaults to `3000`. |
 | `HOST` | No | Bind address; defaults to `127.0.0.1`. Use `0.0.0.0` on a hosted platform. |
 | `ALLOWED_HOSTS` | Recommended in production | Comma-separated hostnames for DNS-rebinding protection when binding publicly. |
@@ -129,7 +151,7 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. Run [`supabase/migrations/202609130001_initial_wordloop.sql`](supabase/migrations/202609130001_initial_wordloop.sql). On the deployed Site, the same script is available at [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql), which is convenient when the GitHub repository is private.
+3. Run both SQL migrations in filename order. On the deployed Site, [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql) contains the combined scripts.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 
@@ -174,7 +196,13 @@ npm start
 | `get_learning_context` | Read today's persisted statuses, recent answer history, review queue, stats, and session rules. |
 | `get_next_round` | Select 5–7 unfinished words. |
 | `record_pretest_result` | Save `known`, `uncertain`, or `unknown` plus the answer in durable attempt history. |
-| `record_attempt` | Save the answer and update counts, error layers, review time, and mastery. |
+| `record_attempt` | Save an ordinary exercise and update counters/error repair only; never advance FSRS. |
+| `record_review_result` | Advance FSRS exactly once for a genuine independent retrieval. |
+| `prepare_daily_new_words` | Allocate the configured daily limit from the vocabulary pool. |
+| `set_daily_new_word_limit` | Configure the daily allocation limit from 10 to 100. |
+| `get_current_shanbay_book` | Read the current Shanbay book using server-only credentials. |
+| `preview_shanbay_book` | Count all three complete source states without importing. |
+| `import_shanbay_book` | Idempotently migrate a complete current or ID-selected book into the vocabulary pool. |
 | `get_error_book` | Return words that still have active error layers. |
 | `save_sentence` | Save a difficult sentence and extracted vocabulary. |
 | `get_progress` | Return daily and all-time totals. |
@@ -209,7 +237,7 @@ The repository also includes a headless strict check:
 npm run test:inspector
 ```
 
-This builds the project, starts a disposable local Wordloop server, runs Inspector `tools/list --strict`, and probes MCP App metadata/resources. The current result is 13 tools listed with no strict schema failures; all five render tools resolve to `text/html;profile=mcp-app` resources with `prefersBorder: true`.
+This builds the project, starts a disposable local Wordloop server, runs Inspector `tools/list --strict`, and probes MCP App metadata/resources. The current result is 19 tools listed with no strict schema failures; all five render tools resolve to `text/html;profile=mcp-app` resources with `prefersBorder: true`.
 
 Suggested database test sequence:
 
@@ -233,7 +261,15 @@ npm run build
 npm test
 ```
 
-The default suite covers deduplication, empty and malformed imports, mixed-delimiter parsing, the 1/3/7/14-day scheduler, incorrect-attempt reset, two-correct error removal, mastery rules, progress calculation, health status, Streamable HTTP initialization, and tool discovery.
+The default suite covers FSRS v6 rating transitions and persistence mapping, exercise/FSRS isolation, due mastered cards, no future-card filler, Shanbay decoding/mapping/pagination/error handling, idempotent multi-book deduplication, error repair, progress, Streamable HTTP initialization, and tool discovery.
+
+## Shanbay migration
+
+Shanbay is an optional, removable one-time migration adapter under `server/integrations/shanbay/`. Wordloop reads the current book through `/wordsapp/user_material_books/current` and can fetch a specified `materialbookId` directly. It imports complete `unlearned_items`, `learning_items`, and `simple_learned_items` pages in database batches, stores IPA and structured Chinese senses, and records many-to-many book provenance in `word_sources`.
+
+No reliable public user-bookshelf endpoint was found, so V1 deliberately does not guess one. The import card supports the current book, refresh-after-switching, and an advanced materialbook ID field. It never switches the user's Shanbay current book. After migration, Shanbay state is metadata only and cannot reset Wordloop state, attempts, errors, or the single FSRS card.
+
+Importing thousands of words fills the vocabulary pool, not today's list. Call `prepare_daily_new_words` to allocate the user's `daily_new_word_limit` (default 50, range 10–100) into the existing pretest workflow.
 
 `tests/supabase.integration.test.ts` runs automatically when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are present. It creates an isolated temporary user, verifies duplicate imports, records an error, reads the same state through a second independent learning-context call (representing a new ChatGPT conversation), verifies the error persists, clears it after two correct repairs, and deletes the temporary user.
 
@@ -276,8 +312,8 @@ Before exposing Wordloop to more than one real user, implement OAuth/authenticat
 ## V1 limitations
 
 - Identity is a server-configured `DEV_USER_ID`; OAuth is not implemented.
-- Manual paste is the only Shanbay import path.
-- The review scheduler is intentionally heuristic, not FSRS/SM-2.
+- Shanbay has no verified bookshelf-list endpoint in this integration; use current-book refresh or a materialbook ID.
+- Shanbay migration depends on an undocumented API and may require refreshing the server-only credential when Shanbay changes it.
 - Browser speech synthesis voice and exact pronunciation quality vary by host/device.
 - No third-party dictionary or TTS endpoint is included.
 - Study-session start/end counters are scaffolded in the database but do not yet have public tools.
@@ -290,8 +326,8 @@ Before exposing Wordloop to more than one real user, implement OAuth/authenticat
 2. Add explicit study-session lifecycle tools and a 20-new-word quiz counter.
 3. Add import history inspection and reversible import management.
 4. Replace browser speech synthesis with a real American-English TTS endpoint if needed.
-5. Add FSRS behind the existing scheduler boundary after enough attempt history exists.
-6. Explore authorized Shanbay sync only after the manual V1 proves useful.
+5. Add FSRS parameter optimization and historical replay tooling after enough real review logs exist.
+6. Replace the Shanbay adapter if an official export/API becomes available; do not turn it into continuous sync.
 
 ## Teaching boundary
 

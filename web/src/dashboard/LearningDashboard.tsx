@@ -7,6 +7,7 @@ import { sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridg
 const progressSchema = z.object({
   today: z.object({ total: z.number(), known: z.number(), uncertain: z.number(), unknown: z.number(), completed: z.number() }),
   all_time: z.object({ total_words: z.number(), mastered: z.number(), learning: z.number(), error_book: z.number() }),
+  fsrs: z.object({ due_now: z.number(), due_today: z.number(), tomorrow: z.number(), due_next_7_days: z.number(), average_stability: z.number() }),
 });
 const payloadSchema = z.object({ widget: z.literal("dashboard"), progress: progressSchema });
 type Progress = z.infer<typeof progressSchema>;
@@ -40,6 +41,13 @@ export function LearningDashboard(): React.JSX.Element {
       <div><dt>Known</dt><dd>{progress.today.known}</dd></div>
       <div><dt>Learning</dt><dd>{learningToday}</dd></div>
       <div><dt>Error book</dt><dd>{progress.all_time.error_book}</dd></div>
+    </dl>
+    <div className="section-divider" />
+    <span className="eyebrow">FSRS review forecast</span>
+    <dl className="metrics fsrs-metrics">
+      <div><dt>Due now</dt><dd>{progress.fsrs.due_now}</dd></div>
+      <div><dt>Tomorrow</dt><dd>{progress.fsrs.tomorrow}</dd></div>
+      <div><dt>Next 7 days</dt><dd>{progress.fsrs.due_next_7_days}</dd></div>
     </dl>
     <div className="button-row dashboard-actions">
       <Button onClick={() => void followUp("继续今天的英语学习")}>Continue learning <ArrowIcon className="button-icon trailing" /></Button>

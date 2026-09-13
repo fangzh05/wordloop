@@ -10,6 +10,10 @@ import { registerRecordAttemptTool } from "./tools/recordAttempt.js";
 import { registerRecordPretestResultTool } from "./tools/recordPretestResult.js";
 import { registerRenderTools, WIDGET_URIS } from "./tools/renderWidgets.js";
 import { registerSaveSentenceTool } from "./tools/saveSentence.js";
+import { registerRecordReviewResultTool } from "./tools/recordReviewResult.js";
+import { registerPrepareDailyNewWordsTool } from "./tools/prepareDailyNewWords.js";
+import { registerShanbayTools } from "./tools/shanbay.js";
+import { registerSetDailyNewWordLimitTool } from "./tools/setDailyNewWordLimit.js";
 
 export type WidgetKind = keyof typeof WIDGET_URIS;
 export type WidgetHtmlLoader = (kind: WidgetKind) => Promise<string>;
@@ -40,7 +44,7 @@ export function createWordloopMcpServer(loadWidgetHtml: WidgetHtmlLoader): McpSe
   const server = new McpServerImpl(
     { name: "wordloop", version: "0.1.0" },
     {
-      instructions: "Use this plugin to retrieve and persist the user's English vocabulary learning state. Before every study session, including a new conversation, call get_learning_context and trust its stored statuses instead of restarting completed work. Record every scored vocabulary attempt. Never invent stored progress. Use render_pretest_widget only for today's words whose stored status is new, once with the complete 1–7 item round, American IPA, part of speech, and concise Chinese meaning for every item. The widget restores saved classifications from Wordloop, grades through host sampling, records through tools/call, displays feedback, advances locally, and becomes the pronunciation player after the round. Do not use it for rolling review, send per-question chat feedback, or render separate pronunciation cards for that round. Respond only when the completed widget sends one request to continue. When the user asks for 进度, call get_progress and then render_learning_dashboard in the same turn. When the user asks to import words, call render_word_import. Use standalone pronunciation or dictation render tools only outside this integrated pretest flow. Data tools alone do not render UI.",
+      instructions: "Use Wordloop to retrieve and persist vocabulary state; ChatGPT remains the teaching and grading engine. Before every study session call get_learning_context and trust stored state. If today's list is empty after a book migration, call prepare_daily_new_words once, then reload context. Use record_attempt only for ordinary exercises and error-layer repair. Use record_review_result exactly once for a genuine independent retrieval checkpoint: Again means retrieval failed, an answer was shown, or a substantial hint was required; Hard means independent but effortful or self-corrected; Good means normal independent recall; Easy means immediate and stable recall. Repetition after an answer, shadowing, copying, immediate correction, and newly taught practice never advance FSRS. Pretest classifications already advance FSRS. Review active errors and due cards only, at most five; never pull future cards to fill a quota. Mastered is a progress label, not exclusion from due review. Use render_pretest_widget only for today's new words. When asked for progress, call get_progress then render_learning_dashboard. When asked to import vocabulary, render_word_import. Never invent stored progress or expose Shanbay credentials.",
     },
   );
   registerImportWordsTool(server);
@@ -48,6 +52,10 @@ export function createWordloopMcpServer(loadWidgetHtml: WidgetHtmlLoader): McpSe
   registerGetNextRoundTool(server);
   registerRecordPretestResultTool(server);
   registerRecordAttemptTool(server);
+  registerRecordReviewResultTool(server);
+  registerPrepareDailyNewWordsTool(server);
+  registerShanbayTools(server);
+  registerSetDailyNewWordLimitTool(server);
   registerGetErrorBookTool(server);
   registerSaveSentenceTool(server);
   registerGetProgressTool(server);

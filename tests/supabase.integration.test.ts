@@ -5,6 +5,7 @@ import { getDatabase, resetDatabaseForTests } from "../server/db.js";
 import { recordAttempt } from "../server/services/attempts.js";
 import { getErrorBook, getLearningContext } from "../server/services/review.js";
 import { importWords, recordPretestResult } from "../server/services/words.js";
+import { recordReviewResult } from "../server/services/fsrsReviews.js";
 
 const canRun = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 const integrationUser = randomUUID();
@@ -28,7 +29,19 @@ describe.runIf(canRun)("Supabase persistence", () => {
       user_answer: "",
       activity_type: "pretest_cn_to_en",
     });
+    const db = getDatabase();
+    const { data: beforeAttempt } = await db.from("user_words")
+      .select("fsrs_reps,fsrs_stability,next_review_at,last_reviewed_at,word:words!inner(normalized_word)")
+      .eq("user_id", integrationUser).eq("word.normalized_word", "empirical").single();
     await recordAttempt({ word: "empirical", activity_type: "sentence", user_answer: "bad answer", is_correct: false, error_layer: "collocation" });
+    const { data: afterAttempt } = await db.from("user_words")
+      .select("fsrs_reps,fsrs_stability,next_review_at,last_reviewed_at,word:words!inner(normalized_word)")
+      .eq("user_id", integrationUser).eq("word.normalized_word", "empirical").single();
+    expect(afterAttempt).toMatchObject(beforeAttempt as Record<string, unknown>);
+    await recordReviewResult({ word: "empirical", rating: "again", source: "review", reason: "independent retrieval failed" });
+    const { count: reviewLogCount } = await db.from("fsrs_review_logs")
+      .select("id", { count: "exact", head: true }).eq("user_id", integrationUser);
+    expect(reviewLogCount).toBe(2);
     expect((await getLearningContext()).rolling_review.some((word) => word.word === "empirical")).toBe(true);
 
     // This second independent read represents opening another ChatGPT conversation.
