@@ -36,9 +36,8 @@ describe("Streamable HTTP server", () => {
     expect(names).toEqual(expect.arrayContaining([
       "import_words", "get_learning_context", "get_next_round", "record_pretest_result",
       "record_attempt", "get_error_book", "save_sentence", "get_progress",
-      "render_word_import", "render_learning_dashboard", "render_pronunciation_cards", "render_dictation_widget",
+      "render_word_import", "render_pretest_widget", "render_learning_dashboard", "render_pronunciation_cards", "render_dictation_widget",
     ]));
     await client.close();
   });
 });
-
