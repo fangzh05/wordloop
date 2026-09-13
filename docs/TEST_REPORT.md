@@ -26,7 +26,7 @@ The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`
 - Mastery requires at least three correct attempts, two consecutive correct attempts, and no active error flag.
 - Progress calculations separate mastered, learning, and error-book counts.
 - GET `/` returns health status.
-- POST `/mcp` initializes over Streamable HTTP and lists all data/render tools.
+- POST `/mcp` initializes over local Streamable HTTP and lists all data/render tools; the deployed GPT Site uses `/api/mcp` because `/mcp` is reserved by the Sites gateway.
 - The GPT Sites Worker serves `/health` and exposes all 12 tools over stateless Web Standard Streamable HTTP.
 - The optional Supabase integration test verifies persistence across independent context reads and cleans up its temporary user when credentials and the migration are present.
 
