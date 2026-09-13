@@ -65,7 +65,7 @@ export function PretestWidget(): React.JSX.Element {
       if (!window.__WORDLOOP_PREVIEW__) {
         await updateModelContext("A Wordloop pretest answer is ready for grading.", { wordloopPretestAnswer: answerContext });
         await sendUserMessage(
-          `Wordloop 预测试答题（第 ${index + 1}/${payload.items.length} 题）。目标词：${item.word}。题目：${item.prompt}。我的答案：${cleanAnswer}。请只批改这一题，判断 known、uncertain 或 unknown，调用 record_pretest_result，然后再继续下一题。`,
+          `Wordloop 预测试答题（第 ${index + 1}/${payload.items.length} 题）。目标词：${item.word}。题目：${item.prompt}。我的答案：${cleanAnswer}。请只批改这一题，判断 known、uncertain 或 unknown，并调用 record_pretest_result。不要再次调用 render_pretest_widget；当前 Widget 已包含本轮后续题目。`,
         );
       }
       setStatus("sent");
