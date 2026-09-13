@@ -171,9 +171,9 @@ npm start
 | Tool | Role |
 | --- | --- |
 | `import_words` | Normalize, deduplicate, and persist a daily ordered list. |
-| `get_learning_context` | Read today's list, review queue, stats, and session rules. |
+| `get_learning_context` | Read today's persisted statuses, recent answer history, review queue, stats, and session rules. |
 | `get_next_round` | Select 5–7 unfinished words. |
-| `record_pretest_result` | Save `known`, `uncertain`, or `unknown`. |
+| `record_pretest_result` | Save `known`, `uncertain`, or `unknown` plus the answer in durable attempt history. |
 | `record_attempt` | Save the answer and update counts, error layers, review time, and mastery. |
 | `get_error_book` | Return words that still have active error layers. |
 | `save_sentence` | Save a difficult sentence and extracted vocabulary. |
@@ -188,6 +188,8 @@ npm start
 | `render_learning_dashboard` | `ui://wordloop/dashboard.html` |
 | `render_pronunciation_cards` | `ui://wordloop/pronunciation.html` |
 | `render_dictation_widget` | `ui://wordloop/dictation.html` |
+
+The pretest widget reloads stored daily classifications from Supabase before resuming, so closing Chat and reopening the conversation does not restart completed questions. Its integrated pronunciation view shows the word, American IPA, part of speech, Chinese core meaning, and a user-triggered Play button.
 
 The pronunciation and dictation views call browser `speechSynthesis` only after a button click. If it is unavailable, the view displays `Audio unavailable`. The dictation transcript is not inserted into the visible DOM until the user selects `Show transcript`.
 

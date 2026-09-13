@@ -189,7 +189,12 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .pronunciation-list { display: grid; gap: 0; overflow: hidden; background: var(--control); border-radius: 15px; }
 .pronunciation-row { display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; min-height: 3.8rem; margin: 0 0.85rem; padding: 0.65rem 0; border-bottom: 1px solid var(--separator); }
 .pronunciation-row:last-child { border-bottom: 0; }
-.pronunciation-row > div { display: flex; align-items: baseline; gap: 0.75rem; min-width: 0; }
+.pronunciation-row > div { min-width: 0; }
+.pronunciation-copy { display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 0.12rem; }
+.pronunciation-heading { display: flex; align-items: center; gap: 0.45rem; }
+.part-of-speech { display: inline-flex; align-items: center; min-height: 1.3rem; padding: 0.08rem 0.42rem; border-radius: 999px; color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 0.7rem !important; font-weight: 650; line-height: 1; }
+.pronunciation-copy .ipa { color: var(--muted); font-size: 0.82rem; }
+.pronunciation-copy .meaning-zh { overflow: hidden; max-width: 100%; color: var(--text); font-size: 0.8rem; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .pronunciation-row strong { font-size: 1rem; font-weight: 650; letter-spacing: -0.012em; }
 .pronunciation-row span { color: var(--muted); font-size: 0.875rem; }
 .play-button { display: inline-flex; min-height: 44px; align-items: center; gap: 0.42rem; flex: 0 0 auto; padding: 0.3rem 0.15rem 0.3rem 0.6rem; border: 0; border-radius: 10px; background: transparent; color: var(--accent); font-size: 0.8125rem; font-weight: 620; cursor: pointer; transition: transform 100ms ease-out, opacity 140ms ease; }
@@ -215,7 +220,6 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
   .button-row.dashboard-actions .button { width: 100%; }
   .pretest-meta { align-items: flex-start; flex-direction: column; gap: 0.28rem; }
   .compact-header { align-items: center; }
-  .pronunciation-row > div { align-items: flex-start; flex-direction: column; gap: 0.18rem; }
   .dictation-controls { align-items: stretch; }
   .dictation-controls .button { flex: 1; min-width: 0; }
 }

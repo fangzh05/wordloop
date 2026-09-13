@@ -22,13 +22,19 @@ describe.runIf(canRun)("Supabase persistence", () => {
     expect(first).toMatchObject({ total: 2, new: 2, existing: 0 });
     expect(duplicate).toMatchObject({ total: 2, new: 0, existing: 2 });
 
-    await recordPretestResult({ word: "empirical", result: "unknown" });
+    await recordPretestResult({
+      word: "empirical",
+      result: "unknown",
+      user_answer: "",
+      activity_type: "pretest_cn_to_en",
+    });
     await recordAttempt({ word: "empirical", activity_type: "sentence", user_answer: "bad answer", is_correct: false, error_layer: "collocation" });
     expect((await getLearningContext()).rolling_review.some((word) => word.word === "empirical")).toBe(true);
 
     // This second independent read represents opening another ChatGPT conversation.
     const secondConversation = await getLearningContext();
     expect(secondConversation.stats.error_book).toBe(1);
+    expect(secondConversation.recent_activity.some((entry) => entry.word === "empirical" && entry.activity_type === "pretest_cn_to_en")).toBe(true);
     expect((await getErrorBook()).words[0]?.errors).toContain("collocation");
 
     await recordAttempt({ word: "empirical", activity_type: "collocation", user_answer: "repair 1", is_correct: true, error_layer: "collocation" });

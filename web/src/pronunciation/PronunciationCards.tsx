@@ -5,7 +5,12 @@ import { PlayIcon } from "../components/Icons.js";
 
 const payloadSchema = z.object({
   widget: z.literal("pronunciation"),
-  words: z.array(z.object({ word: z.string(), ipa: z.string() })).min(1).max(7),
+  words: z.array(z.object({
+    word: z.string(),
+    ipa: z.string(),
+    part_of_speech: z.string().optional(),
+    meaning_zh: z.string().optional(),
+  })).min(1).max(7),
 });
 type PronunciationWord = z.infer<typeof payloadSchema>["words"][number];
 
@@ -36,7 +41,11 @@ export function PronunciationCards(): React.JSX.Element {
     <header className="widget-header"><span className="eyebrow">Listen first</span><h1 id="pronunciation-title">Pronunciation</h1><p>American English · tap a word to hear it</p></header>
     <div className="pronunciation-list">
       {words.map((item) => <div className="pronunciation-row" key={item.word}>
-        <div><strong>{item.word}</strong><span>{item.ipa}</span></div>
+        <div className="pronunciation-copy">
+          <div className="pronunciation-heading"><strong>{item.word}</strong>{item.part_of_speech ? <span className="part-of-speech">{item.part_of_speech}</span> : null}</div>
+          <span className="ipa">{item.ipa}</span>
+          {item.meaning_zh ? <span className="meaning-zh">{item.meaning_zh}</span> : null}
+        </div>
         <button className="play-button" type="button" onClick={() => play(item.word)} disabled={!speechAvailable} aria-label={`Play ${item.word}`}>
           <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === item.word ? "Playing" : "Play") : "Audio unavailable"}
         </button>

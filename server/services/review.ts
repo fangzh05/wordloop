@@ -38,22 +38,25 @@ export async function getLearningContext(): Promise<{
   today_words: VocabularyItem[];
   rolling_review: VocabularyItem[];
   old_random_review: VocabularyItem[];
+  recent_activity: Array<{ word: string; activity_type: string; is_correct: boolean; result: string; created_at: string }>;
   stats: { today_total: number; today_completed: number; total_learned: number; error_book: number };
   session_rules: { initial_review_count: number; round_size_min: number; round_size_max: number; error_clear_after_consecutive_correct: number };
 }> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const date = dateInTimeZone(await getUserTimeZone(db, userId));
-  const [todayWords, reviews, all] = await Promise.all([
+  const [todayWords, reviews, all, recentActivity] = await Promise.all([
     getTodayWords(date, db, userId),
     getReviewSelection(5),
     getAllUserWords(db, userId),
+    getRecentActivity(db, userId),
   ]);
   return {
     date,
     today_words: todayWords,
     rolling_review: reviews.rollingReview,
     old_random_review: reviews.oldRandomReview,
+    recent_activity: recentActivity,
     stats: {
       today_total: todayWords.length,
       today_completed: todayWords.filter((word) => word.status !== "new").length,
@@ -67,6 +70,36 @@ export async function getLearningContext(): Promise<{
       error_clear_after_consecutive_correct: 2,
     },
   };
+}
+
+async function getRecentActivity(db = getDatabase(), userId = getAuthenticatedUserId()): Promise<Array<{
+  word: string;
+  activity_type: string;
+  is_correct: boolean;
+  result: string;
+  created_at: string;
+}>> {
+  type AttemptJoin = {
+    activity_type: string;
+    is_correct: boolean;
+    user_answer: string;
+    created_at: string;
+    word: { normalized_word: string } | Array<{ normalized_word: string }>;
+  };
+  const { data, error } = await db
+    .from("attempts")
+    .select("activity_type,is_correct,user_answer,created_at,word:words!inner(normalized_word)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  assertDatabaseResult(error);
+  return ((data ?? []) as unknown as AttemptJoin[]).map((entry) => ({
+    word: (Array.isArray(entry.word) ? entry.word[0]?.normalized_word : entry.word.normalized_word) ?? "",
+    activity_type: entry.activity_type,
+    is_correct: entry.is_correct,
+    result: entry.is_correct ? "correct" : "incorrect",
+    created_at: entry.created_at,
+  }));
 }
 
 export async function getNextRound(limit: number): Promise<{ words: VocabularyItem[] }> {

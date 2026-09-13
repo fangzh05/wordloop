@@ -38,8 +38,8 @@ export function createHttpApp() {
         pretest: {
           widget: "pretest",
           items: [
-            { word: "empirical", ipa: "/ɪmˈpɪrɪkəl/", prompt: "经验性的；以观察 / 实验为依据的", direction: "cn_to_en" },
-            { word: "subtle", ipa: "/ˈsʌtəl/", prompt: "subtle", direction: "en_definition" },
+            { word: "empirical", ipa: "/ɪmˈpɪrɪkəl/", part_of_speech: "adj.", meaning_zh: "经验性的；以观察或实验为依据的", prompt: "经验性的；以观察 / 实验为依据的", direction: "cn_to_en" },
+            { word: "subtle", ipa: "/ˈsʌtəl/", part_of_speech: "adj.", meaning_zh: "微妙的；不易察觉的", prompt: "subtle", direction: "en_definition" },
           ],
         },
         dashboard: {
@@ -52,9 +52,9 @@ export function createHttpApp() {
         pronunciation: {
           widget: "pronunciation",
           words: [
-            { word: "plausible", ipa: "/ˈplɔːzəbəl/" },
-            { word: "empirical", ipa: "/ɪmˈpɪrɪkəl/" },
-            { word: "rigorous", ipa: "/ˈrɪɡərəs/" },
+            { word: "plausible", ipa: "/ˈplɔːzəbəl/", part_of_speech: "adj.", meaning_zh: "看似合理的；可信的" },
+            { word: "empirical", ipa: "/ɪmˈpɪrɪkəl/", part_of_speech: "adj.", meaning_zh: "经验性的；实证的" },
+            { word: "rigorous", ipa: "/ˈrɪɡərəs/", part_of_speech: "adj.", meaning_zh: "严谨的；严格的" },
           ],
         },
         dictation: { widget: "dictation", title: "Dictation 1", text: "Rigorous evidence can constrain plausible explanations without eliminating uncertainty." },

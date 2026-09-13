@@ -7,6 +7,8 @@ import { callServerTool, requestFocusMode, sampleHostText, sendUserMessage, subs
 const itemSchema = z.object({
   word: z.string().trim().min(1).max(100),
   ipa: z.string().trim().min(1).max(120),
+  part_of_speech: z.string().trim().min(1).max(40),
+  meaning_zh: z.string().trim().min(1).max(240),
   prompt: z.string().trim().min(1).max(1000),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
 });
@@ -63,6 +65,8 @@ export function PretestWidget(): React.JSX.Element {
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
   const answerRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
+  const interactionStartedRef = useRef(false);
+  const payloadSignatureRef = useRef("");
   const speechAvailable = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 
   useEffect(() => subscribeToApp((event) => {
@@ -72,6 +76,9 @@ export function PretestWidget(): React.JSX.Element {
       : event.value.structuredContent;
     const parsed = payloadSchema.safeParse(candidate);
     if (!parsed.success) return;
+    const signature = JSON.stringify(parsed.data);
+    if (payloadSignatureRef.current === signature) return;
+    payloadSignatureRef.current = signature;
     const nextIndex = Math.min(parsed.data.current_index ?? 0, parsed.data.items.length - 1);
     setPayload(parsed.data);
     setIndex(nextIndex);
@@ -82,13 +89,58 @@ export function PretestWidget(): React.JSX.Element {
     setCompleted(false);
     setShowPronunciation(false);
     setStatus("idle");
+
+    if (!window.__WORDLOOP_PREVIEW__) {
+      void restoreSavedProgress(parsed.data);
+    }
   }), []);
+
+  async function restoreSavedProgress(nextPayload: Payload): Promise<void> {
+    try {
+      const stored = await callServerTool("get_learning_context", {});
+      if (stored.isError) return;
+      const context = z.object({
+        today_words: z.array(z.object({
+          word: z.string(),
+          status: z.enum(["new", "known", "uncertain", "unknown", "review", "mastered"]),
+        })),
+      }).safeParse(stored.structuredContent);
+      if (!context.success || interactionStartedRef.current) return;
+      const statusByWord = new Map(context.data.today_words.map((entry) => [entry.word, entry.status]));
+      const restored = nextPayload.items.flatMap((entry): GradedAnswer[] => {
+        const saved = statusByWord.get(entry.word.toLocaleLowerCase());
+        if (!saved || saved === "new") return [];
+        const result: PretestResult = saved === "known" || saved === "mastered"
+          ? "known"
+          : saved === "uncertain" ? "uncertain" : "unknown";
+        return [{ word: entry.word, answer: "", result, feedback: "已从 Wordloop 恢复。" }];
+      });
+      if (restored.length === 0) return;
+      setResults(restored);
+      const pendingIndex = nextPayload.items.findIndex((entry) => !restored.some((saved) => saved.word === entry.word));
+      if (pendingIndex === -1) {
+        setIndex(nextPayload.items.length - 1);
+        setFeedback(restored.at(-1) ?? null);
+        setStatus("sent");
+        setCompleted(true);
+      } else {
+        setIndex(pendingIndex);
+        setAnswer("");
+        setFeedback(null);
+        setStatus("idle");
+        requestAnimationFrame(() => answerRef.current?.focus());
+      }
+    } catch {
+      // The card remains usable if a transient restore read fails.
+    }
+  }
 
   const item = payload?.items[index];
 
   async function submit(): Promise<void> {
     if (!payload || !item || !answer.trim() || status === "sending" || status === "sent" || submittingRef.current) return;
     submittingRef.current = true;
+    interactionStartedRef.current = true;
     const cleanAnswer = answer.trim();
     setStatus("sending");
     setError("");
@@ -111,7 +163,12 @@ export function PretestWidget(): React.JSX.Element {
   async function saveGrade(cleanAnswer: string, grade: { result: PretestResult; feedback: string }, advanceImmediately: boolean): Promise<void> {
     if (!payload || !item) return;
     if (!window.__WORDLOOP_PREVIEW__) {
-      const stored = await callServerTool("record_pretest_result", { word: item.word, result: grade.result });
+      const stored = await callServerTool("record_pretest_result", {
+        word: item.word,
+        result: grade.result,
+        user_answer: cleanAnswer,
+        activity_type: item.direction === "cn_to_en" ? "pretest_cn_to_en" : "pretest_en_definition",
+      });
       if (stored.isError) throw new Error("结果未能保存，请重试。");
     }
     const graded = { word: item.word, answer: cleanAnswer, ...grade };
@@ -137,6 +194,7 @@ export function PretestWidget(): React.JSX.Element {
   async function markUnknown(): Promise<void> {
     if (!payload || !item || status === "sending" || status === "sent" || submittingRef.current) return;
     submittingRef.current = true;
+    interactionStartedRef.current = true;
     setStatus("sending");
     setError("");
     try {
@@ -220,7 +278,11 @@ export function PretestWidget(): React.JSX.Element {
         </header>
         {pronunciationWords.length ? <div className="pronunciation-list">
           {pronunciationWords.map((entry) => <div className="pronunciation-row" key={entry.word}>
-            <div><strong>{entry.word}</strong><span>{entry.ipa}</span></div>
+            <div className="pronunciation-copy">
+              <div className="pronunciation-heading"><strong>{entry.word}</strong><span className="part-of-speech">{entry.part_of_speech}</span></div>
+              <span className="ipa">{entry.ipa}</span>
+              <span className="meaning-zh">{entry.meaning_zh}</span>
+            </div>
             <button className="play-button" type="button" onClick={() => play(entry.word)} disabled={!speechAvailable} aria-label={`Play ${entry.word}`}>
               <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === entry.word ? "Playing" : "Play") : "Audio unavailable"}
             </button>

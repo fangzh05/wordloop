@@ -57,14 +57,37 @@ export async function importWords(input: {
 export async function recordPretestResult(input: {
   word: string;
   result: Extract<WordStatus, "known" | "uncertain" | "unknown">;
+  user_answer?: string;
+  activity_type?: "pretest_cn_to_en" | "pretest_en_definition";
 }, db = getDatabase(), userId = getAuthenticatedUserId()): Promise<{ word: string; result: string }> {
+  const normalizedWord = normalizeWord(input.word);
   const { data, error } = await db.rpc("record_pretest_result_v1", {
     p_user_id: userId,
-    p_normalized_word: normalizeWord(input.word),
+    p_normalized_word: normalizedWord,
     p_result: input.result,
   });
   assertDatabaseResult(error);
-  return data as { word: string; result: string };
+
+  // Keep a durable audit trail in the existing attempts table so reopening the
+  // app can distinguish a saved classification from transient widget state.
+  const { data: wordRow, error: wordError } = await db
+    .from("words")
+    .select("id")
+    .eq("normalized_word", normalizedWord)
+    .single();
+  assertDatabaseResult(wordError);
+  const { error: attemptError } = await db.from("attempts").insert({
+    user_id: userId,
+    word_id: (wordRow as { id: string }).id,
+    session_id: null,
+    activity_type: input.activity_type ?? "pretest_cn_to_en",
+    user_answer: input.user_answer ?? "",
+    is_correct: input.result === "known",
+    error_layer: "none",
+  });
+  assertDatabaseResult(attemptError);
+
+  return { ...(data as { word: string; result: string }), persisted: true } as { word: string; result: string };
 }
 
 export async function getTodayWords(
@@ -142,4 +165,3 @@ export function toVocabularyItem(
 }
 
 export type DbClient = SupabaseClient;
-

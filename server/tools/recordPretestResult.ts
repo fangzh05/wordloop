@@ -10,8 +10,9 @@ export function registerRecordPretestResultTool(server: McpServer): void {
     inputSchema: z.object({
       word: z.string().trim().min(1).max(100),
       result: z.enum(["known", "uncertain", "unknown"]),
+      user_answer: z.string().max(2000).default(""),
+      activity_type: z.enum(["pretest_cn_to_en", "pretest_en_definition"]).default("pretest_cn_to_en"),
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, (input) => safeTool(() => recordPretestResult(input)));
 }
-
