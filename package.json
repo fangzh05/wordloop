@@ -1,0 +1,42 @@
+{
+  "name": "wordloop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Persistent vocabulary state and MCP App widgets for ChatGPT-hosted English learning.",
+  "scripts": {
+    "dev": "npm run build:web && node --import tsx --watch server/index.ts",
+    "build": "npm run build:web && npm run build:server && npm run build:sites",
+    "build:web": "node --import tsx scripts/build-widgets.ts",
+    "build:server": "tsc -p tsconfig.build.json",
+    "build:sites": "node --import tsx scripts/build-sites-worker.ts",
+    "start": "node node-dist/server/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:inspector": "npm run build && node scripts/inspect-mcp.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@supabase/supabase-js": "^2.57.4",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.1",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "esbuild": "^0.25.9",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

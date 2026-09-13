@@ -1,0 +1,24 @@
+{
+  "name": "wordloop",
+  "version": "0.1.0",
+  "description": "Persistent English vocabulary learning state and interactive MCP App widgets.",
+  "author": {
+    "name": "Wordloop"
+  },
+  "interface": {
+    "displayName": "Wordloop",
+    "shortDescription": "Persistent vocabulary memory for ChatGPT-led English study.",
+    "longDescription": "Import Shanbay word lists, retain attempts and error layers, schedule reviews, and render native MCP App study widgets while ChatGPT remains the teacher.",
+    "developerName": "Wordloop",
+    "category": "Education",
+    "capabilities": ["Interactive", "Write"],
+    "brandColor": "#28B84A",
+    "defaultPrompt": [
+      "开始今天的英语学习",
+      "导入今天的扇贝单词",
+      "显示我的英语学习进度"
+    ]
+  },
+  "mcpServers": "./.mcp.json",
+  "apps": "./.app.json"
+}

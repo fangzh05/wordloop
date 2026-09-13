@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0f0f10" media="(prefers-color-scheme: dark)" />
+  <meta name="description" content="Wordloop 为 ChatGPT 保存英语词汇学习状态、错词与复习节奏。" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230071e3'/%3E%3Cpath d='M15 20l8 26 9-21 9 21 8-26' fill='none' stroke='white' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <title>Wordloop — ChatGPT 英语学习记忆层</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav-shell" aria-label="主导航">
+      <a class="brand" href="#top" aria-label="Wordloop 首页">
+        <span class="brand-mark" aria-hidden="true">W</span>
+        <span>Wordloop</span>
+      </a>
+      <div class="nav-links">
+        <a href="#workflow">工作方式</a>
+        <a href="#connect">接入</a>
+        <span class="status-pill"><span aria-hidden="true"></span>V1</span>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <span class="product-pill">MCP App for ChatGPT</span>
+        <h1 id="hero-title">教学交给 ChatGPT。<br />记忆交给 Wordloop。</h1>
+        <p>它不再造一个聊天机器人，只为你的单词、错题、复习队列和长期进度提供可靠的记忆层。</p>
+        <div class="hero-actions">
+          <a class="primary-action" href="#connect">查看接入方式 <span aria-hidden="true">›</span></a>
+          <button class="quiet-action" id="copy-prompt" type="button" data-copy="开始今天的英语学习">复制开始指令</button>
+        </div>
+        <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="product-preview" aria-label="Wordloop 学习进度界面预览">
+        <div class="preview-bar">
+          <div>
+            <span class="eyebrow">学习进度</span>
+            <strong>今日词汇</strong>
+          </div>
+          <span class="preview-label">界面预览</span>
+        </div>
+        <div class="progress-count"><strong>26</strong><span>/ 50</span></div>
+        <div class="progress-track" role="img" aria-label="今日完成 52%"><span></span></div>
+        <div class="metric-list">
+          <div><span>已会</span><strong>13</strong></div>
+          <div><span>学习中</span><strong>13</strong></div>
+          <div><span>错词本</span><strong>7</strong></div>
+        </div>
+        <button class="continue-button" type="button" data-scroll-target="connect">继续学习 <span aria-hidden="true">›</span></button>
+      </div>
+    </section>
+
+    <section class="principle" aria-label="产品原则">
+      <p>一次只推进一步。每一道可判断的输出都被记录；一次答对不会被误判为掌握。</p>
+      <div class="principle-tags" aria-label="关键能力">
+        <span>输出优先</span><span>错误分层</span><span>跨对话保留</span>
+      </div>
+    </section>
+
+    <section class="workflow" id="workflow" aria-labelledby="workflow-title">
+      <div class="section-heading">
+        <span class="eyebrow">清晰分工</span>
+        <h2 id="workflow-title">一个模型，一层记忆。</h2>
+        <p>ChatGPT 负责解释、出题与纠错。Wordloop 只处理结构化状态和交互式卡片。</p>
+      </div>
+      <div class="flow-grid">
+        <article>
+          <span class="step-number">01</span>
+          <h3>导入</h3>
+          <p>把扇贝词表粘贴进卡片。去重但保留原顺序，不覆盖过去的学习进度。</p>
+        </article>
+        <article>
+          <span class="step-number">02</span>
+          <h3>学习</h3>
+          <p>ChatGPT 按 5–7 词推进预测试、发音和输出练习，不一次倾倒全部内容。</p>
+        </article>
+        <article>
+          <span class="step-number">03</span>
+          <h3>记住</h3>
+          <p>每次作答更新错词层与复习时间；下一次对话从真实状态继续。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="connect" id="connect" aria-labelledby="connect-title">
+      <div class="connect-copy">
+        <span class="eyebrow">GPT Sites + MCP</span>
+        <h2 id="connect-title">可以接入，但职责要分开。</h2>
+        <p>同一个 GPT Site 同时提供产品页面和标准 Streamable HTTP <code>/mcp</code>。ChatGPT 连接这个地址，Supabase service-role key 只存在 Sites 的服务端运行环境。</p>
+      </div>
+      <ol class="setup-list">
+        <li><span>1</span><div><strong>初始化 Supabase</strong><p>执行迁移并配置服务端环境变量。</p></div></li>
+        <li><span>2</span><div><strong>配置 Sites 环境变量</strong><p>密钥只注入 Worker，不进入网页或 Widget。</p></div></li>
+        <li><span>3</span><div><strong>连接 ChatGPT</strong><p>在 Developer Mode 中添加本站的 <code>/mcp</code> 地址，然后开始学习。</p></div></li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    <span class="brand footer-brand"><span class="brand-mark" aria-hidden="true">W</span>Wordloop</span>
+    <p>Built for focused, persistent English learning.</p>
+  </footer>
+  <script src="./app.js" defer></script>
+</body>
+</html>
