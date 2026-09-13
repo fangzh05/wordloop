@@ -152,6 +152,8 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .answer-status { margin: 0.7rem 0 0; color: var(--success); font-size: 0.8125rem; line-height: 1.4; }
 .pretest-actions { display: flex; gap: 0.5rem; margin-top: 0.95rem; }
 .pretest-actions .button { flex: 1; }
+.pretest-actions .button.unknown-action { flex: 0 0 5.5rem; color: var(--error); background: var(--control); }
+.pretest-actions .button.unknown-action:hover:not(:disabled), .pretest-actions .button.unknown-action:active:not(:disabled) { background: color-mix(in srgb, var(--error) 12%, transparent); }
 .compact-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.8rem; }
 .compact-header > div { min-width: 0; }
 .focus-mode-button { min-height: 36px; flex: 0 0 auto; padding: 0.4rem 0.7rem; border: 0; border-radius: 999px; background: var(--control); color: var(--accent); font-size: 0.76rem; font-weight: 650; cursor: pointer; }
