@@ -40,7 +40,7 @@ export function createWordloopMcpServer(loadWidgetHtml: WidgetHtmlLoader): McpSe
   const server = new McpServerImpl(
     { name: "wordloop", version: "0.1.0" },
     {
-      instructions: "Use this plugin to retrieve and persist the user's English vocabulary learning state. Before starting a vocabulary study session, call get_learning_context. Record pretest classifications and scored vocabulary attempts. Never invent stored progress. Use render tools only when visual interaction is useful.",
+      instructions: "Use this plugin to retrieve and persist the user's English vocabulary learning state. Before a study session, call get_learning_context. Record pretest classifications and scored vocabulary attempts. Never invent stored progress. When a study session has unanswered words, call render_pretest_widget with one prompt at a time; do not output a batch of pretest questions as prose. After each answer from ui/message, grade it, call record_pretest_result, and continue with the next item. When the user asks for 进度, call get_progress and then render_learning_dashboard in the same turn; show the dashboard instead of prose-only output. When the user asks to import words, call render_word_import. After the user asks for pronunciation cards or dictation, call the corresponding render tool. Data tools alone do not render UI.",
     },
   );
   registerImportWordsTool(server);
