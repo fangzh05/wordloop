@@ -7,6 +7,7 @@ declare const __SITE_CSS__: string;
 declare const __SITE_JS__: string;
 declare const __WIDGET_JS__: string;
 declare const __WIDGET_CSS__: string;
+declare const __MIGRATION_SQL__: string;
 
 type WorkerEnv = {
   SUPABASE_URL?: string;
@@ -19,6 +20,7 @@ const siteCss = typeof __SITE_CSS__ === "string" ? __SITE_CSS__ : "";
 const siteJs = typeof __SITE_JS__ === "string" ? __SITE_JS__ : "";
 const widgetJs = typeof __WIDGET_JS__ === "string" ? __WIDGET_JS__ : "";
 const widgetCss = typeof __WIDGET_CSS__ === "string" ? __WIDGET_CSS__ : "";
+const migrationSql = typeof __MIGRATION_SQL__ === "string" ? __MIGRATION_SQL__ : "-- Wordloop migration is embedded when the Site is built.\n";
 
 function widgetHtml(kind: WidgetKind): Promise<string> {
   return Promise.resolve(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="wordloop-widget" content="${kind}"><style>${widgetCss}</style></head><body><div id="root"></div><script>${widgetJs}</script></body></html>`);
@@ -51,6 +53,7 @@ export const worker = {
     if (request.method === "GET" && url.pathname === "/") return response(siteHtml, "text/html; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/styles.css") return response(siteCss, "text/css; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/app.js") return response(siteJs, "text/javascript; charset=utf-8");
+    if (request.method === "GET" && url.pathname === "/setup.sql") return response(migrationSql, "text/plain; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/health") {
       return response(JSON.stringify({ name: "wordloop", status: "ok", mcp: "/mcp", version: "0.1.0" }), "application/json; charset=utf-8");
     }
