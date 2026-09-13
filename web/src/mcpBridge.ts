@@ -20,9 +20,13 @@ declare global {
 
 const app = new App({ name: "wordloop-widget", version: "0.1.0" }, {}, { autoResize: true });
 const listeners = new Set<Listener>();
+let latestDataEvent: Extract<AppEvent, { type: "toolinput" | "toolresult" }> | undefined;
+let latestThemeEvent: Extract<AppEvent, { type: "theme" }> | undefined;
 let connected: Promise<void> | undefined;
 
 function publish(event: AppEvent): void {
+  if (event.type === "toolinput" || event.type === "toolresult") latestDataEvent = event;
+  if (event.type === "theme") latestThemeEvent = event;
   for (const listener of listeners) listener(event);
 }
 
@@ -41,7 +45,10 @@ export function subscribeToApp(listener: Listener): () => void {
   const preview = window.__WORDLOOP_PREVIEW__;
   if (preview?.payload) {
     listener({ type: "toolresult", value: { content: [], structuredContent: preview.payload } });
+  } else if (latestDataEvent) {
+    listener(latestDataEvent);
   }
+  if (latestThemeEvent) listener(latestThemeEvent);
   return () => listeners.delete(listener);
 }
 
