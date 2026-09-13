@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { ArrowIcon } from "../components/Icons.js";
+import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { callServerTool, requestFocusMode, sampleHostText, sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
 
 const itemSchema = z.object({
   word: z.string().trim().min(1).max(100),
+  ipa: z.string().trim().min(1).max(120),
   prompt: z.string().trim().min(1).max(1000),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
 });
@@ -56,9 +57,13 @@ export function PretestWidget(): React.JSX.Element {
   const [feedback, setFeedback] = useState<GradedAnswer | null>(null);
   const [results, setResults] = useState<GradedAnswer[]>([]);
   const [completed, setCompleted] = useState(false);
+  const [showPronunciation, setShowPronunciation] = useState(false);
+  const [playing, setPlaying] = useState<string | null>(null);
   const [focusModeMessage, setFocusModeMessage] = useState("");
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
   const answerRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false);
+  const speechAvailable = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 
   useEffect(() => subscribeToApp((event) => {
     if (event.type !== "toolinput" && event.type !== "toolresult") return;
@@ -75,13 +80,15 @@ export function PretestWidget(): React.JSX.Element {
     setFeedback(null);
     setResults([]);
     setCompleted(false);
+    setShowPronunciation(false);
     setStatus("idle");
   }), []);
 
   const item = payload?.items[index];
 
   async function submit(): Promise<void> {
-    if (!payload || !item || !answer.trim() || status === "sending" || status === "sent") return;
+    if (!payload || !item || !answer.trim() || status === "sending" || status === "sent" || submittingRef.current) return;
+    submittingRef.current = true;
     const cleanAnswer = answer.trim();
     setStatus("sending");
     setError("");
@@ -92,18 +99,53 @@ export function PretestWidget(): React.JSX.Element {
           `目标词：${item.word}\n题目方向：${item.direction}\n题目：${item.prompt}\n用户答案：${cleanAnswer}\n\n判定规则：known=准确产出目标词或英文释义完整准确；uncertain=方向正确但没有产出目标词、存在轻微拼写错误或释义明显不完整；unknown=答案错误或无关。用中文写一句不超过40字的具体反馈。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`,
           gradeSystemPrompt,
         ));
-      if (!window.__WORDLOOP_PREVIEW__) {
-        const stored = await callServerTool("record_pretest_result", { word: item.word, result: grade.result });
-        if (stored.isError) throw new Error("结果未能保存，请重试。");
-      }
-      const graded = { word: item.word, answer: cleanAnswer, ...grade };
-      setFeedback(graded);
-      setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
-      setStatus("sent");
-      if (index === payload.items.length - 1) setCompleted(true);
+      await saveGrade(cleanAnswer, grade, false);
     } catch (caught) {
       setStatus("error");
       setError(caught instanceof Error ? caught.message : "Answer could not be sent.");
+    } finally {
+      submittingRef.current = false;
+    }
+  }
+
+  async function saveGrade(cleanAnswer: string, grade: { result: PretestResult; feedback: string }, advanceImmediately: boolean): Promise<void> {
+    if (!payload || !item) return;
+    if (!window.__WORDLOOP_PREVIEW__) {
+      const stored = await callServerTool("record_pretest_result", { word: item.word, result: grade.result });
+      if (stored.isError) throw new Error("结果未能保存，请重试。");
+    }
+    const graded = { word: item.word, answer: cleanAnswer, ...grade };
+    setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
+    if (index === payload.items.length - 1) {
+      setFeedback(graded);
+      setStatus("sent");
+      setCompleted(true);
+      return;
+    }
+    if (advanceImmediately) {
+      setIndex((value) => value + 1);
+      setAnswer("");
+      setFeedback(null);
+      setStatus("idle");
+      requestAnimationFrame(() => answerRef.current?.focus());
+      return;
+    }
+    setFeedback(graded);
+    setStatus("sent");
+  }
+
+  async function markUnknown(): Promise<void> {
+    if (!payload || !item || status === "sending" || status === "sent" || submittingRef.current) return;
+    submittingRef.current = true;
+    setStatus("sending");
+    setError("");
+    try {
+      await saveGrade("", { result: "unknown", feedback: "已直接标记为不会。" }, true);
+    } catch (caught) {
+      setStatus("error");
+      setError(caught instanceof Error ? caught.message : "结果未能保存，请重试。");
+    } finally {
+      submittingRef.current = false;
     }
   }
 
@@ -142,14 +184,55 @@ export function PretestWidget(): React.JSX.Element {
     }
   }
 
+  function play(word: string): void {
+    if (!speechAvailable) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = "en-US";
+    utterance.rate = 0.9;
+    utterance.onstart = () => setPlaying(word);
+    utterance.onend = () => setPlaying(null);
+    utterance.onerror = () => setPlaying(null);
+    window.speechSynthesis.speak(utterance);
+  }
+
   if (!payload || !item) {
     return <section className="widget-card skeleton" aria-busy="true"><span>Loading pretest…</span></section>;
   }
 
   const percent = ((index + 1) / payload.items.length) * 100;
   const isLast = index === payload.items.length - 1;
+  const pronunciationWords = results
+    .filter((entry) => entry.result !== "known")
+    .map((entry) => payload.items.find((candidate) => candidate.word === entry.word))
+    .filter((entry): entry is Payload["items"][number] => Boolean(entry));
 
   if (completed) {
+    if (showPronunciation) {
+      return <section className="widget-card pretest-card" aria-labelledby="embedded-pronunciation-title">
+        <header className="widget-header compact-header">
+          <div>
+            <span className="eyebrow">Listen & repeat</span>
+            <h1 id="embedded-pronunciation-title">本轮发音</h1>
+            <p>美式英语 · 点击播放后跟读一遍。</p>
+          </div>
+          <button className="focus-mode-button" type="button" onClick={() => setShowPronunciation(false)}>返回结果</button>
+        </header>
+        {pronunciationWords.length ? <div className="pronunciation-list">
+          {pronunciationWords.map((entry) => <div className="pronunciation-row" key={entry.word}>
+            <div><strong>{entry.word}</strong><span>{entry.ipa}</span></div>
+            <button className="play-button" type="button" onClick={() => play(entry.word)} disabled={!speechAvailable} aria-label={`Play ${entry.word}`}>
+              <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === entry.word ? "Playing" : "Play") : "Audio unavailable"}
+            </button>
+          </div>)}
+        </div> : <div className="inline-feedback known"><strong>全部已会</strong><span>本轮没有需要补发音的词。</span></div>}
+        {error ? <p className="error-text" role="alert">{error}</p> : null}
+        <Button onClick={() => void continueLearning()} disabled={continueStatus === "sending" || continueStatus === "sent"}>
+          {continueStatus === "sending" ? "正在进入下一步…" : continueStatus === "sent" ? "已发送" : "我已跟读，开始学习"}
+          {continueStatus === "idle" ? <ArrowIcon className="button-icon trailing" /> : null}
+        </Button>
+      </section>;
+    }
     return <section className="widget-card pretest-card" aria-labelledby="pretest-complete-title">
       <header className="widget-header compact-header">
         <div>
@@ -169,9 +252,8 @@ export function PretestWidget(): React.JSX.Element {
         })}
       </div>
       {error ? <p className="error-text" role="alert">{error}</p> : null}
-      <Button onClick={() => void continueLearning()} disabled={continueStatus === "sending" || continueStatus === "sent"}>
-        {continueStatus === "sending" ? "正在进入下一步…" : continueStatus === "sent" ? "已发送" : "进入发音阶段"}
-        {continueStatus === "idle" ? <ArrowIcon className="button-icon trailing" /> : null}
+      <Button onClick={() => setShowPronunciation(true)}>
+        打开本轮发音 <ArrowIcon className="button-icon trailing" />
       </Button>
     </section>;
   }
@@ -233,9 +315,12 @@ export function PretestWidget(): React.JSX.Element {
     <div className="pretest-actions">
       {status === "sent" && !isLast ?
         <Button className="secondary" onClick={nextQuestion}>Next question <ArrowIcon className="button-icon trailing" /></Button> :
-        <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending" || status === "sent"}>
-          {status === "sending" ? "正在卡片内批改…" : status === "sent" ? (isLast ? "本轮完成" : "已记录") : "提交答案"}
-        </Button>}
+        <>
+          <Button className="unknown-action" onClick={() => void markUnknown()} disabled={status === "sending" || status === "sent"}>不会</Button>
+          <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending" || status === "sent"}>
+            {status === "sending" ? "正在保存…" : status === "sent" ? (isLast ? "本轮完成" : "已记录") : "提交答案"}
+          </Button>
+        </>}
     </div>
   </section>;
 }
