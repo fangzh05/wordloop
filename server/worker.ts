@@ -55,9 +55,11 @@ export const worker = {
     if (request.method === "GET" && url.pathname === "/app.js") return response(siteJs, "text/javascript; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/setup.sql") return response(migrationSql, "text/plain; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/health") {
-      return response(JSON.stringify({ name: "wordloop", status: "ok", mcp: "/mcp", version: "0.1.0" }), "application/json; charset=utf-8");
+      return response(JSON.stringify({ name: "wordloop", status: "ok", mcp: "/api/mcp", version: "0.1.0" }), "application/json; charset=utf-8");
     }
-    if (url.pathname !== "/mcp") return response("Not found", "text/plain; charset=utf-8", 404);
+    // GPT Sites reserves /mcp before requests reach the Worker. Keep the standard
+    // Streamable HTTP protocol on a non-reserved public path instead.
+    if (url.pathname !== "/api/mcp") return response("Not found", "text/plain; charset=utf-8", 404);
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
     try {
