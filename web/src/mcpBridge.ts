@@ -74,6 +74,31 @@ export async function callServerTool(name: string, args: Record<string, unknown>
   throw new Error("This host cannot call Wordloop tools from the widget.");
 }
 
+export async function sampleHostText(prompt: string, systemPrompt: string): Promise<string> {
+  await connectApp();
+  if (!app.getHostCapabilities()?.sampling) {
+    throw new Error("当前 ChatGPT 客户端不支持卡片内智能批改，请更新客户端后重试。");
+  }
+  const result = await app.createSamplingMessage({
+    messages: [{ role: "user", content: { type: "text", text: prompt } }],
+    systemPrompt,
+    maxTokens: 180,
+    temperature: 0,
+  });
+  const blocks = Array.isArray(result.content) ? result.content : [result.content];
+  const text = blocks.find((block) => block.type === "text");
+  if (!text || text.type !== "text" || !text.text.trim()) throw new Error("ChatGPT 没有返回可用的批改结果。");
+  return text.text.trim();
+}
+
+export async function requestFocusMode(): Promise<boolean> {
+  await connectApp();
+  const context = app.getHostContext();
+  if (!context?.availableDisplayModes?.includes("fullscreen")) return false;
+  const result = await app.requestDisplayMode({ mode: "fullscreen" });
+  return result.mode === "fullscreen";
+}
+
 export async function sendUserMessage(text: string): Promise<void> {
   try {
     await connectApp();
