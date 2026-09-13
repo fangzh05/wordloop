@@ -10,13 +10,13 @@ describe("Sites Worker", () => {
     await expect(result.json()).resolves.toEqual({
       name: "wordloop",
       status: "ok",
-      mcp: "/mcp",
+      mcp: "/api/mcp",
       version: "0.1.0",
     });
   });
 
   it("exposes all MCP tools through stateless Streamable HTTP", async () => {
-    const result = await worker.fetch(new Request(`${testOrigin}/mcp`, {
+    const result = await worker.fetch(new Request(`${testOrigin}/api/mcp`, {
       method: "POST",
       headers: {
         accept: "application/json, text/event-stream",
