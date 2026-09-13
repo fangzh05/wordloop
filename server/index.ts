@@ -38,8 +38,8 @@ export function createHttpApp() {
         pretest: {
           widget: "pretest",
           items: [
-            { word: "empirical", prompt: "经验性的；以观察 / 实验为依据的", direction: "cn_to_en" },
-            { word: "subtle", prompt: "subtle", direction: "en_definition" },
+            { word: "empirical", ipa: "/ɪmˈpɪrɪkəl/", prompt: "经验性的；以观察 / 实验为依据的", direction: "cn_to_en" },
+            { word: "subtle", ipa: "/ˈsʌtəl/", prompt: "subtle", direction: "en_definition" },
           ],
         },
         dashboard: {
