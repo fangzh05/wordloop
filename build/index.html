@@ -93,12 +93,12 @@
       <div class="connect-copy">
         <span class="eyebrow">GPT Sites + MCP</span>
         <h2 id="connect-title">可以接入，但职责要分开。</h2>
-        <p>同一个 GPT Site 同时提供产品页面和标准 Streamable HTTP <code>/mcp</code>。ChatGPT 连接这个地址，Supabase service-role key 只存在 Sites 的服务端运行环境。</p>
+        <p>同一个 GPT Site 同时提供产品页面和标准 Streamable HTTP <code>/api/mcp</code>。ChatGPT 连接这个地址，Supabase service-role key 只存在 Sites 的服务端运行环境。</p>
       </div>
       <ol class="setup-list">
         <li><span>1</span><div><strong>初始化 Supabase</strong><p>在 SQL Editor 粘贴并运行 <a href="/setup.sql">Wordloop setup.sql</a>。</p></div></li>
         <li><span>2</span><div><strong>配置 Sites 环境变量</strong><p>密钥只注入 Worker，不进入网页或 Widget。</p></div></li>
-        <li><span>3</span><div><strong>连接 ChatGPT</strong><p>在 Developer Mode 中添加本站的 <code>/mcp</code> 地址，然后开始学习。</p></div></li>
+        <li><span>3</span><div><strong>连接 ChatGPT</strong><p>在 Developer Mode 中添加本站的 <code>/api/mcp</code> 地址，然后开始学习。</p></div></li>
       </ol>
     </section>
   </main>
