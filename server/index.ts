@@ -29,12 +29,19 @@ export function createHttpApp() {
   if (process.env.ENABLE_WIDGET_PREVIEW === "true") {
     app.get("/preview/:kind", async (req, res) => {
       const kind = req.params.kind;
-      if (!["import", "dashboard", "pronunciation", "dictation"].includes(kind)) {
+      if (!["import", "pretest", "dashboard", "pronunciation", "dictation"].includes(kind)) {
         res.status(404).send("Unknown widget.");
         return;
       }
       const payloads: Record<string, Record<string, unknown>> = {
         import: { widget: "import" },
+        pretest: {
+          widget: "pretest",
+          items: [
+            { word: "empirical", prompt: "经验性的；以观察 / 实验为依据的", direction: "cn_to_en" },
+            { word: "subtle", prompt: "subtle", direction: "en_definition" },
+          ],
+        },
         dashboard: {
           widget: "dashboard",
           progress: {
@@ -53,7 +60,7 @@ export function createHttpApp() {
         dictation: { widget: "dictation", title: "Dictation 1", text: "Rigorous evidence can constrain plausible explanations without eliminating uncertainty." },
       };
       const theme = req.query.theme === "dark" ? "dark" : "light";
-      res.type("html").send(await widgetHtml(kind as "import" | "dashboard" | "pronunciation" | "dictation", { theme, payload: payloads[kind] }));
+      res.type("html").send(await widgetHtml(kind as "import" | "pretest" | "dashboard" | "pronunciation" | "dictation", { theme, payload: payloads[kind] }));
     });
   }
 
