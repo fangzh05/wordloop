@@ -15,6 +15,7 @@ export const WIDGET_URIS = {
 const pronunciationWord = z.object({ word: z.string().trim().min(1).max(100), ipa: z.string().trim().min(1).max(120) });
 const pretestItem = z.object({
   word: z.string().trim().min(1).max(100),
+  ipa: z.string().trim().min(1).max(120).describe("American English IPA, including stress marks"),
   prompt: z.string().trim().min(1).max(1000),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
 });
@@ -30,7 +31,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_pretest_widget", {
     title: "Open Interactive Pretest",
-    description: "Render one self-contained interactive card for a complete 1–7 item pretest round. Put every item in this single call. The widget uses host sampling for inline feedback, records results with tools/call, and advances locally; do not send per-question chat feedback or call this render tool again within the round.",
+    description: "Render one self-contained interactive card for a complete 1–7 item pretest round. Include American IPA for every item. The widget supports a one-tap unknown action, uses host sampling for inline feedback, records results with tools/call, and turns into the pronunciation player after the round. Do not send per-question chat feedback or render a separate pronunciation widget for this round.",
     inputSchema: z.object({
       items: z.array(pretestItem).min(1).max(7),
       current_index: z.number().int().min(0).max(6).default(0),
