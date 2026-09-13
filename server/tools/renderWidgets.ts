@@ -6,25 +6,43 @@ import { safeTool } from "./helpers.js";
 
 export const WIDGET_URIS = {
   import: "ui://wordloop/import.html",
+  pretest: "ui://wordloop/pretest.html",
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
   dictation: "ui://wordloop/dictation.html",
 } as const;
 
 const pronunciationWord = z.object({ word: z.string().trim().min(1).max(100), ipa: z.string().trim().min(1).max(120) });
+const pretestItem = z.object({
+  word: z.string().trim().min(1).max(100),
+  prompt: z.string().trim().min(1).max(1000),
+  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
+});
 
 export function registerRenderTools(server: McpServer): void {
   registerAppTool(server, "render_word_import", {
     title: "Open Word Import",
-    description: "Render the manual Shanbay word import widget.",
+    description: "Render the manual Shanbay word import widget. Call this when the user asks to import or paste a word list.",
     inputSchema: z.object({}),
     _meta: { ui: { resourceUri: WIDGET_URIS.import } },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, () => safeTool(async () => ({ widget: "import" })));
 
+  registerAppTool(server, "render_pretest_widget", {
+    title: "Open Interactive Pretest",
+    description: "Render the one-question-at-a-time vocabulary pretest. Provide a Chinese prompt for cn_to_en or an English word prompt for en_definition. After each answer arrives through ui/message, grade it with record_pretest_result before continuing.",
+    inputSchema: z.object({
+      items: z.array(pretestItem).min(1).max(7),
+      current_index: z.number().int().min(0).max(6).default(0),
+      title: z.string().trim().min(1).max(100).default("Quick pretest"),
+    }),
+    _meta: { ui: { resourceUri: WIDGET_URIS.pretest } },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  }, (input) => safeTool(async () => ({ widget: "pretest", ...input })));
+
   registerAppTool(server, "render_learning_dashboard", {
     title: "Show Learning Dashboard",
-    description: "Render today's vocabulary progress and study actions.",
+    description: "Render today's vocabulary progress and study actions. MUST be called after get_progress when the user asks for 进度, so the user receives the interactive dashboard.",
     inputSchema: z.object({}),
     _meta: { ui: { resourceUri: WIDGET_URIS.dashboard } },
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -49,4 +67,3 @@ export function registerRenderTools(server: McpServer): void {
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, (input) => safeTool(async () => ({ widget: "dictation", ...input })));
 }
-
