@@ -6,7 +6,7 @@ describe("GPT Sites surface", () => {
     const html = await readFile(new URL("../build/index.html", import.meta.url), "utf8");
     expect(html).toContain('<link rel="stylesheet" href="./styles.css"');
     expect(html).toContain('<script src="./app.js" defer></script>');
-    expect(html).toContain("/mcp");
+    expect(html).toContain("/api/mcp");
     expect(html).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|service_role_key|access_token/i);
   });
 
