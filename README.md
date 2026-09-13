@@ -128,7 +128,7 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. Run [`supabase/migrations/202609130001_initial_wordloop.sql`](supabase/migrations/202609130001_initial_wordloop.sql).
+3. Run [`supabase/migrations/202609130001_initial_wordloop.sql`](supabase/migrations/202609130001_initial_wordloop.sql). On the deployed Site, the same script is available at [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql), which is convenient when the GitHub repository is private.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 
