@@ -110,8 +110,18 @@ export function createHttpApp() {
 
 const isEntrypoint = process.argv[1] && new URL(import.meta.url).pathname === process.argv[1];
 if (isEntrypoint) {
-  const port = Number(process.env.PORT ?? 3000);
-  const host = process.env.HOST ?? "127.0.0.1";
+  const argumentValue = (name: string): string | undefined => {
+    const position = process.argv.indexOf(name);
+    return position >= 0 ? process.argv[position + 1] : undefined;
+  };
+  const port = Number(argumentValue("--port") ?? process.env.PORT ?? 3000);
+  const host = argumentValue("--host") ?? process.env.HOST ?? "127.0.0.1";
+  process.env.PORT = String(port);
+  process.env.HOST = host;
+  if (process.argv.includes("--strictPort")) {
+    process.env.ENABLE_WIDGET_PREVIEW = "true";
+    process.env.ALLOWED_HOSTS = [process.env.ALLOWED_HOSTS, "terminal.local"].filter(Boolean).join(",");
+  }
   createHttpApp().listen(port, host, () => {
     console.log(`Wordloop listening on http://${host}:${port}`);
   });
