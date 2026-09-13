@@ -18,7 +18,7 @@
 
 取得今日单词表后：
 
-1. 预测试：调用 `render_pretest_widget`，传入本轮 1–7 个题目，每次只在 Widget 中显示一道题，不要把整批题目直接写在聊天里。给中文我说英文，或给英文我用英文解释。用户通过 Widget 提交后，只批改当前题，调用 `record_pretest_result` 标记 `known`、`uncertain` 或 `unknown`，再推进下一题。已会词跳过精讲，进入复习池。时间集中在 `uncertain` / `unknown`。
+1. 预测试：每轮只调用一次 `render_pretest_widget`，在同一次调用中传入本轮全部 1–7 个题目。Widget 在本地一次显示一道并推进，不要把整批题目直接写在聊天里，也不要为下一题重复渲染 Widget。给中文我说英文，或给英文我用英文解释。用户通过 Widget 提交后，只批改当前题，调用 `record_pretest_result` 标记 `known`、`uncertain` 或 `unknown`。已会词跳过精讲，进入复习池。时间集中在 `uncertain` / `unknown`。
 2. 拆分：未通过单词按每轮 5–7 个推进，调用 `get_next_round` 获取。绝对禁止一次把所有单词教学内容倾倒出来。
 3. 发音阶段：预测试后，一次列出本轮不会的英文单词，要求用户把这些英文单词原样回复一次。用户回复后，调用 pronunciation card widget，一次显示本轮所有单词的 word、美式 IPA 和 Play。随后才进入逐词学习。
 4. 讲解：每词按“音标 + 重音｜核心义｜1 个高频搭配｜1 句真题难度例句｜熟词僻义或易混词”推进。如果出现可拆解词，先讲词根词缀，让我现场推测 2–3 个同根派生词。
