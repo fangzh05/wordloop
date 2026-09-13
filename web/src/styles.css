@@ -121,6 +121,19 @@ textarea::placeholder { color: var(--muted); opacity: 0.72; }
 .result-strip small { display: block; margin-top: 0.18rem; color: var(--muted); font-size: 0.72rem; line-height: 1.2; }
 .error-text { margin: 0.65rem 0 0; color: var(--error); font-size: 0.8125rem; line-height: 1.4; }
 
+.pretest-meta { display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: 0.78rem; font-weight: 620; }
+.pretest-progress { height: 7px; margin: 0.7rem 0 1.15rem; overflow: hidden; border-radius: 999px; background: var(--control); }
+.pretest-progress span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 260ms cubic-bezier(.22,.8,.35,1); }
+.question-block { padding: 1.05rem 1.1rem 1.2rem; border: 1px solid var(--separator); border-radius: 16px; background: var(--control); }
+.question-label { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 650; letter-spacing: 0.015em; }
+.question-prompt { margin: 0.72rem 0 0; color: var(--text); font-size: 1.28rem; line-height: 1.38; font-weight: 620; letter-spacing: -0.018em; }
+.answer-label { display: block; margin-top: 1rem; color: var(--muted); font-size: 0.78rem; font-weight: 650; }
+.answer-input { min-height: 6.5rem; margin-top: 0.4rem; }
+.answer-hint { margin: 0.42rem 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.35; }
+.answer-status { margin: 0.7rem 0 0; color: var(--success); font-size: 0.8125rem; line-height: 1.4; }
+.pretest-actions { display: flex; gap: 0.5rem; margin-top: 0.95rem; }
+.pretest-actions .button { flex: 1; }
+
 .dashboard-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
 .progress-number { white-space: nowrap; line-height: 1; font-variant-numeric: tabular-nums; }
 .progress-number strong { font-size: 2.5rem; font-weight: 680; letter-spacing: -0.055em; }
@@ -163,6 +176,7 @@ textarea::placeholder { color: var(--muted); opacity: 0.72; }
   .dashboard-heading { align-items: flex-start; flex-direction: column; gap: 0.45rem; }
   .button-row.dashboard-actions { flex-direction: column; }
   .button-row.dashboard-actions .button { width: 100%; }
+  .pretest-meta { align-items: flex-start; flex-direction: column; gap: 0.28rem; }
   .pronunciation-row > div { align-items: flex-start; flex-direction: column; gap: 0.18rem; }
   .dictation-controls { align-items: stretch; }
   .dictation-controls .button { flex: 1; min-width: 0; }
