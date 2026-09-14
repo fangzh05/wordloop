@@ -38,7 +38,7 @@ export function PronunciationCards(): React.JSX.Element {
   }
 
   return <section className="widget-card" aria-labelledby="pronunciation-title">
-    <header className="widget-header"><span className="eyebrow">Listen first</span><h1 id="pronunciation-title">Pronunciation</h1><p>American English · tap a word to hear it</p></header>
+    <header className="widget-header"><span className="eyebrow">先听再读</span><h1 id="pronunciation-title">发音</h1><p>美式英语 · 点击播放</p></header>
     <div className="pronunciation-list">
       {words.map((item) => <div className="pronunciation-row" key={item.word}>
         <div className="pronunciation-copy">
@@ -46,8 +46,8 @@ export function PronunciationCards(): React.JSX.Element {
           <span className="ipa">{item.ipa}</span>
           {item.meaning_zh ? <span className="meaning-zh">{item.meaning_zh}</span> : null}
         </div>
-        <button className="play-button" type="button" onClick={() => play(item.word)} disabled={!speechAvailable} aria-label={`Play ${item.word}`}>
-          <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === item.word ? "Playing" : "Play") : "Audio unavailable"}
+        <button className="play-button" type="button" onClick={() => play(item.word)} disabled={!speechAvailable} aria-label={`播放 ${item.word}`}>
+          <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === item.word ? "正在播放" : "播放") : "当前设备无法播放"}
         </button>
       </div>)}
     </div>

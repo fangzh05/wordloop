@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:inspector": "npm run build && node scripts/inspect-mcp.mjs"
+    "test:inspector": "npm run build && node scripts/inspect-mcp.mjs",
+    "check:shanbay": "node --import tsx scripts/check-shanbay.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.5",

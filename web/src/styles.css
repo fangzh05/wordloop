@@ -192,6 +192,8 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .source-card small, .helper-text { color: var(--muted); font-size: 0.75rem; line-height: 1.45; }
 .field-label { display: block; margin: 0.7rem 0 0.35rem; color: var(--muted); font-size: 0.78rem; font-weight: 620; }
 input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.7rem 0.8rem; border: 1px solid var(--separator); border-radius: 12px; background: var(--control); color: var(--text); font: inherit; }
+.advanced-options { margin: 0.8rem 0; }
+.advanced-options summary { color: var(--accent); cursor: pointer; font-size: 0.82rem; font-weight: 620; }
 .import-metrics { margin-bottom: 0.75rem; }
 .import-progress { margin: 0.85rem 0 0.25rem; padding: 0.8rem 0.85rem; border-radius: 14px; background: var(--control); }
 .import-progress-label { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; color: var(--muted); font-size: 0.78rem; }
@@ -203,6 +205,20 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .manual-import .button { width: 100%; margin-top: 0.55rem; }
 .dashboard-actions .button:first-child { flex: 1; }
 .skeleton { min-height: 9rem; display: grid; place-items: center; color: var(--muted); font-size: 0.875rem; }
+
+.daily-limit { margin: 0.9rem 0 0.25rem; padding: 0.85rem; border-radius: 14px; background: var(--control); }
+.daily-limit-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.daily-limit-heading .eyebrow { margin-bottom: 0.2rem; }
+.daily-limit-heading strong { font-size: 0.875rem; font-weight: 650; }
+.daily-limit-input-row { display: grid; grid-template-columns: 2.7rem minmax(4.25rem, 1fr) 2.7rem auto; gap: 0.45rem; align-items: center; margin-top: 0.7rem; }
+.daily-limit-input-row > button, .daily-limit-presets button { min-height: 40px; border: 0; border-radius: 10px; background: var(--material-raised); color: var(--accent); font-size: 1rem; font-weight: 650; cursor: pointer; }
+.daily-limit-input-row > button:disabled, .daily-limit-presets button:disabled { cursor: not-allowed; opacity: 0.45; }
+.daily-limit-input-row input { width: 100%; min-height: 40px; border: 1px solid transparent; border-radius: 10px; background: var(--material-raised); color: var(--text); text-align: center; outline: none; font-variant-numeric: tabular-nums; }
+.daily-limit-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+.daily-limit-input-row .button { min-height: 40px; padding-inline: 0.75rem; }
+.daily-limit-presets { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+.daily-limit-presets button { min-height: 32px; min-width: 2.6rem; padding: 0.3rem 0.55rem; font-size: 0.75rem; }
+.daily-limit .helper-text { margin: 0.6rem 0 0; }
 
 .pronunciation-list { display: grid; gap: 0; overflow: hidden; background: var(--control); border-radius: 15px; }
 .pronunciation-row { display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; min-height: 3.8rem; margin: 0 0.85rem; padding: 0.65rem 0; border-bottom: 1px solid var(--separator); }
@@ -240,6 +256,8 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
   .compact-header { align-items: center; }
   .dictation-controls { align-items: stretch; }
   .dictation-controls .button { flex: 1; min-width: 0; }
+  .daily-limit-input-row { grid-template-columns: 2.5rem minmax(3.5rem, 1fr) 2.5rem; }
+  .daily-limit-input-row .button { grid-column: 1 / -1; width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

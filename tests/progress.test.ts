@@ -20,6 +20,7 @@ describe("progress calculation", () => {
       today: { total: 4, known: 1, uncertain: 1, unknown: 1, completed: 4 },
       all_time: { total_words: 5, mastered: 1, learning: 3, error_book: 1 },
       fsrs: { due_now: 0, due_today: 0, tomorrow: 0, due_next_7_days: 0, average_stability: 0 },
+      settings: { daily_new_word_limit: 50 },
     });
   });
 });

@@ -32,19 +32,19 @@ export function DictationWidget(): React.JSX.Element {
   }
 
   return <section className="widget-card dictation-card" aria-labelledby="dictation-title">
-    <header className="widget-header"><span className="eyebrow">Listening practice</span><h1 id="dictation-title">{payload?.title ?? "Dictation"}</h1><p>The transcript stays hidden until you reveal it.</p></header>
+    <header className="widget-header"><span className="eyebrow">听力练习</span><h1 id="dictation-title">{payload?.title ?? "听写"}</h1><p>原文默认隐藏，需要时再显示。</p></header>
     <div className="dictation-controls">
-      <Button className="round-play" onClick={play} disabled={!payload || !speechAvailable}><PlayIcon className="button-icon" /> {playing ? "Playing" : "Play"}</Button>
-      <Button className="secondary" onClick={play} disabled={!payload || !speechAvailable}><ReplayIcon className="button-icon" /> Replay</Button>
+      <Button className="round-play" onClick={play} disabled={!payload || !speechAvailable}><PlayIcon className="button-icon" /> {playing ? "正在播放" : "播放"}</Button>
+      <Button className="secondary" onClick={play} disabled={!payload || !speechAvailable}><ReplayIcon className="button-icon" /> 重播</Button>
     </div>
-    {!speechAvailable ? <p className="error-text">Audio unavailable</p> : null}
+    {!speechAvailable ? <p className="error-text">当前设备无法播放</p> : null}
     <div className="divider" />
     <fieldset className="speed-control">
-      <legend>Speed</legend>
+      <legend>速度</legend>
       {[0.75, 1, 1.25].map((option) => <button type="button" key={option} className={rate === option ? "selected" : ""} onClick={() => setRate(option)}>{option}×</button>)}
     </fieldset>
     <Button className="secondary transcript-button" onClick={() => setShowTranscript((value) => !value)} disabled={!payload}>
-      {showTranscript ? "Hide transcript" : "Show transcript"}
+      {showTranscript ? "隐藏原文" : "显示原文"}
     </Button>
     {showTranscript && payload ? <p className="transcript" aria-live="polite">{payload.text}</p> : null}
   </section>;

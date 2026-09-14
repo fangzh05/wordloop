@@ -52,6 +52,7 @@ wordloop/
 ├── scripts/
 │   ├── build-sites-worker.ts
 │   ├── build-widgets.ts
+│   ├── check-shanbay.ts
 │   └── inspect-mcp.mjs
 ├── server/
 │   ├── index.ts
@@ -94,7 +95,8 @@ wordloop/
 │       └── saveSentence.ts
 ├── supabase/migrations/
 │   ├── 202609130001_initial_wordloop.sql
-│   └── 202609130002_fsrs_shanbay.sql
+│   ├── 202609130002_fsrs_shanbay.sql
+│   └── 202609140003_daily_queue_ui_fix.sql
 ├── tests/
 │   ├── mcpHttp.test.ts
 │   ├── fsrsReview.test.ts
@@ -151,7 +153,7 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. Run both SQL migrations in filename order. On the deployed Site, [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql) contains the combined scripts.
+3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001, 002, and 003 in that order. If a real database already ran the older 001 + 002 setup, do **not** rerun the combined file: execute only [`202609140003_daily_queue_ui_fix.sql`](supabase/migrations/202609140003_daily_queue_ui_fix.sql). It preserves all existing imports, attempts, FSRS cards, and error layers.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 
@@ -199,7 +201,7 @@ npm start
 | `record_attempt` | Save an ordinary exercise and update counters/error repair only; never advance FSRS. |
 | `record_review_result` | Advance FSRS exactly once for a genuine independent retrieval. |
 | `prepare_daily_new_words` | Allocate the configured daily limit from the vocabulary pool. |
-| `set_daily_new_word_limit` | Configure the daily allocation limit from 10 to 100. |
+| `set_daily_new_word_limit` | Configure the daily allocation limit from 1 to 200. |
 | `get_current_shanbay_book` | Read the current Shanbay book using server-only credentials. |
 | `preview_shanbay_book` | Count all three complete source states without importing. |
 | `import_shanbay_book` | Idempotently migrate one bounded chunk of a current or ID-selected book; repeat with `next_cursor` until `complete=true`. |
@@ -269,9 +271,11 @@ Shanbay is an optional, removable one-time migration adapter under `server/integ
 
 No reliable public user-bookshelf endpoint was found, so V1 deliberately does not guess one. The import card supports the current book, refresh-after-switching, and an advanced materialbook ID field. It never switches the user's Shanbay current book. After migration, Shanbay state is metadata only and cannot reset Wordloop state, attempts, errors, or the single FSRS card.
 
-Importing thousands of words fills the vocabulary pool, not today's list. Call `prepare_daily_new_words` to allocate the user's `daily_new_word_limit` (default 50, range 10–100) into the existing pretest workflow.
+Importing thousands of words fills the vocabulary pool, not today's list. Call `prepare_daily_new_words` to allocate the user's `daily_new_word_limit` (default 50, range 1–200) into the existing pretest workflow. A word that is still `new` remains eligible on the following day; only a word already scheduled **today** is excluded. The daily limit counts all of today's existing queues, so a legacy/manual 30-word queue is supplemented only up to the current limit rather than becoming 30 + 50.
 
-`tests/supabase.integration.test.ts` runs automatically when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are present. It creates an isolated temporary user, verifies duplicate imports, records an error, reads the same state through a second independent learning-context call (representing a new ChatGPT conversation), verifies the error persists, clears it after two correct repairs, and deletes the temporary user.
+Validated against a real Shanbay account on 2026-09-14. No Shanbay credentials, user identifiers, or source payloads are stored in this repository.
+
+`tests/supabase.integration.test.ts` runs automatically when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are present. It creates an isolated temporary user, verifies the 1–200 setting, incomplete-new-word carryover to the next day, same-day idempotency, legacy-queue capacity, lowering/raising limits, FSRS/attempt isolation, review logs, idempotent Shanbay re-import, and a second independent learning-context read. It then deletes the temporary user.
 
 ## ChatGPT Developer Mode connection
 

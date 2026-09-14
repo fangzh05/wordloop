@@ -74,4 +74,5 @@ export interface ProgressResult {
   today: { total: number; known: number; uncertain: number; unknown: number; completed: number };
   all_time: { total_words: number; mastered: number; learning: number; error_book: number };
   fsrs: { due_now: number; due_today: number; tomorrow: number; due_next_7_days: number; average_stability: number };
+  settings: { daily_new_word_limit: number };
 }

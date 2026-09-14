@@ -154,7 +154,7 @@ export function PretestWidget(): React.JSX.Element {
       await saveGrade(cleanAnswer, grade, false);
     } catch (caught) {
       setStatus("error");
-      setError(caught instanceof Error ? caught.message : "Answer could not be sent.");
+      setError(caught instanceof Error ? caught.message : "答案未能提交，请重试。");
     } finally {
       submittingRef.current = false;
     }
@@ -255,7 +255,7 @@ export function PretestWidget(): React.JSX.Element {
   }
 
   if (!payload || !item) {
-    return <section className="widget-card skeleton" aria-busy="true"><span>Loading pretest…</span></section>;
+    return <section className="widget-card skeleton" aria-busy="true"><span>正在加载预测试…</span></section>;
   }
 
   const percent = ((index + 1) / payload.items.length) * 100;
@@ -270,7 +270,7 @@ export function PretestWidget(): React.JSX.Element {
       return <section className="widget-card pretest-card" aria-labelledby="embedded-pronunciation-title">
         <header className="widget-header compact-header">
           <div>
-            <span className="eyebrow">Listen & repeat</span>
+            <span className="eyebrow">先听再读</span>
             <h1 id="embedded-pronunciation-title">本轮发音</h1>
             <p>美式英语 · 点击播放后跟读一遍。</p>
           </div>
@@ -283,8 +283,8 @@ export function PretestWidget(): React.JSX.Element {
               <span className="ipa">{entry.ipa}</span>
               <span className="meaning-zh">{entry.meaning_zh}</span>
             </div>
-            <button className="play-button" type="button" onClick={() => play(entry.word)} disabled={!speechAvailable} aria-label={`Play ${entry.word}`}>
-              <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === entry.word ? "Playing" : "Play") : "Audio unavailable"}
+            <button className="play-button" type="button" onClick={() => play(entry.word)} disabled={!speechAvailable} aria-label={`播放 ${entry.word}`}>
+              <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === entry.word ? "正在播放" : "播放") : "当前设备无法播放"}
             </button>
           </div>)}
         </div> : <div className="inline-feedback known"><strong>全部已会</strong><span>本轮没有需要补发音的词。</span></div>}
@@ -298,7 +298,7 @@ export function PretestWidget(): React.JSX.Element {
     return <section className="widget-card pretest-card" aria-labelledby="pretest-complete-title">
       <header className="widget-header compact-header">
         <div>
-          <span className="eyebrow">Round complete</span>
+          <span className="eyebrow">本轮完成</span>
           <h1 id="pretest-complete-title">预测试完成</h1>
           <p>结果已经写入 Wordloop，不需要回到聊天记录逐条查看。</p>
         </div>
@@ -323,8 +323,8 @@ export function PretestWidget(): React.JSX.Element {
   return <section className="widget-card pretest-card" aria-labelledby="pretest-title">
     <header className="widget-header compact-header">
       <div>
-        <span className="eyebrow">Active recall</span>
-        <h1 id="pretest-title">{payload.title ?? "Quick pretest"}</h1>
+        <span className="eyebrow">主动回忆</span>
+        <h1 id="pretest-title">{payload.title ?? "快速预测试"}</h1>
         <p>答案、批改和进度都留在这张卡片里。</p>
       </div>
       <button className="focus-mode-button" type="button" onClick={() => void enterFocusMode()}>专注模式</button>
@@ -332,19 +332,19 @@ export function PretestWidget(): React.JSX.Element {
     {focusModeMessage ? <p className="answer-hint" role="status">{focusModeMessage}</p> : null}
 
     <div className="pretest-meta">
-      <span>Question {index + 1} of {payload.items.length}</span>
+      <span>第 {index + 1} 题，共 {payload.items.length} 题</span>
       <span>{directionLabel(item.direction)}</span>
     </div>
-    <div className="pretest-progress" role="progressbar" aria-label="Pretest progress" aria-valuemin={0} aria-valuemax={payload.items.length} aria-valuenow={index + 1}>
+    <div className="pretest-progress" role="progressbar" aria-label="预测试进度" aria-valuemin={0} aria-valuemax={payload.items.length} aria-valuenow={index + 1}>
       <span style={{ width: `${percent}%` }} />
     </div>
 
     <div className="question-block">
-      <span className="question-label">{item.direction === "cn_to_en" ? "Translate into English" : "Explain in English"}</span>
+      <span className="question-label">{item.direction === "cn_to_en" ? "翻译成英文" : "用英文解释"}</span>
       <p className="question-prompt">{item.prompt}</p>
     </div>
 
-    <label className="answer-label" htmlFor="pretest-answer">Your answer</label>
+    <label className="answer-label" htmlFor="pretest-answer">你的答案</label>
     <input
       ref={answerRef}
       id="pretest-answer"
@@ -358,7 +358,7 @@ export function PretestWidget(): React.JSX.Element {
           void submit();
         }
       }}
-      placeholder={item.direction === "cn_to_en" ? "Type the English word…" : "Write a short English definition…"}
+      placeholder={item.direction === "cn_to_en" ? "输入英文单词…" : "写一句简短英文释义…"}
       autoCapitalize="none"
       autoComplete="off"
       spellCheck={false}
@@ -376,7 +376,7 @@ export function PretestWidget(): React.JSX.Element {
 
     <div className="pretest-actions">
       {status === "sent" && !isLast ?
-        <Button className="secondary" onClick={nextQuestion}>Next question <ArrowIcon className="button-icon trailing" /></Button> :
+        <Button className="secondary" onClick={nextQuestion}>下一题 <ArrowIcon className="button-icon trailing" /></Button> :
         <>
           <Button className="unknown-action" onClick={() => void markUnknown()} disabled={status === "sending" || status === "sent"}>不会</Button>
           <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending" || status === "sent"}>

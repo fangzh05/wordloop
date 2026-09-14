@@ -29,47 +29,47 @@ const pretestItem = z.object({
 
 export function registerRenderTools(server: McpServer): void {
   registerAppTool(server, "render_word_import", {
-    title: "Open Word Import",
-    description: "Render the one-time Shanbay book migration UI with current-book, materialbook ID, preview, full import, and manual fallback.",
+    title: "打开词表导入",
+    description: "显示一次性扇贝词书迁移界面，包含当前词书、预览、完整导入和手动导入备用方式。",
     inputSchema: z.object({}),
     _meta: { ui: { resourceUri: WIDGET_URIS.import } },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, () => safeTool(async () => ({ widget: "import" })));
 
   registerAppTool(server, "render_pretest_widget", {
-    title: "Open Interactive Pretest",
-    description: "Render one self-contained interactive card for a complete 1–7 item NEW-WORD pretest round. Include American IPA, part of speech, and concise Chinese meaning for every item. The widget restores saved classifications from Wordloop, supports a one-tap unknown action, records results with tools/call, and turns into the pronunciation player after the round. Do not use this tool for rolling review, send per-question chat feedback, or render a separate pronunciation widget for this round.",
+    title: "打开预测试",
+    description: "显示一张完整的 1–7 题新词预测试卡片。每题包含美式 IPA、词性和简明中文核心义；卡片会恢复已保存结果，支持一键标记不会、卡内批改和本轮发音，不要逐题在聊天区重复反馈。",
     inputSchema: z.object({
       items: z.array(pretestItem).min(1).max(7),
       current_index: z.number().int().min(0).max(6).default(0),
-      title: z.string().trim().min(1).max(100).default("Quick pretest"),
+      title: z.string().trim().min(1).max(100).default("快速预测试"),
     }),
     _meta: { ui: { resourceUri: WIDGET_URIS.pretest } },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, (input) => safeTool(async () => ({ widget: "pretest", ...input })));
 
   registerAppTool(server, "render_learning_dashboard", {
-    title: "Show Learning Dashboard",
-    description: "Render today's vocabulary progress and study actions. MUST be called after get_progress when the user asks for 进度, so the user receives the interactive dashboard.",
+    title: "显示学习进度",
+    description: "显示今日词汇进度和学习操作。用户询问进度时，应先调用 get_progress，再调用此工具显示交互式面板。",
     inputSchema: z.object({}),
     _meta: { ui: { resourceUri: WIDGET_URIS.dashboard } },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, () => safeTool(async () => ({ widget: "dashboard", progress: await getProgress() })));
 
   registerAppTool(server, "render_pronunciation_cards", {
-    title: "Show Pronunciation Cards",
-    description: "Render 5–7 user-triggered American English pronunciation cards after the user repeats the words.",
+    title: "显示发音卡片",
+    description: "显示 5–7 个由用户点击播放的美式英语发音卡片。",
     inputSchema: z.object({ words: z.array(pronunciationWord).min(1).max(7) }),
     _meta: { ui: { resourceUri: WIDGET_URIS.pronunciation } },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, (input) => safeTool(async () => ({ widget: "pronunciation", ...input })));
 
   registerAppTool(server, "render_dictation_widget", {
-    title: "Open Dictation",
-    description: "Render a user-triggered speech-synthesis dictation player with the transcript hidden by default.",
+    title: "打开听写",
+    description: "显示由用户点击播放的听写播放器，原文默认隐藏。",
     inputSchema: z.object({
       text: z.string().trim().min(1).max(4000),
-      title: z.string().trim().min(1).max(100).default("Dictation"),
+      title: z.string().trim().min(1).max(100).default("听写"),
     }),
     _meta: { ui: { resourceUri: WIDGET_URIS.dictation } },
     annotations: { readOnlyHint: true, openWorldHint: false },

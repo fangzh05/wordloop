@@ -46,6 +46,23 @@ export async function getUserTimeZone(db = getDatabase(), userId = getAuthentica
   return (data as { timezone?: string } | null)?.timezone ?? "Asia/Shanghai";
 }
 
+export async function getDailyNewWordLimit(
+  db = getDatabase(), userId = getAuthenticatedUserId(),
+): Promise<number> {
+  const { error: ensureError } = await db
+    .from("users")
+    .upsert({ id: userId }, { onConflict: "id", ignoreDuplicates: true });
+  assertDatabaseResult(ensureError);
+  const { data, error } = await db
+    .from("users")
+    .select("daily_new_word_limit")
+    .eq("id", userId)
+    .maybeSingle();
+  assertDatabaseResult(error);
+  const value = (data as { daily_new_word_limit?: number } | null)?.daily_new_word_limit;
+  return typeof value === "number" ? value : 50;
+}
+
 export async function importWords(input: {
   words: string[];
   date?: string;
@@ -185,11 +202,11 @@ export function toVocabularyItem(
 
 export async function prepareDailyNewWords(
   db = getDatabase(), userId = getAuthenticatedUserId(), date?: string,
-): Promise<{ date: string; prepared: number; limit: number }> {
+): Promise<{ date: string; prepared: number; added: number; limit: number }> {
   const targetDate = date ?? dateInTimeZone(await getUserTimeZone(db, userId));
   const { data, error } = await db.rpc("prepare_daily_new_words_v1", { p_user_id: userId, p_date: targetDate });
   assertDatabaseResult(error);
-  return data as { date: string; prepared: number; limit: number };
+  return data as { date: string; prepared: number; added: number; limit: number };
 }
 
 export async function setDailyNewWordLimit(limit: number): Promise<{ daily_new_word_limit: number }> {

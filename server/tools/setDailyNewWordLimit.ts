@@ -5,9 +5,9 @@ import { safeTool } from "./helpers.js";
 
 export function registerSetDailyNewWordLimitTool(server: McpServer): void {
   server.registerTool("set_daily_new_word_limit", {
-    title: "Set daily new-word limit",
-    description: "Set how many vocabulary-pool words Wordloop may allocate per day.",
-    inputSchema: z.object({ limit: z.number().int().min(10).max(100) }),
+    title: "设置每日新词数量",
+    description: "设置 Wordloop 每天可从词库安排的新词数量（1–200）。",
+    inputSchema: z.object({ limit: z.number().int().min(1).max(200) }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, (input) => safeTool(() => setDailyNewWordLimit(input.limit)));
 }

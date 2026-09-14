@@ -18,6 +18,6 @@ const widgets: Record<string, React.JSX.Element> = {
 };
 
 const root = document.getElementById("root");
-if (!root) throw new Error("Wordloop root element is missing.");
-createRoot(root).render(<StrictMode>{widgets[kind ?? ""] ?? <p className="error-text">Unknown Wordloop widget.</p>}</StrictMode>);
+if (!root) throw new Error("Wordloop widget root is missing.");
+createRoot(root).render(<StrictMode>{widgets[kind ?? ""] ?? <p className="error-text">无法识别 WordLoop 卡片。</p>}</StrictMode>);
 void connectApp();

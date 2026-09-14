@@ -48,6 +48,7 @@ export function createHttpApp() {
             today: { total: 50, known: 13, uncertain: 8, unknown: 5, completed: 26 },
             all_time: { total_words: 821, mastered: 574, learning: 230, error_book: 7 },
             fsrs: { due_now: 4, due_today: 11, tomorrow: 8, due_next_7_days: 38, average_stability: 12.4 },
+            settings: { daily_new_word_limit: 50 },
           },
         },
         pronunciation: {
@@ -58,7 +59,7 @@ export function createHttpApp() {
             { word: "rigorous", ipa: "/ˈrɪɡərəs/", part_of_speech: "adj.", meaning_zh: "严谨的；严格的" },
           ],
         },
-        dictation: { widget: "dictation", title: "Dictation 1", text: "Rigorous evidence can constrain plausible explanations without eliminating uncertainty." },
+        dictation: { widget: "dictation", title: "听写 1", text: "Rigorous evidence can constrain plausible explanations without eliminating uncertainty." },
       };
       const theme = req.query.theme === "dark" ? "dark" : "light";
       const toolResults = kind === "import" ? {

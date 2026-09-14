@@ -1,7 +1,7 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ActiveErrorLayer, UserWordRow, VocabularyItem } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
-import { getAllUserWords, getTodayWords, getUserTimeZone } from "./words.js";
+import { getAllUserWords, getDailyNewWordLimit, getTodayWords, getUserTimeZone } from "./words.js";
 import { fsrsForecast } from "./progress.js";
 
 function byReviewPriority(a: VocabularyItem, b: VocabularyItem): number {
@@ -37,16 +37,18 @@ export async function getLearningContext(): Promise<{
   recent_activity: Array<{ word: string; activity_type: string; is_correct: boolean; result: string; created_at: string }>;
   stats: { today_total: number; today_completed: number; total_learned: number; error_book: number };
   fsrs: { due_now: number; due_today: number; due_next_7_days: number };
+  settings: { daily_new_word_limit: number };
   session_rules: { initial_review_count: number; round_size_min: number; round_size_max: number; error_clear_after_consecutive_correct: number };
 }> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const timeZone = await getUserTimeZone(db, userId);
   const date = dateInTimeZone(timeZone);
-  const [todayWords, all, recentActivity] = await Promise.all([
+  const [todayWords, all, recentActivity, dailyNewWordLimit] = await Promise.all([
     getTodayWords(date, db, userId),
     getAllUserWords(db, userId),
     getRecentActivity(db, userId),
+    getDailyNewWordLimit(db, userId),
   ]);
   const reviews = { rollingReview: selectReviewWords(all, 5), oldRandomReview: [] as VocabularyItem[] };
   const forecast = fsrsForecast(all, timeZone);
@@ -67,6 +69,7 @@ export async function getLearningContext(): Promise<{
       total_learned: all.filter((word) => word.status !== "new").length,
       error_book: all.filter((word) => word.error_layers.length > 0).length,
     },
+    settings: { daily_new_word_limit: dailyNewWordLimit },
     session_rules: {
       initial_review_count: 5,
       round_size_min: 5,

@@ -12,7 +12,7 @@
 
 ## 会话开始
 
-每次真正开始英语学习前，先调用 `get_learning_context`。如果迁移词库后今日列表为空，调用一次 `prepare_daily_new_words`，再重新读取 context。优先检查错误层仍活跃的词和 FSRS 已到期词，最多 5 个；不足 5 个时不提前抽取未到期词。只给中文义或语境，让我产出英文。不要同时公布答案。
+每次真正开始英语学习前，先调用 `get_learning_context`。如果迁移词库后今日列表为空，调用一次 `prepare_daily_new_words`，再重新读取 context。每日新词数量由用户设置决定，默认 50，不是固定值。用户明确说“今天学 20 个”“每天 30 个”或“新词改成 50”时，依次调用 `set_daily_new_word_limit` → `prepare_daily_new_words` → `get_learning_context`；若降低数量，不删除今天已经准备的内容。优先检查错误层仍活跃的词和 FSRS 已到期词，最多 5 个；不足 5 个时不提前抽取未到期词。只给中文义或语境，让我产出英文。不要同时公布答案。
 
 ## 单词表工作流
 

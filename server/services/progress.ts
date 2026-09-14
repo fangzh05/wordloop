@@ -1,18 +1,19 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ProgressResult } from "../types.js";
 import { dateInTimeZone } from "./shared.js";
-import { getAllUserWords, getTodayWords, getUserTimeZone } from "./words.js";
+import { getAllUserWords, getDailyNewWordLimit, getTodayWords, getUserTimeZone } from "./words.js";
 
 export async function getProgress(): Promise<ProgressResult> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const timeZone = await getUserTimeZone(db, userId);
   const date = dateInTimeZone(timeZone);
-  const [today, all] = await Promise.all([
+  const [today, all, dailyNewWordLimit] = await Promise.all([
     getTodayWords(date, db, userId),
     getAllUserWords(db, userId),
+    getDailyNewWordLimit(db, userId),
   ]);
-  return calculateProgress(today, all, timeZone);
+  return calculateProgress(today, all, timeZone, dailyNewWordLimit);
 }
 
 function addCalendarDays(date: string, days: number): string {
@@ -35,7 +36,12 @@ export function fsrsForecast(all: Awaited<ReturnType<typeof getAllUserWords>>, t
   };
 }
 
-export function calculateProgress(today: Awaited<ReturnType<typeof getTodayWords>>, all: Awaited<ReturnType<typeof getAllUserWords>>, timeZone = "Asia/Shanghai"): ProgressResult {
+export function calculateProgress(
+  today: Awaited<ReturnType<typeof getTodayWords>>,
+  all: Awaited<ReturnType<typeof getAllUserWords>>,
+  timeZone = "Asia/Shanghai",
+  dailyNewWordLimit = 50,
+): ProgressResult {
   const mastered = all.filter((word) => word.mastered).length;
   const errorBook = all.filter((word) => word.error_layers.length > 0).length;
   return {
@@ -53,5 +59,6 @@ export function calculateProgress(today: Awaited<ReturnType<typeof getTodayWords
       error_book: errorBook,
     },
     fsrs: fsrsForecast(all, timeZone),
+    settings: { daily_new_word_limit: dailyNewWordLimit },
   };
 }
