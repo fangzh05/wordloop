@@ -11,7 +11,7 @@ const PAGE_CONCURRENCY = 8;
 // Keep one MCP call comfortably below ChatGPT/Worker request limits. The
 // importer asks for another cursor after each chunk, so a large book never
 // has to stay inside one long-running request.
-const IMPORT_PAGES_PER_CHUNK = 4;
+const IMPORT_PAGES_PER_CHUNK = 5;
 const endpointState: Record<ShanbaySourceState, string> = {
   unlearned: "unlearned_items", learning: "learning_items", simple_learned: "simple_learned_items",
 };
