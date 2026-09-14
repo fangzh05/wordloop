@@ -27,4 +27,18 @@ describe("Shanbay client", () => {
     const client = new ShanbayClient("auth_token=test", async () => Response.json({ data: { wrong: [] } }));
     await expect(client.getPage("book", "learning", 1)).rejects.toThrow("Shanbay API format changed");
   });
+
+  it("returns bounded resumable chunks", async () => {
+    const fetcher: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/current")) return Response.json({ materialbook_id: "book-1", name: "Book" });
+      return Response.json({ data: { total: 25, objects: [lexical] } });
+    };
+    const client = new ShanbayClient("auth_token=test", fetcher);
+    const chunk = await client.getWordChunk("book-1");
+    expect(chunk.words).toHaveLength(3);
+    expect(chunk.pages).toBe(3);
+    expect(chunk.state_total).toBe(25);
+    expect(chunk.next_cursor).toEqual({ state: "learning", page: 1 });
+  });
 });

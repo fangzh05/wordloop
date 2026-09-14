@@ -4,6 +4,10 @@ import { getCurrentShanbayBook, importShanbayBook, previewShanbayBook } from "..
 import { safeTool } from "./helpers.js";
 
 const bookId = z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
+const importCursor = z.object({
+  state: z.enum(["unlearned", "learning", "simple_learned"]),
+  page: z.number().int().min(1).max(100_000),
+});
 
 export function registerShanbayTools(server: McpServer): void {
   server.registerTool("get_current_shanbay_book", {
@@ -19,9 +23,9 @@ export function registerShanbayTools(server: McpServer): void {
   }, (input) => safeTool(() => previewShanbayBook(input.book_id)));
 
   server.registerTool("import_shanbay_book", {
-    title: "Import complete Shanbay book",
-    description: "One-time, idempotent migration of unlearned, learning, and simple-learned words into the Wordloop vocabulary pool. Existing learning, FSRS, errors, and attempts are preserved.",
-    inputSchema: z.object({ book_id: bookId.optional() }),
+    title: "Import Shanbay book chunk",
+    description: "Import one bounded, resumable chunk of all Shanbay word states. Call again with next_cursor until complete=true. Every chunk is idempotent; existing learning, FSRS, errors, and attempts are preserved.",
+    inputSchema: z.object({ book_id: bookId.optional(), cursor: importCursor.optional() }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-  }, (input) => safeTool(() => importShanbayBook(input.book_id)));
+  }, (input) => safeTool(() => importShanbayBook(input.book_id, input.cursor)));
 }

@@ -193,6 +193,10 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .field-label { display: block; margin: 0.7rem 0 0.35rem; color: var(--muted); font-size: 0.78rem; font-weight: 620; }
 input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.7rem 0.8rem; border: 1px solid var(--separator); border-radius: 12px; background: var(--control); color: var(--text); font: inherit; }
 .import-metrics { margin-bottom: 0.75rem; }
+.import-progress { margin: 0.85rem 0 0.25rem; padding: 0.8rem 0.85rem; border-radius: 14px; background: var(--control); }
+.import-progress-label { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; color: var(--muted); font-size: 0.78rem; }
+.import-progress-label strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.import-progress .progress-track { margin-top: 0.55rem; }
 .manual-import { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--separator); }
 .manual-import summary { color: var(--accent); cursor: pointer; font-size: 0.82rem; font-weight: 620; }
 .manual-import textarea { margin-top: 0.75rem; }
