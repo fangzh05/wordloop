@@ -4,7 +4,9 @@ import { mapCurrentBook, mapShanbayWord } from "./mapper.js";
 import type { ShanbayBook, ShanbayPage, ShanbaySourceState, ShanbayWord } from "./types.js";
 
 const BASE_URL = "https://apiv3.shanbay.com";
-const PAGE_SIZE = 100;
+// Shanbay's web client uses a conservative page size. Larger values can leave
+// the encrypted vocabulary response hanging behind the API gateway.
+const PAGE_SIZE = 10;
 const endpointState: Record<ShanbaySourceState, string> = {
   unlearned: "unlearned_items", learning: "learning_items", simple_learned: "simple_learned_items",
 };
