@@ -43,6 +43,15 @@ describe("Streamable HTTP server", () => {
       "record_attempt", "get_error_book", "save_sentence", "get_progress",
       "render_word_import", "render_pretest_widget", "render_learning_dashboard", "render_pronunciation_cards", "render_dictation_widget",
     ]));
+    expect(instructions).toContain("active error");
+    expect(instructions).toContain("next_review_at is due");
+    expect(instructions).toContain("record_review_result");
+    const reviewTool = response.tools.find((tool) => tool.name === "record_review_result");
+    expect(reviewTool?.description).toContain("next_review_at is due");
+    expect(reviewTool?.description).toContain("not-yet-due error repair");
+    expect(reviewTool?.description).toContain("default 20-word quiz questions");
+    expect(reviewTool?.description).toContain("end-of-session free recall");
+    expect(reviewTool?.description).toContain("learning or relearning step");
     await client.close();
   });
 });
