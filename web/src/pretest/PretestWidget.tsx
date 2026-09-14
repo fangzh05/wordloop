@@ -94,7 +94,17 @@ export async function gradePretestAnswer(
   if (item.direction === "cn_to_en" || !samplingAvailable) {
     return gradeCnToEn(answer, item.word);
   }
-  return parseGrade(await sample(semanticGradePrompt(item, answer), gradeSystemPrompt));
+  try {
+    return parseGrade(await sample(semanticGradePrompt(item, answer), gradeSystemPrompt));
+  } catch (caught) {
+    // A host can withdraw an optional capability after initialization. Treat
+    // that race exactly like an unavailable capability instead of blocking
+    // the pretest; malformed semantic responses still surface for retry.
+    if (caught instanceof Error && caught.message === "Sampling unavailable.") {
+      return gradeCnToEn(answer, item.word);
+    }
+    throw caught;
+  }
 }
 
 export function schedulePretestAdvance(
