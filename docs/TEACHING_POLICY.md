@@ -40,7 +40,7 @@
 
 ## 滚动复习
 
-每次会话开头检查错误层仍活跃的词和 FSRS 到期词，按错误优先、到期时间升序最多抽查 5 个，不随机补未到期词。active error 但 `next_review_at` 尚未到时，只调用 `record_attempt` 维护错误层；`next_review_at` 已到时，完成一次新的、无提示的独立回忆后才调用 `record_review_result`。若一个词同时是 active error 且已到期，可以先调用 `record_attempt` 维护错误层，再且仅再调用一次 `record_review_result` 推进 FSRS。对应错误层连续答对 2 次才能清除，FSRS 的 Good 不直接清除错误层。
+每次会话开头检查错误层仍活跃的词和 FSRS 到期词，按错误优先、到期时间升序最多抽查 5 个，不随机补未到期词。active error 但 `next_review_at` 尚未到时，只调用 `record_attempt` 维护错误层；`next_review_at` 已到时，完成一次新的、无提示的独立回忆后才调用 `record_review_result`。若一个词同时是 active error 且已到期，可以先调用 `record_attempt` 维护错误层，再且仅再调用一次 `record_review_result` 推进 FSRS。对应错误层连续答对 2 次才能清除，FSRS 的 Good 不直接清除错误层。有待复习词时调用 `render_review_widget`，把题面、输入、批改和记录留在卡片内；卡片成功渲染后不要在聊天区重复题目、进度或逐词反馈。
 
 ## FSRS Rating
 

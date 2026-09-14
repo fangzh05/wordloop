@@ -29,7 +29,7 @@ export function createHttpApp() {
   if (process.env.ENABLE_WIDGET_PREVIEW === "true") {
     app.get("/preview/:kind", async (req, res) => {
       const kind = req.params.kind;
-      if (!["import", "pretest", "dashboard", "pronunciation", "dictation"].includes(kind)) {
+      if (!["import", "pretest", "review", "dashboard", "pronunciation", "dictation"].includes(kind)) {
         res.status(404).send("Unknown widget.");
         return;
       }
@@ -40,6 +40,13 @@ export function createHttpApp() {
           items: [
             { word: "empirical", ipa: "/ɪmˈpɪrɪkəl/", part_of_speech: "adj.", meaning_zh: "经验性的；以观察或实验为依据的", prompt: "经验性的；以观察 / 实验为依据的", direction: "cn_to_en" },
             { word: "subtle", ipa: "/ˈsʌtəl/", part_of_speech: "adj.", meaning_zh: "微妙的；不易察觉的", prompt: "Give an English definition for subtle without using the word itself.", direction: "en_definition" },
+          ],
+        },
+        review: {
+          widget: "review",
+          items: [
+            { word: "recur", meaning_zh: "再次发生；复发", part_of_speech: "v.", direction: "cn_to_en", error_layers: ["meaning"], is_due: true },
+            { word: "subtle", meaning_zh: "微妙的；不易察觉的", part_of_speech: "adj.", direction: "en_definition", error_layers: ["collocation"], is_due: false },
           ],
         },
         dashboard: {
@@ -66,7 +73,7 @@ export function createHttpApp() {
         get_current_shanbay_book: { id: "materialbook-2026", name: "考研英语词汇", is_current: true },
         preview_shanbay_book: { book: { id: "materialbook-2026", name: "考研英语词汇", is_current: true }, unlearned: 3812, learning: 624, simple_learned: 1046, estimated_unique_total: 5482 },
       } : undefined;
-      res.type("html").send(await widgetHtml(kind as "import" | "pretest" | "dashboard" | "pronunciation" | "dictation", { theme, payload: payloads[kind], toolResults }));
+      res.type("html").send(await widgetHtml(kind as "import" | "pretest" | "review" | "dashboard" | "pronunciation" | "dictation", { theme, payload: payloads[kind], toolResults }));
     });
   }
 

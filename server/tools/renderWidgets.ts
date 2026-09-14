@@ -7,6 +7,7 @@ import { safeTool } from "./helpers.js";
 export const WIDGET_URIS = {
   import: "ui://wordloop/import.html",
   pretest: "ui://wordloop/pretest.html",
+  review: "ui://wordloop/review.html",
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
   dictation: "ui://wordloop/dictation.html",
@@ -25,6 +26,13 @@ const pretestItem = z.object({
   meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
   prompt: z.string().trim().max(1000).optional(),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
+});
+const reviewItem = z.object({
+  word: z.string().trim().min(1).max(100),
+  meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
+  part_of_speech: z.string().trim().max(40).optional(),
+  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
+  error_layers: z.array(z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"])).max(5).default([]),
 });
 
 export function registerRenderTools(server: McpServer): void {
@@ -47,6 +55,18 @@ export function registerRenderTools(server: McpServer): void {
     _meta: { ui: { resourceUri: WIDGET_URIS.pretest } },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, (input) => safeTool(async () => ({ widget: "pretest", ...input })));
+
+  registerAppTool(server, "render_review_widget", {
+    title: "打开复习",
+    description: "在卡片内完成错误词和 FSRS 到期词的独立复习。卡片负责题面、批改和保存结果；成功渲染后不要在聊天区重复题目或反馈。",
+    inputSchema: z.object({
+      items: z.array(reviewItem).min(1).max(5),
+      current_index: z.number().int().min(0).max(4).default(0),
+      title: z.string().trim().min(1).max(100).default("复习"),
+    }),
+    _meta: { ui: { resourceUri: WIDGET_URIS.review } },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  }, (input) => safeTool(async () => ({ widget: "review", ...input })));
 
   registerAppTool(server, "render_learning_dashboard", {
     title: "显示学习进度",
