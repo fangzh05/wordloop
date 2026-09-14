@@ -67,9 +67,6 @@ export function DailyNewWordControl({
       <button type="button" aria-label="增加每日新词数量" onClick={() => updateDraft(Number(draft || limit) + 1)} disabled={saving || Number(draft) >= 200}>＋</button>
       <Button onClick={() => void save()} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
     </div>
-    <div className="daily-limit-presets" aria-label="快捷数量">
-      {[20, 30, 50, 80].map((value) => <button type="button" key={value} onClick={() => updateDraft(value)} disabled={saving}>{value}</button>)}
-    </div>
     {message ? <p className="helper-text" role="status">{message}</p> : null}
   </section>;
 }

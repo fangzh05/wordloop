@@ -185,6 +185,9 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .button-row { display: flex; gap: 0.5rem; }
 .button-row { flex-wrap: wrap; }
 .button-row .button { flex: 1 1 8rem; }
+.dashboard-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.dashboard-actions .button { min-width: 0; flex: 0 0 auto; }
+.dashboard-actions .button:first-child { grid-column: 1 / -1; }
 .section-divider { height: 1px; margin: 0.8rem 0 1rem; background: var(--separator); }
 .fsrs-metrics { margin-top: 0.55rem; }
 .source-card { display: flex; flex-direction: column; gap: 0.24rem; margin-bottom: 0.85rem; padding: 0.85rem; border-radius: 14px; background: var(--control); }
@@ -203,7 +206,6 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .manual-import summary { display: inline-flex; min-height: 44px; align-items: center; color: var(--accent); cursor: pointer; font-size: 0.82rem; font-weight: 620; }
 .manual-import textarea { margin-top: 0.75rem; }
 .manual-import .button { width: 100%; margin-top: 0.55rem; }
-.dashboard-actions .button:first-child { flex: 1; }
 .skeleton { min-height: 9rem; display: grid; place-items: center; color: var(--muted); font-size: 0.875rem; }
 
 .daily-limit { margin: 0.9rem 0 0.25rem; padding: 0.85rem; border-radius: 14px; background: var(--control); }
@@ -211,13 +213,11 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .daily-limit-heading .eyebrow { margin-bottom: 0.2rem; }
 .daily-limit-heading strong { font-size: 0.875rem; font-weight: 650; }
 .daily-limit-input-row { display: grid; grid-template-columns: 2.7rem minmax(4.25rem, 1fr) 2.7rem auto; gap: 0.45rem; align-items: center; margin-top: 0.7rem; }
-.daily-limit-input-row > button, .daily-limit-presets button { min-height: 44px; border: 0; border-radius: 10px; background: var(--material-raised); color: var(--accent); font-size: 1rem; font-weight: 650; cursor: pointer; }
-.daily-limit-input-row > button:disabled, .daily-limit-presets button:disabled { cursor: not-allowed; opacity: 0.45; }
+.daily-limit-input-row > button { min-height: 44px; border: 0; border-radius: 10px; background: var(--material-raised); color: var(--accent); font-size: 1rem; font-weight: 650; cursor: pointer; }
+.daily-limit-input-row > button:disabled { cursor: not-allowed; opacity: 0.45; }
 .daily-limit-input-row input { width: 100%; min-height: 44px; border: 1px solid transparent; border-radius: 10px; background: var(--material-raised); color: var(--text); text-align: center; outline: none; font-variant-numeric: tabular-nums; }
 .daily-limit-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
 .daily-limit-input-row .button { min-height: 44px; padding-inline: 0.75rem; }
-.daily-limit-presets { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
-.daily-limit-presets button { min-width: 2.6rem; padding: 0.3rem 0.55rem; font-size: 0.75rem; }
 .daily-limit .helper-text { margin: 0.6rem 0 0; }
 
 .pronunciation-list { display: grid; gap: 0; overflow: hidden; background: var(--control); border-radius: 15px; }
@@ -250,8 +250,6 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 @media (max-width: 520px) {
   .widget-card { padding: 1rem; border-radius: 18px; }
   .dashboard-heading { align-items: flex-start; flex-direction: column; gap: 0.45rem; }
-  .button-row.dashboard-actions { flex-direction: column; }
-  .button-row.dashboard-actions .button { width: 100%; }
   .pretest-meta { align-items: flex-start; flex-direction: column; gap: 0.28rem; }
   .compact-header { align-items: center; }
   .dictation-controls { align-items: stretch; }
