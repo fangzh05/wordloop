@@ -52,7 +52,10 @@ export class ShanbayClient {
         const safe = safeError(error);
         if (safe.code === "network") {
           const errorName = error instanceof Error ? error.name : "unknown";
-          console.warn(`Shanbay request ${path} failed at network layer (${errorName})`);
+          const errorMessage = error instanceof Error
+            ? error.message.replace(/auth_token=[^;\s]+/giu, "auth_token=[redacted]").slice(0, 120)
+            : "unknown error";
+          console.warn(`Shanbay request ${path} failed at network layer (${errorName}: ${errorMessage})`);
         }
         if (safe.code !== "network" || attempt === 2) throw safe;
       }
