@@ -9,8 +9,10 @@ const itemSchema = z.object({
   ipa: z.string().trim().min(1).max(120),
   part_of_speech: z.string().trim().min(1).max(40),
   meaning_zh: z.string().trim().min(1).max(240),
-  prompt: z.string().trim().min(1).max(1000),
-  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
+  // `prompt` and `en_definition` are accepted as compatibility aliases for
+  // older cards, but the product now has only two deterministic directions.
+  prompt: z.string().trim().max(1000).default(""),
+  direction: z.enum(["cn_to_en", "en_to_cn", "en_definition"]).default("cn_to_en"),
 });
 
 const payloadSchema = z.object({
@@ -47,7 +49,7 @@ function resultLabel(result: PretestResult): string {
 }
 
 function directionLabel(direction: Payload["items"][number]["direction"]): string {
-  return direction === "cn_to_en" ? "中文 → 英文" : "英文释义";
+  return direction === "cn_to_en" ? "中文 → 英文" : "英文 → 中文";
 }
 
 export function PretestWidget(): React.JSX.Element {
@@ -137,12 +139,11 @@ export function PretestWidget(): React.JSX.Element {
 
   const item = payload?.items[index];
 
-  // For Chinese → English retrieval, the model may send a generic prompt
-  // (for example, “请根据中文义写出对应英文单词。”). The actual question
-  // is the structured Chinese meaning, so always render that field here.
-  // This keeps the answer hidden while ensuring the learner can see what to
-  // retrieve. English-definition questions continue to use their prompt.
-  const questionPrompt = item && item.direction === "cn_to_en" ? item.meaning_zh : item?.prompt;
+  // Keep the card deterministic: Chinese → English shows the Chinese meaning;
+  // English → Chinese shows the English word. `prompt` is only a legacy field
+  // and must never change the direction of the question.
+  const isChineseToEnglish = item?.direction === "cn_to_en";
+  const questionPrompt = item ? (isChineseToEnglish ? item.meaning_zh : item.word) : "";
 
   async function submit(): Promise<void> {
     if (!payload || !item || !answer.trim() || status === "sending" || status === "sent" || submittingRef.current) return;
@@ -153,9 +154,11 @@ export function PretestWidget(): React.JSX.Element {
     setError("");
     try {
       const grade = window.__WORDLOOP_PREVIEW__
-        ? { result: cleanAnswer.toLocaleLowerCase() === item.word.toLocaleLowerCase() ? "known" as const : "unknown" as const, feedback: "预览模式：答案已在卡片内完成判定。" }
+        ? { result: (isChineseToEnglish
+            ? cleanAnswer.toLocaleLowerCase() === item.word.toLocaleLowerCase()
+            : cleanAnswer === item.meaning_zh) ? "known" as const : "unknown" as const, feedback: "预览模式：答案已在卡片内完成判定。" }
         : parseGrade(await sampleHostText(
-          `目标词：${item.word}\n题目方向：${item.direction}\n题目：${item.direction === "cn_to_en" ? item.meaning_zh : item.prompt}\n用户答案：${cleanAnswer}\n\n判定规则：known=准确产出目标词或英文释义完整准确；uncertain=方向正确但没有产出目标词、存在轻微拼写错误或释义明显不完整；unknown=答案错误或无关。用中文写一句不超过40字的具体反馈。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`,
+          `目标词：${item.word}\n题目方向：${item.direction}\n题面：${questionPrompt}\n目标中文核心义：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定规则：中文→英文时，答案应准确写出目标英文单词；英文→中文时，答案应准确表达目标中文核心义。known=独立且准确；uncertain=方向正确但有轻微拼写或释义不完整；unknown=答案错误、无关或没有完成对应方向。用中文写一句不超过40字的具体反馈。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`,
           gradeSystemPrompt,
         ));
       await saveGrade(cleanAnswer, grade, false);
@@ -174,6 +177,8 @@ export function PretestWidget(): React.JSX.Element {
         word: item.word,
         result: grade.result,
         user_answer: cleanAnswer,
+        // Keep the persisted activity enum backward-compatible while the UI
+        // exposes the corrected English → Chinese direction.
         activity_type: item.direction === "cn_to_en" ? "pretest_cn_to_en" : "pretest_en_definition",
       });
       if (stored.isError) throw new Error("结果未能保存，请重试。");
@@ -345,7 +350,7 @@ export function PretestWidget(): React.JSX.Element {
     </div>
 
     <div className="question-block">
-      <span className="question-label">{item.direction === "cn_to_en" ? "翻译成英文" : "用英文解释"}</span>
+      <span className="question-label">{isChineseToEnglish ? "翻译成英文" : "翻译成中文"}</span>
       <p className="question-prompt">{questionPrompt}</p>
     </div>
 
@@ -363,7 +368,7 @@ export function PretestWidget(): React.JSX.Element {
           void submit();
         }
       }}
-      placeholder={item.direction === "cn_to_en" ? "输入英文单词…" : "写一句简短英文释义…"}
+      placeholder={isChineseToEnglish ? "输入英文单词…" : "输入中文词义…"}
       autoCapitalize="none"
       autoComplete="off"
       spellCheck={false}
