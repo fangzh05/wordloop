@@ -38,7 +38,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_pretest_widget", {
     title: "打开预测试",
-    description: "显示一张完整的 1–7 题新词预测试卡片。每题包含美式 IPA、词性和简明中文核心义；卡片会恢复已保存结果，支持一键标记不会、卡内批改和本轮发音，不要逐题在聊天区重复反馈。",
+    description: "显示一张完整的 1–7 题新词预测试卡片。每题包含美式 IPA、词性和简明中文核心义；中译英题面直接显示 meaning_zh，prompt 应提供英文释义题的实际题面，不要传通用占位语。卡片会恢复已保存结果，支持一键标记不会、卡内批改和本轮发音，不要逐题在聊天区重复反馈。",
     inputSchema: z.object({
       items: z.array(pretestItem).min(1).max(7),
       current_index: z.number().int().min(0).max(6).default(0),

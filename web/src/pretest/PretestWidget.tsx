@@ -137,6 +137,13 @@ export function PretestWidget(): React.JSX.Element {
 
   const item = payload?.items[index];
 
+  // For Chinese → English retrieval, the model may send a generic prompt
+  // (for example, “请根据中文义写出对应英文单词。”). The actual question
+  // is the structured Chinese meaning, so always render that field here.
+  // This keeps the answer hidden while ensuring the learner can see what to
+  // retrieve. English-definition questions continue to use their prompt.
+  const questionPrompt = item && item.direction === "cn_to_en" ? item.meaning_zh : item?.prompt;
+
   async function submit(): Promise<void> {
     if (!payload || !item || !answer.trim() || status === "sending" || status === "sent" || submittingRef.current) return;
     submittingRef.current = true;
@@ -148,7 +155,7 @@ export function PretestWidget(): React.JSX.Element {
       const grade = window.__WORDLOOP_PREVIEW__
         ? { result: cleanAnswer.toLocaleLowerCase() === item.word.toLocaleLowerCase() ? "known" as const : "unknown" as const, feedback: "预览模式：答案已在卡片内完成判定。" }
         : parseGrade(await sampleHostText(
-          `目标词：${item.word}\n题目方向：${item.direction}\n题目：${item.prompt}\n用户答案：${cleanAnswer}\n\n判定规则：known=准确产出目标词或英文释义完整准确；uncertain=方向正确但没有产出目标词、存在轻微拼写错误或释义明显不完整；unknown=答案错误或无关。用中文写一句不超过40字的具体反馈。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`,
+          `目标词：${item.word}\n题目方向：${item.direction}\n题目：${item.direction === "cn_to_en" ? item.meaning_zh : item.prompt}\n用户答案：${cleanAnswer}\n\n判定规则：known=准确产出目标词或英文释义完整准确；uncertain=方向正确但没有产出目标词、存在轻微拼写错误或释义明显不完整；unknown=答案错误或无关。用中文写一句不超过40字的具体反馈。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`,
           gradeSystemPrompt,
         ));
       await saveGrade(cleanAnswer, grade, false);
@@ -341,7 +348,7 @@ export function PretestWidget(): React.JSX.Element {
 
     <div className="question-block">
       <span className="question-label">{item.direction === "cn_to_en" ? "翻译成英文" : "用英文解释"}</span>
-      <p className="question-prompt">{item.prompt}</p>
+      <p className="question-prompt">{questionPrompt}</p>
     </div>
 
     <label className="answer-label" htmlFor="pretest-answer">你的答案</label>
