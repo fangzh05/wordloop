@@ -14,9 +14,26 @@ import { registerRecordReviewResultTool } from "./tools/recordReviewResult.js";
 import { registerPrepareDailyNewWordsTool } from "./tools/prepareDailyNewWords.js";
 import { registerShanbayTools } from "./tools/shanbay.js";
 import { registerSetDailyNewWordLimitTool } from "./tools/setDailyNewWordLimit.js";
+import { TEACHING_PROMPT } from "./teachingPrompt.js";
 
 export type WidgetKind = keyof typeof WIDGET_URIS;
 export type WidgetHtmlLoader = (kind: WidgetKind) => Promise<string>;
+
+const WORDLOOP_RUNTIME_RULES = `
+## WordLoop runtime and tool rules
+
+WordLoop is the persistent vocabulary, error-layer, review-scheduling, and widget layer. ChatGPT remains responsible for teaching, question selection, explanations, grading, and natural-language interaction. Never invent stored progress. All progress reads and writes must use the WordLoop tools and the authenticated user scope.
+
+Before every real study session call get_learning_context. If the user specifies a daily new-word count, call set_daily_new_word_limit, then prepare_daily_new_words when today's queue needs more words, and then reload get_learning_context. Lowering the limit never deletes words already prepared today. A whole Shanbay migration enters the vocabulary pool; it does not make the whole book today's lesson.
+
+Use record_attempt only for ordinary exercises and error-layer repair. It must not advance FSRS. Use record_review_result exactly once for a genuine independent retrieval checkpoint. Again means retrieval failed, an answer was shown, or a substantial hint was required; Hard means independent but effortful or self-corrected; Good means normal independent recall; Easy means immediate and stable recall. Repetition after an answer, shadowing, copying, immediate correction, and newly taught practice never advance FSRS. Pretest classifications are the initial retrieval and advance FSRS once.
+
+Review active error layers first, then FSRS cards that are due, at most five. Never pull future cards just to fill a quota. A mastered word is still reviewed when its card is due. Error-layer repair and FSRS scheduling are independent: a Good review does not clear an error layer without two consecutive correct repairs.
+
+The pretest Widget has two fixed directions only: cn_to_en gives a Chinese core meaning and asks for the English word; en_definition gives the English word and part of speech and asks for a simple English definition. The Widget determines the visible question from direction and ignores the compatibility prompt field. After a successful render_pretest_widget call, keep the chat quiet: do not explain how to use the Widget, repeat its questions, ask the user to answer in the chat box, report known / uncertain / unknown per item, or append product instructions. Only describe a Widget failure when the render call fails.
+
+When the user asks for progress, call get_progress and render_learning_dashboard. When the user asks to import vocabulary, render_word_import. For a difficult sentence, let ChatGPT analyze it and call save_sentence. Never expose Shanbay credentials or server secrets to the user, Widget, tool arguments, or model context.
+`;
 
 function registerWidgetResources(server: McpServer, loadWidgetHtml: WidgetHtmlLoader): void {
   for (const [kind, uri] of Object.entries(WIDGET_URIS) as Array<[WidgetKind, string]>) {
@@ -44,7 +61,7 @@ export function createWordloopMcpServer(loadWidgetHtml: WidgetHtmlLoader): McpSe
   const server = new McpServerImpl(
     { name: "wordloop", version: "0.1.0" },
     {
-      instructions: "Use Wordloop to retrieve and persist vocabulary state; ChatGPT remains the teaching and grading engine. Before every study session call get_learning_context and trust stored state. If today's list is empty after a book migration, call prepare_daily_new_words once, then reload context. When the user says 今天学20个、每天30个、新词改成50 or otherwise specifies a daily-new-word count, call set_daily_new_word_limit first; if today's list needs supplementing call prepare_daily_new_words, then reload get_learning_context. If the user lowers the limit, never delete words already prepared today. Use record_attempt only for ordinary exercises and error-layer repair. Use record_review_result exactly once for a genuine independent retrieval checkpoint: Again means retrieval failed, an answer was shown, or a substantial hint was required; Hard means independent but effortful or self-corrected; Good means normal independent recall; Easy means immediate and stable recall. Repetition after an answer, shadowing, copying, immediate correction, and newly taught practice never advance FSRS. Pretest classifications already advance FSRS. Review active errors and due cards only, at most five; never pull future cards to fill a quota. Mastered is a progress label, not exclusion from due review. Use render_pretest_widget only for today's new words. 预测试只使用两种固定题型：cn_to_en 给中文核心义并要求写英文单词，en_definition 给英文单词和词性并要求用简单英文解释；Widget 自己固定题面，不要让 prompt 生成题干。Widget 成功渲染后不要在聊天消息中解释如何使用、重复题目、要求用户回到聊天框作答、汇报每个词的 known / uncertain / unknown 内部状态或追加操作说明；保持聊天区安静，让用户直接在卡片内完成。只有 Widget 调用失败时才说明错误。When asked for progress, call get_progress then render_learning_dashboard. When asked to import vocabulary, render_word_import. Never invent stored progress or expose Shanbay credentials.",
+      instructions: `${TEACHING_PROMPT}\n\n${WORDLOOP_RUNTIME_RULES}`,
     },
   );
   registerImportWordsTool(server);

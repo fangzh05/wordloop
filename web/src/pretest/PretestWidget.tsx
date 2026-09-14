@@ -193,18 +193,20 @@ export function PretestWidget(): React.JSX.Element {
     setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
     setFeedback(graded);
     setStatus("sent");
-    window.setTimeout(() => {
-      if (index === payload.items.length - 1) {
-        setFeedback(null);
-        setCompleted(true);
-        return;
-      }
-      setIndex((value) => value + 1);
-      setAnswer("");
+  }
+
+  function nextQuestion(): void {
+    if (!payload || !item || status !== "sent") return;
+    if (index === payload.items.length - 1) {
       setFeedback(null);
-      setStatus("idle");
-      requestAnimationFrame(() => answerRef.current?.focus());
-    }, 600);
+      setCompleted(true);
+      return;
+    }
+    setIndex((value) => value + 1);
+    setAnswer("");
+    setFeedback(null);
+    setStatus("idle");
+    requestAnimationFrame(() => answerRef.current?.focus());
   }
 
   async function markUnknown(): Promise<void> {
@@ -367,10 +369,15 @@ export function PretestWidget(): React.JSX.Element {
     </div> : null}
 
     <div className="pretest-actions">
-      <Button className="secondary unknown-action" onClick={() => void markUnknown()} disabled={status === "sending" || status === "sent"}>不会</Button>
-      <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending" || status === "sent"}>
-        {status === "sending" ? "正在保存…" : "提交"}
-      </Button>
+      {status === "sent" ? <Button onClick={nextQuestion}>
+        {index === payload.items.length - 1 ? "查看结果" : "下一题"}
+        {index === payload.items.length - 1 ? null : <ArrowIcon className="button-icon trailing" />}
+      </Button> : <>
+        <Button className="secondary unknown-action" onClick={() => void markUnknown()} disabled={status === "sending"}>不会</Button>
+        <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending"}>
+          {status === "sending" ? "正在保存…" : "提交"}
+        </Button>
+      </>}
     </div>
   </section>;
 }

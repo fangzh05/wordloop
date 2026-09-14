@@ -31,6 +31,11 @@ describe("Streamable HTTP server", () => {
     const client = new Client({ name: "wordloop-test", version: "1.0.0" });
     const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
     await client.connect(transport);
+    const instructions = client.getInstructions() ?? "";
+    expect(instructions).toContain("没有输出 = 没有学会");
+    expect(instructions).toContain("每词至少覆盖一道输出题");
+    expect(instructions).toContain("每完成2轮做一次听写");
+    expect(instructions).toContain("长难句收尾");
     const response = await client.listTools();
     const names = response.tools.map((tool) => tool.name);
     expect(names).toEqual(expect.arrayContaining([

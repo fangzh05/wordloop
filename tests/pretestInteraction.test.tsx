@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PretestQuestion } from "../web/src/pretest/PretestWidget.js";
 
@@ -29,5 +30,12 @@ describe("PretestQuestion", () => {
     expect(markup).toContain("v.");
     expect(markup).not.toContain("再次发生；复发");
     expect(markup).not.toContain("Give an English definition");
+  });
+
+  it("waits for a manual next-question action after grading", () => {
+    const source = readFileSync(new URL("../web/src/pretest/PretestWidget.tsx", import.meta.url), "utf8");
+    expect(source).not.toContain("window.setTimeout");
+    expect(source).toContain("function nextQuestion()");
+    expect(source).toContain("下一题");
   });
 });
