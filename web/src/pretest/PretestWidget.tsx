@@ -9,10 +9,9 @@ const itemSchema = z.object({
   ipa: z.string().trim().min(1).max(120),
   part_of_speech: z.string().trim().min(1).max(40),
   meaning_zh: z.string().trim().min(1).max(240),
-  // `prompt` and `en_definition` are accepted as compatibility aliases for
-  // older cards, but the product now has only two deterministic directions.
-  prompt: z.string().trim().max(1000).default(""),
-  direction: z.enum(["cn_to_en", "en_to_cn", "en_definition"]).default("cn_to_en"),
+  // Kept only for compatibility with older tool calls. The card never renders it.
+  prompt: z.string().trim().max(1000).optional(),
+  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
 });
 
 const payloadSchema = z.object({
@@ -23,6 +22,7 @@ const payloadSchema = z.object({
 });
 
 type Payload = z.infer<typeof payloadSchema>;
+type PretestItem = Payload["items"][number];
 type AnswerStatus = "idle" | "sending" | "sent" | "error";
 type PretestResult = "known" | "uncertain" | "unknown";
 type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
@@ -42,14 +42,23 @@ function parseGrade(raw: string): z.infer<typeof gradeSchema> {
   return parsed.data;
 }
 
-function resultLabel(result: PretestResult): string {
-  if (result === "known") return "已会";
-  if (result === "uncertain") return "模糊";
-  return "不会";
+function resultStatus(result: PretestResult): string {
+  if (result === "known") return "✓ 已会";
+  if (result === "uncertain") return "△ 模糊";
+  return "× 不会";
 }
 
-function directionLabel(direction: Payload["items"][number]["direction"]): string {
-  return direction === "cn_to_en" ? "中文 → 英文" : "英文 → 中文";
+export function PretestQuestion({ item }: { item: PretestItem }): React.JSX.Element {
+  return <div className="question-block">
+    {item.direction === "cn_to_en" ? <>
+      <span className="question-label">中 → 英</span>
+      <p className="question-prompt">{item.meaning_zh}</p>
+    </> : <>
+      <span className="question-label">英 → 英</span>
+      <p className="question-word">{item.word}</p>
+      <span className="part-of-speech">{item.part_of_speech}</span>
+    </>}
+  </div>;
 }
 
 export function PretestWidget(): React.JSX.Element {
@@ -138,12 +147,7 @@ export function PretestWidget(): React.JSX.Element {
   }
 
   const item = payload?.items[index];
-
-  // Keep the card deterministic: Chinese → English shows the Chinese meaning;
-  // English → Chinese shows the English word. `prompt` is only a legacy field
-  // and must never change the direction of the question.
   const isChineseToEnglish = item?.direction === "cn_to_en";
-  const questionPrompt = item ? (isChineseToEnglish ? item.meaning_zh : item.word) : "";
 
   async function submit(): Promise<void> {
     if (!payload || !item || !answer.trim() || status === "sending" || status === "sent" || submittingRef.current) return;
@@ -156,12 +160,14 @@ export function PretestWidget(): React.JSX.Element {
       const grade = window.__WORDLOOP_PREVIEW__
         ? { result: (isChineseToEnglish
             ? cleanAnswer.toLocaleLowerCase() === item.word.toLocaleLowerCase()
-            : cleanAnswer === item.meaning_zh) ? "known" as const : "unknown" as const, feedback: "预览模式：答案已在卡片内完成判定。" }
+            : cleanAnswer.length > 0) ? "known" as const : "unknown" as const, feedback: "预览模式：答案已在卡片内完成判定。" }
         : parseGrade(await sampleHostText(
-          `目标词：${item.word}\n题目方向：${item.direction}\n题面：${questionPrompt}\n目标中文核心义：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定规则：中文→英文时，答案应准确写出目标英文单词；英文→中文时，答案应准确表达目标中文核心义。known=独立且准确；uncertain=方向正确但有轻微拼写或释义不完整；unknown=答案错误、无关或没有完成对应方向。用中文写一句不超过40字的具体反馈。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`,
+          isChineseToEnglish
+            ? `题型：中文核心义 → 英文单词\n目标英文单词：${item.word}\n中文核心义：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定规则：known=正确写出目标英文单词，大小写不影响判定；uncertain=明显知道目标词，但只有轻微拼写错误；unknown=错误单词、无关答案或不知道。用中文写一句不超过40字的简短反馈，不要教学。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`
+            : `题型：英文单词 → 简单英文解释\n英文单词：${item.word}\n词性：${item.part_of_speech}\n中文核心义（仅供判断，不要求照抄）：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定规则：known=用自然英文表达出该词任意一个正确、常见的核心义，短语也可以；uncertain=语义方向正确但过于模糊或不完整；unknown=意义错误、混淆其他词或与题目无关。不要要求字典式措辞、完整覆盖全部词义、特定句型或完整句子。用中文写一句不超过40字的简短反馈，不要教学。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`,
           gradeSystemPrompt,
         ));
-      await saveGrade(cleanAnswer, grade, false);
+      await saveGrade(cleanAnswer, grade);
     } catch (caught) {
       setStatus("error");
       setError(caught instanceof Error ? caught.message : "答案未能提交，请重试。");
@@ -170,7 +176,7 @@ export function PretestWidget(): React.JSX.Element {
     }
   }
 
-  async function saveGrade(cleanAnswer: string, grade: { result: PretestResult; feedback: string }, advanceImmediately: boolean): Promise<void> {
+  async function saveGrade(cleanAnswer: string, grade: { result: PretestResult; feedback: string }): Promise<void> {
     if (!payload || !item) return;
     if (!window.__WORDLOOP_PREVIEW__) {
       const stored = await callServerTool("record_pretest_result", {
@@ -185,22 +191,20 @@ export function PretestWidget(): React.JSX.Element {
     }
     const graded = { word: item.word, answer: cleanAnswer, ...grade };
     setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
-    if (index === payload.items.length - 1) {
-      setFeedback(graded);
-      setStatus("sent");
-      setCompleted(true);
-      return;
-    }
-    if (advanceImmediately) {
+    setFeedback(graded);
+    setStatus("sent");
+    window.setTimeout(() => {
+      if (index === payload.items.length - 1) {
+        setFeedback(null);
+        setCompleted(true);
+        return;
+      }
       setIndex((value) => value + 1);
       setAnswer("");
       setFeedback(null);
       setStatus("idle");
       requestAnimationFrame(() => answerRef.current?.focus());
-      return;
-    }
-    setFeedback(graded);
-    setStatus("sent");
+    }, 600);
   }
 
   async function markUnknown(): Promise<void> {
@@ -210,23 +214,13 @@ export function PretestWidget(): React.JSX.Element {
     setStatus("sending");
     setError("");
     try {
-      await saveGrade("", { result: "unknown", feedback: "已直接标记为不会。" }, true);
+      await saveGrade("", { result: "unknown", feedback: "已直接标记为不会。" });
     } catch (caught) {
       setStatus("error");
       setError(caught instanceof Error ? caught.message : "结果未能保存，请重试。");
     } finally {
       submittingRef.current = false;
     }
-  }
-
-  function nextQuestion(): void {
-    if (!payload || status !== "sent" || index >= payload.items.length - 1) return;
-    setIndex((value) => value + 1);
-    setAnswer("");
-    setError("");
-    setFeedback(null);
-    setStatus("idle");
-    requestAnimationFrame(() => answerRef.current?.focus());
   }
 
   async function enterFocusMode(): Promise<void> {
@@ -271,11 +265,15 @@ export function PretestWidget(): React.JSX.Element {
   }
 
   const percent = ((index + 1) / payload.items.length) * 100;
-  const isLast = index === payload.items.length - 1;
   const pronunciationWords = results
     .filter((entry) => entry.result !== "known")
     .map((entry) => payload.items.find((candidate) => candidate.word === entry.word))
     .filter((entry): entry is Payload["items"][number] => Boolean(entry));
+  const resultCounts = {
+    known: results.filter((entry) => entry.result === "known").length,
+    uncertain: results.filter((entry) => entry.result === "uncertain").length,
+    unknown: results.filter((entry) => entry.result === "unknown").length,
+  };
 
   if (completed) {
     if (showPronunciation) {
@@ -310,49 +308,36 @@ export function PretestWidget(): React.JSX.Element {
     return <section className="widget-card pretest-card" aria-labelledby="pretest-complete-title">
       <header className="widget-header compact-header">
         <div>
-          <span className="eyebrow">本轮完成</span>
           <h1 id="pretest-complete-title">预测试完成</h1>
         </div>
       </header>
-      {feedback ? <div className={`inline-feedback ${feedback.result}`} role="status">
-        <strong>{resultLabel(feedback.result)}</strong>
-        <span>{feedback.feedback}</span>
-      </div> : null}
-      <div className="pretest-results" aria-label="本轮预测试结果">
-        {payload.items.map((entry) => {
-          const graded = results.find((result) => result.word === entry.word);
-          return <div key={entry.word}><span>{entry.word}</span><strong className={graded?.result}>{graded ? resultLabel(graded.result) : "未完成"}</strong></div>;
-        })}
+      <div className="result-strip" aria-label="本轮预测试结果">
+        <span><strong>{resultCounts.known}</strong><small>✓ 已会</small></span>
+        <span><strong>{resultCounts.uncertain}</strong><small>△ 模糊</small></span>
+        <span><strong>{resultCounts.unknown}</strong><small>× 不会</small></span>
       </div>
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       <Button onClick={() => setShowPronunciation(true)}>
-        打开本轮发音 <ArrowIcon className="button-icon trailing" />
+        听音跟读 <ArrowIcon className="button-icon trailing" />
       </Button>
     </section>;
   }
 
   return <section className="widget-card pretest-card" aria-labelledby="pretest-title">
     <header className="widget-header compact-header">
-      <div>
-        <span className="eyebrow">主动回忆</span>
-        <h1 id="pretest-title">{payload.title ?? "快速预测试"}</h1>
+      <div className="pretest-title-row">
+        <h1 id="pretest-title">预测试</h1>
+        <span className="pretest-count">{index + 1} / {payload.items.length}</span>
       </div>
-      <button className="focus-mode-button" type="button" onClick={() => void enterFocusMode()}>专注模式</button>
+      <button className="focus-mode-button" type="button" onClick={() => void enterFocusMode()}>⛶ 专注</button>
     </header>
     {focusModeMessage ? <p className="answer-hint" role="status">{focusModeMessage}</p> : null}
 
-    <div className="pretest-meta">
-      <span>第 {index + 1} 题，共 {payload.items.length} 题</span>
-      <span>{directionLabel(item.direction)}</span>
-    </div>
     <div className="pretest-progress" role="progressbar" aria-label="预测试进度" aria-valuemin={0} aria-valuemax={payload.items.length} aria-valuenow={index + 1}>
       <span style={{ width: `${percent}%` }} />
     </div>
 
-    <div className="question-block">
-      <span className="question-label">{isChineseToEnglish ? "翻译成英文" : "翻译成中文"}</span>
-      <p className="question-prompt">{questionPrompt}</p>
-    </div>
+    <PretestQuestion item={item} />
 
     <label className="answer-label" htmlFor="pretest-answer">你的答案</label>
     <input
@@ -368,31 +353,24 @@ export function PretestWidget(): React.JSX.Element {
           void submit();
         }
       }}
-      placeholder={isChineseToEnglish ? "输入英文单词…" : "输入中文词义…"}
+      placeholder={isChineseToEnglish ? "输入英文单词…" : "用简单英文解释这个词…"}
       autoCapitalize="none"
       autoComplete="off"
       spellCheck={false}
       enterKeyHint="send"
       disabled={status === "sending" || status === "sent"}
-      aria-describedby="pretest-hint"
     />
-    <p className="answer-hint" id="pretest-hint">按回车直接提交，输入焦点不会跳到聊天框。</p>
 
     {status === "error" ? <p className="error-text" role="alert">{error}</p> : null}
-    {feedback ? <div className={`inline-feedback ${feedback.result}`} role="status">
-      <strong>{resultLabel(feedback.result)}</strong>
-      <span>{feedback.feedback}</span>
+    {feedback ? <div className={`inline-feedback status-only ${feedback.result}`} role="status">
+      <strong>{resultStatus(feedback.result)}</strong>
     </div> : null}
 
     <div className="pretest-actions">
-      {status === "sent" && !isLast ?
-        <Button className="secondary" onClick={nextQuestion}>下一题 <ArrowIcon className="button-icon trailing" /></Button> :
-        <>
-          <Button className="unknown-action" onClick={() => void markUnknown()} disabled={status === "sending" || status === "sent"}>不会</Button>
-          <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending" || status === "sent"}>
-            {status === "sending" ? "正在保存…" : status === "sent" ? (isLast ? "本轮完成" : "已记录") : "提交答案"}
-          </Button>
-        </>}
+      <Button className="secondary unknown-action" onClick={() => void markUnknown()} disabled={status === "sending" || status === "sent"}>不会</Button>
+      <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending" || status === "sent"}>
+        {status === "sending" ? "正在保存…" : "提交"}
+      </Button>
     </div>
   </section>;
 }

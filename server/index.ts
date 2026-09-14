@@ -39,7 +39,7 @@ export function createHttpApp() {
           widget: "pretest",
           items: [
             { word: "empirical", ipa: "/ɪmˈpɪrɪkəl/", part_of_speech: "adj.", meaning_zh: "经验性的；以观察或实验为依据的", prompt: "经验性的；以观察 / 实验为依据的", direction: "cn_to_en" },
-            { word: "subtle", ipa: "/ˈsʌtəl/", part_of_speech: "adj.", meaning_zh: "微妙的；不易察觉的", prompt: "", direction: "en_to_cn" },
+            { word: "subtle", ipa: "/ˈsʌtəl/", part_of_speech: "adj.", meaning_zh: "微妙的；不易察觉的", prompt: "Give an English definition for subtle without using the word itself.", direction: "en_definition" },
           ],
         },
         dashboard: {

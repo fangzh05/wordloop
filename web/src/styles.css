@@ -141,35 +141,33 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .result-strip small { display: block; margin-top: 0.18rem; color: var(--muted); font-size: 0.72rem; line-height: 1.2; }
 .error-text { margin: 0.65rem 0 0; color: var(--error); font-size: 0.8125rem; line-height: 1.4; }
 
-.pretest-meta { display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: 0.78rem; font-weight: 620; }
 .pretest-progress { height: 7px; margin: 0.7rem 0 1.15rem; overflow: hidden; border-radius: 999px; background: var(--control); }
 .pretest-progress span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 260ms cubic-bezier(.22,.8,.35,1); }
 .question-block { padding: 1.05rem 1.1rem 1.2rem; border: 1px solid var(--separator); border-radius: 16px; background: var(--control); }
 .question-label { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 650; letter-spacing: 0.015em; }
 .question-prompt { margin: 0.72rem 0 0; color: var(--text); font-size: 1.28rem; line-height: 1.38; font-weight: 620; letter-spacing: -0.018em; }
+.question-word { margin: 0.62rem 0 0.35rem; color: var(--text); font-size: 1.8rem; line-height: 1.12; font-weight: 700; letter-spacing: -0.04em; }
 .answer-label { display: block; margin-top: 1rem; color: var(--muted); font-size: 0.78rem; font-weight: 650; }
 .answer-hint { margin: 0.42rem 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.35; }
 .answer-status { margin: 0.7rem 0 0; color: var(--success); font-size: 0.8125rem; line-height: 1.4; }
 .pretest-actions { display: flex; gap: 0.5rem; margin-top: 0.95rem; }
 .pretest-actions .button { flex: 1; }
-.pretest-actions .button.unknown-action { flex: 0 0 5.5rem; color: var(--error); background: var(--control); }
-.pretest-actions .button.unknown-action:hover:not(:disabled), .pretest-actions .button.unknown-action:active:not(:disabled) { background: color-mix(in srgb, var(--error) 12%, transparent); }
+.pretest-actions .button.unknown-action { flex: 0 0 5.5rem; color: var(--text); background: var(--control); }
+.pretest-actions .button.unknown-action:hover:not(:disabled), .pretest-actions .button.unknown-action:active:not(:disabled) { background: var(--control-hover); }
 .compact-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.8rem; }
 .compact-header > div { min-width: 0; }
-.focus-mode-button { min-height: 44px; flex: 0 0 auto; padding: 0.4rem 0.7rem; border: 0; border-radius: 999px; background: var(--control); color: var(--accent); font-size: 0.76rem; font-weight: 650; cursor: pointer; }
+.pretest-title-row { display: flex; align-items: baseline; gap: 0.55rem; }
+.pretest-title-row h1 { margin: 0; }
+.pretest-count { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.focus-mode-button { min-height: 36px; flex: 0 0 auto; padding: 0.32rem 0.62rem; border: 1px solid var(--separator); border-radius: 999px; background: transparent; color: var(--accent); font-size: 0.72rem; font-weight: 650; cursor: pointer; }
 .focus-mode-button:active { transform: scale(0.96); background: var(--control-hover); }
 .inline-feedback { display: grid; grid-template-columns: auto 1fr; gap: 0.55rem; align-items: baseline; margin-top: 0.75rem; padding: 0.75rem 0.85rem; border-radius: 13px; background: var(--control); font-size: 0.82rem; line-height: 1.4; }
+.inline-feedback.status-only { display: flex; }
 .inline-feedback strong { white-space: nowrap; color: var(--muted); }
 .inline-feedback.known strong { color: var(--success); }
 .inline-feedback.uncertain strong { color: #b26a00; }
 .inline-feedback.unknown strong { color: var(--error); }
-.pretest-results { margin-top: 0.9rem; overflow: hidden; border-radius: 14px; background: var(--control); }
-.pretest-results div { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0 0.85rem; padding: 0.65rem 0; border-bottom: 1px solid var(--separator); font-size: 0.875rem; }
-.pretest-results div:last-child { border-bottom: 0; }
-.pretest-results strong { font-size: 0.78rem; }
-.pretest-results strong.known { color: var(--success); }
-.pretest-results strong.uncertain { color: #b26a00; }
-.pretest-results strong.unknown { color: var(--error); }
+.pretest-actions .button:disabled { opacity: 1; color: var(--muted); background: var(--control); }
 
 .dashboard-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
 .progress-number { white-space: nowrap; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -250,7 +248,6 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 @media (max-width: 520px) {
   .widget-card { padding: 1rem; border-radius: 18px; }
   .dashboard-heading { align-items: flex-start; flex-direction: column; gap: 0.45rem; }
-  .pretest-meta { align-items: flex-start; flex-direction: column; gap: 0.28rem; }
   .compact-header { align-items: center; }
   .dictation-controls { align-items: stretch; }
   .dictation-controls .button { flex: 1; min-width: 0; }

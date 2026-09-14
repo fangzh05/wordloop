@@ -23,8 +23,8 @@ const pretestItem = z.object({
   ipa: z.string().trim().min(1).max(120).describe("American English IPA, including stress marks"),
   part_of_speech: z.string().trim().min(1).max(40).describe("Concise part of speech, such as adj. or v."),
   meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
-  prompt: z.string().trim().max(1000).default(""),
-  direction: z.enum(["cn_to_en", "en_to_cn"]).default("cn_to_en"),
+  prompt: z.string().trim().max(1000).optional(),
+  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
 });
 
 export function registerRenderTools(server: McpServer): void {
@@ -38,7 +38,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_pretest_widget", {
     title: "打开预测试",
-    description: "显示一张完整的 1–7 题新词预测试卡片。预测试只使用两种方向：cn_to_en=显示中文释义并要求写英文单词；en_to_cn=显示英文单词并要求写中文词义。每题包含美式 IPA、词性和简明中文核心义；prompt 是兼容字段，不要用它改变题型。卡片会恢复已保存结果，支持一键标记不会、卡内批改和本轮发音，不要逐题在聊天区重复反馈。",
+    description: "显示一张完整的 1–7 题新词预测试卡片。预测试只使用两种固定题型：cn_to_en=给中文核心义并要求写英文单词；en_definition=给英文单词和词性并要求用简单英文解释。每题可传美式 IPA、词性和简明中文核心义供后续学习使用，但预测试答题阶段只显示当前题型需要的内容；prompt 仅为兼容字段，Widget 不渲染它。卡片会恢复已保存结果，支持一键标记不会、卡内批改和本轮发音，不要逐题在聊天区重复反馈。",
     inputSchema: z.object({
       items: z.array(pretestItem).min(1).max(7),
       current_index: z.number().int().min(0).max(6).default(0),
