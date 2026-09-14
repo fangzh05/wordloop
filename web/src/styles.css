@@ -156,7 +156,7 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .pretest-actions .button.unknown-action:hover:not(:disabled), .pretest-actions .button.unknown-action:active:not(:disabled) { background: color-mix(in srgb, var(--error) 12%, transparent); }
 .compact-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.8rem; }
 .compact-header > div { min-width: 0; }
-.focus-mode-button { min-height: 36px; flex: 0 0 auto; padding: 0.4rem 0.7rem; border: 0; border-radius: 999px; background: var(--control); color: var(--accent); font-size: 0.76rem; font-weight: 650; cursor: pointer; }
+.focus-mode-button { min-height: 44px; flex: 0 0 auto; padding: 0.4rem 0.7rem; border: 0; border-radius: 999px; background: var(--control); color: var(--accent); font-size: 0.76rem; font-weight: 650; cursor: pointer; }
 .focus-mode-button:active { transform: scale(0.96); background: var(--control-hover); }
 .inline-feedback { display: grid; grid-template-columns: auto 1fr; gap: 0.55rem; align-items: baseline; margin-top: 0.75rem; padding: 0.75rem 0.85rem; border-radius: 13px; background: var(--control); font-size: 0.82rem; line-height: 1.4; }
 .inline-feedback strong { white-space: nowrap; color: var(--muted); }
@@ -193,14 +193,14 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .field-label { display: block; margin: 0.7rem 0 0.35rem; color: var(--muted); font-size: 0.78rem; font-weight: 620; }
 input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.7rem 0.8rem; border: 1px solid var(--separator); border-radius: 12px; background: var(--control); color: var(--text); font: inherit; }
 .advanced-options { margin: 0.8rem 0; }
-.advanced-options summary { color: var(--accent); cursor: pointer; font-size: 0.82rem; font-weight: 620; }
+.advanced-options summary { display: inline-flex; min-height: 44px; align-items: center; color: var(--accent); cursor: pointer; font-size: 0.82rem; font-weight: 620; }
 .import-metrics { margin-bottom: 0.75rem; }
 .import-progress { margin: 0.85rem 0 0.25rem; padding: 0.8rem 0.85rem; border-radius: 14px; background: var(--control); }
 .import-progress-label { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; color: var(--muted); font-size: 0.78rem; }
 .import-progress-label strong { color: var(--text); font-variant-numeric: tabular-nums; }
 .import-progress .progress-track { margin-top: 0.55rem; }
 .manual-import { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--separator); }
-.manual-import summary { color: var(--accent); cursor: pointer; font-size: 0.82rem; font-weight: 620; }
+.manual-import summary { display: inline-flex; min-height: 44px; align-items: center; color: var(--accent); cursor: pointer; font-size: 0.82rem; font-weight: 620; }
 .manual-import textarea { margin-top: 0.75rem; }
 .manual-import .button { width: 100%; margin-top: 0.55rem; }
 .dashboard-actions .button:first-child { flex: 1; }
@@ -211,13 +211,13 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .daily-limit-heading .eyebrow { margin-bottom: 0.2rem; }
 .daily-limit-heading strong { font-size: 0.875rem; font-weight: 650; }
 .daily-limit-input-row { display: grid; grid-template-columns: 2.7rem minmax(4.25rem, 1fr) 2.7rem auto; gap: 0.45rem; align-items: center; margin-top: 0.7rem; }
-.daily-limit-input-row > button, .daily-limit-presets button { min-height: 40px; border: 0; border-radius: 10px; background: var(--material-raised); color: var(--accent); font-size: 1rem; font-weight: 650; cursor: pointer; }
+.daily-limit-input-row > button, .daily-limit-presets button { min-height: 44px; border: 0; border-radius: 10px; background: var(--material-raised); color: var(--accent); font-size: 1rem; font-weight: 650; cursor: pointer; }
 .daily-limit-input-row > button:disabled, .daily-limit-presets button:disabled { cursor: not-allowed; opacity: 0.45; }
-.daily-limit-input-row input { width: 100%; min-height: 40px; border: 1px solid transparent; border-radius: 10px; background: var(--material-raised); color: var(--text); text-align: center; outline: none; font-variant-numeric: tabular-nums; }
+.daily-limit-input-row input { width: 100%; min-height: 44px; border: 1px solid transparent; border-radius: 10px; background: var(--material-raised); color: var(--text); text-align: center; outline: none; font-variant-numeric: tabular-nums; }
 .daily-limit-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
-.daily-limit-input-row .button { min-height: 40px; padding-inline: 0.75rem; }
+.daily-limit-input-row .button { min-height: 44px; padding-inline: 0.75rem; }
 .daily-limit-presets { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
-.daily-limit-presets button { min-height: 32px; min-width: 2.6rem; padding: 0.3rem 0.55rem; font-size: 0.75rem; }
+.daily-limit-presets button { min-width: 2.6rem; padding: 0.3rem 0.55rem; font-size: 0.75rem; }
 .daily-limit .helper-text { margin: 0.6rem 0 0; }
 
 .pronunciation-list { display: grid; gap: 0; overflow: hidden; background: var(--control); border-radius: 15px; }
@@ -241,7 +241,7 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .divider { height: 1px; margin: 1.1rem 0 0.8rem; background: var(--separator); }
 .speed-control { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; margin: 0; padding: 0.22rem; border: 0; border-radius: 12px; background: var(--control); }
 .speed-control legend { grid-column: 1 / -1; margin: 0 0 0.48rem; padding: 0; color: var(--muted); font-size: 0.8125rem; }
-.speed-control button { min-height: 38px; border: 0; border-radius: 9px; background: transparent; color: var(--text); cursor: pointer; font-size: 0.8125rem; transition: transform 100ms ease-out, background-color 140ms ease, box-shadow 140ms ease; }
+.speed-control button { min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--text); cursor: pointer; font-size: 0.8125rem; transition: transform 100ms ease-out, background-color 140ms ease, box-shadow 140ms ease; }
 .speed-control button:active { transform: scale(0.96); }
 .speed-control button.selected { background: var(--material-raised); color: var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); font-weight: 620; }
 .transcript-button { width: 100%; margin-top: 0.75rem; }
