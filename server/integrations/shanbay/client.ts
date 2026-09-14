@@ -26,10 +26,17 @@ export class ShanbayClient {
   private async request(path: string): Promise<unknown> {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const response = await this.fetcher(`${BASE_URL}${path}`, {
-          headers: { accept: "application/json", cookie: this.cookie },
-          signal: AbortSignal.timeout(15000),
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        let response: Response;
+        try {
+          response = await this.fetcher(`${BASE_URL}${path}`, {
+            headers: { accept: "application/json", cookie: this.cookie },
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
         if (!response.ok) {
           console.warn(`Shanbay request ${path} returned HTTP ${response.status}`);
           if (response.status === 401 || response.status === 403) throw new ShanbayError("Shanbay login expired.", "auth");
