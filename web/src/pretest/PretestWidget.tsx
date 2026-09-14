@@ -307,7 +307,6 @@ export function PretestWidget(): React.JSX.Element {
         <div>
           <span className="eyebrow">本轮完成</span>
           <h1 id="pretest-complete-title">预测试完成</h1>
-          <p>结果已经写入 Wordloop，不需要回到聊天记录逐条查看。</p>
         </div>
       </header>
       {feedback ? <div className={`inline-feedback ${feedback.result}`} role="status">
@@ -332,7 +331,6 @@ export function PretestWidget(): React.JSX.Element {
       <div>
         <span className="eyebrow">主动回忆</span>
         <h1 id="pretest-title">{payload.title ?? "快速预测试"}</h1>
-        <p>答案、批改和进度都留在这张卡片里。</p>
       </div>
       <button className="focus-mode-button" type="button" onClick={() => void enterFocusMode()}>专注模式</button>
     </header>
