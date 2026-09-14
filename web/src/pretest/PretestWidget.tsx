@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
-import { callServerTool, requestFocusMode, sampleHostText, sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
+import { callServerTool, getSamplingAvailability, requestFocusMode, sampleHostText, sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
 
 const itemSchema = z.object({
   word: z.string().trim().min(1).max(100),
@@ -22,9 +22,9 @@ const payloadSchema = z.object({
 });
 
 type Payload = z.infer<typeof payloadSchema>;
-type PretestItem = Payload["items"][number];
+export type PretestItem = Payload["items"][number];
 type AnswerStatus = "idle" | "sending" | "sent" | "error";
-type PretestResult = "known" | "uncertain" | "unknown";
+export type PretestResult = "known" | "uncertain" | "unknown";
 type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
 
 const gradeSchema = z.object({
@@ -33,6 +33,81 @@ const gradeSchema = z.object({
 });
 
 const gradeSystemPrompt = "You grade one English vocabulary pretest answer. Return strict JSON only. Do not teach or add markdown.";
+
+export function normalizePretestWord(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function editDistance(left: string, right: string): number {
+  const source = normalizePretestWord(left);
+  const target = normalizePretestWord(right);
+  let previous = Array.from({ length: target.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= source.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= target.length; column += 1) {
+      current[column] = Math.min(
+        (current[column - 1] ?? Number.POSITIVE_INFINITY) + 1,
+        (previous[column] ?? Number.POSITIVE_INFINITY) + 1,
+        (previous[column - 1] ?? Number.POSITIVE_INFINITY) + (source[row - 1] === target[column - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[target.length] ?? source.length;
+}
+
+export function gradeCnToEn(answer: string, target: string): { result: PretestResult; feedback: string } {
+  const normalizedAnswer = normalizePretestWord(answer);
+  const normalizedTarget = normalizePretestWord(target);
+  if (normalizedAnswer && normalizedAnswer === normalizedTarget) {
+    return { result: "known", feedback: "答案正确。" };
+  }
+  if (normalizedTarget.length > 3 && editDistance(normalizedAnswer, normalizedTarget) === 1) {
+    return { result: "uncertain", feedback: "拼写接近目标词。" };
+  }
+  return { result: "unknown", feedback: "答案与目标词不匹配。" };
+}
+
+export function effectivePretestDirection(
+  direction: PretestItem["direction"],
+  samplingAvailable: boolean,
+): PretestItem["direction"] {
+  return direction === "en_definition" && !samplingAvailable ? "cn_to_en" : direction;
+}
+
+export function pretestActivityType(direction: PretestItem["direction"]): "pretest_cn_to_en" | "pretest_en_definition" {
+  return direction === "cn_to_en" ? "pretest_cn_to_en" : "pretest_en_definition";
+}
+
+type SamplingFunction = (prompt: string, systemPrompt: string) => Promise<string>;
+
+function semanticGradePrompt(item: Pick<PretestItem, "word" | "meaning_zh" | "part_of_speech">, answer: string): string {
+  return `题型：英文单词 → 简单英文解释\n英文单词：${item.word}\n词性：${item.part_of_speech}\n中文核心义（仅供判断，不要求照抄）：${item.meaning_zh}\n用户答案：${answer}\n\n判定规则：known=用自然英文表达出该词任意一个正确、常见的核心义，短语也可以；uncertain=语义方向正确但过于模糊或不完整；unknown=意义错误、混淆其他词或与题目无关。不要要求字典式措辞、完整覆盖全部词义、特定句型或完整句子。用中文写一句不超过40字的简短反馈，不要教学。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`;
+}
+
+export async function gradePretestAnswer(
+  item: Pick<PretestItem, "word" | "meaning_zh" | "part_of_speech" | "direction">,
+  answer: string,
+  samplingAvailable: boolean,
+  sample: SamplingFunction = sampleHostText,
+): Promise<{ result: PretestResult; feedback: string }> {
+  if (item.direction === "cn_to_en" || !samplingAvailable) {
+    return gradeCnToEn(answer, item.word);
+  }
+  return parseGrade(await sample(semanticGradePrompt(item, answer), gradeSystemPrompt));
+}
+
+export function schedulePretestAdvance(
+  timerRef: { current: ReturnType<typeof setTimeout> | null },
+  callback: () => void,
+  delayMs = 600,
+): void {
+  if (timerRef.current !== null) clearTimeout(timerRef.current);
+  timerRef.current = setTimeout(() => {
+    timerRef.current = null;
+    callback();
+  }, delayMs);
+}
 
 function parseGrade(raw: string): z.infer<typeof gradeSchema> {
   const match = raw.match(/\{[\s\S]*\}/);
@@ -78,20 +153,30 @@ export function PretestWidget(): React.JSX.Element {
   const submittingRef = useRef(false);
   const interactionStartedRef = useRef(false);
   const payloadSignatureRef = useRef("");
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const speechAvailable = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 
-  useEffect(() => subscribeToApp((event) => {
-    if (event.type !== "toolinput" && event.type !== "toolresult") return;
-    const candidate = event.type === "toolinput"
-      ? { widget: "pretest", ...event.value }
-      : event.value.structuredContent;
-    const parsed = payloadSchema.safeParse(candidate);
-    if (!parsed.success) return;
-    const signature = JSON.stringify(parsed.data);
-    if (payloadSignatureRef.current === signature) return;
-    payloadSignatureRef.current = signature;
-    const nextIndex = Math.min(parsed.data.current_index ?? 0, parsed.data.items.length - 1);
-    setPayload(parsed.data);
+  function clearAdvanceTimer(): void {
+    if (advanceTimerRef.current !== null) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  }
+
+  async function initializePayload(nextPayload: Payload, signature: string): Promise<void> {
+    const available = await getSamplingAvailability();
+    if (payloadSignatureRef.current !== signature) return;
+    const effectivePayload: Payload = {
+      ...nextPayload,
+      items: nextPayload.items.map((entry) => ({
+        ...entry,
+        direction: effectivePretestDirection(entry.direction, available),
+      })),
+    };
+    setSamplingAvailable(available);
+    const nextIndex = Math.min(effectivePayload.current_index ?? 0, effectivePayload.items.length - 1);
+    setPayload(effectivePayload);
     setIndex(nextIndex);
     setAnswer("");
     setError("");
@@ -102,9 +187,39 @@ export function PretestWidget(): React.JSX.Element {
     setStatus("idle");
 
     if (!window.__WORDLOOP_PREVIEW__) {
-      void restoreSavedProgress(parsed.data);
+      void restoreSavedProgress(effectivePayload);
     }
-  }), []);
+  }
+
+  useEffect(() => {
+    const unsubscribe = subscribeToApp((event) => {
+      if (event.type !== "toolinput" && event.type !== "toolresult") return;
+      const candidate = event.type === "toolinput"
+        ? { widget: "pretest", ...event.value }
+        : event.value.structuredContent;
+      const parsed = payloadSchema.safeParse(candidate);
+      if (!parsed.success) return;
+      const signature = JSON.stringify(parsed.data);
+      if (payloadSignatureRef.current === signature) return;
+      clearAdvanceTimer();
+      payloadSignatureRef.current = signature;
+      setPayload(null);
+      setSamplingAvailable(null);
+      setIndex(0);
+      setAnswer("");
+      setError("");
+      setFeedback(null);
+      setResults([]);
+      setCompleted(false);
+      setShowPronunciation(false);
+      setStatus("idle");
+      void initializePayload(parsed.data, signature);
+    });
+    return () => {
+      unsubscribe();
+      clearAdvanceTimer();
+    };
+  }, []);
 
   async function restoreSavedProgress(nextPayload: Payload): Promise<void> {
     try {
@@ -158,15 +273,8 @@ export function PretestWidget(): React.JSX.Element {
     setError("");
     try {
       const grade = window.__WORDLOOP_PREVIEW__
-        ? { result: (isChineseToEnglish
-            ? cleanAnswer.toLocaleLowerCase() === item.word.toLocaleLowerCase()
-            : cleanAnswer.length > 0) ? "known" as const : "unknown" as const, feedback: "预览模式：答案已在卡片内完成判定。" }
-        : parseGrade(await sampleHostText(
-          isChineseToEnglish
-            ? `题型：中文核心义 → 英文单词\n目标英文单词：${item.word}\n中文核心义：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定规则：known=正确写出目标英文单词，大小写不影响判定；uncertain=明显知道目标词，但只有轻微拼写错误；unknown=错误单词、无关答案或不知道。用中文写一句不超过40字的简短反馈，不要教学。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`
-            : `题型：英文单词 → 简单英文解释\n英文单词：${item.word}\n词性：${item.part_of_speech}\n中文核心义（仅供判断，不要求照抄）：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定规则：known=用自然英文表达出该词任意一个正确、常见的核心义，短语也可以；uncertain=语义方向正确但过于模糊或不完整；unknown=意义错误、混淆其他词或与题目无关。不要要求字典式措辞、完整覆盖全部词义、特定句型或完整句子。用中文写一句不超过40字的简短反馈，不要教学。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`,
-          gradeSystemPrompt,
-        ));
+        ? await gradePretestAnswer(item, cleanAnswer, samplingAvailable === true, async () => "{\"result\":\"known\",\"feedback\":\"预览模式：答案已在卡片内完成判定。\"}")
+        : await gradePretestAnswer(item, cleanAnswer, samplingAvailable === true);
       await saveGrade(cleanAnswer, grade);
     } catch (caught) {
       setStatus("error");
@@ -183,9 +291,8 @@ export function PretestWidget(): React.JSX.Element {
         word: item.word,
         result: grade.result,
         user_answer: cleanAnswer,
-        // Keep the persisted activity enum backward-compatible while the UI
-        // exposes the corrected English → Chinese direction.
-        activity_type: item.direction === "cn_to_en" ? "pretest_cn_to_en" : "pretest_en_definition",
+        // The effective direction is cn_to_en when semantic sampling is unavailable.
+        activity_type: pretestActivityType(item.direction),
       });
       if (stored.isError) throw new Error("结果未能保存，请重试。");
     }
@@ -193,20 +300,18 @@ export function PretestWidget(): React.JSX.Element {
     setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
     setFeedback(graded);
     setStatus("sent");
-  }
-
-  function nextQuestion(): void {
-    if (!payload || !item || status !== "sent") return;
-    if (index === payload.items.length - 1) {
+    const isLast = index === payload.items.length - 1;
+    schedulePretestAdvance(advanceTimerRef, () => {
       setFeedback(null);
-      setCompleted(true);
-      return;
-    }
-    setIndex((value) => value + 1);
-    setAnswer("");
-    setFeedback(null);
-    setStatus("idle");
-    requestAnimationFrame(() => answerRef.current?.focus());
+      setAnswer("");
+      setStatus("idle");
+      if (isLast) {
+        setCompleted(true);
+        return;
+      }
+      setIndex((value) => value + 1);
+      requestAnimationFrame(() => answerRef.current?.focus());
+    });
   }
 
   async function markUnknown(): Promise<void> {
@@ -369,15 +474,12 @@ export function PretestWidget(): React.JSX.Element {
     </div> : null}
 
     <div className="pretest-actions">
-      {status === "sent" ? <Button onClick={nextQuestion}>
-        {index === payload.items.length - 1 ? "查看结果" : "下一题"}
-        {index === payload.items.length - 1 ? null : <ArrowIcon className="button-icon trailing" />}
-      </Button> : <>
+      {status !== "sent" ? <>
         <Button className="secondary unknown-action" onClick={() => void markUnknown()} disabled={status === "sending"}>不会</Button>
         <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending"}>
           {status === "sending" ? "正在保存…" : "提交"}
         </Button>
-      </>}
+      </> : null}
     </div>
   </section>;
 }

@@ -10,7 +10,7 @@ type Listener = (event: AppEvent) => void;
 
 declare global {
   interface Window {
-    __WORDLOOP_PREVIEW__?: { theme?: "light" | "dark"; payload?: Record<string, unknown>; toolResults?: Record<string, Record<string, unknown>> };
+    __WORDLOOP_PREVIEW__?: { theme?: "light" | "dark"; samplingAvailable?: boolean; payload?: Record<string, unknown>; toolResults?: Record<string, Record<string, unknown>> };
     openai?: {
       callTool?: (name: string, args: Record<string, unknown>) => Promise<CallToolResult>;
       sendFollowUpMessage?: (input: { prompt: string }) => Promise<void>;
@@ -23,6 +23,7 @@ const listeners = new Set<Listener>();
 let latestDataEvent: Extract<AppEvent, { type: "toolinput" | "toolresult" }> | undefined;
 let latestThemeEvent: Extract<AppEvent, { type: "theme" }> | undefined;
 let connected: Promise<void> | undefined;
+let samplingAvailableCache: boolean | undefined;
 
 function publish(event: AppEvent): void {
   if (event.type === "toolinput" || event.type === "toolresult") latestDataEvent = event;
@@ -61,6 +62,22 @@ export async function connectApp(): Promise<void> {
   return connected;
 }
 
+/** Resolve the optional host capability once per widget runtime. */
+export async function getSamplingAvailability(): Promise<boolean> {
+  if (samplingAvailableCache !== undefined) return samplingAvailableCache;
+  if (window.__WORDLOOP_PREVIEW__) {
+    samplingAvailableCache = window.__WORDLOOP_PREVIEW__.samplingAvailable ?? true;
+    return samplingAvailableCache;
+  }
+  try {
+    await connectApp();
+    samplingAvailableCache = Boolean(app.getHostCapabilities()?.sampling);
+  } catch {
+    samplingAvailableCache = false;
+  }
+  return samplingAvailableCache;
+}
+
 export async function callServerTool(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
   const previewResult = window.__WORDLOOP_PREVIEW__?.toolResults?.[name];
   if (previewResult) return { content: [], structuredContent: previewResult };
@@ -77,10 +94,8 @@ export async function callServerTool(name: string, args: Record<string, unknown>
 }
 
 export async function sampleHostText(prompt: string, systemPrompt: string): Promise<string> {
+  if (!(await getSamplingAvailability())) throw new Error("Sampling unavailable.");
   await connectApp();
-  if (!app.getHostCapabilities()?.sampling) {
-    throw new Error("当前 ChatGPT 客户端不支持卡片内智能批改，请更新客户端后重试。");
-  }
   const result = await app.createSamplingMessage({
     messages: [{ role: "user", content: { type: "text", text: prompt } }],
     systemPrompt,

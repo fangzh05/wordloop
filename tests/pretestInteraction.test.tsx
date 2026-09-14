@@ -32,10 +32,12 @@ describe("PretestQuestion", () => {
     expect(markup).not.toContain("Give an English definition");
   });
 
-  it("waits for a manual next-question action after grading", () => {
+  it("auto-advances after grading and clears pending timers", () => {
     const source = readFileSync(new URL("../web/src/pretest/PretestWidget.tsx", import.meta.url), "utf8");
-    expect(source).not.toContain("window.setTimeout");
-    expect(source).toContain("function nextQuestion()");
-    expect(source).toContain("下一题");
+    expect(source).toContain("schedulePretestAdvance");
+    expect(source).toContain("600");
+    expect(source).toContain("clearAdvanceTimer");
+    expect(source).not.toContain("function nextQuestion()");
+    expect(source).not.toContain("下一题");
   });
 });
