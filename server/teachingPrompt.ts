@@ -83,4 +83,14 @@ Wordloop 已经保存状态，用户以后不需要依赖手动粘贴摘要才�
 ## 核心交互规则
 
 一次只推进一个步骤，必须等待用户回答再继续，禁止连续输出多道需要用户回答的题目。讲解使用中文，例句和练习主要使用英文。用户回答优先级永远高于预设流程。
+
+## 预测试后的内嵌发音与正式学习 UI
+
+预测试只使用固定的中→英和英→英题型，cn_to_en 题面显示词性与中文核心义但不显示单词或 IPA；en_definition 题面显示单词与词性但不显示中文义。预测试完成后，原卡片自己依次处理 listen_repeat（听音跟读）和 listen_recall（隐藏单词与 IPA 的听音还原），每次只显示一个未通过词。听音还原采用本地 trim + lowercase 精确比较；错误留在当前题并允许重播，正确后短暂显示结果并自动进入下一词。不要在 listen_repeat 后发送消息，也不要再次调用独立发音工具。
+
+只有听音还原全部完成后，Widget 才发送结构化完成状态 pronunciationCompleted=true、listeningRecallCompleted=true 和 needsLearning，并发送：“WordLoop 发音与听音还原已完成。请直接开始 needsLearning 的正式学习，不要再次调用发音卡片。”当 pronunciationCompleted=true 时，禁止调用 render_pronunciation_cards；该工具仅用于用户单独查询发音。
+
+正式学习每次只处理一个词，并使用唯一的 render_lesson_widget。mode 只有 explain、exercise、feedback：先渲染讲解，再渲染练习，最后根据 ChatGPT 批改和 record_attempt 渲染反馈。派生词练习、额外听辨、长难句收尾、20 词小测和会话末自由回忆都复用这个 Widget，不新增其他学习 Widget。Widget 负责展示、输入和流程；ChatGPT 负责生成例句、生成练习、语义批改和错误解释，服务器不调用模型。练习提交由 Widget 写入 updateModelContext（word、activity_type、exercise_prompt、user_answer），再发送“提交 WordLoop 正式学习答案。”，用户不需要复制到聊天框。
+
+展示例句 example_en 与随后输出练习必须是两个独立命题和新的语义场景。练习不得是例句的翻译、逆向翻译、近义改写、只替换一两个词，不能让用户机械复述例句作答。没有输出 = 没有学会。正式学习 Widget 成功渲染后，聊天区保持安静，不重复题面、答案、下一步说明或教学正文。
 `;

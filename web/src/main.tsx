@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { LearningDashboard } from "./dashboard/LearningDashboard.js";
+import { LessonWidget } from "./lesson/LessonWidget.js";
 import { DictationWidget } from "./dictation/DictationWidget.js";
 import { WordImport } from "./import/WordImport.js";
 import { connectApp } from "./mcpBridge.js";
@@ -17,6 +18,7 @@ const widgets: Record<string, React.JSX.Element> = {
   dictation: <DictationWidget />,
   pretest: <PretestWidget />,
   review: <ReviewWidget />,
+  lesson: <LessonWidget />,
 };
 
 const root = document.getElementById("root");

@@ -14,6 +14,7 @@ describe("PretestQuestion", () => {
     const markup = renderToStaticMarkup(<PretestQuestion item={{ ...base, word: "recur", direction: "cn_to_en" }} />);
     expect(markup).toContain("中 → 英");
     expect(markup).toContain("再次发生；复发");
+    expect(markup).toContain("v.");
     expect(markup).not.toContain("recur");
     expect(markup).not.toContain("/rɪˈkɜːr/");
   });
@@ -37,6 +38,9 @@ describe("PretestQuestion", () => {
     expect(source).toContain("schedulePretestAdvance");
     expect(source).toContain("600");
     expect(source).toContain("clearAdvanceTimer");
+    expect(source).toContain("listen_repeat");
+    expect(source).toContain("listen_recall");
+    expect(source).toContain("pronunciationCompleted");
     expect(source).not.toContain("function nextQuestion()");
     expect(source).not.toContain("下一题");
   });

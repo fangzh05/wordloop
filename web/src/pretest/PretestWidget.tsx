@@ -2,14 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
-import { callServerTool, getSamplingAvailability, requestFocusMode, sampleHostText, sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
+import {
+  callServerTool,
+  getSamplingAvailability,
+  requestFocusMode,
+  sampleHostText,
+  sendUserMessage,
+  subscribeToApp,
+  updateModelContext,
+} from "../mcpBridge.js";
 
 const itemSchema = z.object({
   word: z.string().trim().min(1).max(100),
   ipa: z.string().trim().min(1).max(120),
   part_of_speech: z.string().trim().min(1).max(40),
   meaning_zh: z.string().trim().min(1).max(240),
-  // Kept only for compatibility with older tool calls. The card never renders it.
+  // Compatibility only. The fixed card never renders prompt.
   prompt: z.string().trim().max(1000).optional(),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
 });
@@ -23,8 +31,10 @@ const payloadSchema = z.object({
 
 type Payload = z.infer<typeof payloadSchema>;
 export type PretestItem = Payload["items"][number];
-type AnswerStatus = "idle" | "sending" | "sent" | "error";
 export type PretestResult = "known" | "uncertain" | "unknown";
+type AnswerStatus = "idle" | "sending" | "sent" | "error";
+type PronunciationStage = "result" | "listen_repeat" | "listen_recall" | "ready";
+type RecallStatus = "idle" | "correct" | "wrong";
 type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
 
 const gradeSchema = z.object({
@@ -81,8 +91,19 @@ export function pretestActivityType(direction: PretestItem["direction"]): "prete
 
 type SamplingFunction = (prompt: string, systemPrompt: string) => Promise<string>;
 
-function semanticGradePrompt(item: Pick<PretestItem, "word" | "meaning_zh" | "part_of_speech">, answer: string): string {
-  return `题型：英文单词 → 简单英文解释\n英文单词：${item.word}\n词性：${item.part_of_speech}\n中文核心义（仅供判断，不要求照抄）：${item.meaning_zh}\n用户答案：${answer}\n\n判定规则：known=用自然英文表达出该词任意一个正确、常见的核心义，短语也可以；uncertain=语义方向正确但过于模糊或不完整；unknown=意义错误、混淆其他词或与题目无关。不要要求字典式措辞、完整覆盖全部词义、特定句型或完整句子。用中文写一句不超过40字的简短反馈，不要教学。只返回 {"result":"known|uncertain|unknown","feedback":"..."}。`;
+function semanticGradePrompt(
+  item: Pick<PretestItem, "word" | "meaning_zh" | "part_of_speech">,
+  answer: string,
+): string {
+  return [
+    "题型：英文单词 → 简单英文解释",
+    "英文单词：" + item.word,
+    "词性：" + item.part_of_speech,
+    "中文核心义（仅供判断，不要求照抄）：" + item.meaning_zh,
+    "用户答案：" + answer,
+    "",
+    "判定规则：known=用自然英文表达出该词任意一个正确、常见的核心义，短语也可以；uncertain=语义方向正确但过于模糊或不完整；unknown=意义错误、混淆其他词或与题目无关。不要要求字典式措辞、完整覆盖全部词义、特定句型或完整句子。用中文写一句不超过40字的简短反馈，不要教学。只返回 {\"result\":\"known|uncertain|unknown\",\"feedback\":\"...\"}。",
+  ].join("\n");
 }
 
 export async function gradePretestAnswer(
@@ -97,9 +118,6 @@ export async function gradePretestAnswer(
   try {
     return parseGrade(await sample(semanticGradePrompt(item, answer), gradeSystemPrompt));
   } catch (caught) {
-    // A host can withdraw an optional capability after initialization. Treat
-    // that race exactly like an unavailable capability instead of blocking
-    // the pretest; malformed semantic responses still surface for retry.
     if (caught instanceof Error && caught.message === "Sampling unavailable.") {
       return gradeCnToEn(answer, item.word);
     }
@@ -137,6 +155,7 @@ export function PretestQuestion({ item }: { item: PretestItem }): React.JSX.Elem
   return <div className="question-block">
     {item.direction === "cn_to_en" ? <>
       <span className="question-label">中 → 英</span>
+      <span className="part-of-speech">{item.part_of_speech}</span>
       <p className="question-prompt">{item.meaning_zh}</p>
     </> : <>
       <span className="question-label">英 → 英</span>
@@ -154,23 +173,37 @@ export function PretestWidget(): React.JSX.Element {
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState<GradedAnswer | null>(null);
   const [results, setResults] = useState<GradedAnswer[]>([]);
-  const [completed, setCompleted] = useState(false);
-  const [showPronunciation, setShowPronunciation] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [stage, setStage] = useState<PronunciationStage>("result");
+  const [pronunciationIndex, setPronunciationIndex] = useState(0);
+  const [recallAnswer, setRecallAnswer] = useState("");
+  const [recallStatus, setRecallStatus] = useState<RecallStatus>("idle");
   const [playing, setPlaying] = useState<string | null>(null);
   const [focusModeMessage, setFocusModeMessage] = useState("");
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
+  const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const answerRef = useRef<HTMLInputElement>(null);
+  const recallInputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
   const interactionStartedRef = useRef(false);
   const payloadSignatureRef = useRef("");
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
-  const speechAvailable = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  const speechAvailable = typeof window !== "undefined"
+    && "speechSynthesis" in window
+    && "SpeechSynthesisUtterance" in window;
 
   function clearAdvanceTimer(): void {
     if (advanceTimerRef.current !== null) {
       clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = null;
+    }
+  }
+
+  function focusInput(input: HTMLInputElement | null): void {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => input?.focus());
+    } else {
+      input?.focus();
     }
   }
 
@@ -185,17 +218,20 @@ export function PretestWidget(): React.JSX.Element {
       })),
     };
     setSamplingAvailable(available);
-    const nextIndex = Math.min(effectivePayload.current_index ?? 0, effectivePayload.items.length - 1);
     setPayload(effectivePayload);
-    setIndex(nextIndex);
+    setIndex(Math.min(effectivePayload.current_index ?? 0, effectivePayload.items.length - 1));
     setAnswer("");
     setError("");
     setFeedback(null);
     setResults([]);
-    setCompleted(false);
-    setShowPronunciation(false);
+    setFinished(false);
+    setStage("result");
+    setPronunciationIndex(0);
+    setRecallAnswer("");
+    setRecallStatus("idle");
+    setContinueStatus("idle");
     setStatus("idle");
-
+    interactionStartedRef.current = false;
     if (!window.__WORDLOOP_PREVIEW__) {
       void restoreSavedProgress(effectivePayload);
     }
@@ -220,14 +256,20 @@ export function PretestWidget(): React.JSX.Element {
       setError("");
       setFeedback(null);
       setResults([]);
-      setCompleted(false);
-      setShowPronunciation(false);
+      setFinished(false);
+      setStage("result");
+      setPronunciationIndex(0);
+      setRecallAnswer("");
+      setRecallStatus("idle");
       setStatus("idle");
+      setContinueStatus("idle");
+      interactionStartedRef.current = false;
       void initializePayload(parsed.data, signature);
     });
     return () => {
       unsubscribe();
       clearAdvanceTimer();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
   }, []);
 
@@ -242,9 +284,9 @@ export function PretestWidget(): React.JSX.Element {
         })),
       }).safeParse(stored.structuredContent);
       if (!context.success || interactionStartedRef.current) return;
-      const statusByWord = new Map(context.data.today_words.map((entry) => [entry.word, entry.status]));
+      const statusByWord = new Map(context.data.today_words.map((entry) => [normalizePretestWord(entry.word), entry.status]));
       const restored = nextPayload.items.flatMap((entry): GradedAnswer[] => {
-        const saved = statusByWord.get(entry.word.toLocaleLowerCase());
+        const saved = statusByWord.get(normalizePretestWord(entry.word));
         if (!saved || saved === "new") return [];
         const result: PretestResult = saved === "known" || saved === "mastered"
           ? "known"
@@ -256,25 +298,22 @@ export function PretestWidget(): React.JSX.Element {
       const pendingIndex = nextPayload.items.findIndex((entry) => !restored.some((saved) => saved.word === entry.word));
       if (pendingIndex === -1) {
         setIndex(nextPayload.items.length - 1);
-        setFeedback(restored.at(-1) ?? null);
-        setStatus("sent");
-        setCompleted(true);
+        setFinished(true);
+        setStage("result");
       } else {
         setIndex(pendingIndex);
         setAnswer("");
         setFeedback(null);
         setStatus("idle");
-        requestAnimationFrame(() => answerRef.current?.focus());
+        focusInput(answerRef.current);
       }
     } catch {
-      // The card remains usable if a transient restore read fails.
+      // A transient restore failure must not block the card.
     }
   }
 
-  const item = payload?.items[index];
-  const isChineseToEnglish = item?.direction === "cn_to_en";
-
   async function submit(): Promise<void> {
+    const item = payload?.items[index];
     if (!payload || !item || !answer.trim() || status === "sending" || status === "sent" || submittingRef.current) return;
     submittingRef.current = true;
     interactionStartedRef.current = true;
@@ -282,10 +321,16 @@ export function PretestWidget(): React.JSX.Element {
     setStatus("sending");
     setError("");
     try {
+      const itemForGrade = item;
       const grade = window.__WORDLOOP_PREVIEW__
-        ? await gradePretestAnswer(item, cleanAnswer, samplingAvailable === true, async () => "{\"result\":\"known\",\"feedback\":\"预览模式：答案已在卡片内完成判定。\"}")
-        : await gradePretestAnswer(item, cleanAnswer, samplingAvailable === true);
-      await saveGrade(cleanAnswer, grade);
+        ? await gradePretestAnswer(
+          itemForGrade,
+          cleanAnswer,
+          samplingAvailable === true,
+          async () => "{\"result\":\"known\",\"feedback\":\"预览模式：答案已在卡片内完成判定。\"}",
+        )
+        : await gradePretestAnswer(itemForGrade, cleanAnswer, samplingAvailable === true);
+      await saveGrade(itemForGrade, cleanAnswer, grade);
     } catch (caught) {
       setStatus("error");
       setError(caught instanceof Error ? caught.message : "答案未能提交，请重试。");
@@ -294,19 +339,23 @@ export function PretestWidget(): React.JSX.Element {
     }
   }
 
-  async function saveGrade(cleanAnswer: string, grade: { result: PretestResult; feedback: string }): Promise<void> {
-    if (!payload || !item) return;
+  async function saveGrade(
+    item: Payload["items"][number],
+    cleanAnswer: string,
+    grade: { result: PretestResult; feedback: string },
+  ): Promise<void> {
+    if (!payload) return;
     if (!window.__WORDLOOP_PREVIEW__) {
       const stored = await callServerTool("record_pretest_result", {
         word: item.word,
         result: grade.result,
         user_answer: cleanAnswer,
-        // The effective direction is cn_to_en when semantic sampling is unavailable.
+        // The item direction has already been downgraded when sampling is unavailable.
         activity_type: pretestActivityType(item.direction),
       });
       if (stored.isError) throw new Error("结果未能保存，请重试。");
     }
-    const graded = { word: item.word, answer: cleanAnswer, ...grade };
+    const graded: GradedAnswer = { word: item.word, answer: cleanAnswer, ...grade };
     setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
     setFeedback(graded);
     setStatus("sent");
@@ -316,22 +365,24 @@ export function PretestWidget(): React.JSX.Element {
       setAnswer("");
       setStatus("idle");
       if (isLast) {
-        setCompleted(true);
+        setFinished(true);
+        setStage("result");
         return;
       }
       setIndex((value) => value + 1);
-      requestAnimationFrame(() => answerRef.current?.focus());
+      focusInput(answerRef.current);
     });
   }
 
   async function markUnknown(): Promise<void> {
+    const item = payload?.items[index];
     if (!payload || !item || status === "sending" || status === "sent" || submittingRef.current) return;
     submittingRef.current = true;
     interactionStartedRef.current = true;
     setStatus("sending");
     setError("");
     try {
-      await saveGrade("", { result: "unknown", feedback: "已直接标记为不会。" });
+      await saveGrade(item, "", { result: "unknown", feedback: "已直接标记为不会。" });
     } catch (caught) {
       setStatus("error");
       setError(caught instanceof Error ? caught.message : "结果未能保存，请重试。");
@@ -350,21 +401,6 @@ export function PretestWidget(): React.JSX.Element {
     }
   }
 
-  async function continueLearning(): Promise<void> {
-    if (!payload || results.length !== payload.items.length || continueStatus === "sending" || continueStatus === "sent") return;
-    setContinueStatus("sending");
-    setError("");
-    try {
-      const needsLearning = results.filter((entry) => entry.result !== "known").map((entry) => entry.word);
-      await updateModelContext("Wordloop pretest round completed inside the widget.", { wordloopPretestResults: results, needsLearning });
-      await sendUserMessage(`Wordloop 预测试已在卡片内完成并保存。需要学习的词：${needsLearning.join("、") || "无"}。请继续下一步；不要重复汇报每题结果。`);
-      setContinueStatus("sent");
-    } catch (caught) {
-      setContinueStatus("error");
-      setError(caught instanceof Error ? caught.message : "无法继续学习，请重试。");
-    }
-  }
-
   function play(word: string): void {
     if (!speechAvailable) return;
     window.speechSynthesis.cancel();
@@ -377,69 +413,188 @@ export function PretestWidget(): React.JSX.Element {
     window.speechSynthesis.speak(utterance);
   }
 
-  if (!payload || !item) {
+  function submitRecall(): void {
+    const current = pronunciationWordsForRecall();
+    if (!current || !recallAnswer.trim() || recallStatus === "correct") return;
+    if (normalizePretestWord(recallAnswer) === normalizePretestWord(current.word)) {
+      setRecallStatus("correct");
+      const isLast = pronunciationIndex === pronunciationWordsForRecall().length - 1;
+      schedulePretestAdvance(advanceTimerRef, () => {
+        setRecallAnswer("");
+        setRecallStatus("idle");
+        if (isLast) {
+          setStage("ready");
+          return;
+        }
+        setPronunciationIndex((value) => value + 1);
+        setStage("listen_repeat");
+      });
+    } else {
+      setRecallStatus("wrong");
+    }
+  }
+
+  function pronunciationWordsForRecall(): Payload["items"][number][] {
+    if (!payload) return [];
+    return payload.items.filter((candidate) =>
+      results.some((entry) => entry.word === candidate.word && entry.result !== "known"),
+    );
+  }
+
+  async function continueLearning(): Promise<void> {
+    if (!payload || !finished || results.length !== payload.items.length || continueStatus === "sending" || continueStatus === "sent") return;
+    setContinueStatus("sending");
+    setError("");
+    try {
+      const needsLearning = results.filter((entry) => entry.result !== "known").map((entry) => entry.word);
+      await updateModelContext("WordLoop 发音与听音还原已完成。", {
+        pronunciationCompleted: true,
+        listeningRecallCompleted: true,
+        needsLearning,
+      });
+      await sendUserMessage("WordLoop 发音与听音还原已完成。请直接开始 needsLearning 的正式学习，不要再次调用发音卡片。");
+      setContinueStatus("sent");
+    } catch (caught) {
+      setContinueStatus("error");
+      setError(caught instanceof Error ? caught.message : "无法开始正式学习，请重试。");
+    }
+  }
+
+  if (!payload) {
     return <section className="widget-card skeleton" aria-busy="true"><span>正在加载预测试…</span></section>;
   }
 
-  const percent = ((index + 1) / payload.items.length) * 100;
-  const pronunciationWords = results
-    .filter((entry) => entry.result !== "known")
-    .map((entry) => payload.items.find((candidate) => candidate.word === entry.word))
-    .filter((entry): entry is Payload["items"][number] => Boolean(entry));
+  const currentItem = payload.items[index];
   const resultCounts = {
     known: results.filter((entry) => entry.result === "known").length,
     uncertain: results.filter((entry) => entry.result === "uncertain").length,
     unknown: results.filter((entry) => entry.result === "unknown").length,
   };
+  const pronunciationWords = payload.items.filter((candidate) =>
+    results.some((entry) => entry.word === candidate.word && entry.result !== "known"),
+  );
+  const currentPronunciation = pronunciationWords[pronunciationIndex];
+  const percent = ((index + 1) / payload.items.length) * 100;
 
-  if (completed) {
-    if (showPronunciation) {
-      return <section className="widget-card pretest-card" aria-labelledby="embedded-pronunciation-title">
+  if (finished) {
+    if (stage === "result") {
+      return <section className="widget-card pretest-card" aria-labelledby="pretest-complete-title">
         <header className="widget-header compact-header">
           <div>
-            <span className="eyebrow">先听再读</span>
-            <h1 id="embedded-pronunciation-title">本轮发音</h1>
-            <p>美式英语 · 点击播放后跟读一遍。</p>
+            <h1 id="pretest-complete-title">预测试完成</h1>
           </div>
-          <button className="focus-mode-button" type="button" onClick={() => setShowPronunciation(false)}>返回结果</button>
         </header>
-        {pronunciationWords.length ? <div className="pronunciation-list">
-          {pronunciationWords.map((entry) => <div className="pronunciation-row" key={entry.word}>
-            <div className="pronunciation-copy">
-              <div className="pronunciation-heading"><strong>{entry.word}</strong><span className="part-of-speech">{entry.part_of_speech}</span></div>
-              <span className="ipa">{entry.ipa}</span>
-              <span className="meaning-zh">{entry.meaning_zh}</span>
-            </div>
-            <button className="play-button" type="button" onClick={() => play(entry.word)} disabled={!speechAvailable} aria-label={`播放 ${entry.word}`}>
-              <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === entry.word ? "正在播放" : "播放") : "当前设备无法播放"}
-            </button>
-          </div>)}
-        </div> : <div className="inline-feedback known"><strong>全部已会</strong><span>本轮没有需要补发音的词。</span></div>}
+        <div className="result-strip" aria-label="本轮预测试结果">
+          <span><strong>{resultCounts.known}</strong><small>✓ 已会</small></span>
+          <span><strong>{resultCounts.uncertain}</strong><small>△ 模糊</small></span>
+          <span><strong>{resultCounts.unknown}</strong><small>× 不会</small></span>
+        </div>
+        {error ? <p className="error-text" role="alert">{error}</p> : null}
+        <Button onClick={() => {
+          if (pronunciationWords.length) {
+            setPronunciationIndex(0);
+            setRecallAnswer("");
+            setRecallStatus("idle");
+            setStage("listen_repeat");
+          } else {
+            void continueLearning();
+          }
+        }}>
+          {pronunciationWords.length ? "听音跟读" : "开始正式学习"} <ArrowIcon className="button-icon trailing" />
+        </Button>
+      </section>;
+    }
+
+    if (stage === "listen_repeat" && currentPronunciation) {
+      return <section className="widget-card pretest-card pronunciation-stage" aria-labelledby="listen-repeat-title">
+        <header className="widget-header compact-header">
+          <div>
+            <span className="eyebrow">听音跟读</span>
+            <h1 id="listen-repeat-title">{pronunciationIndex + 1} / {pronunciationWords.length}</h1>
+          </div>
+        </header>
+        <div className="pronunciation-focus">
+          <div className="pronunciation-heading"><strong>{currentPronunciation.word}</strong><span className="part-of-speech">{currentPronunciation.part_of_speech}</span></div>
+          <span className="ipa">{currentPronunciation.ipa}</span>
+          <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
+        </div>
+        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable} aria-label={"播放 " + currentPronunciation.word}>
+          <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
+        </button>
+        <Button onClick={() => {
+          setRecallAnswer("");
+          setRecallStatus("idle");
+          setStage("listen_recall");
+          focusInput(recallInputRef.current);
+        }}>我已听读 <ArrowIcon className="button-icon trailing" /></Button>
+      </section>;
+    }
+
+    if (stage === "listen_recall" && currentPronunciation) {
+      return <section className="widget-card pretest-card pronunciation-stage" aria-labelledby="listen-recall-title">
+        <header className="widget-header compact-header">
+          <div>
+            <span className="eyebrow">听音还原</span>
+            <h1 id="listen-recall-title">{pronunciationIndex + 1} / {pronunciationWords.length}</h1>
+          </div>
+        </header>
+        <div className="pronunciation-focus">
+          <span className="part-of-speech">{currentPronunciation.part_of_speech}</span>
+          <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
+        </div>
+        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable} aria-label={"播放 " + currentPronunciation.word}>
+          <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
+        </button>
+        <label className="answer-label" htmlFor="pronunciation-recall-answer">你的答案</label>
+        <input
+          ref={recallInputRef}
+          id="pronunciation-recall-answer"
+          className="answer-input"
+          type="text"
+          value={recallAnswer}
+          onChange={(event) => {
+            setRecallAnswer(event.target.value);
+            if (recallStatus !== "idle") setRecallStatus("idle");
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              submitRecall();
+            }
+          }}
+          placeholder="输入听到的单词…"
+          autoCapitalize="none"
+          autoComplete="off"
+          spellCheck={false}
+          enterKeyHint="send"
+        />
+        {recallStatus === "correct" ? <p className="answer-status" role="status">✓ 正确</p> : null}
+        {recallStatus === "wrong" ? <p className="error-text" role="status">× 再听一次</p> : null}
+        <Button onClick={submitRecall} disabled={!recallAnswer.trim()}>提交</Button>
+      </section>;
+    }
+
+    if (stage === "ready") {
+      return <section className="widget-card pretest-card" aria-labelledby="listening-complete-title">
+        <header className="widget-header compact-header">
+          <div>
+            <h1 id="listening-complete-title">听音完成</h1>
+          </div>
+        </header>
         {error ? <p className="error-text" role="alert">{error}</p> : null}
         <Button onClick={() => void continueLearning()} disabled={continueStatus === "sending" || continueStatus === "sent"}>
-          {continueStatus === "sending" ? "正在进入下一步…" : continueStatus === "sent" ? "已发送" : "我已跟读，开始学习"}
+          {continueStatus === "sending" ? "正在开始…" : continueStatus === "sent" ? "已发送" : "开始正式学习"}
           {continueStatus === "idle" ? <ArrowIcon className="button-icon trailing" /> : null}
         </Button>
       </section>;
     }
-    return <section className="widget-card pretest-card" aria-labelledby="pretest-complete-title">
-      <header className="widget-header compact-header">
-        <div>
-          <h1 id="pretest-complete-title">预测试完成</h1>
-        </div>
-      </header>
-      <div className="result-strip" aria-label="本轮预测试结果">
-        <span><strong>{resultCounts.known}</strong><small>✓ 已会</small></span>
-        <span><strong>{resultCounts.uncertain}</strong><small>△ 模糊</small></span>
-        <span><strong>{resultCounts.unknown}</strong><small>× 不会</small></span>
-      </div>
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
-      <Button onClick={() => setShowPronunciation(true)}>
-        听音跟读 <ArrowIcon className="button-icon trailing" />
-      </Button>
-    </section>;
   }
 
+  if (!currentItem) {
+    return <section className="widget-card skeleton" aria-busy="true"><span>正在加载题目…</span></section>;
+  }
+
+  const isChineseToEnglish = currentItem.direction === "cn_to_en";
   return <section className="widget-card pretest-card" aria-labelledby="pretest-title">
     <header className="widget-header compact-header">
       <div className="pretest-title-row">
@@ -449,13 +604,10 @@ export function PretestWidget(): React.JSX.Element {
       <button className="focus-mode-button" type="button" onClick={() => void enterFocusMode()}>⛶ 专注</button>
     </header>
     {focusModeMessage ? <p className="answer-hint" role="status">{focusModeMessage}</p> : null}
-
     <div className="pretest-progress" role="progressbar" aria-label="预测试进度" aria-valuemin={0} aria-valuemax={payload.items.length} aria-valuenow={index + 1}>
-      <span style={{ width: `${percent}%` }} />
+      <span style={{ width: String(percent) + "%" }} />
     </div>
-
-    <PretestQuestion item={item} />
-
+    <PretestQuestion item={currentItem} />
     <label className="answer-label" htmlFor="pretest-answer">你的答案</label>
     <input
       ref={answerRef}
@@ -477,12 +629,8 @@ export function PretestWidget(): React.JSX.Element {
       enterKeyHint="send"
       disabled={status === "sending" || status === "sent"}
     />
-
     {status === "error" ? <p className="error-text" role="alert">{error}</p> : null}
-    {feedback ? <div className={`inline-feedback status-only ${feedback.result}`} role="status">
-      <strong>{resultStatus(feedback.result)}</strong>
-    </div> : null}
-
+    {feedback ? <div className={"inline-feedback status-only " + feedback.result} role="status"><strong>{resultStatus(feedback.result)}</strong></div> : null}
     <div className="pretest-actions">
       {status !== "sent" ? <>
         <Button className="secondary unknown-action" onClick={() => void markUnknown()} disabled={status === "sending"}>不会</Button>
@@ -493,3 +641,4 @@ export function PretestWidget(): React.JSX.Element {
     </div>
   </section>;
 }
+

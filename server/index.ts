@@ -29,7 +29,7 @@ export function createHttpApp() {
   if (process.env.ENABLE_WIDGET_PREVIEW === "true") {
     app.get("/preview/:kind", async (req, res) => {
       const kind = req.params.kind;
-      if (!["import", "pretest", "review", "dashboard", "pronunciation", "dictation"].includes(kind)) {
+      if (!["import", "pretest", "review", "dashboard", "pronunciation", "dictation", "lesson"].includes(kind)) {
         res.status(404).send("Unknown widget.");
         return;
       }
@@ -67,13 +67,31 @@ export function createHttpApp() {
           ],
         },
         dictation: { widget: "dictation", title: "听写 1", text: "Rigorous evidence can constrain plausible explanations without eliminating uncertainty." },
+        lesson: {
+          widget: "lesson",
+          mode: "explain",
+          progress: "1 / 3",
+          word: "recur",
+          ipa: "/rɪˈkɜːr/",
+          part_of_speech: "v.",
+          meaning_zh: "再次发生；反复出现",
+          collocations: ["recur frequently", "recur at regular intervals"],
+          derivations: ["recurrence n.", "recurrent adj."],
+          example_en: "Symptoms may recur several weeks after treatment.",
+          note: "医学语境常见 recurrent infection / tumor recurrence",
+          exercise: {
+            activity_type: "translation_cn_to_en",
+            instruction: "使用 recur 翻译下面句子",
+            prompt: "研究人员发现，这种并发症在老年患者中更容易再次出现。"
+          }
+        },
       };
       const theme = req.query.theme === "dark" ? "dark" : "light";
       const toolResults = kind === "import" ? {
         get_current_shanbay_book: { id: "materialbook-2026", name: "考研英语词汇", is_current: true },
         preview_shanbay_book: { book: { id: "materialbook-2026", name: "考研英语词汇", is_current: true }, unlearned: 3812, learning: 624, simple_learned: 1046, estimated_unique_total: 5482 },
       } : undefined;
-      res.type("html").send(await widgetHtml(kind as "import" | "pretest" | "review" | "dashboard" | "pronunciation" | "dictation", { theme, payload: payloads[kind], toolResults }));
+      res.type("html").send(await widgetHtml(kind as "import" | "pretest" | "review" | "dashboard" | "pronunciation" | "dictation" | "lesson", { theme, payload: payloads[kind], toolResults }));
     });
   }
 

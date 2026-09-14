@@ -10,8 +10,8 @@ Run date: 2026-09-13 (Asia/Shanghai)
 | `npm run build` | Passed |
 | `npm test` | 34 passed, 1 Supabase integration test skipped because credentials were not available |
 | Plugin manifest validator | Passed |
-| MCP Inspector strict `tools/list` | Passed; 19 tools, no strict schema failure |
-| MCP App metadata probe | Passed; 5 render tools resolved their UI resources |
+| MCP Inspector strict `tools/list` | Passed; 21 tools, no strict schema failure |
+| MCP App metadata probe | Passed; seven render tools resolved their UI resources |
 
 The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`, and modern nested `_meta.ui.resourceUri`; the compatibility key is added by the official helper.
 
@@ -30,7 +30,7 @@ The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`
 - Progress calculations separate mastered, learning, and error-book counts.
 - GET `/` returns health status.
 - POST `/mcp` initializes over local Streamable HTTP and lists all data/render tools; the deployed GPT Site uses `/api/mcp` because `/mcp` is reserved by the Sites gateway.
-- The GPT Sites Worker serves `/health` and exposes all 19 tools over stateless Web Standard Streamable HTTP.
+- The GPT Sites Worker serves `/health` and exposes all 21 tools over stateless Web Standard Streamable HTTP.
 - The optional Supabase integration test verifies persistence across independent context reads and cleans up its temporary user when credentials and the migration are present.
 
 ## Visual QA
@@ -49,3 +49,6 @@ ENABLE_WIDGET_PREVIEW=true npm run dev
 - `http://127.0.0.1:3000/preview/pronunciation`
 - `http://127.0.0.1:3000/preview/dictation`
 - Append `?theme=dark` for dark mode.
+
+
+- Lesson Widget：explain、exercise、feedback 三种模式共用同一张卡片，正式练习提交留在 Widget 内。

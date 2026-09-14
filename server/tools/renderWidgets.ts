@@ -11,6 +11,7 @@ export const WIDGET_URIS = {
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
   dictation: "ui://wordloop/dictation.html",
+  lesson: "ui://wordloop/lesson.html",
 } as const;
 
 const pronunciationWord = z.object({
@@ -26,6 +27,46 @@ const pretestItem = z.object({
   meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
   prompt: z.string().trim().max(1000).optional(),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
+});
+const lessonExercise = z.object({
+  type: z.string().trim().max(80).optional(),
+  activity_type: z.string().trim().max(80).optional(),
+  instruction: z.string().trim().max(300).optional(),
+  prompt: z.string().trim().max(4000).optional(),
+  prompt_en: z.string().trim().max(4000).optional(),
+  multiline: z.boolean().optional(),
+});
+const lessonFeedback = z.object({
+  is_correct: z.boolean().optional(),
+  result: z.string().optional(),
+  status: z.string().optional(),
+  error_layer: z.string().optional(),
+  message: z.string().optional(),
+  user_answer: z.string().optional(),
+  reference_answer: z.string().optional(),
+  explanation: z.string().optional(),
+  reveal_answer: z.boolean().optional(),
+});
+const lessonPayload = z.object({
+  mode: z.enum(["explain", "exercise", "feedback"]).default("explain"),
+  title: z.string().trim().max(120).optional(),
+  progress: z.string().trim().max(40).optional(),
+  word: z.string().trim().min(1).max(100),
+  ipa: z.string().trim().max(120).optional(),
+  part_of_speech: z.string().trim().max(40).optional(),
+  meaning_zh: z.string().trim().max(240).optional(),
+  collocations: z.array(z.string().trim().max(200)).max(8).optional(),
+  derivations: z.array(z.string().trim().max(200)).max(8).optional(),
+  collocation: z.string().trim().max(200).optional(),
+  example_en: z.string().trim().max(1000).optional(),
+  note: z.string().trim().max(1000).optional(),
+  activity_type: z.string().trim().max(80).optional(),
+  instruction: z.string().trim().max(300).optional(),
+  prompt: z.string().trim().max(4000).optional(),
+  prompt_en: z.string().trim().max(4000).optional(),
+  multiline: z.boolean().optional(),
+  exercise: lessonExercise.optional(),
+  feedback: lessonFeedback.optional(),
 });
 const reviewItem = z.object({
   word: z.string().trim().min(1).max(100),
@@ -76,9 +117,17 @@ export function registerRenderTools(server: McpServer): void {
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, () => safeTool(async () => ({ widget: "dashboard", progress: await getProgress() })));
 
+  registerAppTool(server, "render_lesson_widget", {
+    title: "打开单词学习",
+    description: "显示一个单词的讲解、练习或批改卡片。正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。成功显示后不要在聊天区重复教学正文或操作说明。",
+    inputSchema: lessonPayload,
+    _meta: { ui: { resourceUri: WIDGET_URIS.lesson } },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  }, (input) => safeTool(async () => ({ widget: "lesson", ...input })));
+
   registerAppTool(server, "render_pronunciation_cards", {
     title: "显示发音卡片",
-    description: "显示 5–7 个由用户点击播放的美式英语发音卡片。",
+    description: "仅用于独立发音查询，显示由用户点击播放的美式英语发音卡片。预测试已经进入内嵌发音流程后禁止调用此工具。",
     inputSchema: z.object({ words: z.array(pronunciationWord).min(1).max(7) }),
     _meta: { ui: { resourceUri: WIDGET_URIS.pronunciation } },
     annotations: { readOnlyHint: true, openWorldHint: false },
