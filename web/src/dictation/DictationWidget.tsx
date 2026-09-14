@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Button } from "../components/Button.js";
 import { PlayIcon, ReplayIcon } from "../components/Icons.js";
+import { FocusButton } from "../components/FocusButton.js";
 import { subscribeToApp } from "../mcpBridge.js";
 
 const payloadSchema = z.object({ widget: z.literal("dictation"), text: z.string().min(1), title: z.string().min(1) });
@@ -32,7 +33,7 @@ export function DictationWidget(): React.JSX.Element {
   }
 
   return <section className="widget-card dictation-card" aria-labelledby="dictation-title">
-    <header className="widget-header"><span className="eyebrow">听力练习</span><h1 id="dictation-title">{payload?.title ?? "听写"}</h1><p>原文默认隐藏，需要时再显示。</p></header>
+    <header className="widget-header compact-header"><div><span className="eyebrow">听力练习</span><h1 id="dictation-title">{payload?.title ?? "听写"}</h1><p>原文默认隐藏，需要时再显示。</p></div><FocusButton /></header>
     <div className="dictation-controls">
       <Button className="round-play" onClick={play} disabled={!payload || !speechAvailable}><PlayIcon className="button-icon" /> {playing ? "正在播放" : "播放"}</Button>
       <Button className="secondary" onClick={play} disabled={!payload || !speechAvailable}><ReplayIcon className="button-icon" /> 重播</Button>

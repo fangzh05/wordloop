@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ReviewQuestion } from "../web/src/review/ReviewWidget.js";
+import { gradeReviewCnToEn, ReviewQuestion } from "../web/src/review/ReviewWidget.js";
 
 const base = {
   meaning_zh: "再次发生；复发",
@@ -14,6 +14,7 @@ describe("ReviewQuestion", () => {
     const markup = renderToStaticMarkup(<ReviewQuestion item={{ ...base, word: "recur", is_due: true }} />);
     expect(markup).toContain("中 → 英");
     expect(markup).toContain("再次发生；复发");
+    expect(markup).toContain("v.");
     expect(markup).not.toContain("recur");
   });
 
@@ -23,5 +24,11 @@ describe("ReviewQuestion", () => {
     expect(markup).toContain("recur");
     expect(markup).toContain("v.");
     expect(markup).not.toContain("再次发生；复发");
+  });
+
+  it("grades Chinese-to-English review locally", () => {
+    expect(gradeReviewCnToEn(" RECUR ", "recur")).toMatchObject({ is_correct: true, rating: "good", error_layer: "none" });
+    expect(gradeReviewCnToEn("recure", "recur")).toMatchObject({ is_correct: true, rating: "hard", error_layer: "spelling" });
+    expect(gradeReviewCnToEn("navigate", "recur")).toMatchObject({ is_correct: false, rating: "again", error_layer: "meaning" });
   });
 });

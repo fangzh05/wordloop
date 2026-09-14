@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
+import { FocusButton } from "../components/FocusButton.js";
 import { sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
 import { z } from "zod";
 
@@ -238,6 +239,7 @@ export function LessonWidget(): React.JSX.Element {
           <span className="eyebrow">{payload.title ?? "练习"}</span>
           <h1 id="lesson-exercise-title">{payload.progress ?? "当前练习"}</h1>
         </div>
+        <FocusButton />
       </header>
       <div className="lesson-exercise-heading">
         <strong>{instruction}</strong>
@@ -293,6 +295,7 @@ export function LessonWidget(): React.JSX.Element {
           <span className="eyebrow">批改</span>
           <h1 id="lesson-feedback-title">{correct ? "✓ 通过" : "需要修改"}</h1>
         </div>
+        <FocusButton />
       </header>
       {feedback?.user_answer || answer ? <div className="lesson-answer"><span>你的答案</span><p>{feedback?.user_answer ?? answer}</p></div> : null}
       {!correct ? <div className="lesson-feedback">
@@ -314,6 +317,7 @@ export function LessonWidget(): React.JSX.Element {
         <span className="eyebrow">新词</span>
         <h1 id="lesson-explain-title">{payload.progress ?? "单词学习"}</h1>
       </div>
+      <FocusButton />
     </header>
     <div className="lesson-word-heading">
       <strong>{payload.word}</strong>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { subscribeToApp } from "../mcpBridge.js";
 import { PlayIcon } from "../components/Icons.js";
+import { FocusButton } from "../components/FocusButton.js";
 
 const payloadSchema = z.object({
   widget: z.literal("pronunciation"),
@@ -38,7 +39,7 @@ export function PronunciationCards(): React.JSX.Element {
   }
 
   return <section className="widget-card" aria-labelledby="pronunciation-title">
-    <header className="widget-header"><span className="eyebrow">先听再读</span><h1 id="pronunciation-title">发音</h1><p>美式英语 · 点击播放</p></header>
+    <header className="widget-header compact-header"><div><span className="eyebrow">先听再读</span><h1 id="pronunciation-title">发音</h1><p>美式英语 · 点击播放</p></div><FocusButton /></header>
     <div className="pronunciation-list">
       {words.map((item) => <div className="pronunciation-row" key={item.word}>
         <div className="pronunciation-copy">

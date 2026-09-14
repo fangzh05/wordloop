@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
+import { FocusButton } from "../components/FocusButton.js";
 import {
   callServerTool,
   getSamplingAvailability,
-  requestFocusMode,
   sampleHostText,
   sendUserMessage,
   subscribeToApp,
@@ -121,6 +121,11 @@ function semanticGradePrompt(
   ].join("\n");
 }
 
+function isSamplingCapabilityError(caught: unknown): boolean {
+  return caught instanceof Error
+    && /sampling unavailable|host capability missing|createSamplingMessage|sampling undefined/i.test(caught.message);
+}
+
 export async function gradePretestAnswer(
   item: Pick<PretestItem, "word" | "meaning_zh" | "part_of_speech" | "direction">,
   answer: string,
@@ -133,7 +138,7 @@ export async function gradePretestAnswer(
   try {
     return parseGrade(await sample(semanticGradePrompt(item, answer), gradeSystemPrompt));
   } catch (caught) {
-    if (caught instanceof Error && caught.message === "Sampling unavailable.") {
+    if (isSamplingCapabilityError(caught)) {
       return gradeCnToEn(answer, item.word);
     }
     throw caught;
@@ -194,7 +199,6 @@ export function PretestWidget(): React.JSX.Element {
   const [recallAnswer, setRecallAnswer] = useState("");
   const [recallStatus, setRecallStatus] = useState<RecallStatus>("idle");
   const [playing, setPlaying] = useState<string | null>(null);
-  const [focusModeMessage, setFocusModeMessage] = useState("");
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
   const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const answerRef = useRef<HTMLInputElement>(null);
@@ -352,7 +356,7 @@ export function PretestWidget(): React.JSX.Element {
       await saveGrade(itemForGrade, cleanAnswer, grade);
     } catch (caught) {
       setStatus("error");
-      setError(caught instanceof Error ? caught.message : "答案未能提交，请重试。");
+      setError(isSamplingCapabilityError(caught) ? "暂时无法完成智能批改，请重试。" : caught instanceof Error ? caught.message : "答案未能提交，请重试。");
     } finally {
       submittingRef.current = false;
     }
@@ -407,16 +411,6 @@ export function PretestWidget(): React.JSX.Element {
       setError(caught instanceof Error ? caught.message : "结果未能保存，请重试。");
     } finally {
       submittingRef.current = false;
-    }
-  }
-
-  async function enterFocusMode(): Promise<void> {
-    setFocusModeMessage("");
-    try {
-      const changed = await requestFocusMode();
-      if (!changed) setFocusModeMessage("当前客户端暂不支持全屏，仍可在卡片内答题。");
-    } catch {
-      setFocusModeMessage("暂时无法进入全屏，仍可在卡片内答题。");
     }
   }
 
@@ -494,6 +488,7 @@ export function PretestWidget(): React.JSX.Element {
           <div>
             <h1 id="pretest-complete-title">预测试完成</h1>
           </div>
+          <FocusButton />
         </header>
         <div className="result-strip" aria-label="本轮预测试结果">
           <span><strong>{resultCounts.known}</strong><small>✓ 已会</small></span>
@@ -523,6 +518,7 @@ export function PretestWidget(): React.JSX.Element {
             <span className="eyebrow">听音跟读</span>
             <h1 id="listen-repeat-title">{pronunciationIndex + 1} / {pronunciationWords.length}</h1>
           </div>
+          <FocusButton />
         </header>
         <div className="pronunciation-focus">
           <div className="pronunciation-heading"><strong>{currentPronunciation.word}</strong><span className="part-of-speech">{currentPronunciation.part_of_speech}</span></div>
@@ -547,6 +543,7 @@ export function PretestWidget(): React.JSX.Element {
             <span className="eyebrow">听音还原</span>
             <h1 id="listen-recall-title">{pronunciationIndex + 1} / {pronunciationWords.length}</h1>
           </div>
+          <FocusButton />
         </header>
         <div className="pronunciation-focus">
           <span className="part-of-speech">{currentPronunciation.part_of_speech}</span>
@@ -590,6 +587,7 @@ export function PretestWidget(): React.JSX.Element {
           <div>
             <h1 id="listening-complete-title">听音完成</h1>
           </div>
+          <FocusButton />
         </header>
         {error ? <p className="error-text" role="alert">{error}</p> : null}
         <Button onClick={() => void continueLearning()} disabled={continueStatus === "sending" || continueStatus === "sent"}>
@@ -611,9 +609,8 @@ export function PretestWidget(): React.JSX.Element {
         <h1 id="pretest-title">预测试</h1>
         <span className="pretest-count">{index + 1} / {payload.items.length}</span>
       </div>
-      <button className="focus-mode-button" type="button" onClick={() => void enterFocusMode()}>⛶ 专注</button>
+      <FocusButton />
     </header>
-    {focusModeMessage ? <p className="answer-hint" role="status">{focusModeMessage}</p> : null}
     <div className="pretest-progress" role="progressbar" aria-label="预测试进度" aria-valuemin={0} aria-valuemax={payload.items.length} aria-valuenow={index + 1}>
       <span style={{ width: String(percent) + "%" }} />
     </div>

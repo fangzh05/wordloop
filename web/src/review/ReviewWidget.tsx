@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ArrowIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
-import { callServerTool, sampleHostText, sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
+import { FocusButton } from "../components/FocusButton.js";
+import { callServerTool, getSamplingAvailability, sampleHostText, sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
 
 const errorLayerSchema = z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"]);
 const itemSchema = z.object({
@@ -61,6 +62,65 @@ function normalize(word: string): string {
   return word.trim().toLocaleLowerCase();
 }
 
+export function effectiveReviewDirection(
+  direction: ReviewItem["direction"],
+  samplingAvailable: boolean,
+): ReviewItem["direction"] {
+  return direction === "en_definition" && !samplingAvailable ? "cn_to_en" : direction;
+}
+
+function editDistance(left: string, right: string): number {
+  const source = normalize(left);
+  const target = normalize(right);
+  let previous = Array.from({ length: target.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= source.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= target.length; column += 1) {
+      current[column] = Math.min(
+        (current[column - 1] ?? Number.POSITIVE_INFINITY) + 1,
+        (previous[column] ?? Number.POSITIVE_INFINITY) + 1,
+        (previous[column - 1] ?? Number.POSITIVE_INFINITY) + (source[row - 1] === target[column - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[target.length] ?? source.length;
+}
+
+export function gradeReviewCnToEn(answer: string, target: string): {
+  is_correct: boolean;
+  rating: "again" | "hard" | "good";
+  error_layer: "none" | "spelling" | "meaning";
+  feedback: string;
+} {
+  const cleanAnswer = normalize(answer);
+  const cleanTarget = normalize(target);
+  if (cleanAnswer && cleanAnswer === cleanTarget) {
+    return { is_correct: true, rating: "good", error_layer: "none", feedback: "答案正确。" };
+  }
+  if (cleanAnswer && cleanTarget.length > 3 && editDistance(cleanAnswer, cleanTarget) === 1) {
+    return { is_correct: true, rating: "hard", error_layer: "spelling", feedback: "拼写接近目标词。" };
+  }
+  const clearlyAnotherWord = /^[a-z]+$/.test(cleanAnswer) && cleanAnswer.length >= 3
+    && cleanAnswer[0] !== cleanTarget[0];
+  return {
+    is_correct: false,
+    rating: "again",
+    error_layer: clearlyAnotherWord ? "meaning" : "none",
+    feedback: clearlyAnotherWord ? "这不是目标词的正确含义。" : "答案不匹配，请再试一次。",
+  };
+}
+
+function isSamplingCapabilityError(caught: unknown): boolean {
+  return caught instanceof Error
+    && /sampling unavailable|host capability missing|createSamplingMessage|sampling undefined/i.test(caught.message);
+}
+
+function reviewErrorMessage(caught: unknown): string {
+  if (isSamplingCapabilityError(caught)) return "暂时无法完成智能批改，请重试。";
+  return caught instanceof Error ? caught.message : "答案未能提交，请重试。";
+}
+
 function resultLabel(result: GradedAnswer): string {
   return result.is_correct ? "✓ 已记住" : "× 再复习一次";
 }
@@ -69,6 +129,7 @@ export function ReviewQuestion({ item }: { item: ReviewItem }): React.JSX.Elemen
   return <div className="question-block">
     {item.direction === "cn_to_en" ? <>
       <span className="question-label">中 → 英</span>
+      {item.part_of_speech ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
       <p className="question-prompt">{item.meaning_zh}</p>
     </> : <>
       <span className="question-label">英 → 英</span>
@@ -89,9 +150,34 @@ export function ReviewWidget(): React.JSX.Element {
   const [completed, setCompleted] = useState(false);
   const [dueByWord, setDueByWord] = useState<Map<string, boolean>>(new Map());
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
+  const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const answerRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
   const payloadSignatureRef = useRef("");
+
+  async function initializePayload(nextPayload: Payload, signature: string): Promise<void> {
+    const available = await getSamplingAvailability();
+    if (payloadSignatureRef.current !== signature) return;
+    const effectivePayload: Payload = {
+      ...nextPayload,
+      items: nextPayload.items.map((entry) => ({
+        ...entry,
+        direction: effectiveReviewDirection(entry.direction, available),
+      })),
+    };
+    setSamplingAvailable(available);
+    setPayload(effectivePayload);
+    setIndex(Math.min(effectivePayload.current_index ?? 0, effectivePayload.items.length - 1));
+    setAnswer("");
+    setStatus("idle");
+    setError("");
+    setFeedback(null);
+    setResults([]);
+    setCompleted(false);
+    setDueByWord(new Map());
+    setContinueStatus("idle");
+    void loadDueState(effectivePayload);
+  }
 
   useEffect(() => subscribeToApp((event) => {
     if (event.type !== "toolinput" && event.type !== "toolresult") return;
@@ -103,9 +189,9 @@ export function ReviewWidget(): React.JSX.Element {
     const signature = JSON.stringify(parsed.data);
     if (payloadSignatureRef.current === signature) return;
     payloadSignatureRef.current = signature;
-    const nextIndex = Math.min(parsed.data.current_index ?? 0, parsed.data.items.length - 1);
-    setPayload(parsed.data);
-    setIndex(nextIndex);
+    setPayload(null);
+    setSamplingAvailable(null);
+    setIndex(0);
     setAnswer("");
     setStatus("idle");
     setError("");
@@ -114,7 +200,7 @@ export function ReviewWidget(): React.JSX.Element {
     setCompleted(false);
     setDueByWord(new Map());
     setContinueStatus("idle");
-    void loadDueState(parsed.data);
+    void initializePayload(parsed.data, signature);
   }), []);
 
   async function loadDueState(nextPayload: Payload): Promise<void> {
@@ -151,6 +237,18 @@ export function ReviewWidget(): React.JSX.Element {
 
   const item = payload?.items[index];
 
+  function switchCurrentToChineseTest(): void {
+    setPayload((current) => current ? {
+      ...current,
+      items: current.items.map((entry, entryIndex) => entryIndex === index ? { ...entry, direction: "cn_to_en" } : entry),
+    } : current);
+    setSamplingAvailable(false);
+    setAnswer("");
+    setFeedback(null);
+    setStatus("idle");
+    setError("当前环境已切换为中→英测试。");
+  }
+
   async function submit(): Promise<void> {
     if (!payload || !item || !answer.trim() || status === "sending" || status === "sent" || submittingRef.current) return;
     submittingRef.current = true;
@@ -158,23 +256,32 @@ export function ReviewWidget(): React.JSX.Element {
     setStatus("sending");
     setError("");
     try {
-      const grade = window.__WORDLOOP_PREVIEW__
-        ? {
-          is_correct: item.direction === "cn_to_en"
-            ? cleanAnswer.toLocaleLowerCase() === item.word.toLocaleLowerCase()
-            : cleanAnswer.length > 0,
+      let grade: z.infer<typeof gradeSchema> | ReturnType<typeof gradeReviewCnToEn>;
+      if (item.direction === "cn_to_en") {
+        grade = gradeReviewCnToEn(cleanAnswer, item.word);
+      } else if (window.__WORDLOOP_PREVIEW__) {
+        grade = {
+          is_correct: cleanAnswer.length > 0,
           rating: "good" as const,
           error_layer: "none" as const,
           feedback: "结果已记录在卡片中。",
+        };
+      } else {
+        try {
+          grade = parseGrade(await sampleHostText(
+            `题型：英文单词 → 简单英文解释\n英文单词：${item.word}\n词性：${item.part_of_speech ?? ""}\n中文核心义（仅供判断，不要求照抄）：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定：用自然英文表达该词任意一个正确、常见核心义为 is_correct=true；语义方向正确但明显不完整可为 false 并标 meaning。不要要求字典原文、完整覆盖全部词义、固定句型或完整句子。正确答案时 rating 可为 hard/good/easy，错误答案必须为 again。用中文写一句不超过30字的反馈。只返回 {"is_correct":true,"rating":"good","error_layer":"none","feedback":"..."}。`,
+            gradeSystemPrompt,
+          ));
+        } catch (caught) {
+          if (isSamplingCapabilityError(caught)) {
+            switchCurrentToChineseTest();
+            return;
+          }
+          throw caught;
         }
-        : parseGrade(await sampleHostText(
-          item.direction === "cn_to_en"
-            ? `题型：中文核心义 → 英文单词\n目标英文单词：${item.word}\n中文核心义：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定：正确写出目标词为 is_correct=true；拼写明显错误、错误单词或不知道为 false。正确答案时 rating 可为 hard/good/easy，错误答案必须为 again。error_layer 在错误时选择 meaning、spelling 或其他最主要层级，正确时为 none。用中文写一句不超过30字的反馈。只返回 {"is_correct":true,"rating":"good","error_layer":"none","feedback":"..."}。`
-            : `题型：英文单词 → 简单英文解释\n英文单词：${item.word}\n词性：${item.part_of_speech ?? ""}\n中文核心义（仅供判断，不要求照抄）：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定：用自然英文表达该词任意一个正确、常见核心义为 is_correct=true；语义方向正确但明显不完整可为 false 并标 meaning。不要要求字典原文、完整覆盖全部词义、固定句型或完整句子。正确答案时 rating 可为 hard/good/easy，错误答案必须为 again。用中文写一句不超过30字的反馈。只返回 {"is_correct":true,"rating":"good","error_layer":"none","feedback":"..."}。`,
-          gradeSystemPrompt,
-        ));
+      }
       const attemptErrorLayer = grade.is_correct
-        ? (item.error_layers[0] ?? "none")
+        ? grade.error_layer
         : grade.error_layer === "none" ? "meaning" : grade.error_layer;
       const attempt = await callServerTool("record_attempt", {
         word: item.word,
@@ -200,7 +307,7 @@ export function ReviewWidget(): React.JSX.Element {
       setStatus("sent");
     } catch (caught) {
       setStatus("error");
-      setError(caught instanceof Error ? caught.message : "答案未能提交，请重试。");
+      setError(reviewErrorMessage(caught));
     } finally {
       submittingRef.current = false;
     }
@@ -237,7 +344,7 @@ export function ReviewWidget(): React.JSX.Element {
       setStatus("sent");
     } catch (caught) {
       setStatus("error");
-      setError(caught instanceof Error ? caught.message : "答案未能提交，请重试。");
+      setError(reviewErrorMessage(caught));
     } finally {
       submittingRef.current = false;
     }
@@ -277,6 +384,7 @@ export function ReviewWidget(): React.JSX.Element {
     return <section className="widget-card review-card" aria-labelledby="review-complete-title">
       <header className="widget-header compact-header">
         <div><span className="eyebrow">复习</span><h1 id="review-complete-title">复习完成</h1></div>
+        <FocusButton />
       </header>
       <div className="result-strip" aria-label="复习结果">
         <span><strong>{results.filter((entry) => entry.is_correct).length}</strong><small>✓ 记住</small></span>
@@ -294,6 +402,7 @@ export function ReviewWidget(): React.JSX.Element {
   return <section className="widget-card review-card" aria-labelledby="review-title">
     <header className="widget-header compact-header">
       <div className="review-title-row"><h1 id="review-title">复习</h1><span className="pretest-count">{index + 1} / {payload.items.length}</span></div>
+      <FocusButton />
     </header>
     <div className="pretest-progress" role="progressbar" aria-label="复习进度" aria-valuemin={0} aria-valuemax={payload.items.length} aria-valuenow={index + 1}>
       <span style={{ width: `${percent}%` }} />
