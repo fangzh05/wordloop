@@ -11,6 +11,12 @@ const endpointState: Record<ShanbaySourceState, string> = {
 
 export type ShanbayFetch = typeof fetch;
 
+// Cloudflare Workers' fetch implementation checks that it is called with
+// globalThis as its receiver. Passing `fetch` directly as a callback and then
+// invoking it as a class property changes `this` to the client instance and
+// raises "Illegal invocation" before any request reaches Shanbay.
+const defaultShanbayFetch: ShanbayFetch = globalThis.fetch.bind(globalThis);
+
 export class ShanbayError extends Error {
   constructor(message: string, readonly code: "auth" | "decode" | "missing_book" | "payload" | "network") { super(message); }
 }
@@ -21,7 +27,7 @@ function safeError(error: unknown): ShanbayError {
 }
 
 export class ShanbayClient {
-  constructor(private readonly cookie = getShanbayCookie(), private readonly fetcher: ShanbayFetch = fetch) {}
+  constructor(private readonly cookie = getShanbayCookie(), private readonly fetcher: ShanbayFetch = defaultShanbayFetch) {}
 
   private async request(path: string): Promise<unknown> {
     for (let attempt = 0; attempt < 3; attempt++) {
