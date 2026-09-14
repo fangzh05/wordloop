@@ -30,8 +30,9 @@ export class ShanbayClient {
           headers: { accept: "application/json", cookie: this.cookie },
           signal: AbortSignal.timeout(15000),
         });
-        if (response.status === 401 || response.status === 403) throw new ShanbayError("Shanbay login expired.", "auth");
         if (!response.ok) {
+          console.warn(`Shanbay request ${path} returned HTTP ${response.status}`);
+          if (response.status === 401 || response.status === 403) throw new ShanbayError("Shanbay login expired.", "auth");
           if (response.status >= 500 && attempt < 2) continue;
           throw new ShanbayError("Shanbay unavailable.", "network");
         }
@@ -42,6 +43,7 @@ export class ShanbayClient {
         }
       } catch (error) {
         const safe = safeError(error);
+        if (safe.code === "network") console.warn(`Shanbay request ${path} failed at network layer`);
         if (safe.code !== "network" || attempt === 2) throw safe;
       }
     }
