@@ -62,7 +62,7 @@ export function applyHostContext(ctx: HostContext | null | undefined): void {
 
 app.addEventListener("toolinput", (params) => publish({ type: "toolinput", value: params.arguments ?? {} }));
 app.addEventListener("toolresult", (params) => publish({ type: "toolresult", value: params }));
-app.addEventListener("hostcontextchanged", (params) => applyHostContext(params));
+app.addEventListener("hostcontextchanged", (params) => applyHostContext({ ...app.getHostContext(), ...params }));
 
 export function subscribeToApp(listener: Listener): () => void {
   listeners.add(listener);
