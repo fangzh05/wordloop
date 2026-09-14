@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Request, Response } from "express";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -139,7 +141,9 @@ export function createHttpApp() {
   return app;
 }
 
-const isEntrypoint = process.argv[1] && new URL(import.meta.url).pathname === process.argv[1];
+const isEntrypoint = process.argv[1]
+  ? path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1])
+  : false;
 if (isEntrypoint) {
   const argumentValue = (name: string): string | undefined => {
     const position = process.argv.indexOf(name);

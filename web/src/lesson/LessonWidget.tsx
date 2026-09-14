@@ -51,10 +51,46 @@ const payloadSchema = z.object({
 type Payload = z.infer<typeof payloadSchema>;
 type Mode = "explain" | "exercise" | "feedback";
 type SubmitStatus = "idle" | "sending" | "sent" | "error";
+type ExerciseContext = {
+  word: string;
+  title?: string;
+  progress?: string;
+  activityType: string;
+  instruction: string;
+  prompt: string;
+  multiline: boolean;
+};
 
 function listValues(values: string[] | undefined, fallback: string | undefined): string[] {
   if (values?.length) return values;
   return fallback ? [fallback] : [];
+}
+
+function firstText(...values: Array<string | undefined>): string {
+  return values.find((value) => Boolean(value?.trim())) ?? "";
+}
+
+function isMultilineActivity(activityType: string): boolean {
+  return activityType === "recall"
+    || activityType === "free_recall"
+    || activityType === "session_recall"
+    || activityType === "long_sentence";
+}
+
+function extractExerciseContext(nextPayload: Payload): ExerciseContext | null {
+  const nested = nextPayload.exercise;
+  const activityType = firstText(nextPayload.activity_type, nested?.activity_type, nested?.type) || "sentence";
+  const prompt = firstText(nextPayload.prompt, nextPayload.prompt_en, nested?.prompt, nested?.prompt_en);
+  if (!prompt) return null;
+  return {
+    word: nextPayload.word,
+    title: nextPayload.title,
+    progress: nextPayload.progress,
+    activityType,
+    instruction: firstText(nextPayload.instruction, nested?.instruction) || `使用 ${nextPayload.word} 完成练习`,
+    prompt,
+    multiline: nextPayload.multiline ?? nested?.multiline ?? isMultilineActivity(activityType),
+  };
 }
 
 function feedbackIsCorrect(feedback: Payload["feedback"]): boolean {
@@ -77,6 +113,7 @@ export function LessonWidget(): React.JSX.Element {
   const [error, setError] = useState("");
   const [playing, setPlaying] = useState(false);
   const signatureRef = useRef("");
+  const exerciseContextRef = useRef<ExerciseContext | null>(null);
   const answerRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
   const speechAvailable = typeof window !== "undefined"
     && "speechSynthesis" in window
@@ -93,6 +130,12 @@ export function LessonWidget(): React.JSX.Element {
       const signature = JSON.stringify(parsed.data);
       if (signatureRef.current === signature) return;
       signatureRef.current = signature;
+      const nextExerciseContext = extractExerciseContext(parsed.data);
+      if (parsed.data.mode === "exercise" || (parsed.data.mode === "explain" && nextExerciseContext)) {
+        exerciseContextRef.current = nextExerciseContext;
+      } else if (parsed.data.mode === "explain") {
+        exerciseContextRef.current = null;
+      }
       setPayload(parsed.data);
       setLocalMode(null);
       setAnswer("");
@@ -104,10 +147,13 @@ export function LessonWidget(): React.JSX.Element {
 
   const mode = localMode ?? payload?.mode ?? "explain";
   const nestedExercise = payload?.exercise;
-  const activityType = payload?.activity_type ?? nestedExercise?.activity_type ?? nestedExercise?.type ?? "sentence";
-  const exercisePrompt = payload?.prompt ?? payload?.prompt_en ?? nestedExercise?.prompt ?? nestedExercise?.prompt_en ?? "";
-  const instruction = payload?.instruction ?? nestedExercise?.instruction ?? (payload?.word ? "使用 " + payload.word + " 完成练习" : "");
-  const multiline = (payload?.multiline ?? nestedExercise?.multiline ?? (activityType === "recall" || activityType === "long_sentence"));
+  const retainedExercise = payload?.mode === "feedback" && exerciseContextRef.current?.word === payload.word
+    ? exerciseContextRef.current
+    : null;
+  const activityType = firstText(payload?.activity_type, nestedExercise?.activity_type, nestedExercise?.type, retainedExercise?.activityType) || "sentence";
+  const exercisePrompt = firstText(payload?.prompt, payload?.prompt_en, nestedExercise?.prompt, nestedExercise?.prompt_en, retainedExercise?.prompt);
+  const instruction = firstText(payload?.instruction, nestedExercise?.instruction, retainedExercise?.instruction) || (payload?.word ? "使用 " + payload.word + " 完成练习" : "");
+  const multiline = payload?.multiline ?? nestedExercise?.multiline ?? retainedExercise?.multiline ?? isMultilineActivity(activityType);
 
   const collocations = useMemo(() => listValues(payload?.collocations, payload?.collocation), [payload?.collocations, payload?.collocation]);
   const derivations = payload?.derivations ?? [];
@@ -197,6 +243,9 @@ export function LessonWidget(): React.JSX.Element {
         <strong>{instruction}</strong>
       </div>
       <div className="lesson-prompt">{exercisePrompt || "请等待练习题目。"}</div>
+      {activityType === "listening" ? <button className="play-button lesson-audio" type="button" onClick={play} disabled={!speechAvailable} aria-label="播放听力">
+        <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing ? "正在播放" : "播放") : "当前设备无法播放"}
+      </button> : null}
       <label className="answer-label" htmlFor="lesson-answer">你的答案</label>
       {multiline ? <textarea
         ref={(node) => { answerRef.current = node; }}

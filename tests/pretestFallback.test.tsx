@@ -4,9 +4,11 @@ import {
   effectivePretestDirection,
   gradeCnToEn,
   gradePretestAnswer,
+  isExactPronunciationRecall,
   pretestActivityType,
   PretestQuestion,
   schedulePretestAdvance,
+  selectPronunciationWords,
 } from "../web/src/pretest/PretestWidget.js";
 
 const item = {
@@ -96,5 +98,24 @@ describe("pretest auto advance", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("embedded pronunciation recall", () => {
+  it("selects only uncertain and unknown words and compares recall locally", () => {
+    const words = [
+      item,
+      { ...item, word: "recur" },
+      { ...item, word: "subtle" },
+    ];
+    const pronunciationWords = selectPronunciationWords(words, [
+      { word: "navigate", result: "known" },
+      { word: "recur", result: "uncertain" },
+      { word: "subtle", result: "unknown" },
+    ]);
+
+    expect(pronunciationWords.map((entry) => entry.word)).toEqual(["recur", "subtle"]);
+    expect(isExactPronunciationRecall("  RECUR ", "recur")).toBe(true);
+    expect(isExactPronunciationRecall("recurred", "recur")).toBe(false);
   });
 });

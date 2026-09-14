@@ -1,6 +1,6 @@
 # Wordloop V1 Test Report
 
-Run date: 2026-09-13 (Asia/Shanghai)
+Run date: 2026-09-15 (Asia/Shanghai)
 
 ## Required checks
 
@@ -8,7 +8,7 @@ Run date: 2026-09-13 (Asia/Shanghai)
 | --- | --- |
 | `npm run typecheck` | Passed |
 | `npm run build` | Passed |
-| `npm test` | 34 passed, 1 Supabase integration test skipped because credentials were not available |
+| `npm test` | 60 passed, 1 Supabase integration test skipped because credentials were not available |
 | Plugin manifest validator | Passed |
 | MCP Inspector strict `tools/list` | Passed; 21 tools, no strict schema failure |
 | MCP App metadata probe | Passed; seven render tools resolved their UI resources |
@@ -48,6 +48,8 @@ ENABLE_WIDGET_PREVIEW=true npm run dev
 - `http://127.0.0.1:3000/preview/dashboard`
 - `http://127.0.0.1:3000/preview/pronunciation`
 - `http://127.0.0.1:3000/preview/dictation`
+- `http://127.0.0.1:3000/preview/review`
+- `http://127.0.0.1:3000/preview/lesson`
 - Append `?theme=dark` for dark mode.
 
 

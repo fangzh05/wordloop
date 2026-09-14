@@ -37,6 +37,21 @@ type PronunciationStage = "result" | "listen_repeat" | "listen_recall" | "ready"
 type RecallStatus = "idle" | "correct" | "wrong";
 type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
 
+export function selectPronunciationWords(
+  items: PretestItem[],
+  results: Array<{ word: string; result: PretestResult }>,
+): PretestItem[] {
+  const resultByWord = new Map(results.map((entry) => [normalizePretestWord(entry.word), entry.result]));
+  return items.filter((candidate) => {
+    const result = resultByWord.get(normalizePretestWord(candidate.word));
+    return result !== undefined && result !== "known";
+  });
+}
+
+export function isExactPronunciationRecall(answer: string, target: string): boolean {
+  return normalizePretestWord(answer) === normalizePretestWord(target);
+}
+
 const gradeSchema = z.object({
   result: z.enum(["known", "uncertain", "unknown"]),
   feedback: z.string().trim().min(1).max(180),
@@ -273,6 +288,10 @@ export function PretestWidget(): React.JSX.Element {
     };
   }, []);
 
+  useEffect(() => {
+    if (stage === "listen_recall") focusInput(recallInputRef.current);
+  }, [stage]);
+
   async function restoreSavedProgress(nextPayload: Payload): Promise<void> {
     try {
       const stored = await callServerTool("get_learning_context", {});
@@ -414,11 +433,12 @@ export function PretestWidget(): React.JSX.Element {
   }
 
   function submitRecall(): void {
-    const current = pronunciationWordsForRecall();
+    const pronunciationWords = selectPronunciationWords(payload?.items ?? [], results);
+    const current = pronunciationWords[pronunciationIndex];
     if (!current || !recallAnswer.trim() || recallStatus === "correct") return;
-    if (normalizePretestWord(recallAnswer) === normalizePretestWord(current.word)) {
+    if (isExactPronunciationRecall(recallAnswer, current.word)) {
       setRecallStatus("correct");
-      const isLast = pronunciationIndex === pronunciationWordsForRecall().length - 1;
+      const isLast = pronunciationIndex === pronunciationWords.length - 1;
       schedulePretestAdvance(advanceTimerRef, () => {
         setRecallAnswer("");
         setRecallStatus("idle");
@@ -432,13 +452,6 @@ export function PretestWidget(): React.JSX.Element {
     } else {
       setRecallStatus("wrong");
     }
-  }
-
-  function pronunciationWordsForRecall(): Payload["items"][number][] {
-    if (!payload) return [];
-    return payload.items.filter((candidate) =>
-      results.some((entry) => entry.word === candidate.word && entry.result !== "known"),
-    );
   }
 
   async function continueLearning(): Promise<void> {
@@ -470,9 +483,7 @@ export function PretestWidget(): React.JSX.Element {
     uncertain: results.filter((entry) => entry.result === "uncertain").length,
     unknown: results.filter((entry) => entry.result === "unknown").length,
   };
-  const pronunciationWords = payload.items.filter((candidate) =>
-    results.some((entry) => entry.word === candidate.word && entry.result !== "known"),
-  );
+  const pronunciationWords = selectPronunciationWords(payload.items, results);
   const currentPronunciation = pronunciationWords[pronunciationIndex];
   const percent = ((index + 1) / payload.items.length) * 100;
 
@@ -518,14 +529,13 @@ export function PretestWidget(): React.JSX.Element {
           <span className="ipa">{currentPronunciation.ipa}</span>
           <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
         </div>
-        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable} aria-label={"播放 " + currentPronunciation.word}>
+        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable} aria-label="播放音频">
           <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
         </button>
         <Button onClick={() => {
           setRecallAnswer("");
           setRecallStatus("idle");
           setStage("listen_recall");
-          focusInput(recallInputRef.current);
         }}>我已听读 <ArrowIcon className="button-icon trailing" /></Button>
       </section>;
     }
@@ -542,7 +552,7 @@ export function PretestWidget(): React.JSX.Element {
           <span className="part-of-speech">{currentPronunciation.part_of_speech}</span>
           <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
         </div>
-        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable} aria-label={"播放 " + currentPronunciation.word}>
+        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable} aria-label="播放音频">
           <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
         </button>
         <label className="answer-label" htmlFor="pronunciation-recall-answer">你的答案</label>

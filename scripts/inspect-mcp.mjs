@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
 
 const port = "3101";
 const server = spawn(process.execPath, ["node-dist/server/index.js"], {
@@ -22,7 +23,8 @@ function waitForReady() {
 
 function runInspector(args) {
   return new Promise((resolve, reject) => {
-    const child = spawn("npx", ["-y", "@modelcontextprotocol/inspector", "--cli", ...args], {
+    const inspectorEntry = path.join(process.cwd(), "node_modules", "@modelcontextprotocol", "inspector", "clients", "launcher", "build", "index.js");
+    const child = spawn(process.execPath, [inspectorEntry, "--cli", ...args], {
       cwd: process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],
     });

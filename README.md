@@ -146,7 +146,7 @@ Copy `.env.example` to `.env` and set:
 | `ALLOWED_HOSTS` | Recommended in production | Comma-separated hostnames for DNS-rebinding protection when binding publicly. |
 | `PUBLIC_BASE_URL` | Documentation/deploy | Public HTTPS origin used when configuring ChatGPT. |
 | `WORDLOOP_ROOT` | Only for unusual launches | Absolute project root if the process is started from another working directory. |
-| `ENABLE_WIDGET_PREVIEW` | Development only | Enables `/preview/import`, `/preview/dashboard`, `/preview/pronunciation`, and `/preview/dictation`. |
+| `ENABLE_WIDGET_PREVIEW` | Development only | Enables `/preview/import`, `/preview/pretest`, `/preview/dashboard`, `/preview/pronunciation`, `/preview/dictation`, `/preview/review`, and `/preview/lesson`. |
 
 The client never accepts a `user_id`. The current identity comes only from trusted server configuration. Production OAuth should replace `DEV_USER_ID`, not add it as a tool argument.
 
