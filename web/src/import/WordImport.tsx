@@ -94,7 +94,8 @@ export function WordImport(): React.JSX.Element {
       processed: checkpoint?.processed ?? 0,
     };
     let cursor = checkpoint?.cursor ?? undefined;
-    setImportProgress({ processed: aggregate.processed, total: preview?.estimated_unique_total ?? null, state: cursor?.state ?? "unlearned" });
+    const sourceTotal = preview ? preview.unlearned + preview.learning + preview.simple_learned : null;
+    setImportProgress({ processed: aggregate.processed, total: sourceTotal, state: cursor?.state ?? "unlearned" });
     try {
       // Each call reads at most eight Shanbay pages and writes immediately.
       // If the host interrupts the widget, the cursor remains locally and the
@@ -111,7 +112,7 @@ export function WordImport(): React.JSX.Element {
         aggregate.existing += parsed.data.existing;
         aggregate.processed += parsed.data.processed;
         cursor = parsed.data.next_cursor ?? undefined;
-        setImportProgress({ processed: aggregate.processed, total: preview?.estimated_unique_total ?? null, state: parsed.data.state });
+        setImportProgress({ processed: aggregate.processed, total: sourceTotal, state: parsed.data.state });
         saveCheckpoint(selectedBookId, { cursor: parsed.data.next_cursor, ...aggregate });
         if (parsed.data.complete) {
           clearCheckpoint(selectedBookId);

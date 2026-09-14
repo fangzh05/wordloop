@@ -202,7 +202,7 @@ npm start
 | `set_daily_new_word_limit` | Configure the daily allocation limit from 10 to 100. |
 | `get_current_shanbay_book` | Read the current Shanbay book using server-only credentials. |
 | `preview_shanbay_book` | Count all three complete source states without importing. |
-| `import_shanbay_book` | Idempotently migrate a complete current or ID-selected book into the vocabulary pool. |
+| `import_shanbay_book` | Idempotently migrate one bounded chunk of a current or ID-selected book; repeat with `next_cursor` until `complete=true`. |
 | `get_error_book` | Return words that still have active error layers. |
 | `save_sentence` | Save a difficult sentence and extracted vocabulary. |
 | `get_progress` | Return daily and all-time totals. |
@@ -265,7 +265,7 @@ The default suite covers FSRS v6 rating transitions and persistence mapping, exe
 
 ## Shanbay migration
 
-Shanbay is an optional, removable one-time migration adapter under `server/integrations/shanbay/`. Wordloop reads the current book through `/wordsapp/user_material_books/current` and can fetch a specified `materialbookId` directly. It imports complete `unlearned_items`, `learning_items`, and `simple_learned_items` pages in database batches, stores IPA and structured Chinese senses, and records many-to-many book provenance in `word_sources`.
+Shanbay is an optional, removable one-time migration adapter under `server/integrations/shanbay/`. Wordloop reads the current book through `/wordsapp/user_material_books/current` and can fetch a specified `materialbookId` directly. It imports complete `unlearned_items`, `learning_items`, and `simple_learned_items` pages in small resumable chunks (the widget checkpoints `next_cursor` locally), stores IPA and structured Chinese senses, and records many-to-many book provenance in `word_sources`. A cancelled request therefore leaves already-written batches available for an idempotent resume instead of waiting for the entire book before the first write.
 
 No reliable public user-bookshelf endpoint was found, so V1 deliberately does not guess one. The import card supports the current book, refresh-after-switching, and an advanced materialbook ID field. It never switches the user's Shanbay current book. After migration, Shanbay state is metadata only and cannot reset Wordloop state, attempts, errors, or the single FSRS card.
 
