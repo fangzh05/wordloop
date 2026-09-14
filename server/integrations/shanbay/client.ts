@@ -43,7 +43,10 @@ export class ShanbayClient {
         }
       } catch (error) {
         const safe = safeError(error);
-        if (safe.code === "network") console.warn(`Shanbay request ${path} failed at network layer`);
+        if (safe.code === "network") {
+          const errorName = error instanceof Error ? error.name : "unknown";
+          console.warn(`Shanbay request ${path} failed at network layer (${errorName})`);
+        }
         if (safe.code !== "network" || attempt === 2) throw safe;
       }
     }
