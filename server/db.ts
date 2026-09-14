@@ -44,9 +44,19 @@ export function getAuthenticatedUserId(): string {
 export function getShanbayCookie(): string {
   const env = activeEnv();
   const fullCookie = z.string().trim().min(1).safeParse(env.SHANBAY_COOKIE);
-  if (fullCookie.success) return fullCookie.data;
+  if (fullCookie.success) {
+    // Browser Cookie headers often contain tracking cookies and extra spacing.
+    // Shanbay only needs auth_token; canonicalize it before the server-side request.
+    const match = fullCookie.data.match(/(?:^|;\s*)auth_token=([^;]+)/i);
+    if (match?.[1]) return `auth_token=${match[1]}`;
+    return fullCookie.data;
+  }
   const token = z.string().trim().min(1).safeParse(env.SHANBAY_AUTH_TOKEN);
-  if (token.success) return `auth_token=${encodeURIComponent(token.data)}`;
+  if (token.success) {
+    const inlineCookie = token.data.match(/(?:^|;\s*)auth_token=([^;]+)/i);
+    if (inlineCookie?.[1]) return `auth_token=${inlineCookie[1]}`;
+    return `auth_token=${encodeURIComponent(token.data)}`;
+  }
   throw new Error("Shanbay authentication is not configured.");
 }
 
