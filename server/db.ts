@@ -60,6 +60,18 @@ export function getShanbayCookie(): string {
   throw new Error("Shanbay authentication is not configured.");
 }
 
+/**
+ * Some Shanbay vocabulary endpoints expect the browser's CSRF header even for
+ * read requests. Keep this value server-side and return only the token; the
+ * auth Cookie itself remains canonicalized to auth_token by getShanbayCookie.
+ */
+export function getShanbayCsrfToken(): string | undefined {
+  const value = z.string().trim().min(1).safeParse(activeEnv().SHANBAY_COOKIE);
+  if (!value.success) return undefined;
+  const match = value.data.match(/(?:^|;\s*)csrftoken=([^;]+)/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
 export function resetDatabaseForTests(): void {
   client = undefined;
   runtimeEnv = undefined;

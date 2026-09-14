@@ -1,4 +1,4 @@
-import { getShanbayCookie } from "../../db.js";
+import { getShanbayCookie, getShanbayCsrfToken } from "../../db.js";
 import { unwrapShanbayPayload } from "./decode.js";
 import { mapCurrentBook, mapShanbayWord } from "./mapper.js";
 import type { ShanbayBook, ShanbayPage, ShanbaySourceState, ShanbayWord } from "./types.js";
@@ -27,7 +27,11 @@ function safeError(error: unknown): ShanbayError {
 }
 
 export class ShanbayClient {
-  constructor(private readonly cookie = getShanbayCookie(), private readonly fetcher: ShanbayFetch = defaultShanbayFetch) {}
+  constructor(
+    private readonly cookie = getShanbayCookie(),
+    private readonly fetcher: ShanbayFetch = defaultShanbayFetch,
+    private readonly csrfToken = getShanbayCsrfToken(),
+  ) {}
 
   private async request(path: string): Promise<unknown> {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -37,7 +41,12 @@ export class ShanbayClient {
         let response: Response;
         try {
           response = await this.fetcher(`${BASE_URL}${path}`, {
-            headers: { accept: "application/json", cookie: this.cookie },
+            headers: {
+              accept: "application/json, text/plain, */*",
+              cookie: this.cookie,
+              ...(this.csrfToken ? { "x-csrftoken": this.csrfToken } : {}),
+              referer: "https://web.shanbay.com/",
+            },
             signal: controller.signal,
           });
         } finally {
