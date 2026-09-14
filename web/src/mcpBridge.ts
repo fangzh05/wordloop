@@ -6,6 +6,17 @@ type AppEvent =
   | { type: "toolresult"; value: CallToolResult }
   | { type: "theme"; value: "light" | "dark" };
 
+export type HostContext = {
+  theme?: "light" | "dark";
+  displayMode?: string;
+  safeAreaInsets?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+  };
+};
+
 type Listener = (event: AppEvent) => void;
 
 declare global {
@@ -37,9 +48,21 @@ function applyTheme(theme: unknown): void {
   publish({ type: "theme", value: resolved });
 }
 
+export function applyHostContext(ctx: HostContext | null | undefined): void {
+  if (ctx?.theme) applyTheme(ctx.theme);
+
+  document.documentElement.dataset.displayMode = ctx?.displayMode ?? "inline";
+
+  const safe = ctx?.safeAreaInsets;
+  document.documentElement.style.setProperty("--safe-area-top", `${safe?.top ?? 0}px`);
+  document.documentElement.style.setProperty("--safe-area-right", `${safe?.right ?? 0}px`);
+  document.documentElement.style.setProperty("--safe-area-bottom", `${safe?.bottom ?? 0}px`);
+  document.documentElement.style.setProperty("--safe-area-left", `${safe?.left ?? 0}px`);
+}
+
 app.addEventListener("toolinput", (params) => publish({ type: "toolinput", value: params.arguments ?? {} }));
 app.addEventListener("toolresult", (params) => publish({ type: "toolresult", value: params }));
-app.addEventListener("hostcontextchanged", (params) => applyTheme(params.theme));
+app.addEventListener("hostcontextchanged", (params) => applyHostContext(params));
 
 export function subscribeToApp(listener: Listener): () => void {
   listeners.add(listener);
@@ -56,9 +79,13 @@ export function subscribeToApp(listener: Listener): () => void {
 export async function connectApp(): Promise<void> {
   if (window.__WORDLOOP_PREVIEW__) {
     applyTheme(window.__WORDLOOP_PREVIEW__.theme);
+    applyHostContext({ displayMode: "inline" });
     return;
   }
-  connected ??= app.connect().then(() => applyTheme(app.getHostContext()?.theme));
+  connected ??= app.connect().then(() => {
+    const ctx = app.getHostContext();
+    if (ctx) applyHostContext(ctx);
+  });
   return connected;
 }
 
