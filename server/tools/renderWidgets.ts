@@ -70,7 +70,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_learning_dashboard", {
     title: "显示学习进度",
-    description: "显示今日词汇进度和学习操作。用户询问进度时，应先调用 get_progress，再调用此工具显示交互式面板。",
+    description: "显示今日词汇进度和学习操作。用户询问进度时，应先调用 get_progress，再调用此工具显示交互式面板；卡片成功显示后保持聊天区安静，不要重复进度或操作说明。",
     inputSchema: z.object({}),
     _meta: { ui: { resourceUri: WIDGET_URIS.dashboard } },
     annotations: { readOnlyHint: true, openWorldHint: false },
