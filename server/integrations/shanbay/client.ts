@@ -7,6 +7,7 @@ const BASE_URL = "https://apiv3.shanbay.com";
 // Shanbay's web client uses a conservative page size. Larger values can leave
 // the encrypted vocabulary response hanging behind the API gateway.
 const PAGE_SIZE = 10;
+const PAGE_CONCURRENCY = 8;
 const endpointState: Record<ShanbaySourceState, string> = {
   unlearned: "unlearned_items", learning: "learning_items", simple_learned: "simple_learned_items",
 };
@@ -88,18 +89,44 @@ export class ShanbayClient {
     }
   }
 
-  async getPage(bookId: string, state: ShanbaySourceState, page: number): Promise<ShanbayWord[]> {
+  private async getPagePayload(bookId: string, state: ShanbaySourceState, page: number): Promise<{ words: ShanbayWord[]; total?: number }> {
     const safeBookId = encodeURIComponent(bookId);
     const path = `/wordsapp/user_material_books/${safeBookId}/learning/words/${endpointState[state]}?page=${page}&ipp=${PAGE_SIZE}&order=ASC`;
     const decoded = await this.request(path) as ShanbayPage;
     if (!decoded || !Array.isArray(decoded.objects)) throw new ShanbayError("Shanbay API format changed.", "payload");
-    return decoded.objects.map((item, index) => mapShanbayWord(item, state, (page - 1) * PAGE_SIZE + index));
+    const total = typeof decoded.total === "number" && Number.isFinite(decoded.total) ? decoded.total : undefined;
+    return {
+      words: decoded.objects.map((item, index) => mapShanbayWord(item, state, (page - 1) * PAGE_SIZE + index)),
+      total,
+    };
+  }
+
+  async getPage(bookId: string, state: ShanbaySourceState, page: number): Promise<ShanbayWord[]> {
+    return (await this.getPagePayload(bookId, state, page)).words;
   }
 
   async getAllWords(bookId: string): Promise<{ words: ShanbayWord[]; counts: Record<ShanbaySourceState, number> }> {
     const fetchState = async (state: ShanbaySourceState): Promise<ShanbayWord[]> => {
-      const output: ShanbayWord[] = [];
-      for (let page = 1; page <= 1000; page++) {
+      const first = await this.getPagePayload(bookId, state, 1);
+      const output = [...first.words];
+      if (first.total !== undefined) {
+        const pageCount = Math.ceil(first.total / PAGE_SIZE);
+        for (let start = 2; start <= pageCount; start += PAGE_CONCURRENCY) {
+          const pageNumbers = Array.from(
+            { length: Math.min(PAGE_CONCURRENCY, pageCount - start + 1) },
+            (_, offset) => start + offset,
+          );
+          const pages = await Promise.all(pageNumbers.map((page) => this.getPagePayload(bookId, state, page)));
+          for (const page of pages) output.push(...page.words);
+        }
+        return output;
+      }
+
+      if (first.words.length < PAGE_SIZE) return output;
+
+      // Older Shanbay responses may omit `total`; retain a bounded sequential
+      // fallback for those payloads.
+      for (let page = 2; page <= 1000; page++) {
         const pageWords = await this.getPage(bookId, state, page);
         output.push(...pageWords);
         if (pageWords.length < PAGE_SIZE) break;

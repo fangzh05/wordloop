@@ -19,4 +19,7 @@ export interface ShanbayWord {
   position: number;
 }
 
-export interface ShanbayPage { objects: unknown[] }
+export interface ShanbayPage {
+  objects: unknown[];
+  total?: number;
+}
