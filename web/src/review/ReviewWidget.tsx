@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ArrowIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
+import { gradeTargetWord } from "../grading/deterministic.js";
 import { callServerTool, getSamplingAvailability, sampleHostText, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 
 const errorLayerSchema = z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"]);
@@ -55,10 +56,6 @@ function parseGrade(raw: string): z.infer<typeof gradeSchema> {
   return parsed.data;
 }
 
-function normalize(word: string): string {
-  return word.trim().toLocaleLowerCase();
-}
-
 export function effectiveReviewDirection(
   direction: ReviewItem["direction"],
   samplingAvailable: boolean,
@@ -79,46 +76,13 @@ export function isReviewCardAlreadyCompleteResult(result: Pick<CallToolResult, "
   return /FSRS_CARD_NOT_DUE|FSRS card is not due/i.test(text);
 }
 
-function editDistance(left: string, right: string): number {
-  const source = normalize(left);
-  const target = normalize(right);
-  let previous = Array.from({ length: target.length + 1 }, (_, index) => index);
-  for (let row = 1; row <= source.length; row += 1) {
-    const current = [row];
-    for (let column = 1; column <= target.length; column += 1) {
-      current[column] = Math.min(
-        (current[column - 1] ?? Number.POSITIVE_INFINITY) + 1,
-        (previous[column] ?? Number.POSITIVE_INFINITY) + 1,
-        (previous[column - 1] ?? Number.POSITIVE_INFINITY) + (source[row - 1] === target[column - 1] ? 0 : 1),
-      );
-    }
-    previous = current;
-  }
-  return previous[target.length] ?? source.length;
-}
-
 export function gradeReviewCnToEn(answer: string, target: string): {
   is_correct: boolean;
   rating: "again" | "hard" | "good";
   error_layer: "none" | "spelling" | "meaning";
   feedback: string;
 } {
-  const cleanAnswer = normalize(answer);
-  const cleanTarget = normalize(target);
-  if (cleanAnswer && cleanAnswer === cleanTarget) {
-    return { is_correct: true, rating: "good", error_layer: "none", feedback: "答案正确。" };
-  }
-  if (cleanAnswer && cleanTarget.length > 3 && editDistance(cleanAnswer, cleanTarget) === 1) {
-    return { is_correct: true, rating: "hard", error_layer: "spelling", feedback: "拼写接近目标词。" };
-  }
-  const clearlyAnotherWord = /^[a-z]+$/.test(cleanAnswer) && cleanAnswer.length >= 3
-    && cleanAnswer[0] !== cleanTarget[0];
-  return {
-    is_correct: false,
-    rating: "again",
-    error_layer: clearlyAnotherWord ? "meaning" : "none",
-    feedback: clearlyAnotherWord ? "这不是目标词的正确含义。" : "答案不匹配，请再试一次。",
-  };
+  return gradeTargetWord(answer, target);
 }
 
 function isSamplingCapabilityError(caught: unknown): boolean {

@@ -1,5 +1,6 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ErrorLayer, FsrsRating, ReviewSource, UserWordRow } from "../types.js";
+import { assertGradeInvariants } from "../../web/src/grading/deterministic.js";
 import { assertDatabaseResult } from "./shared.js";
 import { normalizeWord } from "./wordNormalization.js";
 import { cardToDatabase, reviewLogToDatabase, scheduleReview, stateName } from "./fsrsScheduler.js";
@@ -65,6 +66,14 @@ export async function recordReviewSubmission(input: {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const word = normalizeWord(input.word);
+  // The atomic due-review submission is the one path allowed to advance FSRS, so
+  // it is the one path that must carry a rating — and that rating must agree with
+  // the verdict. A failed retrieval rated Good here would silently corrupt the
+  // review schedule, so the invariant gate runs before any write.
+  assertGradeInvariants(
+    { is_correct: input.is_correct, error_layer: input.error_layer, rating: input.rating, feedback: "", graded_by: "deterministic" },
+    { activity_type: "review", advancesFsrs: true, reviewSubmission: true, direction: "cn_to_en" },
+  );
   const row = await loadUserWord(word, db, userId);
   assertReviewCardDue(row.next_review_at, now);
   const result = scheduleReview(row, input.rating, now, enableFuzz);

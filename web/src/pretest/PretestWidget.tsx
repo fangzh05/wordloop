@@ -10,6 +10,11 @@ import {
   sendUserMessage,
   subscribeToApp,
 } from "../mcpBridge.js";
+import {
+  editDistance as sharedEditDistance,
+  gradeExactRecall,
+  normalizeAnswer,
+} from "../grading/deterministic.js";
 
 const itemSchema = z.object({
   word: z.string().trim().min(1).max(100),
@@ -61,34 +66,29 @@ const gradeSchema = z.object({
 const gradeSystemPrompt = "You grade one English vocabulary pretest answer. Return strict JSON only. Do not teach or add markdown.";
 
 export function normalizePretestWord(value: string): string {
-  return value.trim().toLowerCase();
+  return normalizeAnswer(value);
 }
 
 export function editDistance(left: string, right: string): number {
-  const source = normalizePretestWord(left);
-  const target = normalizePretestWord(right);
-  let previous = Array.from({ length: target.length + 1 }, (_, index) => index);
-  for (let row = 1; row <= source.length; row += 1) {
-    const current = [row];
-    for (let column = 1; column <= target.length; column += 1) {
-      current[column] = Math.min(
-        (current[column - 1] ?? Number.POSITIVE_INFINITY) + 1,
-        (previous[column] ?? Number.POSITIVE_INFINITY) + 1,
-        (previous[column - 1] ?? Number.POSITIVE_INFINITY) + (source[row - 1] === target[column - 1] ? 0 : 1),
-      );
-    }
-    previous = current;
-  }
-  return previous[target.length] ?? source.length;
+  return sharedEditDistance(left, right);
 }
 
+/**
+ * Grade a cn_to_en pretest answer into the pretest's three-way confidence scale.
+ *
+ * This delegates to the shared deterministic grader so the pretest and the
+ * lesson practice can never drift apart: exact match and single-edit near miss
+ * mean the same thing everywhere. The pretest additionally maps a correct-but-
+ * misspelled answer to "uncertain" rather than a plain pass, because a pretest
+ * is a fast triage step, not a graded attempt — a word the learner can only
+ * half-spell should still be taught.
+ */
 export function gradeCnToEn(answer: string, target: string): { result: PretestResult; feedback: string } {
-  const normalizedAnswer = normalizePretestWord(answer);
-  const normalizedTarget = normalizePretestWord(target);
-  if (normalizedAnswer && normalizedAnswer === normalizedTarget) {
+  const grade = gradeExactRecall(answer, target);
+  if (grade.is_correct && grade.error_layer === "none") {
     return { result: "known", feedback: "答案正确。" };
   }
-  if (normalizedTarget.length > 3 && editDistance(normalizedAnswer, normalizedTarget) === 1) {
+  if (grade.is_correct) {
     return { result: "uncertain", feedback: "拼写接近目标词。" };
   }
   return { result: "unknown", feedback: "答案与目标词不匹配。" };

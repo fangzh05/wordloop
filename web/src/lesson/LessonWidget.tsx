@@ -113,7 +113,7 @@ export function buildLessonSubmissionMessage(input: {
   prompt: string;
   answer: string;
 }): string {
-  return `提交 WordLoop 正式学习答案。\n\n目标词：${input.word}\n练习类型：${input.activityType}\n题目：${input.prompt}\n用户答案：${input.answer.trim()}\n\n请按 Teaching Prompt 批改，调用 record_attempt，然后 render_lesson_widget mode=feedback。`;
+  return `提交 WordLoop 正式学习答案。\n\n目标词：${input.word}\n练习类型：${input.activityType}\n题目：${input.prompt}\n用户答案：${input.answer.trim()}\n\n判定规则：若练习类型属于确定性题型（pretest_cn_to_en、listen_recall、spelling、word_recall），用确定性判分得到 is_correct 与 error_layer（不要凭语感判断；错误层只允许 none/spelling/meaning）；其余题型按 Teaching Prompt 做语义批改。然后调用 record_attempt 记录本次作答（record_attempt 只负责持久化，不会替你判分）。最后调用 render_lesson_widget mode=feedback，批改用词与解释由你负责。`;
 }
 
 export function buildNextLessonMessage(nextWord: string): string {
