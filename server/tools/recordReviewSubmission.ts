@@ -10,6 +10,9 @@ const inputSchema = z.object({
   is_correct: z.boolean(),
   error_layer: z.enum(ERROR_LAYERS).default("none"),
   rating: z.enum(FSRS_RATINGS),
+  // The card's actual direction decides which grading authority the verdict
+  // must follow: cn_to_en is deterministic recall, en_definition is semantic.
+  direction: z.enum(["cn_to_en", "en_definition"]),
   session_id: z.string().uuid().optional(),
 }).superRefine((value, context) => {
   if (!value.is_correct && value.error_layer === "none") {

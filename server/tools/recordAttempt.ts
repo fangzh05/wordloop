@@ -12,6 +12,9 @@ export function registerRecordAttemptTool(server: McpServer): void {
       word: z.string().trim().min(1).max(100),
       session_id: z.string().uuid().optional(),
       activity_type: z.enum(ACTIVITY_TYPES),
+      // Review cards only: pass the card's direction so the persistence gate
+      // can apply the matching grading rules. Omit for ordinary lesson practice.
+      direction: z.enum(["cn_to_en", "en_definition"]).optional(),
       user_answer: z.string().max(4000).default(""),
       is_correct: z.boolean(),
       error_layer: z.enum(ERROR_LAYERS).default("none"),

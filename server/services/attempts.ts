@@ -1,6 +1,6 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ActivityType, ErrorLayer } from "../types.js";
-import { assertGradeInvariants } from "../../web/src/grading/deterministic.js";
+import { assertGradeInvariants, gradingRouteForDirection } from "../../web/src/grading/deterministic.js";
 import { assertDatabaseResult } from "./shared.js";
 import { normalizeWord } from "./wordNormalization.js";
 
@@ -8,6 +8,8 @@ export interface RecordAttemptInput {
   word: string;
   session_id?: string;
   activity_type: ActivityType;
+  /** Review cards only: the persisted direction, so the gate can route review verdicts correctly. */
+  direction?: "cn_to_en" | "en_definition";
   user_answer: string;
   is_correct: boolean;
   error_layer: ErrorLayer;
@@ -16,10 +18,19 @@ export interface RecordAttemptInput {
 export async function recordAttempt(input: RecordAttemptInput): Promise<Record<string, unknown>> {
   // Fail-closed gate: no attempt reaches durable state unless its verdict obeys
   // the grading invariants. Ordinary practice never advances FSRS, so it must
-  // arrive without a rating and its verdict must match the route for its type.
+  // arrive without a rating. The tool input carries no graded_by claim of its
+  // own, so the verdict's authority is derived from the route for this type:
+  // that is what lets the gate reject a language-level error layer on a
+  // deterministic question while leaving semantic questions unrestricted.
+  const route = gradingRouteForDirection(input.activity_type, input.direction);
   assertGradeInvariants(
-    { is_correct: input.is_correct, error_layer: input.error_layer, feedback: "", graded_by: "deterministic" },
-    { activity_type: input.activity_type, advancesFsrs: false },
+    {
+      is_correct: input.is_correct,
+      error_layer: input.error_layer,
+      feedback: "",
+      graded_by: route === "semantic" ? "semantic" : "deterministic",
+    },
+    { activity_type: input.activity_type, advancesFsrs: false, direction: input.direction },
   );
   const { data, error } = await getDatabase().rpc("record_attempt_v2", {
     p_user_id: getAuthenticatedUserId(),

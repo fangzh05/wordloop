@@ -1,6 +1,6 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ErrorLayer, FsrsRating, ReviewSource, UserWordRow } from "../types.js";
-import { assertGradeInvariants } from "../../web/src/grading/deterministic.js";
+import { assertGradeInvariants, gradingRouteForDirection } from "../../web/src/grading/deterministic.js";
 import { assertDatabaseResult } from "./shared.js";
 import { normalizeWord } from "./wordNormalization.js";
 import { cardToDatabase, reviewLogToDatabase, scheduleReview, stateName } from "./fsrsScheduler.js";
@@ -61,6 +61,7 @@ export async function recordReviewSubmission(input: {
   is_correct: boolean;
   error_layer: ErrorLayer;
   rating: FsrsRating;
+  direction: "cn_to_en" | "en_definition";
   session_id?: string;
 }, now = new Date(), enableFuzz = true): Promise<Record<string, unknown>> {
   const db = getDatabase();
@@ -69,10 +70,20 @@ export async function recordReviewSubmission(input: {
   // The atomic due-review submission is the one path allowed to advance FSRS, so
   // it is the one path that must carry a rating — and that rating must agree with
   // the verdict. A failed retrieval rated Good here would silently corrupt the
-  // review schedule, so the invariant gate runs before any write.
+  // review schedule, so the invariant gate runs before any write. The widget
+  // tells us the card's actual direction: a cn_to_en card is a deterministic
+  // recall verdict, an en_definition card is a semantic one, and the gate
+  // applies the matching error-layer rules to each.
+  const route = gradingRouteForDirection("review", input.direction);
   assertGradeInvariants(
-    { is_correct: input.is_correct, error_layer: input.error_layer, rating: input.rating, feedback: "", graded_by: "deterministic" },
-    { activity_type: "review", advancesFsrs: true, reviewSubmission: true, direction: "cn_to_en" },
+    {
+      is_correct: input.is_correct,
+      error_layer: input.error_layer,
+      rating: input.rating,
+      feedback: "",
+      graded_by: route === "semantic" ? "semantic" : "deterministic",
+    },
+    { activity_type: "review", advancesFsrs: true, reviewSubmission: true, direction: input.direction },
   );
   const row = await loadUserWord(word, db, userId);
   assertReviewCardDue(row.next_review_at, now);

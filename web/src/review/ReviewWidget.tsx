@@ -247,6 +247,7 @@ export function ReviewWidget(): React.JSX.Element {
           is_correct: grade.is_correct,
           error_layer: attemptErrorLayer,
           rating: grade.is_correct ? grade.rating : "again",
+          direction: item.direction,
         });
         if (submission.isError) {
           if (isReviewCardAlreadyCompleteResult(submission)) {
@@ -269,6 +270,7 @@ export function ReviewWidget(): React.JSX.Element {
         const attempt = await callServerTool("record_attempt", {
           word: item.word,
           activity_type: "review",
+          direction: item.direction,
           user_answer: cleanAnswer,
           is_correct: grade.is_correct,
           error_layer: attemptErrorLayer,

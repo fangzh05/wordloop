@@ -287,10 +287,40 @@ describe("grade invariants", () => {
     )).toThrow(GradeInvariantError);
   });
 
-  it("accepts ordinary practice that carries no rating", () => {
+  it("accepts ordinary semantic practice without a rating, as the persistence gate constructs it", () => {
+    // Mirrors how server/services/attempts.ts builds the verdict: graded_by is
+    // derived from the route, never hardcoded. This is the regression test for
+    // the bug that rejected every semantic record_attempt.
+    for (const activityType of ["sentence", "cloze", "translation_cn_to_en", "derivation", "collocation", "recall"]) {
+      const route = gradingRouteForDirection(activityType);
+      const verdict = {
+        is_correct: false,
+        error_layer: "grammar" as const,
+        feedback: "",
+        graded_by: route === "semantic" ? ("semantic" as const) : ("deterministic" as const),
+      };
+      expect(() => assertGradeInvariants(verdict, { activity_type: activityType, advancesFsrs: false }), activityType).not.toThrow();
+    }
+  });
+
+  it("accepts an en_definition review verdict carrying a language-level error layer", () => {
+    // An en_definition card is graded semantically, so grammar/collocation are
+    // legitimate layers. Hardcoding direction "cn_to_en" at the gate wrongly
+    // rejected these.
+    const route = gradingRouteForDirection("review", "en_definition");
+    expect(route).toBe("semantic");
     expect(() => assertGradeInvariants(
-      gradeSemanticAnswer({ isCorrect: false, errorLayer: "grammar", feedback: "x", advancesFsrs: false }),
-      { activity_type: "sentence", advancesFsrs: false },
+      { is_correct: false, error_layer: "collocation", rating: "again", feedback: "", graded_by: route === "semantic" ? "semantic" : "deterministic" },
+      { activity_type: "review", advancesFsrs: true, reviewSubmission: true, direction: "en_definition" },
+    )).not.toThrow();
+  });
+
+  it("accepts a cn_to_en review attempt without a direction field the way error repair does", () => {
+    // Error-repair review attempts omit direction; the gate then routes review
+    // as deterministic recall, which matches how the widget grades cn_to_en.
+    expect(() => assertGradeInvariants(
+      { is_correct: false, error_layer: "meaning", feedback: "", graded_by: "deterministic" },
+      { activity_type: "review", advancesFsrs: false },
     )).not.toThrow();
   });
 });

@@ -131,6 +131,7 @@ describe.runIf(canRun)("Supabase persistence", () => {
       is_correct: true,
       error_layer: "none",
       rating: "good",
+      direction: "cn_to_en",
     });
     const { count: reviewLogCount, error: reviewLogError } = await db.from("fsrs_review_logs")
       .select("id", { count: "exact", head: true }).eq("user_id", integrationUser);
@@ -150,6 +151,7 @@ describe.runIf(canRun)("Supabase persistence", () => {
       is_correct: true,
       error_layer: "none",
       rating: "good",
+      direction: "cn_to_en",
     })).rejects.toThrow("FSRS card is not due.");
     const { count: attemptsAfterDuplicate, error: attemptsAfterDuplicateError } = await db.from("attempts")
       .select("id", { count: "exact", head: true }).eq("user_id", integrationUser);
