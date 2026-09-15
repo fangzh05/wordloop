@@ -4,6 +4,7 @@ import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
 import { getAllUserWords, getDailyNewWordLimit, getTodayWords, getUserTimeZone } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
 import { fsrsForecast } from "./progress.js";
+import { getActiveStudySession } from "./studySessions.js";
 
 function reviewDueAt(item: VocabularyItem, now: Date): boolean {
   if (!item.next_review_at) return false;
@@ -139,15 +140,17 @@ export async function getNextRound(limit: number): Promise<{ words: VocabularyIt
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const date = dateInTimeZone(await getUserTimeZone(db, userId));
-  const priority: Record<string, number> = { unknown: 0, uncertain: 1, new: 2 };
   const words = (await getTodayWords(date, db, userId))
-    .filter((word) => !word.mastered && ["unknown", "uncertain", "new"].includes(word.status))
-    .sort((a, b) => (priority[a.status] ?? 9) - (priority[b.status] ?? 9))
+    .filter((word) => !word.mastered && word.status === "new")
     .slice(0, limit);
   return { words };
 }
 
 const learningStatuses = new Set(["unknown", "uncertain", "new"]);
+
+export function findFirstLearningWord(todayWords: VocabularyItem[]): VocabularyItem | null {
+  return todayWords.find((word) => !word.mastered && learningStatuses.has(word.status)) ?? null;
+}
 
 export function findNextLearningWord(todayWords: VocabularyItem[], currentWord: string): {
   next_word: VocabularyItem | null;
@@ -164,9 +167,34 @@ export function findNextLearningWord(todayWords: VocabularyItem[], currentWord: 
 export async function getNextLearningWord(currentWord: string): Promise<ReturnType<typeof findNextLearningWord>> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
-  const date = dateInTimeZone(await getUserTimeZone(db, userId));
+  const date = await resolveLearningQueueDate(currentWord, db, userId);
   const todayWords = await getTodayWords(date, db, userId);
   return findNextLearningWord(todayWords, currentWord);
+}
+
+export async function resolveLearningQueueDate(
+  currentWord?: string,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<string> {
+  if (currentWord) {
+    const active = await getActiveStudySession(db, userId);
+    if (active?.state?.widget === "lesson"
+      && active.state.current_word
+      && normalizeWord(active.state.current_word) === normalizeWord(currentWord)) {
+      return active.state.date;
+    }
+  }
+  return dateInTimeZone(await getUserTimeZone(db, userId));
+}
+
+export async function getFirstLearningWord(
+  date?: string,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<VocabularyItem | null> {
+  const targetDate = date ?? dateInTimeZone(await getUserTimeZone(db, userId));
+  return findFirstLearningWord(await getTodayWords(targetDate, db, userId));
 }
 
 export async function getErrorBook(): Promise<{

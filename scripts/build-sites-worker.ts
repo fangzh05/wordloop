@@ -14,6 +14,7 @@ const values = await Promise.all([
   readFile(path.join(root, "supabase", "migrations", "202609130002_fsrs_shanbay.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609140003_daily_queue_ui_fix.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609150004_study_session_state.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "202609150005_integrity_guards.sql"), "utf8"),
 ]);
 
 await rm(outputRoot, { recursive: true, force: true });
@@ -37,7 +38,7 @@ await build({
     __SITE_JS__: JSON.stringify(values[2]),
     __WIDGET_JS__: JSON.stringify(values[3]),
     __WIDGET_CSS__: JSON.stringify(values[4]),
-    __MIGRATION_SQL__: JSON.stringify(`${values[5]}\n\n${values[6]}\n\n${values[7]}\n\n${values[8]}`),
+    __MIGRATION_SQL__: JSON.stringify(`${values[5]}\n\n${values[6]}\n\n${values[7]}\n\n${values[8]}\n\n${values[9]}`),
     "process.env.NODE_ENV": '"production"',
   },
 });

@@ -2,9 +2,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { getProgress } from "../services/progress.js";
-import { getReviewSelection } from "../services/review.js";
+import { getFirstLearningWord, getNextLearningWord, getReviewSelection } from "../services/review.js";
 import { getActiveStudySession, getStudyDate, makeStudyState, persistStudyState } from "../services/studySessions.js";
-import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState } from "../types.js";
+import { getTodayWords } from "../services/words.js";
+import { normalizeWord } from "../services/wordNormalization.js";
+import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
 import { safeTool } from "./helpers.js";
 
 export const WIDGET_URIS = {
@@ -39,6 +41,7 @@ const pretestInput = z.union([
   z.object({ resume: z.literal(true) }).strict(),
   pretestPayload,
 ]);
+type PretestRenderItem = z.infer<typeof pretestItem>;
 const pretestToolInputSchema = z.object({
   resume: z.literal(true).optional(),
   items: z.array(pretestItem).min(1).max(7).optional(),
@@ -164,6 +167,7 @@ function resumablePayload(session: StudySessionRow | null, widget: StudyState["w
 }
 
 async function saveWidgetState(input: {
+  date?: string;
   widget: StudyState["widget"];
   phase: StudyPhase;
   current_word: string | null;
@@ -171,22 +175,100 @@ async function saveWidgetState(input: {
   retry_count: number;
   payload: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
-  const state = makeStudyState({ date: await getStudyDate(), ...input });
+  const { date, ...stateInput } = input;
+  const state = makeStudyState({ date: date ?? await getStudyDate(), ...stateInput });
   await persistStudyState(state);
   return widgetPayloadWithState(input.payload, state);
 }
 
 function nextLessonIndex(active: StudySessionRow | null, word: string): number {
   if (active?.state?.widget !== "lesson") return 0;
-  return active.state.current_word === word ? active.state.current_index : active.state.current_index + 1;
+  return active.state.current_word && normalizeWord(active.state.current_word) === normalizeWord(word)
+    ? active.state.current_index
+    : active.state.current_index + 1;
 }
 
 function lessonRetryCount(active: StudySessionRow | null, input: Extract<LessonInput, { mode: "feedback" }>): number {
   if (input.feedback.is_correct !== false) {
-    return active?.state?.widget === "lesson" && active.state.current_word === input.word ? active.state.retry_count : 0;
+    return active?.state?.widget === "lesson"
+      && active.state.current_word
+      && normalizeWord(active.state.current_word) === normalizeWord(input.word)
+      ? active.state.retry_count : 0;
   }
-  if (active?.state?.widget === "lesson" && active.state.current_word === input.word) return active.state.retry_count + 1;
+  if (active?.state?.widget === "lesson"
+    && active.state.current_word
+    && normalizeWord(active.state.current_word) === normalizeWord(input.word)) return active.state.retry_count + 1;
   return 1;
+}
+
+function persistedMeaning(item: VocabularyItem): string {
+  return (Array.isArray(item.senses) ? item.senses : [])
+    .map((sense) => (typeof sense?.definition_cn === "string" ? sense.definition_cn.trim() : ""))
+    .filter(Boolean)
+    .join("；");
+}
+
+function persistedPartOfSpeech(item: VocabularyItem): string | undefined {
+  const value = (Array.isArray(item.senses) ? item.senses : []).find((sense) => typeof sense?.pos === "string" && sense.pos.trim())?.pos.trim();
+  return value || undefined;
+}
+
+export function validatePretestItems(
+  items: PretestRenderItem[],
+  todayWords: VocabularyItem[],
+): PretestRenderItem[] {
+  const eligible = todayWords.filter((word) => word.status === "new" && !word.mastered);
+  const eligibleIndex = new Map(eligible.map((word, index) => [normalizeWord(word.word), index]));
+  const seen = new Set<string>();
+  for (const [index, item] of items.entries()) {
+    const word = normalizeWord(item.word);
+    if (seen.has(word)) throw new Error("PRETEST_WORD_DUPLICATE");
+    seen.add(word);
+    const expectedIndex = eligibleIndex.get(word);
+    if (expectedIndex === undefined) throw new Error("PRETEST_WORD_NOT_ELIGIBLE");
+    if (expectedIndex !== index) throw new Error("PRETEST_QUEUE_ORDER_INVALID");
+  }
+  if (eligible.length < 5 ? items.length !== eligible.length : items.length < 5) {
+    throw new Error("PRETEST_ROUND_SIZE_INVALID");
+  }
+  return items.map((item) => {
+    const persisted = todayWords.find((word) => normalizeWord(word.word) === normalizeWord(item.word));
+    if (!persisted) throw new Error("PRETEST_WORD_NOT_ELIGIBLE");
+    const meaning = persistedMeaning(persisted);
+    const partOfSpeech = persistedPartOfSpeech(persisted);
+    return {
+      ...item,
+      word: persisted.word,
+      ...(persisted.ipa_us?.trim() ? { ipa: persisted.ipa_us.trim() } : {}),
+      ...(partOfSpeech ? { part_of_speech: partOfSpeech } : {}),
+      ...(meaning ? { meaning_zh: meaning } : {}),
+    };
+  });
+}
+
+export function assertLessonWordMatches(expectedWord: string | null, actualWord: string): void {
+  if (!expectedWord || normalizeWord(expectedWord) !== normalizeWord(actualWord)) {
+    throw new Error("LESSON_WORD_MISMATCH");
+  }
+}
+
+async function validateLessonWord(
+  input: Exclude<LessonInput, { resume: true }>,
+  active: StudySessionRow | null,
+): Promise<void> {
+  if (input.mode === "exercise" || input.mode === "feedback") {
+    assertLessonWordMatches(active?.state?.widget === "lesson" ? active.state.current_word : null, input.word);
+    return;
+  }
+
+  if (active?.state?.widget === "lesson") {
+    const expected = active.state.current_word
+      ? (await getNextLearningWord(active.state.current_word)).next_word?.word ?? null
+      : null;
+    assertLessonWordMatches(expected, input.word);
+    return;
+  }
+  assertLessonWordMatches((await getFirstLearningWord())?.word ?? null, input.word);
 }
 
 export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): {
@@ -199,10 +281,10 @@ export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): {
   next_review_at: string | null;
   direction: "cn_to_en";
 } {
-  const senses = item.senses ?? [];
-  const meaning = senses.map((sense) => sense.definition_cn.trim()).filter(Boolean).join("；");
+  const senses = Array.isArray(item.senses) ? item.senses : [];
+  const meaning = senses.map((sense) => typeof sense?.definition_cn === "string" ? sense.definition_cn.trim() : "").filter(Boolean).join("；");
   if (!meaning) throw new Error(`Review word ${item.word} has no persisted meaning.`);
-  const partOfSpeech = senses.find((sense) => sense.pos.trim())?.pos.trim();
+  const partOfSpeech = senses.find((sense) => typeof sense?.pos === "string" && sense.pos.trim())?.pos.trim();
   return {
     word: item.word,
     meaning_zh: meaning,
@@ -215,15 +297,34 @@ export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): {
   };
 }
 
+export function buildReviewWidgetItems(
+  candidates: ReviewVocabularyItem[],
+  limit = 5,
+): ReturnType<typeof reviewWidgetItemFromVocabulary>[] {
+  const items: ReturnType<typeof reviewWidgetItemFromVocabulary>[] = [];
+  for (const candidate of candidates.slice(0, 25)) {
+    try {
+      items.push(reviewWidgetItemFromVocabulary(candidate));
+    } catch (error) {
+      const expected = `Review word ${candidate.word} has no persisted meaning.`;
+      if (!(error instanceof Error) || error.message !== expected) throw error;
+      console.warn(`Review word ${candidate.word} has no persisted meaning; skipped.`);
+    }
+    if (items.length >= limit) break;
+  }
+  return items;
+}
+
 export async function buildReviewWidgetPayload(currentIndex = 0): Promise<{
   widget: "review";
   items: ReturnType<typeof reviewWidgetItemFromVocabulary>[];
   current_index: number;
   title: string;
 }> {
-  const { rollingReview } = await getReviewSelection(5);
+  const { rollingReview } = await getReviewSelection(25);
   if (rollingReview.length === 0) throw new Error("No review words are currently due or have active errors.");
-  const items = rollingReview.map(reviewWidgetItemFromVocabulary);
+  const items = buildReviewWidgetItems(rollingReview, 5);
+  if (items.length === 0) throw new Error("到期复习词缺少释义数据。");
   return {
     widget: "review",
     items,
@@ -250,11 +351,14 @@ export function registerRenderTools(server: McpServer): void {
   }, (input) => safeTool(async () => {
     const parsedInput = pretestInput.parse(input);
     if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "pretest");
-    const payload = { widget: "pretest", ...parsedInput };
+    const date = await getStudyDate();
+    const todayWords = await getTodayWords(date);
+    const items = validatePretestItems(parsedInput.items, todayWords);
+    const payload = { widget: "pretest", ...parsedInput, items };
     return saveWidgetState({
       widget: "pretest",
       phase: "pretest",
-      current_word: parsedInput.items[0]?.word ?? null,
+      current_word: items[0]?.word ?? null,
       current_index: 0,
       retry_count: 0,
       payload,
@@ -295,8 +399,10 @@ export function registerRenderTools(server: McpServer): void {
     const parsedInput = lessonInput.parse(input);
     if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "lesson");
     const active = await getActiveStudySession();
+    await validateLessonWord(parsedInput, active);
     const payload = { widget: "lesson", ...parsedInput };
     return saveWidgetState({
+      ...(active?.state?.widget === "lesson" ? { date: active.state.date } : {}),
       widget: "lesson",
       phase: lessonPhaseByMode[parsedInput.mode],
       current_word: parsedInput.word,

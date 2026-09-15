@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { assertReviewCardDue } from "../server/services/fsrsReviews.js";
 import { selectReviewWords } from "../server/services/review.js";
 import type { VocabularyItem } from "../server/types.js";
 
 const sql = readFileSync(new URL("../supabase/migrations/202609130002_fsrs_shanbay.sql", import.meta.url), "utf8");
+const integritySql = readFileSync(new URL("../supabase/migrations/202609150005_integrity_guards.sql", import.meta.url), "utf8");
 
 describe("attempt/review transaction boundary", () => {
   const item = (word: string, due: string | null, mastered = false, errors: VocabularyItem["error_layers"] = []): VocabularyItem => ({
@@ -47,5 +49,27 @@ describe("attempt/review transaction boundary", () => {
     expect(body).toContain("update user_words set");
     expect(body).toContain("insert into fsrs_review_logs");
     expect(body).toContain("next_review_at");
+  });
+
+  it("checks due state after locking the card", () => {
+    const body = integritySql.slice(integritySql.indexOf("record_review_result_v1"));
+    expect(body).toContain("for update of uw");
+    expect(body).toContain("FSRS_CARD_NOT_DUE");
+    expect(body.indexOf("for update of uw")).toBeLessThan(body.indexOf("FSRS_CARD_NOT_DUE"));
+  });
+
+  it("uses one transaction for the review attempt and FSRS write", () => {
+    expect(integritySql).toContain("record_review_submission_v1");
+    const body = integritySql.slice(integritySql.indexOf("record_review_submission_v1"));
+    expect(body).toContain("record_attempt_v2");
+    expect(body).toContain("record_review_result_v1");
+    expect(body).toContain("jsonb_build_object('attempt', v_attempt, 'review', v_review)");
+  });
+
+  it("fails fast for null, invalid, or future cards while accepting due cards", () => {
+    expect(() => assertReviewCardDue(null, new Date("2026-09-15T00:00:00Z"))).toThrow("FSRS card is not due.");
+    expect(() => assertReviewCardDue("not-a-date", new Date("2026-09-15T00:00:00Z"))).toThrow("FSRS card is not due.");
+    expect(() => assertReviewCardDue("2026-09-16T00:00:00Z", new Date("2026-09-15T00:00:00Z"))).toThrow("FSRS card is not due.");
+    expect(() => assertReviewCardDue("2026-09-14T00:00:00Z", new Date("2026-09-15T00:00:00Z"))).not.toThrow();
   });
 });

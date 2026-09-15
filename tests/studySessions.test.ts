@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   advanceStudyState,
+  isStudySessionSchemaMismatch,
   makeStudyState,
   studySessionSummary,
 } from "../server/services/studySessions.js";
@@ -149,5 +150,22 @@ describe("study session migration", () => {
     expect(sql).toContain("study_sessions_active_idx");
     expect(sql).toContain("where ended_at is null");
     expect(sql).not.toMatch(/create table/i);
+  });
+
+  it("adds only integrity guards and the atomic review submission RPC", () => {
+    const sql = readFileSync(new URL("../supabase/migrations/202609150005_integrity_guards.sql", import.meta.url), "utf8");
+    expect(sql).toContain("study_sessions_one_active_per_user");
+    expect(sql).toContain("ended_at = now()");
+    expect(sql).toContain("state = '{}'::jsonb");
+    expect(sql).toContain("FSRS_CARD_NOT_DUE");
+    expect(sql).toContain("record_review_submission_v1");
+    expect(sql).not.toMatch(/create table/i);
+  });
+
+  it("recognizes only the explicit pre-004 study-session column mismatch", () => {
+    expect(isStudySessionSchemaMismatch({ message: "Could not find the 'state' column of 'study_sessions' in the schema cache" })).toBe(true);
+    expect(isStudySessionSchemaMismatch({ message: "column public.study_sessions.updated_at does not exist", code: "42703" })).toBe(true);
+    expect(isStudySessionSchemaMismatch({ message: "Database connection failed" })).toBe(false);
+    expect(isStudySessionSchemaMismatch({ message: "permission denied for table study_sessions" })).toBe(false);
   });
 });

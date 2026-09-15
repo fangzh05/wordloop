@@ -52,6 +52,13 @@ describe("pretest capability fallback", () => {
     expect(sample).toHaveBeenCalledTimes(1);
     expect(pretestActivityType(semanticItem.direction)).toBe("pretest_en_definition");
   });
+
+  it("does not grade or persist a semantic answer when sampling disappears", async () => {
+    const semanticItem = { ...item, word: "recur", meaning_zh: "再次发生；复发", direction: "en_definition" as const };
+    const sample = vi.fn(async () => { throw new Error("Sampling unavailable."); });
+    await expect(gradePretestAnswer(semanticItem, "happen again", true, sample)).rejects.toThrow("Sampling unavailable.");
+    expect(sample).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("pretest auto advance", () => {

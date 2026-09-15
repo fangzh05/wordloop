@@ -8,6 +8,8 @@ import type { ReviewVocabularyItem } from "../server/types.js";
 
 vi.mock("../server/services/review.js", () => ({
   getReviewSelection: vi.fn(),
+  getFirstLearningWord: vi.fn(),
+  getNextLearningWord: vi.fn(),
 }));
 
 const mockedGetReviewSelection = vi.mocked(getReviewSelection);
@@ -111,7 +113,7 @@ describe("Review render tool schema compatibility", () => {
       const legacy = payloadOf(await client.callTool({ name: "render_review_widget", arguments: {} }));
       const v2 = payloadOf(await client.callTool({ name: "render_review_widget_v2", arguments: {} }));
       expect(v2).toEqual(legacy);
-      expect(mockedGetReviewSelection).toHaveBeenCalledWith(5);
+      expect(mockedGetReviewSelection).toHaveBeenCalledWith(25);
     });
   });
 

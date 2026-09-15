@@ -6,7 +6,7 @@ import { safeTool } from "./helpers.js";
 export function registerGetNextRoundTool(server: McpServer): void {
   server.registerTool("get_next_round", {
     title: "Get next word round",
-    description: "Return 5–7 unfinished words, ordered unknown, uncertain, then new.",
+    description: "Return 5–7 eligible new words in the canonical prepared daily queue order.",
     inputSchema: z.object({ limit: z.number().int().min(5).max(7).default(6) }),
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, ({ limit }) => safeTool(() => getNextRound(limit)));

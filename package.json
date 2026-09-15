@@ -15,7 +15,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:inspector": "npm run build && node scripts/inspect-mcp.mjs",
-    "check:shanbay": "node --import tsx scripts/check-shanbay.ts"
+    "check:shanbay": "node --import tsx scripts/check-shanbay.ts",
+    "check:db": "node --import tsx scripts/check-db-schema.ts",
+    "predeploy:check": "npm run typecheck && npm test && npm run build && npm run check:db"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.5",

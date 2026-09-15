@@ -41,6 +41,7 @@ describe("Streamable HTTP server", () => {
     expect(names).toEqual(expect.arrayContaining([
       "import_words", "get_learning_context", "get_next_learning_word", "get_next_round", "record_pretest_result",
       "record_attempt", "get_error_book", "save_sentence", "get_progress",
+      "record_review_result", "record_review_submission",
       "render_word_import", "render_pretest_widget", "render_review_widget", "render_review_widget_v2", "render_learning_dashboard", "render_lesson_widget", "render_pronunciation_cards", "render_dictation_widget",
       "get_active_study_session", "advance_study_session", "finish_study_session",
     ]));
@@ -49,6 +50,8 @@ describe("Streamable HTTP server", () => {
     expect(instructions).toContain("legacy render_review_widget");
     expect(instructions).toContain("next_review_at is due");
     expect(instructions).toContain("record_review_result");
+    expect(instructions).toContain("record_review_submission");
+    expect(instructions).toContain("原子");
     const contextTool = response.tools.find((tool) => tool.name === "get_learning_context");
     expect(contextTool?.description).toContain("prefer render_review_widget_v2");
     expect(contextTool?.description).toContain("legacy render_review_widget");

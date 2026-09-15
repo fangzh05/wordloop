@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { gradeReviewCnToEn, ReviewQuestion, shouldAdvanceFsrs } from "../web/src/review/ReviewWidget.js";
+import { gradeReviewCnToEn, isReviewCardAlreadyCompleteResult, ReviewQuestion, shouldAdvanceFsrs } from "../web/src/review/ReviewWidget.js";
 
 const base = {
   meaning_zh: "再次发生；复发",
@@ -43,5 +43,20 @@ describe("ReviewQuestion", () => {
     expect(shouldAdvanceFsrs("both")).toBe(true);
     expect(source).not.toContain('callServerTool("get_learning_context"');
     expect(source).not.toContain("dueByWord");
+    expect(source).toContain('callServerTool("record_review_submission"');
+    expect(source).not.toContain('callServerTool("record_review_result"');
+  });
+
+  it("hides stale-widget due errors behind the completed-card message", () => {
+    expect(isReviewCardAlreadyCompleteResult({
+      isError: true,
+      content: [{ type: "text", text: "Database operation failed: FSRS_CARD_NOT_DUE" }],
+    })).toBe(true);
+    expect(isReviewCardAlreadyCompleteResult({
+      isError: true,
+      content: [{ type: "text", text: "Database operation failed: another error" }],
+    })).toBe(false);
+    const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
+    expect(source).toContain("这张卡已经完成复习。");
   });
 });

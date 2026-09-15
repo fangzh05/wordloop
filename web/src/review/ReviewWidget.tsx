@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { ArrowIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
@@ -69,6 +70,15 @@ export function shouldAdvanceFsrs(reviewKind: ReviewItem["review_kind"]): boolea
   return reviewKind === "fsrs_due" || reviewKind === "both";
 }
 
+export function isReviewCardAlreadyCompleteResult(result: Pick<CallToolResult, "isError" | "content">): boolean {
+  if (!result.isError) return false;
+  const text = result.content
+    .filter((entry): entry is Extract<CallToolResult["content"][number], { type: "text" }> => entry.type === "text")
+    .map((entry) => entry.text)
+    .join(" ");
+  return /FSRS_CARD_NOT_DUE|FSRS card is not due/i.test(text);
+}
+
 function editDistance(left: string, right: string): number {
   const source = normalize(left);
   const target = normalize(right);
@@ -118,6 +128,7 @@ function isSamplingCapabilityError(caught: unknown): boolean {
 
 function reviewErrorMessage(caught: unknown): string {
   if (isSamplingCapabilityError(caught)) return "暂时无法完成智能批改，请重试。";
+  if (caught instanceof Error && /FSRS_CARD_NOT_DUE|FSRS card is not due/i.test(caught.message)) return "这张卡已经完成复习。";
   return caught instanceof Error ? caught.message : "答案未能提交，请重试。";
 }
 
@@ -265,22 +276,40 @@ export function ReviewWidget(): React.JSX.Element {
       const attemptErrorLayer = grade.is_correct
         ? grade.error_layer
         : grade.error_layer === "none" ? "meaning" : grade.error_layer;
-      const attempt = await callServerTool("record_attempt", {
-        word: item.word,
-        activity_type: "review",
-        user_answer: cleanAnswer,
-        is_correct: grade.is_correct,
-        error_layer: attemptErrorLayer,
-      });
-      if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
-
       if (shouldAdvanceFsrs(item.review_kind)) {
-        const review = await callServerTool("record_review_result", {
+        const submission = await callServerTool("record_review_submission", {
           word: item.word,
+          user_answer: cleanAnswer,
+          is_correct: grade.is_correct,
+          error_layer: attemptErrorLayer,
           rating: grade.is_correct ? grade.rating : "again",
-          source: "review",
         });
-        if (review.isError) throw new Error("到期复习结果未能保存，请重试。");
+        if (submission.isError) {
+          if (isReviewCardAlreadyCompleteResult(submission)) {
+            const completed: GradedAnswer = {
+              word: item.word,
+              answer: cleanAnswer,
+              is_correct: true,
+              rating: "good",
+              error_layer: "none",
+              feedback: "这张卡已经完成复习。",
+            };
+            setResults((current) => [...current.filter((entry) => entry.word !== item.word), completed]);
+            setFeedback(completed);
+            setStatus("sent");
+            return;
+          }
+          throw new Error("到期复习结果未能保存，请重试。");
+        }
+      } else {
+        const attempt = await callServerTool("record_attempt", {
+          word: item.word,
+          activity_type: "review",
+          user_answer: cleanAnswer,
+          is_correct: grade.is_correct,
+          error_layer: attemptErrorLayer,
+        });
+        if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
       }
       const graded: GradedAnswer = { word: item.word, answer: cleanAnswer, ...grade, error_layer: attemptErrorLayer };
       setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
@@ -300,17 +329,40 @@ export function ReviewWidget(): React.JSX.Element {
     setStatus("sending");
     setError("");
     try {
-      const attempt = await callServerTool("record_attempt", {
-        word: item.word,
-        activity_type: "review",
-        user_answer: "",
-        is_correct: false,
-        error_layer: item.error_layers[0] ?? "meaning",
-      });
-      if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
       if (shouldAdvanceFsrs(item.review_kind)) {
-        const review = await callServerTool("record_review_result", { word: item.word, rating: "again", source: "review" });
-        if (review.isError) throw new Error("到期复习结果未能保存，请重试。");
+        const submission = await callServerTool("record_review_submission", {
+          word: item.word,
+          user_answer: "",
+          is_correct: false,
+          error_layer: item.error_layers[0] ?? "meaning",
+          rating: "again",
+        });
+        if (submission.isError) {
+          if (isReviewCardAlreadyCompleteResult(submission)) {
+            const completed: GradedAnswer = {
+              word: item.word,
+              answer: "",
+              is_correct: true,
+              rating: "good",
+              error_layer: "none",
+              feedback: "这张卡已经完成复习。",
+            };
+            setResults((current) => [...current.filter((entry) => entry.word !== item.word), completed]);
+            setFeedback(completed);
+            setStatus("sent");
+            return;
+          }
+          throw new Error("到期复习结果未能保存，请重试。");
+        }
+      } else {
+        const attempt = await callServerTool("record_attempt", {
+          word: item.word,
+          activity_type: "review",
+          user_answer: "",
+          is_correct: false,
+          error_layer: item.error_layers[0] ?? "meaning",
+        });
+        if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
       }
       const graded: GradedAnswer = {
         word: item.word,

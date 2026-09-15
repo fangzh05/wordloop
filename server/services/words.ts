@@ -26,9 +26,25 @@ interface JoinedUserWord extends UserWordRow {
 }
 
 interface DailyWordJoin {
+  import_id: string;
   position: number;
   word_id: string;
   words: WordEntity | WordEntity[];
+}
+
+export type DailyWordOrderRow = Pick<DailyWordJoin, "import_id" | "position" | "word_id">;
+
+export function sortDailyWordRows<T extends DailyWordOrderRow>(
+  rows: T[],
+  importRank: ReadonlyMap<string, number>,
+): T[] {
+  return [...rows].sort((left, right) => {
+    const leftImportRank = importRank.get(left.import_id) ?? Number.MAX_SAFE_INTEGER;
+    const rightImportRank = importRank.get(right.import_id) ?? Number.MAX_SAFE_INTEGER;
+    return leftImportRank - rightImportRank
+      || left.position - right.position
+      || left.word_id.localeCompare(right.word_id);
+  });
 }
 
 function relationOne<T>(value: T | T[]): T {
@@ -117,21 +133,26 @@ export async function getTodayWords(
 ): Promise<VocabularyItem[]> {
   const { data: imports, error: importError } = await db
     .from("daily_imports")
-    .select("id")
+    .select("id,created_at")
     .eq("user_id", userId)
-    .eq("import_date", date);
+    .eq("import_date", date)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
   assertDatabaseResult(importError);
-  const importIds = (imports ?? []).map((row: { id: string }) => row.id);
+  const orderedImports = (imports ?? []) as Array<{ id: string; created_at: string }>;
+  const importIds = orderedImports.map((row) => row.id);
   if (importIds.length === 0) return [];
+  const importRank = new Map(importIds.map((id, index) => [id, index]));
 
   const { data: joins, error: joinError } = await db
     .from("daily_import_words")
-    .select("position,word_id,words!inner(normalized_word,display_word,ipa_us,ipa_uk,senses)")
+    .select("import_id,position,word_id,words!inner(normalized_word,display_word,ipa_us,ipa_uk,senses)")
     .in("import_id", importIds)
     .order("position", { ascending: true });
   assertDatabaseResult(joinError);
   const dailyRows = (joins ?? []) as unknown as DailyWordJoin[];
-  const wordIds = [...new Set(dailyRows.map((row) => row.word_id))];
+  const orderedDailyRows = sortDailyWordRows(dailyRows, importRank);
+  const wordIds = [...new Set(orderedDailyRows.map((row) => row.word_id))];
   if (wordIds.length === 0) return [];
 
   const { data: states, error: stateError } = await db
@@ -143,7 +164,7 @@ export async function getTodayWords(
   const stateByWord = new Map((states as UserWordRow[] | null ?? []).map((state) => [state.word_id, state]));
   const emitted = new Set<string>();
   const output: VocabularyItem[] = [];
-  for (const row of dailyRows) {
+  for (const row of orderedDailyRows) {
     if (emitted.has(row.word_id)) continue;
     const state = stateByWord.get(row.word_id);
     if (!state) continue;

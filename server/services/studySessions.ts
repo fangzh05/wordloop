@@ -28,6 +28,30 @@ export const studyStateSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
 }).strict();
 
+const OLD_SESSION_SCHEMA_MESSAGE = "WordLoop 数据库版本过旧，请先部署 migration 202609150004。";
+
+type DatabaseError = { code?: string; message: string };
+
+export function isStudySessionSchemaMismatch(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as Partial<DatabaseError>;
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  const missingStateColumn = /(?:column\s+(?:(?:public\.)?study_sessions\.)?[\"']?state[\"']?|[\"']state[\"']\s+column)/i.test(message);
+  const missingUpdatedAtColumn = /(?:column\s+(?:(?:public\.)?study_sessions\.)?[\"']?updated_at[\"']?|[\"']updated_at[\"']\s+column)/i.test(message);
+  return (missingStateColumn || missingUpdatedAtColumn)
+    && /study_sessions|schema cache|does not exist/i.test(message);
+}
+
+function assertStudySessionDatabaseResult(error: DatabaseError | null): void {
+  if (!error) return;
+  if (isStudySessionSchemaMismatch(error)) throw new Error(OLD_SESSION_SCHEMA_MESSAGE);
+  assertDatabaseResult(error);
+}
+
+function isUniqueViolation(error: DatabaseError | null): boolean {
+  return error?.code === "23505";
+}
+
 export type StudySessionDb = SupabaseClient;
 
 function parseSession(data: unknown): StudySessionRow {
@@ -76,7 +100,7 @@ async function updateSessionState(
     .is("ended_at", null)
     .select(sessionColumns)
     .single();
-  assertDatabaseResult(error);
+  assertStudySessionDatabaseResult(error);
   return parseSession(data);
 }
 
@@ -99,7 +123,7 @@ export async function getActiveStudySession(
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  assertDatabaseResult(error);
+  assertStudySessionDatabaseResult(error);
   return data ? parseSession(data) : null;
 }
 
@@ -117,7 +141,11 @@ export async function getOrCreateActiveStudySession(
     .insert(insertValues)
     .select(sessionColumns)
     .single();
-  assertDatabaseResult(error);
+  if (isUniqueViolation(error)) {
+    const winner = await getActiveStudySession(db, userId);
+    if (winner) return winner;
+  }
+  assertStudySessionDatabaseResult(error);
   return parseSession(data);
 }
 
@@ -134,7 +162,11 @@ export async function persistStudyState(
     .insert({ user_id: userId, state: nextState })
     .select(sessionColumns)
     .single();
-  assertDatabaseResult(error);
+  if (isUniqueViolation(error)) {
+    const winner = await getActiveStudySession(db, userId);
+    if (winner) return updateSessionState(winner, nextState, db, userId);
+  }
+  assertStudySessionDatabaseResult(error);
   return parseSession(data);
 }
 
@@ -285,6 +317,6 @@ export async function finishStudySession(
     .is("ended_at", null)
     .select(sessionColumns)
     .single();
-  assertDatabaseResult(error);
+  assertStudySessionDatabaseResult(error);
   return parseSession(data);
 }

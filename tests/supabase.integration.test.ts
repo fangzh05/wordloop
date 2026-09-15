@@ -5,7 +5,7 @@ import { getDatabase, resetDatabaseForTests } from "../server/db.js";
 import { persistShanbayBook } from "../server/integrations/shanbay/importer.js";
 import type { ShanbayWord } from "../server/integrations/shanbay/types.js";
 import { recordAttempt } from "../server/services/attempts.js";
-import { recordReviewResult } from "../server/services/fsrsReviews.js";
+import { recordReviewSubmission } from "../server/services/fsrsReviews.js";
 import { getLearningContext } from "../server/services/review.js";
 import { finishStudySession, getActiveStudySession, makeStudyState, persistStudyState, studySessionSummary } from "../server/services/studySessions.js";
 import { getDailyNewWordLimit, prepareDailyNewWords, recordPretestResult, setDailyNewWordLimit } from "../server/services/words.js";
@@ -116,16 +116,50 @@ describe.runIf(canRun)("Supabase persistence", () => {
     expect(beforeError).toBeNull();
     await recordAttempt({ word: target, activity_type: "sentence", user_answer: "bad answer", is_correct: false, error_layer: "collocation" });
     const { data: afterAttempt, error: afterError } = await db.from("user_words")
-      .select("status,fsrs_reps,fsrs_stability,next_review_at,last_reviewed_at,collocation_error,word:words!inner(normalized_word)")
+      .select("word_id,status,fsrs_reps,fsrs_stability,next_review_at,last_reviewed_at,collocation_error,word:words!inner(normalized_word)")
       .eq("user_id", integrationUser).eq("word.normalized_word", target).single();
     expect(afterError).toBeNull();
     expect(afterAttempt).toMatchObject({ ...(beforeAttempt as Record<string, unknown>), status: "review", collocation_error: true });
 
-    await recordReviewResult({ word: target, rating: "again", source: "review", reason: "integration retrieval" });
+    const { error: forceDueError } = await db.from("user_words")
+      .update({ next_review_at: "2020-01-01T00:00:00Z" })
+      .eq("user_id", integrationUser).eq("word_id", (afterAttempt as { word_id?: string }).word_id ?? "");
+    expect(forceDueError).toBeNull();
+    await recordReviewSubmission({
+      word: target,
+      user_answer: "correct retrieval",
+      is_correct: true,
+      error_layer: "none",
+      rating: "good",
+    });
     const { count: reviewLogCount, error: reviewLogError } = await db.from("fsrs_review_logs")
       .select("id", { count: "exact", head: true }).eq("user_id", integrationUser);
     expect(reviewLogError).toBeNull();
     expect(reviewLogCount).toBe(2);
+
+    const { data: stateBeforeDuplicate, error: stateBeforeDuplicateError } = await db.from("user_words")
+      .select("fsrs_reps,next_review_at")
+      .eq("user_id", integrationUser).eq("word_id", (afterAttempt as { word_id?: string }).word_id ?? "").single();
+    expect(stateBeforeDuplicateError).toBeNull();
+    const { count: attemptsBeforeDuplicate, error: attemptsBeforeDuplicateError } = await db.from("attempts")
+      .select("id", { count: "exact", head: true }).eq("user_id", integrationUser);
+    expect(attemptsBeforeDuplicateError).toBeNull();
+    await expect(recordReviewSubmission({
+      word: target,
+      user_answer: "stale retrieval",
+      is_correct: true,
+      error_layer: "none",
+      rating: "good",
+    })).rejects.toThrow("FSRS card is not due.");
+    const { count: attemptsAfterDuplicate, error: attemptsAfterDuplicateError } = await db.from("attempts")
+      .select("id", { count: "exact", head: true }).eq("user_id", integrationUser);
+    expect(attemptsAfterDuplicateError).toBeNull();
+    expect(attemptsAfterDuplicate).toBe(attemptsBeforeDuplicate);
+    const { data: stateAfterDuplicate, error: stateAfterDuplicateError } = await db.from("user_words")
+      .select("fsrs_reps,next_review_at")
+      .eq("user_id", integrationUser).eq("word_id", (afterAttempt as { word_id?: string }).word_id ?? "").single();
+    expect(stateAfterDuplicateError).toBeNull();
+    expect(stateAfterDuplicate).toEqual(stateBeforeDuplicate);
 
     const { count: attemptsBeforeReimport, error: attemptsError } = await db.from("attempts")
       .select("id", { count: "exact", head: true }).eq("user_id", integrationUser);

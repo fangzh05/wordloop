@@ -159,7 +159,7 @@ export async function gradePretestAnswer(
     return parseGrade(await sample(semanticGradePrompt(item, answer), gradeSystemPrompt));
   } catch (caught) {
     if (isSamplingCapabilityError(caught)) {
-      return gradeCnToEn(answer, item.word);
+      throw caught;
     }
     throw caught;
   }
@@ -375,6 +375,18 @@ export function PretestWidget(): React.JSX.Element {
     if (result.isError) throw new Error("学习阶段保存失败，请重试。");
   }
 
+  function switchCurrentToChineseTest(): void {
+    setPayload((current) => current ? {
+      ...current,
+      items: current.items.map((entry) => entry.direction === "en_definition" ? { ...entry, direction: "cn_to_en" } : entry),
+    } : current);
+    setSamplingAvailable(false);
+    setAnswer("");
+    setFeedback(null);
+    setStatus("idle");
+    setError("当前环境已切换为中→英测试。");
+  }
+
   async function submit(): Promise<void> {
     const item = payload?.items[index];
     if (!payload || !item || !answer.trim() || status === "sending" || status === "sent" || submittingRef.current) return;
@@ -395,6 +407,10 @@ export function PretestWidget(): React.JSX.Element {
         : await gradePretestAnswer(itemForGrade, cleanAnswer, samplingAvailable === true);
       await saveGrade(itemForGrade, cleanAnswer, grade);
     } catch (caught) {
+      if (isSamplingCapabilityError(caught) && item.direction === "en_definition") {
+        switchCurrentToChineseTest();
+        return;
+      }
       setStatus("error");
       setError(isSamplingCapabilityError(caught) ? "暂时无法完成智能批改，请重试。" : caught instanceof Error ? caught.message : "答案未能提交，请重试。");
     } finally {
@@ -718,7 +734,7 @@ export function PretestWidget(): React.JSX.Element {
       enterKeyHint="send"
       disabled={status === "sending" || status === "sent"}
     />
-    {status === "error" ? <p className="error-text" role="alert">{error}</p> : null}
+    {error ? <p className="error-text" role={status === "error" ? "alert" : "status"}>{error}</p> : null}
     {feedback ? <div className={"inline-feedback status-only " + feedback.result} role="status"><strong>{resultStatus(feedback.result)}</strong></div> : null}
     <div className="pretest-actions">
       {status !== "sent" ? <>
