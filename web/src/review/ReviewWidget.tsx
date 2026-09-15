@@ -32,6 +32,7 @@ const gradeSchema = z.object({
 });
 
 const gradeSystemPrompt = "你只负责批改一次独立英语词汇复习。只返回严格 JSON，不教学，不加 Markdown。";
+const REVIEW_AUTO_ADVANCE_MS = 600;
 
 type Payload = z.infer<typeof payloadSchema>;
 type ReviewItem = Payload["items"][number];
@@ -198,6 +199,24 @@ export function ReviewWidget(): React.JSX.Element {
     void initializePayload(parsed.data, signature);
   }), []);
 
+  useEffect(() => {
+    if (status !== "sent" || !feedback || !payload) return;
+    const timer = setTimeout(() => {
+      if (index === payload.items.length - 1) {
+        setFeedback(null);
+        setStatus("idle");
+        setCompleted(true);
+        return;
+      }
+      setIndex((value) => value + 1);
+      setAnswer("");
+      setFeedback(null);
+      setStatus("idle");
+      requestAnimationFrame(() => answerRef.current?.focus());
+    }, REVIEW_AUTO_ADVANCE_MS);
+    return () => clearTimeout(timer);
+  }, [status, feedback, index, payload]);
+
   const item = payload?.items[index];
 
   function switchCurrentToChineseTest(): void {
@@ -316,6 +335,7 @@ export function ReviewWidget(): React.JSX.Element {
     if (!payload || !item || status !== "sent") return;
     if (index === payload.items.length - 1) {
       setFeedback(null);
+      setStatus("idle");
       setCompleted(true);
       return;
     }
