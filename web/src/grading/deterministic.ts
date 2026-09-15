@@ -95,13 +95,16 @@ export function gradingRoute(activityType: string): GradingRoute {
  * `review` covers two directions with different authorities: cn_to_en is a
  * recall question decided by code, while en_definition is an open judgement
  * decided by the model. The invariant check therefore needs the direction to
- * resolve the route correctly for review submissions.
+ * resolve the route correctly for review submissions. Direction is inert for
+ * every other activity type — a caller cannot launder a deterministic type
+ * into a semantic one by attaching a direction to it.
  */
 export function gradingRouteForDirection(
   activityType: string,
   direction?: "cn_to_en" | "en_definition",
 ): GradingRoute {
-  if (activityType === "pretest_en_definition" || direction === "en_definition") return "semantic";
+  if (activityType === "pretest_en_definition") return "semantic";
+  if (activityType === "review" && direction === "en_definition") return "semantic";
   return gradingRoute(activityType);
 }
 

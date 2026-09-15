@@ -104,6 +104,14 @@ describe("grading router", () => {
     expect(isDeterministicallyGraded("review", "cn_to_en")).toBe(true);
     expect(isDeterministicallyGraded("review", "en_definition")).toBe(false);
   });
+
+  it("ignores a direction attached to a non-review type", () => {
+    // A caller must not be able to launder a deterministic type into a semantic
+    // one by attaching a direction to it.
+    expect(gradingRouteForDirection("pretest_cn_to_en", "en_definition")).toBe("deterministic");
+    expect(gradingRouteForDirection("sentence", "en_definition")).toBe("semantic");
+    expect(gradingRouteForDirection("pretest_en_definition", "cn_to_en")).toBe("semantic");
+  });
 });
 
 describe("exact recall grader", () => {
