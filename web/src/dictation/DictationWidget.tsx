@@ -5,7 +5,13 @@ import { PlayIcon, ReplayIcon } from "../components/Icons.js";
 import { FocusButton } from "../components/FocusButton.js";
 import { subscribeToApp } from "../mcpBridge.js";
 
-const payloadSchema = z.object({ widget: z.literal("dictation"), text: z.string().min(1), title: z.string().min(1) });
+const payloadSchema = z.object({
+  widget: z.literal("dictation"),
+  text: z.string().min(1),
+  title: z.string().min(1),
+  phase: z.literal("dictation").optional(),
+  current_index: z.number().int().min(0).optional(),
+}).strict();
 
 export function DictationWidget(): React.JSX.Element {
   const [payload, setPayload] = useState<z.infer<typeof payloadSchema> | null>(null);

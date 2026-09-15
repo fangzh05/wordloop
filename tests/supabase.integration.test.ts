@@ -7,6 +7,7 @@ import type { ShanbayWord } from "../server/integrations/shanbay/types.js";
 import { recordAttempt } from "../server/services/attempts.js";
 import { recordReviewResult } from "../server/services/fsrsReviews.js";
 import { getLearningContext } from "../server/services/review.js";
+import { finishStudySession, getActiveStudySession, makeStudyState, persistStudyState, studySessionSummary } from "../server/services/studySessions.js";
 import { getDailyNewWordLimit, prepareDailyNewWords, recordPretestResult, setDailyNewWordLimit } from "../server/services/words.js";
 
 const canRun = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -153,5 +154,66 @@ describe.runIf(canRun)("Supabase persistence", () => {
     const resumed = await getLearningContext();
     expect(resumed.settings.daily_new_word_limit).toBe(5);
     expect(resumed.rolling_review.some((word) => word.word === target)).toBe(true);
+  });
+
+  it("persists and restores a self-contained study card in the existing session table", async () => {
+    process.env.DEV_USER_ID = integrationUser;
+    resetDatabaseForTests();
+    const exercise = {
+      activity_type: "sentence",
+      instruction: "Use the word in a new scene.",
+      prompt: "The plantation changed hands after the harvest.",
+      multiline: false,
+    };
+    const explain = makeStudyState({
+      date: "2030-01-03",
+      widget: "lesson",
+      phase: "lesson_explain",
+      current_word: "plantation",
+      current_index: 0,
+      retry_count: 0,
+      payload: {
+        widget: "lesson",
+        mode: "explain",
+        word: "plantation",
+        ipa: "/plænˈteɪʃən/",
+        part_of_speech: "n.",
+        meaning_zh: "种植园",
+        collocations: [],
+        derivations: [],
+        example_en: "The plantation changed hands after the harvest.",
+        note: "A large farm or estate.",
+        exercise,
+      },
+    });
+    const first = await persistStudyState(explain);
+    expect(first.id).toBeTruthy();
+    expect(studySessionSummary(await getActiveStudySession())).toEqual({
+      active: true,
+      widget: "lesson",
+      phase: "lesson_explain",
+      current_word: "plantation",
+      current_index: 0,
+    });
+
+    const feedback = makeStudyState({
+      ...explain,
+      phase: "lesson_feedback",
+      retry_count: 1,
+      payload: {
+        widget: "lesson",
+        mode: "feedback",
+        word: "plantation",
+        progress: "1 / 3",
+        exercise,
+        feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false },
+      },
+    });
+    const second = await persistStudyState(feedback);
+    expect(second.id).toBe(first.id);
+    const restored = await getActiveStudySession();
+    expect(restored?.state).toEqual(feedback);
+    await finishStudySession();
+    expect(await getActiveStudySession()).toBeNull();
   });
 });

@@ -40,7 +40,8 @@ describe("PretestQuestion", () => {
     expect(source).toContain("clearAdvanceTimer");
     expect(source).toContain("listen_repeat");
     expect(source).toContain("listen_recall");
-    expect(source).toContain("pronunciationCompleted");
+    expect(source).toContain("advance_study_session");
+    expect(source).not.toContain("updateModelContext");
     expect(source).not.toContain("function nextQuestion()");
     expect(source).not.toContain("下一题");
   });

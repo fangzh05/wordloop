@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ArrowIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
-import { callServerTool, getSamplingAvailability, sampleHostText, sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
+import { callServerTool, getSamplingAvailability, sampleHostText, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 
 const errorLayerSchema = z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"]);
 const itemSchema = z.object({
@@ -331,7 +331,6 @@ export function ReviewWidget(): React.JSX.Element {
     setContinueStatus("sending");
     setError("");
     try {
-      await updateModelContext("Wordloop 复习卡片已完成。", { wordloopReviewResults: results });
       await sendUserMessage("Wordloop 复习卡片已完成，请继续下一步；不要重复汇报每题结果。");
       setContinueStatus("sent");
     } catch (caught) {

@@ -76,10 +76,12 @@ wordloop/
 │   │   ├── reviewScheduler.ts
 │   │   ├── sentences.ts
 │   │   ├── shared.ts
+│   │   ├── studySessions.ts
 │   │   ├── wordNormalization.ts
 │   │   └── words.ts
 │   └── tools/
 │       ├── getErrorBook.ts
+│       ├── getActiveStudySession.ts
 │       ├── getLearningContext.ts
 │       ├── getNextLearningWord.ts
 │       ├── getNextRound.ts
@@ -90,6 +92,8 @@ wordloop/
 │       ├── recordAttempt.ts
 │       ├── recordPretestResult.ts
 │       ├── recordReviewResult.ts
+│       ├── advanceStudySession.ts
+│       ├── finishStudySession.ts
 │       ├── renderWidgets.ts
 │       ├── setDailyNewWordLimit.ts
 │       ├── shanbay.ts
@@ -97,7 +101,8 @@ wordloop/
 ├── supabase/migrations/
 │   ├── 202609130001_initial_wordloop.sql
 │   ├── 202609130002_fsrs_shanbay.sql
-│   └── 202609140003_daily_queue_ui_fix.sql
+│   ├── 202609140003_daily_queue_ui_fix.sql
+│   └── 202609150004_study_session_state.sql
 ├── tests/
 │   ├── mcpHttp.test.ts
 │   ├── fsrsReview.test.ts
@@ -107,6 +112,7 @@ wordloop/
 │   ├── site.test.ts
 │   ├── learningQueue.test.ts
 │   ├── reviewQueue.test.ts
+│   ├── studySessions.test.ts
 │   ├── supabase.integration.test.ts
 │   ├── worker.test.ts
 │   ├── shanbayClient.test.ts
@@ -158,7 +164,7 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001, 002, and 003 in that order. If a real database already ran the older 001 + 002 setup, do **not** rerun the combined file: execute only [`202609140003_daily_queue_ui_fix.sql`](supabase/migrations/202609140003_daily_queue_ui_fix.sql). It preserves all existing imports, attempts, FSRS cards, and error layers.
+3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001, 002, 003, and 004 in that order. If a real database already ran the older setup, execute only the missing migration files in order; migration 004 adds resumable state to the existing `study_sessions` table and preserves all imports, attempts, FSRS cards, and error layers.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 
@@ -201,11 +207,14 @@ npm start
 | --- | --- |
 | `import_words` | Normalize, deduplicate, and persist a daily ordered list. |
 | `get_learning_context` | Read today's persisted statuses, recent answer history, review queue, stats, and session rules. |
+| `get_active_study_session` | Read only the active durable Widget cursor; the full payload stays server-side. |
 | `get_next_learning_word` | Return the first unfinished word after the current word in today's prepared queue. |
 | `get_next_round` | Select 5–7 unfinished words. |
 | `record_pretest_result` | Save `known`, `uncertain`, or `unknown` plus the answer in durable attempt history. |
 | `record_attempt` | Save an ordinary exercise and update counters/error repair only; never advance FSRS. |
 | `record_review_result` | Advance FSRS exactly once for a genuine independent retrieval. |
+| `advance_study_session` | Apply one backend-validated pretest or Lesson phase transition. |
+| `finish_study_session` | Clear the active durable study cursor after the real learning wrap-up. |
 | `prepare_daily_new_words` | Allocate the configured daily limit from the vocabulary pool. |
 | `set_daily_new_word_limit` | Configure the daily allocation limit from 1 to 200. |
 | `get_current_shanbay_book` | Read the current Shanbay book using server-only credentials. |
@@ -226,7 +235,7 @@ npm start
 | `render_dictation_widget` | `ui://wordloop/dictation.html` |
 | `render_lesson_widget` | `ui://wordloop/lesson.html` |
 
-The pretest widget reloads stored daily classifications from Supabase before resuming, so closing Chat and reopening the conversation does not restart completed questions. Its integrated pronunciation view shows the word, American IPA, part of speech, Chinese core meaning, and a user-triggered Play button.
+The pretest, Lesson, and Dictation render tools persist their complete displayed payload before returning it and accept `resume: true`. Closing Chat or destroying a Widget therefore restores the exact saved card, phase, index, and retry cursor from the existing `study_sessions.state` JSONB. Review intentionally remains a live backend queue and is never copied into the session state.
 
 The pronunciation and dictation views call browser `speechSynthesis` only after a button click. If it is unavailable, the view displays `当前设备无法播放`. The dictation transcript is not inserted into the visible DOM until the user selects `Show transcript`.
 
@@ -246,7 +255,7 @@ The repository also includes a headless strict check:
 npm run test:inspector
 ```
 
-This builds the project, starts a disposable local Wordloop server, runs Inspector `tools/list --strict`, and probes MCP App metadata/resources. The current result is 22 tools listed with no strict schema failures; all seven render tools resolve to `text/html;profile=mcp-app` resources with `prefersBorder: true`.
+This builds the project, starts a disposable local Wordloop server, runs Inspector `tools/list --strict`, and probes MCP App metadata/resources. The current result is 25 tools listed with no strict schema failures; all seven render tools resolve to `text/html;profile=mcp-app` resources with `prefersBorder: true`.
 
 Suggested database test sequence:
 
@@ -270,7 +279,7 @@ npm run build
 npm test
 ```
 
-The default suite covers FSRS v6 rating transitions and persistence mapping, exercise/FSRS isolation, due mastered cards, no future-card filler, Shanbay decoding/mapping/pagination/error handling, idempotent multi-book deduplication, error repair, progress, Streamable HTTP initialization, and tool discovery.
+The default suite covers FSRS v6 rating transitions and persistence mapping, exercise/FSRS isolation, due mastered cards, no future-card filler, deterministic next-word ordering, resumable study-session transitions and strict Lesson payloads, Shanbay decoding/mapping/pagination/error handling, idempotent multi-book deduplication, error repair, progress, Streamable HTTP initialization, and tool discovery.
 
 ## Shanbay migration
 
@@ -327,14 +336,14 @@ Before exposing Wordloop to more than one real user, implement OAuth/authenticat
 - Shanbay migration depends on an undocumented API and may require refreshing the server-only credential when Shanbay changes it.
 - Browser speech synthesis voice and exact pronunciation quality vary by host/device.
 - No third-party dictionary or TTS endpoint is included.
-- Study-session start/end counters are scaffolded in the database but do not yet have public tools.
+- Study-session state is intentionally a small JSONB cursor in the existing `study_sessions` table; it does not snapshot review queues or FSRS fields.
 - The server keeps active MCP transport sessions in process memory; vocabulary state itself is durable in Supabase.
 - A full Supabase integration test cannot pass until credentials and the migration are available.
 
 ## Roadmap
 
 1. Replace `DEV_USER_ID` with OAuth-derived identity and add production policies.
-2. Add explicit study-session lifecycle tools and a 20-new-word quiz counter.
+2. Add a 20-new-word quiz counter.
 3. Add import history inspection and reversible import management.
 4. Replace browser speech synthesis with a real American-English TTS endpoint if needed.
 5. Add FSRS parameter optimization and historical replay tooling after enough real review logs exist.
@@ -342,7 +351,7 @@ Before exposing Wordloop to more than one real user, implement OAuth/authenticat
 
 ## Teaching boundary
 
-The full runtime teaching behavior lives in [`server/teachingPrompt.ts`](server/teachingPrompt.ts); [`docs/TEACHING_POLICY.md`](docs/TEACHING_POLICY.md) is the human-readable copy. Wordloop stores state and renders interaction; it does not generate lessons, score answers with a hidden model, or develop a second conversational personality.
+The full runtime teaching behavior lives in [`server/teachingPrompt.ts`](server/teachingPrompt.ts); [`docs/TEACHING_POLICY.md`](docs/TEACHING_POLICY.md) is the human-readable copy. Wordloop stores resumable study state and renders interaction; it does not generate lessons, score answers with a hidden model, or develop a second conversational personality.
 
 
 ## 正式学习卡片

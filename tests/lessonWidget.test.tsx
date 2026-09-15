@@ -6,10 +6,19 @@ import { buildLessonSubmissionMessage, LessonWidget } from "../web/src/lesson/Le
 describe("guided lesson widget", () => {
   it("has the three fixed modes and keeps exercise submission in the card", () => {
     const source = readFileSync(new URL("../web/src/lesson/LessonWidget.tsx", import.meta.url), "utf8");
-    expect(source).toContain('["explain", "exercise", "feedback"]');
+    expect(source).toContain('z.discriminatedUnion("mode"');
+    expect(source).toContain('z.literal("explain")');
+    expect(source).toContain('z.literal("exercise")');
+    expect(source).toContain('z.literal("feedback")');
+    expect(source).toContain("modeForPhase");
     expect(source).toContain("提交 WordLoop 正式学习答案。");
     expect(source).toContain("reference_answer");
     expect(source).toContain("get_next_learning_word");
+    expect(source).toContain('event: "lesson_start_exercise"');
+    expect(source).toContain('event: "lesson_retry"');
+    expect(source).not.toContain("exerciseContextRef");
+    expect(source).not.toContain("retainedExercise");
+    expect(source).not.toContain("请等待练习题目");
     expect(source).not.toContain("updateModelContext");
   });
 

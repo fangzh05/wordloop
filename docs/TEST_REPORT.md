@@ -8,9 +8,9 @@ Run date: 2026-09-15 (Asia/Shanghai)
 | --- | --- |
 | `npm run typecheck` | Passed |
 | `npm run build` | Passed |
-| `npm test` | 72 passed, 1 Supabase integration test skipped because credentials were not available |
+| `npm test` | Passed; 79 tests passed, 2 Supabase integration tests skipped because credentials were not available |
 | Plugin manifest validator | Passed |
-| MCP Inspector strict `tools/list` | Passed; 22 tools, no strict schema failure |
+| MCP Inspector strict `tools/list` | Passed; 25 tools, no strict schema failure |
 | MCP App metadata probe | Passed; seven render tools resolved their UI resources |
 
 The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`, and modern nested `_meta.ui.resourceUri`; the compatibility key is added by the official helper.
@@ -29,12 +29,15 @@ The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`
 - Review payloads are server-owned, carry `review_kind`, preserve persisted meaning/part of speech, and force the deterministic `cn_to_en` direction.
 - The daily learning queue returns the first unfinished word after the current position and reports `round_complete` at the end without selecting a replacement.
 - Lesson exercise, submission, and next-word handoffs use direct widget messages and `get_next_learning_word`; they do not depend on model-context persistence.
+- Resumable study sessions persist the exact pretest, lesson, or dictation Widget payload before rendering; fixed phase transitions and retry state are backend-owned, while review remains a live FSRS/error queue without a session snapshot.
+- Lesson explain payloads include the complete exercise, feedback carries the original exercise, and reload/resume/retry tests preserve the exact card without a GPT turn.
+- `get_active_study_session`, `advance_study_session`, and `finish_study_session` expose only the durable cursor and fixed transitions; arbitrary session JSON is rejected.
 - Shanbay fixture tests cover current-book parsing, all three states, structured IPA/senses, safe 401/invalid-payload errors, and multi-state/multi-book deduplication.
 - Progress calculations separate mastered, learning, and error-book counts.
 - GET `/` returns health status.
 - POST `/mcp` initializes over local Streamable HTTP and lists all data/render tools; the deployed GPT Site uses `/api/mcp` because `/mcp` is reserved by the Sites gateway.
-- The GPT Sites Worker serves `/health` and exposes all 22 tools over stateless Web Standard Streamable HTTP.
-- The optional Supabase integration test verifies persistence across independent context reads and cleans up its temporary user when credentials and the migration are present.
+- The GPT Sites Worker serves `/health` and exposes all 25 tools over stateless Web Standard Streamable HTTP.
+- The optional Supabase integration tests verify session persistence across independent context reads and clean up their temporary user when credentials and the migration are present; they are skipped locally without Supabase credentials.
 
 ## Visual QA
 

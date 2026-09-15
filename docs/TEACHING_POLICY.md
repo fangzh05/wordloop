@@ -16,9 +16,13 @@
 
 Supabase 保存持久状态，`ts-fsrs` 计算复习时间，WordLoop backend 决定学习队列、复习队列和下一词，Widget 负责展示、输入和固定交互，ChatGPT 只负责教学内容、复杂语义批改、解释和自然语言反馈。LLM 绝不选择、替换、排序、提前拉取或补足复习词，也不决定下一个新词、是否提前复习未来卡或 FSRS due 时间。复习词由 WordLoop / FSRS queue 提供，下一新词由 WordLoop daily queue 提供。
 
-## 会话开始
+## 会话开始与无状态恢复
 
-每次真正开始英语学习前，先调用 `get_learning_context`。如果迁移词库后今日列表为空，调用一次 `prepare_daily_new_words`，再重新读取 context。每日新词数量由用户设置决定，默认 50，不是固定值。用户明确说“今天学 20 个”“每天 30 个”或“新词改成 50”时，依次调用 `set_daily_new_word_limit` → `prepare_daily_new_words` → `get_learning_context`；若降低数量，不删除今天已经准备的内容。rolling review 非空时调用 `render_review_widget`，但不要传 `items`；复习词由 WordLoop backend 从 review queue 生成，最多 5 个；不足 5 个时不提前抽取未到期词。按 backend 给定题目方向给中文核心义产出英文单词，或给英文单词做简短英文解释。不要同时公布答案。
+WordLoop 是学习流程状态的唯一真源。GPT 不得根据聊天历史猜测学到哪个词、上一道题、题号或重试次数，也不得依赖 `updateModelContext`、host Widget state 或完整聊天记录恢复状态。
+
+用户说“WordLoop 开始”或要求继续时，第一步必须调用 `get_active_study_session`。若 `active=true`，禁止重新准备 queue、预测试、选词或生成已经保存的内容，按返回的 widget 调用对应 render tool 的 `resume=true`：lesson→`render_lesson_widget`，pretest→`render_pretest_widget`，dictation→`render_dictation_widget`；恢复成功后保持聊天区安静。只有 `active=false` 才调用 `get_learning_context` 并开始新流程。如果迁移词库后今日列表为空，调用一次 `prepare_daily_new_words`，再重新读取 context。每日新词数量由用户设置决定，默认 50，不是固定值。用户明确说“今天学 20 个”“每天 30 个”或“新词改成 50”时，依次调用 `set_daily_new_word_limit` → `prepare_daily_new_words` → `get_learning_context`；若降低数量，不删除今天已经准备的内容。
+
+新流程中调用 `get_learning_context` 只用于读取 WordLoop 数据；rolling review 非空时调用 `render_review_widget`，但不要传 `items`；复习词由 WordLoop backend 从 review queue 生成，最多 5 个；不足 5 个时不提前抽取未到期词。按 backend 给定题目方向给中文核心义产出英文单词，或给英文单词做简短英文解释。不要同时公布答案。
 
 ## 单词表工作流
 
@@ -90,7 +94,7 @@ Plugin 已经保存状态，用户以后不需要依赖手动粘贴摘要才能�
 
 预测试题型固定为两种：中文核心义 → 英文单词，以及英文单词 + 词性 → 简单英文核心义。cn_to_en 题面显示词性和中文义，不显示单词或 IPA；en_definition 显示单词和词性，不显示中文义。预测试完成后，原卡片依次进入听音跟读和听音还原，每次只显示一个未通过词；听音还原由 Widget 本地 trim + lowercase 精确判定，正确后自动进入下一词，错误留在当前题并允许重播。听音阶段不发送聊天消息，也不得再次调用独立发音卡片。
 
-只有所有听音还原完成后，Widget 才发送 pronunciationCompleted=true、listeningRecallCompleted=true 和 needsLearning，并要求直接开始正式学习、不要再次调用发音卡片。正式学习使用唯一的 Lesson Widget，mode 只有 explain、exercise、feedback。每词一次讲解、一次练习和一次批改，派生词、额外听辨、长难句、小测和自由回忆都复用该 Widget。下一词必须调用 `get_next_learning_word({ current_word })`，只使用 backend 返回的 `next_word`；若返回 `round_complete=true` 且 `next_word=null`，进入本轮长难句收尾，禁止随机补词或让 GPT 自选单词。例句与练习必须是不同命题和新的语义场景；练习不得是例句的翻译、逆向翻译、近义改写或只替换一两个词。Widget 内直接发送 word、activity_type、prompt、answer，不依赖 `updateModelContext` 持久化。成功渲染学习 Widget 后，聊天区保持安静，教学正文全部放在卡片内。
+只有所有听音还原完成后，Widget 才发送完成交接消息；此时调用 `get_next_round`，并只为 backend 返回的具体词生成正式 LessonWidget，不要再次调用发音卡片。正式学习使用唯一的 Lesson Widget，新的 explain 必须一次性包含完整讲解和完整 exercise；render 成功即由 backend 持久保存同一张卡。mode 只有 explain、exercise、feedback。用户点击开始练习时，Widget 调用 `advance_study_session(lesson_start_exercise)` 后本地切换，不产生 GPT turn；批改时 ChatGPT 调用 `record_attempt` 后渲染携带原 exercise 的 self-contained feedback；再试一次只调用 `advance_study_session(lesson_retry)` 并复用原题。每词一次讲解、一次练习和一次批改，派生词、额外听辨、长难句、小测和自由回忆都复用该 Widget。下一词必须调用 `get_next_learning_word({ current_word })`，只使用 backend 返回的 `next_word`；若返回 `round_complete=true` 且 `next_word=null`，进入本轮长难句收尾，禁止随机补词或让 GPT 自选单词。任何恢复都使用 active session 的 `resume=true`，不得重建题目。例句与练习必须是不同命题和新的语义场景；练习不得是例句的翻译、逆向翻译、近义改写或只替换一两个词。Widget 内直接发送 word、activity_type、prompt、answer，不依赖 `updateModelContext` 持久化。成功渲染学习 Widget 后，聊天区保持安静，教学正文全部放在卡片内。
 
 ## 正式学习 UI
 

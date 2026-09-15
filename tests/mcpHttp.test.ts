@@ -42,6 +42,7 @@ describe("Streamable HTTP server", () => {
       "import_words", "get_learning_context", "get_next_learning_word", "get_next_round", "record_pretest_result",
       "record_attempt", "get_error_book", "save_sentence", "get_progress",
       "render_word_import", "render_pretest_widget", "render_review_widget", "render_learning_dashboard", "render_lesson_widget", "render_pronunciation_cards", "render_dictation_widget",
+      "get_active_study_session", "advance_study_session", "finish_study_session",
     ]));
     expect(instructions).toContain("active error");
     expect(instructions).toContain("next_review_at is due");
@@ -58,8 +59,21 @@ describe("Streamable HTTP server", () => {
     expect(reviewInput.properties).toHaveProperty("current_index");
     expect(reviewInput.properties).not.toHaveProperty("items");
     expect(reviewInput.required ?? []).not.toContain("items");
+    const activeSessionTool = response.tools.find((tool) => tool.name === "get_active_study_session");
+    expect(activeSessionTool?.inputSchema).toMatchObject({ type: "object" });
+    const advanceTool = response.tools.find((tool) => tool.name === "advance_study_session");
+    expect(JSON.stringify(advanceTool?.inputSchema)).toContain("lesson_start_exercise");
+    expect(JSON.stringify(advanceTool?.inputSchema)).toContain("lesson_retry");
+    const finishTool = response.tools.find((tool) => tool.name === "finish_study_session");
+    expect(finishTool?.inputSchema).toMatchObject({ type: "object" });
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
     expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson.html");
+    expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
+    const invalidLesson = await client.callTool({
+      name: "render_lesson_widget",
+      arguments: { mode: "exercise", word: "plantation", activity_type: "sentence", instruction: "Use it.", multiline: false },
+    });
+    expect(invalidLesson.isError).toBe(true);
     await client.close();
   });
 });

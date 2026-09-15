@@ -19,6 +19,19 @@ export type ReviewSource = (typeof REVIEW_SOURCES)[number];
 export const REVIEW_KINDS = ["error_repair", "fsrs_due", "both"] as const;
 export type ReviewKind = (typeof REVIEW_KINDS)[number];
 
+export const STUDY_WIDGETS = ["pretest", "lesson", "dictation"] as const;
+export type StudyWidget = (typeof STUDY_WIDGETS)[number];
+export const STUDY_PHASES = [
+  "pretest", "pretest_result", "listen_repeat", "listen_recall",
+  "lesson_explain", "lesson_exercise", "lesson_feedback", "dictation",
+] as const;
+export type StudyPhase = (typeof STUDY_PHASES)[number];
+export const STUDY_SESSION_EVENTS = [
+  "pretest_question", "pretest_result", "listen_repeat", "listen_recall",
+  "lesson_start_exercise", "lesson_retry",
+] as const;
+export type StudySessionEvent = (typeof STUDY_SESSION_EVENTS)[number];
+
 export interface LexicalSense {
   pos: string;
   definition_cn: string;
@@ -75,6 +88,28 @@ export interface VocabularyItem {
 export interface ReviewVocabularyItem extends VocabularyItem {
   is_due: boolean;
   review_kind: ReviewKind;
+}
+
+export interface StudyState {
+  version: 1;
+  date: string;
+  widget: StudyWidget;
+  phase: StudyPhase;
+  current_word: string | null;
+  current_index: number;
+  retry_count: number;
+  payload: Record<string, unknown>;
+}
+
+export interface StudySessionRow {
+  id: string;
+  user_id: string;
+  started_at: string;
+  ended_at: string | null;
+  new_words_count: number;
+  review_words_count: number;
+  state: StudyState | null;
+  updated_at: string;
 }
 
 export interface ProgressResult {

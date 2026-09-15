@@ -84,7 +84,8 @@ export function createHttpApp() {
           exercise: {
             activity_type: "translation_cn_to_en",
             instruction: "使用 recur 翻译下面句子",
-            prompt: "研究人员发现，这种并发症在老年患者中更容易再次出现。"
+            prompt: "研究人员发现，这种并发症在老年患者中更容易再次出现。",
+            multiline: false,
           }
         },
       };

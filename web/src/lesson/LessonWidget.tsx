@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
@@ -6,48 +6,67 @@ import { callServerTool, sendUserMessage, subscribeToApp } from "../mcpBridge.js
 import { z } from "zod";
 
 const exerciseSchema = z.object({
-  type: z.string().trim().max(80).optional(),
-  activity_type: z.string().trim().max(80).optional(),
-  instruction: z.string().trim().max(300).optional(),
-  prompt: z.string().trim().max(4000).optional(),
-  prompt_en: z.string().trim().max(4000).optional(),
-  multiline: z.boolean().optional(),
-});
+  activity_type: z.string().trim().min(1).max(80),
+  instruction: z.string().trim().min(1).max(300),
+  prompt: z.string().trim().min(1).max(4000),
+  multiline: z.boolean(),
+}).strict();
 
 const feedbackSchema = z.object({
-  is_correct: z.boolean().optional(),
-  result: z.string().optional(),
-  status: z.string().optional(),
-  error_layer: z.string().optional(),
-  message: z.string().optional(),
-  user_answer: z.string().optional(),
-  reference_answer: z.string().optional(),
-  explanation: z.string().optional(),
-  reveal_answer: z.boolean().optional(),
-});
+  is_correct: z.boolean(),
+  user_answer: z.string().max(4000),
+  error_layer: z.string().trim().max(80).optional(),
+  message: z.string().trim().max(1000).optional(),
+  reference_answer: z.string().trim().max(4000).optional(),
+  explanation: z.string().trim().max(4000).optional(),
+  reveal_answer: z.boolean(),
+}).strict();
 
-const payloadSchema = z.object({
+const payloadCommon = {
   widget: z.literal("lesson"),
-  mode: z.enum(["explain", "exercise", "feedback"]).default("explain"),
   title: z.string().trim().max(120).optional(),
-  progress: z.string().trim().max(40).optional(),
+  phase: z.enum(["lesson_explain", "lesson_exercise", "lesson_feedback"]).optional(),
+  current_index: z.number().int().min(0).optional(),
   word: z.string().trim().min(1).max(100),
-  ipa: z.string().trim().max(120).optional(),
-  part_of_speech: z.string().trim().max(40).optional(),
-  meaning_zh: z.string().trim().max(240).optional(),
-  collocations: z.array(z.string().trim().max(200)).max(8).optional(),
-  derivations: z.array(z.string().trim().max(200)).max(8).optional(),
-  collocation: z.string().trim().max(200).optional(),
-  example_en: z.string().trim().max(1000).optional(),
-  note: z.string().trim().max(1000).optional(),
-  activity_type: z.string().trim().max(80).optional(),
-  instruction: z.string().trim().max(300).optional(),
-  prompt: z.string().trim().max(4000).optional(),
-  prompt_en: z.string().trim().max(4000).optional(),
-  multiline: z.boolean().optional(),
-  exercise: exerciseSchema.optional(),
-  feedback: feedbackSchema.optional(),
-});
+};
+
+const explainPayloadSchema = z.object({
+  ...payloadCommon,
+  mode: z.literal("explain"),
+  progress: z.string().trim().max(40).optional(),
+  ipa: z.string().trim().min(1).max(120),
+  part_of_speech: z.string().trim().min(1).max(40),
+  meaning_zh: z.string().trim().min(1).max(240),
+  collocations: z.array(z.string().trim().min(1).max(200)).max(8),
+  derivations: z.array(z.string().trim().min(1).max(200)).max(8),
+  example_en: z.string().trim().min(1).max(1000),
+  note: z.string().trim().min(1).max(1000),
+  exercise: exerciseSchema,
+}).strict();
+
+const exercisePayloadSchema = z.object({
+  ...payloadCommon,
+  mode: z.literal("exercise"),
+  progress: z.string().trim().min(1).max(40),
+  activity_type: z.string().trim().min(1).max(80),
+  instruction: z.string().trim().min(1).max(300),
+  prompt: z.string().trim().min(1).max(4000),
+  multiline: z.boolean(),
+}).strict();
+
+const feedbackPayloadSchema = z.object({
+  ...payloadCommon,
+  mode: z.literal("feedback"),
+  progress: z.string().trim().min(1).max(40),
+  exercise: exerciseSchema,
+  feedback: feedbackSchema,
+}).strict();
+
+const payloadSchema = z.discriminatedUnion("mode", [
+  explainPayloadSchema,
+  exercisePayloadSchema,
+  feedbackPayloadSchema,
+]);
 
 const nextLearningResultSchema = z.object({
   next_word: z.object({ word: z.string().trim().min(1).max(100) }).nullable(),
@@ -57,62 +76,35 @@ const nextLearningResultSchema = z.object({
 type Payload = z.infer<typeof payloadSchema>;
 type Mode = "explain" | "exercise" | "feedback";
 type SubmitStatus = "idle" | "sending" | "sent" | "error";
-type ExerciseContext = {
-  word: string;
-  title?: string;
-  progress?: string;
-  activityType: string;
-  instruction: string;
-  prompt: string;
-  multiline: boolean;
-};
 
-function listValues(values: string[] | undefined, fallback: string | undefined): string[] {
-  if (values?.length) return values;
-  return fallback ? [fallback] : [];
+type ExercisePayload = z.infer<typeof exerciseSchema>;
+type FeedbackPayload = z.infer<typeof feedbackSchema>;
+
+function exerciseFromPayload(payload: Payload): ExercisePayload {
+  if (payload.mode === "exercise") {
+    return {
+      activity_type: payload.activity_type,
+      instruction: payload.instruction,
+      prompt: payload.prompt,
+      multiline: payload.multiline,
+    };
+  }
+  return payload.exercise;
 }
 
-function firstText(...values: Array<string | undefined>): string {
-  return values.find((value) => Boolean(value?.trim())) ?? "";
+function feedbackIsCorrect(feedback: FeedbackPayload | undefined): boolean {
+  return feedback?.is_correct === true;
 }
 
-function isMultilineActivity(activityType: string): boolean {
-  return activityType === "recall"
-    || activityType === "free_recall"
-    || activityType === "session_recall"
-    || activityType === "long_sentence";
-}
-
-function extractExerciseContext(nextPayload: Payload): ExerciseContext | null {
-  const nested = nextPayload.exercise;
-  const activityType = firstText(nextPayload.activity_type, nested?.activity_type, nested?.type) || "sentence";
-  const prompt = firstText(nextPayload.prompt, nextPayload.prompt_en, nested?.prompt, nested?.prompt_en);
-  if (!prompt) return null;
-  return {
-    word: nextPayload.word,
-    title: nextPayload.title,
-    progress: nextPayload.progress,
-    activityType,
-    instruction: firstText(nextPayload.instruction, nested?.instruction) || `使用 ${nextPayload.word} 完成练习`,
-    prompt,
-    multiline: nextPayload.multiline ?? nested?.multiline ?? isMultilineActivity(activityType),
-  };
-}
-
-function feedbackIsCorrect(feedback: Payload["feedback"]): boolean {
-  if (!feedback) return false;
-  return feedback.is_correct === true
-    || feedback.result === "correct"
-    || feedback.result === "known"
-    || feedback.status === "correct";
-}
-
-function feedbackRevealsAnswer(feedback: Payload["feedback"]): boolean {
+function feedbackRevealsAnswer(feedback: FeedbackPayload | undefined): boolean {
   return Boolean(feedback?.reveal_answer || feedback?.reference_answer);
 }
 
-export function buildLessonExerciseMessage(word: string): string {
-  return `开始 ${word} 的 WordLoop 正式练习。\n请按 Teaching Prompt 生成与例句不同语境的练习，并 render_lesson_widget mode=exercise。`;
+function modeForPhase(phase: Payload["phase"]): Mode | null {
+  if (phase === "lesson_exercise") return "exercise";
+  if (phase === "lesson_feedback") return "feedback";
+  if (phase === "lesson_explain") return "explain";
+  return null;
 }
 
 export function buildLessonSubmissionMessage(input: {
@@ -140,7 +132,6 @@ export function LessonWidget(): React.JSX.Element {
   const [error, setError] = useState("");
   const [playing, setPlaying] = useState(false);
   const signatureRef = useRef("");
-  const exerciseContextRef = useRef<ExerciseContext | null>(null);
   const answerRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
   const speechAvailable = typeof window !== "undefined"
     && "speechSynthesis" in window
@@ -157,12 +148,6 @@ export function LessonWidget(): React.JSX.Element {
       const signature = JSON.stringify(parsed.data);
       if (signatureRef.current === signature) return;
       signatureRef.current = signature;
-      const nextExerciseContext = extractExerciseContext(parsed.data);
-      if (parsed.data.mode === "exercise" || (parsed.data.mode === "explain" && nextExerciseContext)) {
-        exerciseContextRef.current = nextExerciseContext;
-      } else if (parsed.data.mode === "explain") {
-        exerciseContextRef.current = null;
-      }
       setPayload(parsed.data);
       setLocalMode(null);
       setAnswer("");
@@ -172,18 +157,12 @@ export function LessonWidget(): React.JSX.Element {
     return unsubscribe;
   }, []);
 
-  const mode = localMode ?? payload?.mode ?? "explain";
-  const nestedExercise = payload?.exercise;
-  const retainedExercise = payload?.mode === "feedback" && exerciseContextRef.current?.word === payload.word
-    ? exerciseContextRef.current
-    : null;
-  const activityType = firstText(payload?.activity_type, nestedExercise?.activity_type, nestedExercise?.type, retainedExercise?.activityType) || "sentence";
-  const exercisePrompt = firstText(payload?.prompt, payload?.prompt_en, nestedExercise?.prompt, nestedExercise?.prompt_en, retainedExercise?.prompt);
-  const instruction = firstText(payload?.instruction, nestedExercise?.instruction, retainedExercise?.instruction) || (payload?.word ? "使用 " + payload.word + " 完成练习" : "");
-  const multiline = payload?.multiline ?? nestedExercise?.multiline ?? retainedExercise?.multiline ?? isMultilineActivity(activityType);
-
-  const collocations = useMemo(() => listValues(payload?.collocations, payload?.collocation), [payload?.collocations, payload?.collocation]);
-  const derivations = payload?.derivations ?? [];
+  const mode = localMode ?? modeForPhase(payload?.phase) ?? payload?.mode ?? "explain";
+  const exercise = payload ? exerciseFromPayload(payload) : null;
+  const activityType = exercise?.activity_type ?? "";
+  const exercisePrompt = exercise?.prompt ?? "";
+  const instruction = exercise?.instruction ?? "";
+  const multiline = exercise?.multiline ?? false;
   const currentWord = payload?.word ?? "";
 
   function play(): void {
@@ -198,20 +177,17 @@ export function LessonWidget(): React.JSX.Element {
     window.speechSynthesis.speak(utterance);
   }
 
-  function startExercise(): void {
+  async function startExercise(): Promise<void> {
+    if (!payload || payload.mode !== "explain") return;
     setError("");
     setAnswer("");
     setSubmitStatus("idle");
-    if (exercisePrompt) {
-      setLocalMode("exercise");
-      return;
-    }
-    void requestExercise();
-  }
-
-  async function requestExercise(): Promise<void> {
     try {
-      await sendUserMessage(buildLessonExerciseMessage(currentWord));
+      if (!window.__WORDLOOP_PREVIEW__) {
+        const result = await callServerTool("advance_study_session", { event: "lesson_start_exercise" });
+        if (result.isError) throw new Error("无法保存练习阶段，请重试。");
+      }
+      setLocalMode("exercise");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "无法开始练习，请重试。");
     }
@@ -254,11 +230,22 @@ export function LessonWidget(): React.JSX.Element {
     }
   }
 
-  function retryExercise(): void {
-    setLocalMode("exercise");
-    setAnswer("");
-    setSubmitStatus("idle");
+  async function retryExercise(): Promise<void> {
+    if (!payload || payload.mode !== "feedback") return;
+    setSubmitStatus("sending");
     setError("");
+    try {
+      if (!window.__WORDLOOP_PREVIEW__) {
+        const result = await callServerTool("advance_study_session", { event: "lesson_retry" });
+        if (result.isError) throw new Error("无法保存重试阶段，请重试。");
+      }
+      setLocalMode("exercise");
+      setAnswer("");
+      setSubmitStatus("idle");
+    } catch (caught) {
+      setSubmitStatus("error");
+      setError(caught instanceof Error ? caught.message : "无法开始重试，请重试。");
+    }
   }
 
   if (!payload) {
@@ -277,7 +264,7 @@ export function LessonWidget(): React.JSX.Element {
       <div className="lesson-exercise-heading">
         <strong>{instruction}</strong>
       </div>
-      <div className="lesson-prompt">{exercisePrompt || "请等待练习题目。"}</div>
+      <div className="lesson-prompt">{exercisePrompt}</div>
       {activityType === "listening" ? <button className="play-button lesson-audio" type="button" onClick={play} disabled={!speechAvailable} aria-label="播放听力">
         <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing ? "正在播放" : "播放") : "当前设备无法播放"}
       </button> : null}
@@ -318,7 +305,7 @@ export function LessonWidget(): React.JSX.Element {
     </section>;
   }
 
-  if (mode === "feedback") {
+  if (mode === "feedback" && payload.mode === "feedback") {
     const feedback = payload.feedback;
     const correct = feedbackIsCorrect(feedback);
     const reveal = feedbackRevealsAnswer(feedback);
@@ -340,7 +327,7 @@ export function LessonWidget(): React.JSX.Element {
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       {correct || reveal
         ? <Button onClick={() => void nextLesson()}>下一词 <ArrowIcon className="button-icon trailing" /></Button>
-        : <Button className="secondary" onClick={retryExercise}>再试一次</Button>}
+        : <Button className="secondary" onClick={() => void retryExercise()} disabled={submitStatus === "sending"}>再试一次</Button>}
     </section>;
   }
 
@@ -354,18 +341,18 @@ export function LessonWidget(): React.JSX.Element {
     </header>
     <div className="lesson-word-heading">
       <strong>{payload.word}</strong>
-      {payload.part_of_speech ? <span className="part-of-speech">{payload.part_of_speech}</span> : null}
+      {payload.mode === "explain" && payload.part_of_speech ? <span className="part-of-speech">{payload.part_of_speech}</span> : null}
     </div>
-    {payload.ipa ? <div className="lesson-ipa">{payload.ipa}</div> : null}
-    {payload.meaning_zh ? <section className="lesson-section"><h2>核心义</h2><p>{payload.meaning_zh}</p></section> : null}
-    {collocations.length ? <section className="lesson-section"><h2>高频搭配</h2><ul>{collocations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
-    {derivations.length ? <section className="lesson-section"><h2>词族</h2><ul>{derivations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
-    {payload.example_en ? <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{payload.example_en}</p></section> : null}
-    {payload.note ? <section className="lesson-section"><h2>补充</h2><p>{payload.note}</p></section> : null}
+    {payload.mode === "explain" && payload.ipa ? <div className="lesson-ipa">{payload.ipa}</div> : null}
+    {payload.mode === "explain" ? <section className="lesson-section"><h2>核心义</h2><p>{payload.meaning_zh}</p></section> : null}
+    {payload.mode === "explain" && payload.collocations.length ? <section className="lesson-section"><h2>高频搭配</h2><ul>{payload.collocations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
+    {payload.mode === "explain" && payload.derivations.length ? <section className="lesson-section"><h2>词族</h2><ul>{payload.derivations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
+    {payload.mode === "explain" ? <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{payload.example_en}</p></section> : null}
+    {payload.mode === "explain" ? <section className="lesson-section"><h2>补充</h2><p>{payload.note}</p></section> : null}
     <button className="play-button lesson-audio" type="button" onClick={play} disabled={!speechAvailable} aria-label={"播放 " + payload.word}>
       <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing ? "正在播放" : "播放") : "当前设备无法播放"}
     </button>
-    <Button onClick={startExercise}>开始练习 <ArrowIcon className="button-icon trailing" /></Button>
+    <Button onClick={() => void startExercise()}>开始练习 <ArrowIcon className="button-icon trailing" /></Button>
     {error ? <p className="error-text" role="alert">{error}</p> : null}
   </section>;
 }
