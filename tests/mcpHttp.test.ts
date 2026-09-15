@@ -41,12 +41,17 @@ describe("Streamable HTTP server", () => {
     expect(names).toEqual(expect.arrayContaining([
       "import_words", "get_learning_context", "get_next_learning_word", "get_next_round", "record_pretest_result",
       "record_attempt", "get_error_book", "save_sentence", "get_progress",
-      "render_word_import", "render_pretest_widget", "render_review_widget", "render_learning_dashboard", "render_lesson_widget", "render_pronunciation_cards", "render_dictation_widget",
+      "render_word_import", "render_pretest_widget", "render_review_widget", "render_review_widget_v2", "render_learning_dashboard", "render_lesson_widget", "render_pronunciation_cards", "render_dictation_widget",
       "get_active_study_session", "advance_study_session", "finish_study_session",
     ]));
     expect(instructions).toContain("active error");
+    expect(instructions).toContain("Prefer render_review_widget_v2");
+    expect(instructions).toContain("legacy render_review_widget");
     expect(instructions).toContain("next_review_at is due");
     expect(instructions).toContain("record_review_result");
+    const contextTool = response.tools.find((tool) => tool.name === "get_learning_context");
+    expect(contextTool?.description).toContain("prefer render_review_widget_v2");
+    expect(contextTool?.description).toContain("legacy render_review_widget");
     const reviewTool = response.tools.find((tool) => tool.name === "record_review_result");
     expect(reviewTool?.description).toContain("next_review_at is due");
     expect(reviewTool?.description).toContain("not-yet-due error repair");
@@ -54,11 +59,21 @@ describe("Streamable HTTP server", () => {
     expect(reviewTool?.description).toContain("end-of-session free recall");
     expect(reviewTool?.description).toContain("learning or relearning step");
     const reviewRenderTool = response.tools.find((tool) => tool.name === "render_review_widget");
+    expect(reviewRenderTool?.description).toContain("兼容旧客户端");
+    expect(reviewRenderTool?.description).toContain("传入 items 会被忽略");
+    expect(reviewRenderTool?.description).toContain("实际复习队列由 WordLoop backend 生成");
     expect(JSON.stringify(reviewRenderTool?._meta ?? {})).toContain("ui://wordloop/review.html");
     const reviewInput = reviewRenderTool?.inputSchema as { properties?: Record<string, unknown>; required?: string[] };
+    expect(reviewInput.properties).toHaveProperty("items");
     expect(reviewInput.properties).toHaveProperty("current_index");
-    expect(reviewInput.properties).not.toHaveProperty("items");
+    expect(reviewInput.properties).toHaveProperty("title");
     expect(reviewInput.required ?? []).not.toContain("items");
+    const reviewV2Tool = response.tools.find((tool) => tool.name === "render_review_widget_v2");
+    expect(JSON.stringify(reviewV2Tool?._meta ?? {})).toContain("ui://wordloop/review.html");
+    const reviewV2Input = reviewV2Tool?.inputSchema as { properties?: Record<string, unknown>; required?: string[] };
+    expect(reviewV2Input.properties).toHaveProperty("current_index");
+    expect(reviewV2Input.properties).not.toHaveProperty("items");
+    expect(reviewV2Input.properties).not.toHaveProperty("title");
     const activeSessionTool = response.tools.find((tool) => tool.name === "get_active_study_session");
     expect(activeSessionTool?.inputSchema).toMatchObject({ type: "object" });
     const advanceTool = response.tools.find((tool) => tool.name === "advance_study_session");

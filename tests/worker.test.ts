@@ -26,11 +26,12 @@ describe("Sites Worker", () => {
     }), {});
     const payload = await result.json() as { result: { tools: Array<{ name: string }> } };
     expect(result.status).toBe(200);
-    expect(payload.result.tools).toHaveLength(25);
+    expect(payload.result.tools).toHaveLength(26);
     expect(payload.result.tools.some((tool) => tool.name === "get_learning_context")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "get_next_learning_word")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "render_pretest_widget")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "render_review_widget")).toBe(true);
+    expect(payload.result.tools.some((tool) => tool.name === "render_review_widget_v2")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "record_review_result")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "import_shanbay_book")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "render_learning_dashboard")).toBe(true);

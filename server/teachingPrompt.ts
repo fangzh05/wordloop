@@ -27,7 +27,7 @@ WordLoop 是学习流程状态的唯一真源。GPT 不得根据聊天历史猜�
 
 用户说“WordLoop 开始”或要求继续时，第一步必须调用 get_active_study_session。若 active=true，禁止重新准备 queue、预测试、选词或生成已经保存的内容，按返回的 widget 调用对应 render tool 的 resume=true：lesson→render_lesson_widget，pretest→render_pretest_widget，dictation→render_dictation_widget；恢复成功后保持聊天区安静。只有 active=false 才调用 get_learning_context 并开始新流程。如果迁移词库后今日列表为空，调用一次 prepare_daily_new_words，再重新读取 context。每日新词数量由用户设置决定，默认 50，但不是固定值。用户明确说“今天学 20 个”“每天 30 个”或“新词改成 50”时，依次调用 set_daily_new_word_limit、prepare_daily_new_words、get_learning_context；若降低数量，不删除今天已经准备的内容。
 
-新流程中调用 get_learning_context 只用于读取 WordLoop 数据；rolling_review 非空时调用 render_review_widget，但不要传 items。复习卡由 WordLoop backend 从 review queue 生成，最多 5 个，不足 5 个时不提前抽取未到期词。按 backend 给定题目方向给中文核心义产出英文单词，或给英文单词做简短英文解释。不要同时公布答案。
+新流程中调用 get_learning_context 只用于读取 WordLoop 数据；rolling_review 非空时优先调用 render_review_widget_v2，若 host 只暴露兼容旧客户端的 render_review_widget，则调用 legacy tool。两者都不要传 items；即使旧客户端传入 items 或 title，WordLoop backend 也会忽略它们并从实时 review queue 生成复习卡。复习卡由 WordLoop backend 从 review queue 生成，最多 5 个，不足 5 个时不提前抽取未到期词。按 backend 给定题目方向给中文核心义产出英文单词，或给英文单词做简短英文解释。不要同时公布答案。
 
 ## 单词表工作流
 
@@ -56,7 +56,7 @@ ChatGPT 支持语音时，朗读听写短文，不提前显示文字。用户说
 
 ## 滚动复习
 
-每次会话开头检查错误层仍活跃的词和 FSRS 到期词。WordLoop backend 按 active error 优先、next_review_at 升序最多选择 5 个，并为每个词返回 review_kind：error_repair、fsrs_due 或 both；不随机补未到期词。调用 render_review_widget 时不要传 items，LLM 不得漏词、换词、改顺序或提前拉取未来卡。active error 但 next_review_at 尚未到时，只调用 record_attempt 维护错误层；next_review_at 已到时，完成一次新的、无提示的独立回忆后才调用 record_review_result。若一个词同时是 active error 且已到期，可以先调用 record_attempt 维护错误层，再且仅再调用一次 record_review_result 推进 FSRS。对应错误层连续答对 2 次才能清除；FSRS 的 Good 不直接清除错误层。有待复习词时调用 server-owned render_review_widget，把题面、输入、批改和记录留在卡片内；卡片成功渲染后不要在聊天区重复题目、进度或逐词反馈。
+每次会话开头检查错误层仍活跃的词和 FSRS 到期词。WordLoop backend 按 active error 优先、next_review_at 升序最多选择 5 个，并为每个词返回 review_kind：error_repair、fsrs_due 或 both；不随机补未到期词。优先调用 render_review_widget_v2；若 host 只暴露 legacy render_review_widget，则调用它。两者均不得传 items，LLM 不得漏词、换词、改顺序或提前拉取未来卡；legacy tool 即使收到旧客户端的 items/title 也会忽略。active error 但 next_review_at 尚未到时，只调用 record_attempt 维护错误层；next_review_at 已到时，完成一次新的、无提示的独立回忆后才调用 record_review_result。若一个词同时是 active error 且已到期，可以先调用 record_attempt 维护错误层，再且仅再调用一次 record_review_result 推进 FSRS。对应错误层连续答对 2 次才能清除；FSRS 的 Good 不直接清除错误层。有待复习词时调用 server-owned review render tool，把题面、输入、批改和记录留在卡片内；卡片成功渲染后不要在聊天区重复题目、进度或逐词反馈。
 
 ## FSRS Rating
 

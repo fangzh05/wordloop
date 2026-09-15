@@ -125,6 +125,21 @@ const dictationToolInputSchema = z.object({
   text: z.string().trim().min(1).max(4000).optional(),
   title: z.string().trim().min(1).max(100).optional(),
 }).strict();
+const legacyReviewItem = z.object({
+  word: z.string().trim().min(1).max(100),
+  meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
+  part_of_speech: z.string().trim().max(40).optional(),
+  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
+  error_layers: z.array(z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"])).max(5).default([]),
+});
+const legacyReviewToolInputSchema = z.object({
+  items: z.array(legacyReviewItem).min(1).max(5).optional(),
+  current_index: z.number().int().min(0).max(4).optional(),
+  title: z.string().trim().min(1).max(100).optional(),
+}).strict();
+const reviewV2ToolInputSchema = z.object({
+  current_index: z.number().int().min(0).max(4).optional(),
+}).strict();
 
 export const lessonInputSchema = lessonInput;
 export const pretestInputSchema = pretestInput;
@@ -200,6 +215,23 @@ export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): {
   };
 }
 
+export async function buildReviewWidgetPayload(currentIndex = 0): Promise<{
+  widget: "review";
+  items: ReturnType<typeof reviewWidgetItemFromVocabulary>[];
+  current_index: number;
+  title: string;
+}> {
+  const { rollingReview } = await getReviewSelection(5);
+  if (rollingReview.length === 0) throw new Error("No review words are currently due or have active errors.");
+  const items = rollingReview.map(reviewWidgetItemFromVocabulary);
+  return {
+    widget: "review",
+    items,
+    current_index: Math.min(currentIndex, items.length - 1),
+    title: "复习",
+  };
+}
+
 export function registerRenderTools(server: McpServer): void {
   registerAppTool(server, "render_word_import", {
     title: "打开词表导入",
@@ -231,23 +263,19 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_review_widget", {
     title: "打开复习",
-    description: "在卡片内完成 WordLoop backend 选择的错误词和 FSRS 到期词复习。模型不能传入、替换或排序复习词；卡片负责题面、批改和保存结果。",
-    inputSchema: z.object({
-      current_index: z.number().int().min(0).max(4).optional(),
-    }).strict(),
+    description: "兼容旧客户端。传入 items 会被忽略，实际复习队列由 WordLoop backend 生成。在卡片内完成 backend 选择的错误词和 FSRS 到期词复习；模型不能传入、替换或排序复习词。",
+    inputSchema: legacyReviewToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.review } },
     annotations: { readOnlyHint: true, openWorldHint: false },
-  }, ({ current_index }) => safeTool(async () => {
-    const { rollingReview } = await getReviewSelection(5);
-    if (rollingReview.length === 0) throw new Error("No review words are currently due or have active errors.");
-    const items = rollingReview.map(reviewWidgetItemFromVocabulary);
-    return {
-      widget: "review",
-      items,
-      current_index: Math.min(current_index ?? 0, items.length - 1),
-      title: "复习",
-    };
-  }));
+  }, ({ current_index }) => safeTool(async () => buildReviewWidgetPayload(current_index)));
+
+  registerAppTool(server, "render_review_widget_v2", {
+    title: "打开复习（v2）",
+    description: "新客户端使用的复习卡片。复习词和顺序始终由 WordLoop backend 从实时复习队列生成，模型不能传入、替换或排序 items。",
+    inputSchema: reviewV2ToolInputSchema,
+    _meta: { ui: { resourceUri: WIDGET_URIS.review } },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  }, ({ current_index }) => safeTool(async () => buildReviewWidgetPayload(current_index)));
 
   registerAppTool(server, "render_learning_dashboard", {
     title: "显示学习进度",
