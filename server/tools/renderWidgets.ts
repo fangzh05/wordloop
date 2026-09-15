@@ -2,6 +2,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { getProgress } from "../services/progress.js";
+import { getReviewSelection } from "../services/review.js";
+import type { ReviewVocabularyItem } from "../types.js";
 import { safeTool } from "./helpers.js";
 
 export const WIDGET_URIS = {
@@ -68,13 +70,31 @@ const lessonPayload = z.object({
   exercise: lessonExercise.optional(),
   feedback: lessonFeedback.optional(),
 });
-const reviewItem = z.object({
-  word: z.string().trim().min(1).max(100),
-  meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
-  part_of_speech: z.string().trim().max(40).optional(),
-  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
-  error_layers: z.array(z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"])).max(5).default([]),
-});
+export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): {
+  word: string;
+  meaning_zh: string;
+  part_of_speech?: string;
+  error_layers: ReviewVocabularyItem["error_layers"];
+  is_due: boolean;
+  review_kind: ReviewVocabularyItem["review_kind"];
+  next_review_at: string | null;
+  direction: "cn_to_en";
+} {
+  const senses = item.senses ?? [];
+  const meaning = senses.map((sense) => sense.definition_cn.trim()).filter(Boolean).join("；");
+  if (!meaning) throw new Error(`Review word ${item.word} has no persisted meaning.`);
+  const partOfSpeech = senses.find((sense) => sense.pos.trim())?.pos.trim();
+  return {
+    word: item.word,
+    meaning_zh: meaning,
+    ...(partOfSpeech ? { part_of_speech: partOfSpeech } : {}),
+    error_layers: item.error_layers,
+    is_due: item.is_due,
+    review_kind: item.review_kind,
+    next_review_at: item.next_review_at,
+    direction: "cn_to_en",
+  };
+}
 
 export function registerRenderTools(server: McpServer): void {
   registerAppTool(server, "render_word_import", {
@@ -99,15 +119,23 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_review_widget", {
     title: "打开复习",
-    description: "在卡片内完成错误词和 FSRS 到期词的独立复习。卡片负责题面、批改和保存结果；成功渲染后不要在聊天区重复题目或反馈。",
+    description: "在卡片内完成 WordLoop backend 选择的错误词和 FSRS 到期词复习。模型不能传入、替换或排序复习词；卡片负责题面、批改和保存结果。",
     inputSchema: z.object({
-      items: z.array(reviewItem).min(1).max(5),
-      current_index: z.number().int().min(0).max(4).default(0),
-      title: z.string().trim().min(1).max(100).default("复习"),
+      current_index: z.number().int().min(0).max(4).optional(),
     }),
     _meta: { ui: { resourceUri: WIDGET_URIS.review } },
     annotations: { readOnlyHint: true, openWorldHint: false },
-  }, (input) => safeTool(async () => ({ widget: "review", ...input })));
+  }, ({ current_index }) => safeTool(async () => {
+    const { rollingReview } = await getReviewSelection(5);
+    if (rollingReview.length === 0) throw new Error("No review words are currently due or have active errors.");
+    const items = rollingReview.map(reviewWidgetItemFromVocabulary);
+    return {
+      widget: "review",
+      items,
+      current_index: Math.min(current_index ?? 0, items.length - 1),
+      title: "复习",
+    };
+  }));
 
   registerAppTool(server, "render_learning_dashboard", {
     title: "显示学习进度",

@@ -81,6 +81,7 @@ wordloop/
 │   └── tools/
 │       ├── getErrorBook.ts
 │       ├── getLearningContext.ts
+│       ├── getNextLearningWord.ts
 │       ├── getNextRound.ts
 │       ├── getProgress.ts
 │       ├── helpers.ts
@@ -104,6 +105,8 @@ wordloop/
 │   ├── progress.test.ts
 │   ├── reviewScheduler.test.ts
 │   ├── site.test.ts
+│   ├── learningQueue.test.ts
+│   ├── reviewQueue.test.ts
 │   ├── supabase.integration.test.ts
 │   ├── worker.test.ts
 │   ├── shanbayClient.test.ts
@@ -113,6 +116,7 @@ wordloop/
 │   └── wordNormalization.test.ts
 ├── web/src/
 │   ├── components/Button.tsx
+│   ├── components/FocusButton.tsx
 │   ├── dashboard/LearningDashboard.tsx
 │   ├── dictation/DictationWidget.tsx
 │   ├── import/WordImport.tsx
@@ -197,6 +201,7 @@ npm start
 | --- | --- |
 | `import_words` | Normalize, deduplicate, and persist a daily ordered list. |
 | `get_learning_context` | Read today's persisted statuses, recent answer history, review queue, stats, and session rules. |
+| `get_next_learning_word` | Return the first unfinished word after the current word in today's prepared queue. |
 | `get_next_round` | Select 5–7 unfinished words. |
 | `record_pretest_result` | Save `known`, `uncertain`, or `unknown` plus the answer in durable attempt history. |
 | `record_attempt` | Save an ordinary exercise and update counters/error repair only; never advance FSRS. |
@@ -241,7 +246,7 @@ The repository also includes a headless strict check:
 npm run test:inspector
 ```
 
-This builds the project, starts a disposable local Wordloop server, runs Inspector `tools/list --strict`, and probes MCP App metadata/resources. The current result is 21 tools listed with no strict schema failures; all seven render tools resolve to `text/html;profile=mcp-app` resources with `prefersBorder: true`.
+This builds the project, starts a disposable local Wordloop server, runs Inspector `tools/list --strict`, and probes MCP App metadata/resources. The current result is 22 tools listed with no strict schema failures; all seven render tools resolve to `text/html;profile=mcp-app` resources with `prefersBorder: true`.
 
 Suggested database test sequence:
 

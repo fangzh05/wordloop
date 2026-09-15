@@ -39,7 +39,7 @@ describe("Streamable HTTP server", () => {
     const response = await client.listTools();
     const names = response.tools.map((tool) => tool.name);
     expect(names).toEqual(expect.arrayContaining([
-      "import_words", "get_learning_context", "get_next_round", "record_pretest_result",
+      "import_words", "get_learning_context", "get_next_learning_word", "get_next_round", "record_pretest_result",
       "record_attempt", "get_error_book", "save_sentence", "get_progress",
       "render_word_import", "render_pretest_widget", "render_review_widget", "render_learning_dashboard", "render_lesson_widget", "render_pronunciation_cards", "render_dictation_widget",
     ]));
@@ -54,6 +54,10 @@ describe("Streamable HTTP server", () => {
     expect(reviewTool?.description).toContain("learning or relearning step");
     const reviewRenderTool = response.tools.find((tool) => tool.name === "render_review_widget");
     expect(JSON.stringify(reviewRenderTool?._meta ?? {})).toContain("ui://wordloop/review.html");
+    const reviewInput = reviewRenderTool?.inputSchema as { properties?: Record<string, unknown>; required?: string[] };
+    expect(reviewInput.properties).toHaveProperty("current_index");
+    expect(reviewInput.properties).not.toHaveProperty("items");
+    expect(reviewInput.required ?? []).not.toContain("items");
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
     expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson.html");
     await client.close();

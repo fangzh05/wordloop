@@ -8,9 +8,9 @@ Run date: 2026-09-15 (Asia/Shanghai)
 | --- | --- |
 | `npm run typecheck` | Passed |
 | `npm run build` | Passed |
-| `npm test` | 60 passed, 1 Supabase integration test skipped because credentials were not available |
+| `npm test` | 72 passed, 1 Supabase integration test skipped because credentials were not available |
 | Plugin manifest validator | Passed |
-| MCP Inspector strict `tools/list` | Passed; 21 tools, no strict schema failure |
+| MCP Inspector strict `tools/list` | Passed; 22 tools, no strict schema failure |
 | MCP App metadata probe | Passed; seven render tools resolved their UI resources |
 
 The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`, and modern nested `_meta.ui.resourceUri`; the compatibility key is added by the official helper.
@@ -26,11 +26,14 @@ The resolved UI resources use `text/html;profile=mcp-app`, `prefersBorder: true`
 - Mastery requires at least three correct attempts, two consecutive correct attempts, and no active error flag.
 - FSRS v6 covers all four New-card ratings, deterministic due advancement, lapse handling, and DB ↔ Card conversion.
 - Due mastered cards remain eligible, future cards stay out of the queue, and no random filler is added.
+- Review payloads are server-owned, carry `review_kind`, preserve persisted meaning/part of speech, and force the deterministic `cn_to_en` direction.
+- The daily learning queue returns the first unfinished word after the current position and reports `round_complete` at the end without selecting a replacement.
+- Lesson exercise, submission, and next-word handoffs use direct widget messages and `get_next_learning_word`; they do not depend on model-context persistence.
 - Shanbay fixture tests cover current-book parsing, all three states, structured IPA/senses, safe 401/invalid-payload errors, and multi-state/multi-book deduplication.
 - Progress calculations separate mastered, learning, and error-book counts.
 - GET `/` returns health status.
 - POST `/mcp` initializes over local Streamable HTTP and lists all data/render tools; the deployed GPT Site uses `/api/mcp` because `/mcp` is reserved by the Sites gateway.
-- The GPT Sites Worker serves `/health` and exposes all 21 tools over stateless Web Standard Streamable HTTP.
+- The GPT Sites Worker serves `/health` and exposes all 22 tools over stateless Web Standard Streamable HTTP.
 - The optional Supabase integration test verifies persistence across independent context reads and cleans up its temporary user when credentials and the migration are present.
 
 ## Visual QA

@@ -16,6 +16,8 @@ export const FSRS_RATINGS = ["again", "hard", "good", "easy"] as const;
 export type FsrsRating = (typeof FSRS_RATINGS)[number];
 export const REVIEW_SOURCES = ["pretest", "review", "session_checkpoint"] as const;
 export type ReviewSource = (typeof REVIEW_SOURCES)[number];
+export const REVIEW_KINDS = ["error_repair", "fsrs_due", "both"] as const;
+export type ReviewKind = (typeof REVIEW_KINDS)[number];
 
 export interface LexicalSense {
   pos: string;
@@ -68,6 +70,11 @@ export interface VocabularyItem {
   ipa_us?: string | null;
   ipa_uk?: string | null;
   senses?: LexicalSense[];
+}
+
+export interface ReviewVocabularyItem extends VocabularyItem {
+  is_due: boolean;
+  review_kind: ReviewKind;
 }
 
 export interface ProgressResult {

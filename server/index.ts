@@ -47,8 +47,8 @@ export function createHttpApp() {
         review: {
           widget: "review",
           items: [
-            { word: "recur", meaning_zh: "再次发生；复发", part_of_speech: "v.", direction: "cn_to_en", error_layers: ["meaning"], is_due: true },
-            { word: "subtle", meaning_zh: "微妙的；不易察觉的", part_of_speech: "adj.", direction: "en_definition", error_layers: ["collocation"], is_due: false },
+            { word: "recur", meaning_zh: "再次发生；复发", part_of_speech: "v.", direction: "cn_to_en", error_layers: ["meaning"], is_due: true, review_kind: "both", next_review_at: "2026-09-13T00:00:00Z" },
+            { word: "subtle", meaning_zh: "微妙的；不易察觉的", part_of_speech: "adj.", direction: "cn_to_en", error_layers: ["collocation"], is_due: false, review_kind: "error_repair", next_review_at: "2026-09-20T00:00:00Z" },
           ],
         },
         dashboard: {

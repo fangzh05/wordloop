@@ -1,27 +1,53 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { ActiveErrorLayer, UserWordRow, VocabularyItem } from "../types.js";
+import type { ActiveErrorLayer, ReviewKind, ReviewVocabularyItem, UserWordRow, VocabularyItem } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
 import { getAllUserWords, getDailyNewWordLimit, getTodayWords, getUserTimeZone } from "./words.js";
+import { normalizeWord } from "./wordNormalization.js";
 import { fsrsForecast } from "./progress.js";
 
-function byReviewPriority(a: VocabularyItem, b: VocabularyItem): number {
+function reviewDueAt(item: VocabularyItem, now: Date): boolean {
+  if (!item.next_review_at) return false;
+  const timestamp = Date.parse(item.next_review_at);
+  return Number.isFinite(timestamp) && timestamp <= now.getTime();
+}
+
+function reviewKind(item: VocabularyItem, now: Date): ReviewKind {
+  const hasActiveError = item.error_layers.length > 0;
+  const isDue = reviewDueAt(item, now);
+  if (hasActiveError && isDue) return "both";
+  if (hasActiveError) return "error_repair";
+  return "fsrs_due";
+}
+
+export function decorateReviewWord(item: VocabularyItem, now = new Date()): ReviewVocabularyItem {
+  return {
+    ...item,
+    is_due: reviewDueAt(item, now),
+    review_kind: reviewKind(item, now),
+  };
+}
+
+function byReviewPriority(a: ReviewVocabularyItem, b: ReviewVocabularyItem): number {
   const aError = a.error_layers.length > 0 ? 0 : 1;
   const bError = b.error_layers.length > 0 ? 0 : 1;
   if (aError !== bError) return aError - bError;
   const aTime = a.next_review_at ? Date.parse(a.next_review_at) : Number.MAX_SAFE_INTEGER;
   const bTime = b.next_review_at ? Date.parse(b.next_review_at) : Number.MAX_SAFE_INTEGER;
-  return aTime - bTime;
+  const aSortableTime = Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER;
+  const bSortableTime = Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER;
+  return aSortableTime - bSortableTime || a.word.localeCompare(b.word);
 }
 
-export function selectReviewWords(all: VocabularyItem[], limit: number, now = new Date()): VocabularyItem[] {
+export function selectReviewWords(all: VocabularyItem[], limit: number, now = new Date()): ReviewVocabularyItem[] {
   return all
-    .filter((word) => word.error_layers.length > 0 || (word.next_review_at !== null && Date.parse(word.next_review_at) <= now.getTime()))
+    .filter((word) => word.error_layers.length > 0 || reviewDueAt(word, now))
+    .map((word) => decorateReviewWord(word, now))
     .sort(byReviewPriority)
     .slice(0, limit);
 }
 
 export async function getReviewSelection(limit = 5): Promise<{
-  rollingReview: VocabularyItem[];
+  rollingReview: ReviewVocabularyItem[];
   oldRandomReview: VocabularyItem[];
 }> {
   const all = await getAllUserWords(getDatabase(), getAuthenticatedUserId());
@@ -119,6 +145,28 @@ export async function getNextRound(limit: number): Promise<{ words: VocabularyIt
     .sort((a, b) => (priority[a.status] ?? 9) - (priority[b.status] ?? 9))
     .slice(0, limit);
   return { words };
+}
+
+const learningStatuses = new Set(["unknown", "uncertain", "new"]);
+
+export function findNextLearningWord(todayWords: VocabularyItem[], currentWord: string): {
+  next_word: VocabularyItem | null;
+  round_complete: boolean;
+} {
+  const currentIndex = todayWords.findIndex((word) => normalizeWord(word.word) === normalizeWord(currentWord));
+  if (currentIndex < 0) return { next_word: null, round_complete: true };
+  const nextWord = todayWords
+    .slice(currentIndex + 1)
+    .find((word) => !word.mastered && learningStatuses.has(word.status)) ?? null;
+  return { next_word: nextWord, round_complete: nextWord === null };
+}
+
+export async function getNextLearningWord(currentWord: string): Promise<ReturnType<typeof findNextLearningWord>> {
+  const db = getDatabase();
+  const userId = getAuthenticatedUserId();
+  const date = dateInTimeZone(await getUserTimeZone(db, userId));
+  const todayWords = await getTodayWords(date, db, userId);
+  return findNextLearningWord(todayWords, currentWord);
 }
 
 export async function getErrorBook(): Promise<{

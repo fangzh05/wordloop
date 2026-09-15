@@ -6,18 +6,34 @@ import type { VocabularyItem } from "../server/types.js";
 const sql = readFileSync(new URL("../supabase/migrations/202609130002_fsrs_shanbay.sql", import.meta.url), "utf8");
 
 describe("attempt/review transaction boundary", () => {
-  const item = (word: string, due: string | null, mastered = false): VocabularyItem => ({
+  const item = (word: string, due: string | null, mastered = false, errors: VocabularyItem["error_layers"] = []): VocabularyItem => ({
     word, display_word: word, status: mastered ? "mastered" : "review", source: "test",
-    consecutive_correct: 0, wrong_count: 0, mastered, next_review_at: due, error_layers: [],
+    consecutive_correct: 0, wrong_count: 0, mastered, next_review_at: due, error_layers: errors,
     fsrs_stability: 1, fsrs_difficulty: 5, fsrs_scheduled_days: 1, fsrs_state: 2,
   });
 
-  it("includes mastered due cards, excludes future cards, and adds no random filler", () => {
+  it("includes due cards, excludes future cards, and adds no random filler", () => {
     const selected = selectReviewWords([
       item("mastered-due", "2026-09-12T00:00:00Z", true),
       item("future", "2026-09-20T00:00:00Z"),
     ], 5, new Date("2026-09-13T00:00:00Z"));
     expect(selected.map((word) => word.word)).toEqual(["mastered-due"]);
+    expect(selected[0]).toMatchObject({ is_due: true, review_kind: "fsrs_due" });
+  });
+
+  it("labels future active errors as error repair without making them FSRS due", () => {
+    const selected = selectReviewWords([
+      item("repair", "2026-09-20T00:00:00Z", false, ["meaning"]),
+    ], 5, new Date("2026-09-13T00:00:00Z"));
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toMatchObject({ is_due: false, review_kind: "error_repair" });
+  });
+
+  it("labels a due card with an active error as both", () => {
+    const selected = selectReviewWords([
+      item("both", "2026-09-12T00:00:00Z", false, ["spelling"]),
+    ], 5, new Date("2026-09-13T00:00:00Z"));
+    expect(selected[0]).toMatchObject({ is_due: true, review_kind: "both" });
   });
   it("record_attempt_v2 does not update FSRS or review timestamps", () => {
     const body = sql.slice(sql.indexOf("record_attempt_v2"), sql.indexOf("record_review_result_v1"));

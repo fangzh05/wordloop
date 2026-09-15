@@ -12,9 +12,9 @@ const itemSchema = z.object({
   part_of_speech: z.string().trim().max(40).optional(),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
   error_layers: z.array(errorLayerSchema).max(5).default([]),
-  // Used only by local preview fixtures. Live cards verify due status from
-  // get_learning_context before calling record_review_result.
-  is_due: z.boolean().optional(),
+  is_due: z.boolean(),
+  review_kind: z.enum(["error_repair", "fsrs_due", "both"]),
+  next_review_at: z.string().nullable(),
 });
 
 const payloadSchema = z.object({
@@ -22,11 +22,6 @@ const payloadSchema = z.object({
   items: z.array(itemSchema).min(1).max(5),
   current_index: z.number().int().min(0).max(4).optional(),
   title: z.string().trim().min(1).max(100).optional(),
-});
-
-const contextSchema = z.object({
-  rolling_review: z.array(z.object({ word: z.string(), next_review_at: z.string().nullable().optional() })).default([]),
-  today_words: z.array(z.object({ word: z.string(), next_review_at: z.string().nullable().optional() })).default([]),
 });
 
 const gradeSchema = z.object({
@@ -67,6 +62,10 @@ export function effectiveReviewDirection(
   samplingAvailable: boolean,
 ): ReviewItem["direction"] {
   return direction === "en_definition" && !samplingAvailable ? "cn_to_en" : direction;
+}
+
+export function shouldAdvanceFsrs(reviewKind: ReviewItem["review_kind"]): boolean {
+  return reviewKind === "fsrs_due" || reviewKind === "both";
 }
 
 function editDistance(left: string, right: string): number {
@@ -148,7 +147,6 @@ export function ReviewWidget(): React.JSX.Element {
   const [feedback, setFeedback] = useState<GradedAnswer | null>(null);
   const [results, setResults] = useState<GradedAnswer[]>([]);
   const [completed, setCompleted] = useState(false);
-  const [dueByWord, setDueByWord] = useState<Map<string, boolean>>(new Map());
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
   const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const answerRef = useRef<HTMLInputElement>(null);
@@ -174,9 +172,7 @@ export function ReviewWidget(): React.JSX.Element {
     setFeedback(null);
     setResults([]);
     setCompleted(false);
-    setDueByWord(new Map());
     setContinueStatus("idle");
-    void loadDueState(effectivePayload);
   }
 
   useEffect(() => subscribeToApp((event) => {
@@ -198,42 +194,9 @@ export function ReviewWidget(): React.JSX.Element {
     setFeedback(null);
     setResults([]);
     setCompleted(false);
-    setDueByWord(new Map());
     setContinueStatus("idle");
     void initializePayload(parsed.data, signature);
   }), []);
-
-  async function loadDueState(nextPayload: Payload): Promise<void> {
-    const previewDue = new Map(nextPayload.items.map((item) => [normalize(item.word), item.is_due === true]));
-    if (window.__WORDLOOP_PREVIEW__) {
-      setDueByWord(previewDue);
-      return;
-    }
-    try {
-      const stored = await callServerTool("get_learning_context", {});
-      if (stored.isError) {
-        setDueByWord(new Map());
-        return;
-      }
-      const parsed = contextSchema.safeParse(stored.structuredContent);
-      if (!parsed.success) {
-        setDueByWord(new Map());
-        return;
-      }
-      const now = Date.now();
-      const entries = [...parsed.data.rolling_review, ...parsed.data.today_words];
-      const due = new Map<string, boolean>();
-      for (const item of nextPayload.items) {
-        const match = entries.find((entry) => normalize(entry.word) === normalize(item.word));
-        const timestamp = match?.next_review_at ? Date.parse(match.next_review_at) : Number.NaN;
-        due.set(normalize(item.word), Number.isFinite(timestamp) && timestamp <= now);
-      }
-      setDueByWord(due);
-    } catch {
-      // Failing closed keeps an active-error repair from accidentally moving FSRS.
-      setDueByWord(new Map());
-    }
-  }
 
   const item = payload?.items[index];
 
@@ -292,8 +255,7 @@ export function ReviewWidget(): React.JSX.Element {
       });
       if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
 
-      const due = dueByWord.get(normalize(item.word)) === true;
-      if (due) {
+      if (shouldAdvanceFsrs(item.review_kind)) {
         const review = await callServerTool("record_review_result", {
           word: item.word,
           rating: grade.is_correct ? grade.rating : "again",
@@ -327,7 +289,7 @@ export function ReviewWidget(): React.JSX.Element {
         error_layer: item.error_layers[0] ?? "meaning",
       });
       if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
-      if (dueByWord.get(normalize(item.word)) === true) {
+      if (shouldAdvanceFsrs(item.review_kind)) {
         const review = await callServerTool("record_review_result", { word: item.word, rating: "again", source: "review" });
         if (review.isError) throw new Error("到期复习结果未能保存，请重试。");
       }

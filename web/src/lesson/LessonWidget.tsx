@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
-import { sendUserMessage, subscribeToApp, updateModelContext } from "../mcpBridge.js";
+import { callServerTool, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 import { z } from "zod";
 
 const exerciseSchema = z.object({
@@ -47,6 +47,11 @@ const payloadSchema = z.object({
   multiline: z.boolean().optional(),
   exercise: exerciseSchema.optional(),
   feedback: feedbackSchema.optional(),
+});
+
+const nextLearningResultSchema = z.object({
+  next_word: z.object({ word: z.string().trim().min(1).max(100) }).nullable(),
+  round_complete: z.boolean(),
 });
 
 type Payload = z.infer<typeof payloadSchema>;
@@ -104,6 +109,27 @@ function feedbackIsCorrect(feedback: Payload["feedback"]): boolean {
 
 function feedbackRevealsAnswer(feedback: Payload["feedback"]): boolean {
   return Boolean(feedback?.reveal_answer || feedback?.reference_answer);
+}
+
+export function buildLessonExerciseMessage(word: string): string {
+  return `开始 ${word} 的 WordLoop 正式练习。\n请按 Teaching Prompt 生成与例句不同语境的练习，并 render_lesson_widget mode=exercise。`;
+}
+
+export function buildLessonSubmissionMessage(input: {
+  word: string;
+  activityType: string;
+  prompt: string;
+  answer: string;
+}): string {
+  return `提交 WordLoop 正式学习答案。\n\n目标词：${input.word}\n练习类型：${input.activityType}\n题目：${input.prompt}\n用户答案：${input.answer.trim()}\n\n请按 Teaching Prompt 批改，调用 record_attempt，然后 render_lesson_widget mode=feedback。`;
+}
+
+export function buildNextLessonMessage(nextWord: string): string {
+  return `WordLoop backend 指定下一个学习词：\n${nextWord}\n\n请只为这个词按 Teaching Prompt 生成并渲染 LessonWidget mode=explain。\n不要自行更换单词。`;
+}
+
+export function buildRoundCompleteMessage(): string {
+  return "WordLoop backend 确认本轮词汇学习完成。\n请进入本轮长难句收尾。";
 }
 
 export function LessonWidget(): React.JSX.Element {
@@ -185,8 +211,7 @@ export function LessonWidget(): React.JSX.Element {
 
   async function requestExercise(): Promise<void> {
     try {
-      await updateModelContext("开始 WordLoop 正式练习。", { word: currentWord, lessonAction: "start_exercise" });
-      await sendUserMessage("开始 WordLoop 正式练习，请直接渲染练习卡片。");
+      await sendUserMessage(buildLessonExerciseMessage(currentWord));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "无法开始练习，请重试。");
     }
@@ -197,13 +222,12 @@ export function LessonWidget(): React.JSX.Element {
     setSubmitStatus("sending");
     setError("");
     try {
-      await updateModelContext("WordLoop 正式学习答案已提交。", {
+      await sendUserMessage(buildLessonSubmissionMessage({
         word: currentWord,
-        activity_type: activityType,
-        exercise_prompt: exercisePrompt,
-        user_answer: answer.trim(),
-      });
-      await sendUserMessage("提交 WordLoop 正式学习答案。");
+        activityType,
+        prompt: exercisePrompt,
+        answer,
+      }));
       setSubmitStatus("sent");
     } catch (caught) {
       setSubmitStatus("error");
@@ -214,8 +238,17 @@ export function LessonWidget(): React.JSX.Element {
   async function nextLesson(): Promise<void> {
     if (!payload) return;
     try {
-      await updateModelContext("WordLoop 当前单词已完成，请进入下一个词。", { lessonAction: "next_word", word: currentWord });
-      await sendUserMessage("开始下一个 WordLoop 单词。");
+      const result = await callServerTool("get_next_learning_word", { current_word: currentWord });
+      if (result.isError) throw new Error("WordLoop 未能确定下一个学习词，请重试。");
+      const parsed = nextLearningResultSchema.safeParse(result.structuredContent);
+      if (!parsed.success) throw new Error("WordLoop 返回的下一词结果无效，请重试。");
+      if (parsed.data.next_word) {
+        await sendUserMessage(buildNextLessonMessage(parsed.data.next_word.word));
+      } else if (parsed.data.round_complete) {
+        await sendUserMessage(buildRoundCompleteMessage());
+      } else {
+        throw new Error("WordLoop 未返回下一词或本轮完成状态，请重试。");
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "无法进入下一个词，请重试。");
     }
