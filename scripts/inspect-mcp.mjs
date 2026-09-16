@@ -39,14 +39,46 @@ function runInspector(args) {
   });
 }
 
+function parseInspectorJson(stdout, label) {
+  try {
+    const parsed = JSON.parse(stdout.trim());
+    return parsed.result ?? parsed;
+  } catch (error) {
+    throw new Error(`${label} did not return JSON: ${error instanceof Error ? error.message : "unknown error"}`);
+  }
+}
+
 try {
   await waitForReady();
   const target = `http://127.0.0.1:${port}/mcp`;
   const strict = await runInspector([target, "--transport", "http", "--method", "tools/list", "--strict", "--format", "json"]);
   const appInfo = await runInspector([target, "--transport", "http", "--method", "tools/list", "--app-info"]);
+  const resourceList = await runInspector([target, "--transport", "http", "--method", "resources/list", "--format", "json"]);
+  const resources = parseInspectorJson(resourceList.stdout, "resources/list");
+  const resourceUris = Array.isArray(resources.resources) ? resources.resources.map((resource) => resource.uri) : [];
+  for (const uri of ["ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
+    if (!resourceUris.includes(uri)) throw new Error(`resources/list is missing ${uri}.`);
+  }
+  const resourceReads = {};
+  let v2Html;
+  for (const uri of ["ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
+    const read = await runInspector([target, "--transport", "http", "--method", "resources/read", "--uri", uri, "--format", "json"]);
+    const result = parseInspectorJson(read.stdout, `resources/read ${uri}`);
+    const text = result.contents?.[0]?.text;
+    if (typeof text !== "string" || !text.includes('data-widget-version="2"') || !text.includes('content="lesson"')) {
+      throw new Error(`resources/read ${uri} did not return the current LessonWidget HTML.`);
+    }
+    resourceReads[uri] = { ok: true, widgetVersion: 2, htmlLength: text.length };
+    if (uri === "ui://wordloop/lesson-v2.html") v2Html = text;
+    else resourceReads.legacyMatchesV2 = text === v2Html;
+  }
+  if (!resourceReads.legacyMatchesV2) throw new Error("Legacy Lesson resource does not match the v2 HTML.");
   process.stdout.write(strict.stdout);
   process.stdout.write("\n");
   process.stdout.write(appInfo.stdout);
+  process.stdout.write("\n");
+  process.stdout.write(`${JSON.stringify({ method: "resources/list", resources: resourceUris })}\n`);
+  process.stdout.write(`${JSON.stringify({ method: "resources/read", resources: resourceReads })}\n`);
 } finally {
   server.kill("SIGTERM");
 }

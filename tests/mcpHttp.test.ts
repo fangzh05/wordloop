@@ -100,10 +100,16 @@ describe("Streamable HTTP server", () => {
     const finishTool = response.tools.find((tool) => tool.name === "finish_study_session");
     expect(finishTool?.inputSchema).toMatchObject({ type: "object" });
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
-    expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson.html");
+    expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson-v2.html");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
     const lessonInput = lessonTool?.inputSchema as { properties?: Record<string, unknown> } | undefined;
     expect(lessonInput?.properties).not.toHaveProperty("navigation");
+    const resources = await client.listResources();
+    const resourceUris = resources.resources.map((resource) => resource.uri);
+    expect(resourceUris).toEqual(expect.arrayContaining([
+      "ui://wordloop/lesson-v2.html",
+      "ui://wordloop/lesson.html",
+    ]));
     const nextLearningTool = response.tools.find((tool) => tool.name === "get_next_learning_word");
     expect(nextLearningTool?.description).toContain('action="next_word"');
     expect(nextLearningTool?.description).toContain('action="round_complete"');

@@ -5,6 +5,9 @@ import {
   buildLessonSubmissionMessage,
   buildRoundCompleteMessage,
   canStartNextLesson,
+  LESSON_WIDGET_LOAD_ERROR,
+  LESSON_WIDGET_VERSION,
+  lessonPayloadSchema,
   LessonWidget,
 } from "../web/src/lesson/LessonWidget.js";
 
@@ -19,6 +22,9 @@ describe("guided lesson widget", () => {
     expect(source).toContain("提交 WordLoop 正式学习答案。");
     expect(source).toContain("reference_answer");
     expect(source).toContain("payload.navigation");
+    expect(source).toContain("LESSON_WIDGET_PAYLOAD_INVALID");
+    expect(source).toContain("widgetLoadError");
+    expect(source).not.toContain("if (!parsed.success) return;");
     expect(source).toContain('buildLessonSessionAdvance("lesson_complete")');
     expect(source).not.toContain('callServerTool("get_next_learning_word"');
     expect(source).not.toContain("resolveNextLessonToolResult");
@@ -50,6 +56,41 @@ describe("guided lesson widget", () => {
     expect(message).toContain("练习类型：sentence");
     expect(message).toContain("题目：Use planet in a new scene.");
     expect(message).toContain("用户答案：My answer");
+  });
+
+  it("accepts future server metadata without dropping a valid feedback card", () => {
+    const parsed = lessonPayloadSchema.safeParse({
+      widget: "lesson",
+      widget_version: LESSON_WIDGET_VERSION,
+      mode: "feedback",
+      phase: "lesson_feedback",
+      current_index: 8,
+      word: "shrink",
+      progress: "9 / 9",
+      navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
+      exercise: {
+        activity_type: "sentence",
+        instruction: "Use the word in a new scene.",
+        prompt: "Describe a shrinking sample.",
+        multiline: false,
+      },
+      feedback: { is_correct: true, user_answer: "The sample shrank.", reveal_answer: false },
+      future_server_field: "x",
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) throw parsed.error;
+    expect(parsed.data.future_server_field).toBe("x");
+  });
+
+  it("turns missing required payload data into a visible compatibility error", () => {
+    const parsed = lessonPayloadSchema.safeParse({
+      widget: "lesson",
+      mode: "feedback",
+      progress: "9 / 9",
+      feedback: { is_correct: false, user_answer: "", reveal_answer: false },
+    });
+    expect(parsed.success).toBe(false);
+    expect(LESSON_WIDGET_LOAD_ERROR).toBe("WordLoop 学习卡版本不兼容，请重新打开学习。");
   });
 
   it("keeps the next lesson request locked while sending or after success", () => {

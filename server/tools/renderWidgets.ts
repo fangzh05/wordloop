@@ -27,6 +27,7 @@ import { normalizeWord } from "../services/wordNormalization.js";
 import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
 import {
   REVIEW_SESSION_MAX,
+  LESSON_WIDGET_VERSION,
   reviewWidgetItemSchema,
   reviewWidgetPayloadSchema,
   type ReviewWidgetItem,
@@ -41,6 +42,11 @@ export const WIDGET_URIS = {
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
   dictation: "ui://wordloop/dictation.html",
+  lesson: "ui://wordloop/lesson-v2.html",
+} as const;
+
+/** Resource aliases kept for conversations that still reference the old URI. */
+export const LEGACY_WIDGET_URIS = {
   lesson: "ui://wordloop/lesson.html",
 } as const;
 
@@ -184,6 +190,10 @@ function widgetPayloadWithState(payload: Record<string, unknown>, state: StudySt
   return { ...payload, widget: state.widget, phase: state.phase, current_index: state.current_index };
 }
 
+function lessonWidgetPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return { ...payload, widget_version: LESSON_WIDGET_VERSION };
+}
+
 function resumablePayload(session: StudySessionRow | null, widget: StudyState["widget"]): Record<string, unknown> {
   const state = session?.state ? normalizeStudyStateForRead(session.state) : null;
   if (!state || state.widget !== widget) {
@@ -213,9 +223,10 @@ async function resumableLessonPayload(session: StudySessionRow | null): Promise<
     resolved.current_index,
     resolved.current_word,
   );
-  const payload = { ...resolved.payload, navigation };
+  const payload = lessonWidgetPayload({ ...resolved.payload, navigation });
   const navigationChanged = JSON.stringify(resolved.payload.navigation) !== JSON.stringify(navigation);
-  if (navigationChanged && resolvedSession) {
+  const versionChanged = resolved.payload.widget_version !== LESSON_WIDGET_VERSION;
+  if ((navigationChanged || versionChanged) && resolvedSession) {
     resolvedSession = await persistStudyState({ ...resolved, payload }, db, userId, resolvedSession);
     resolved = resolvedSession.state ? normalizeStudyStateForRead(resolvedSession.state) : { ...resolved, payload };
   }
@@ -527,7 +538,7 @@ export function registerRenderTools(server: McpServer): void {
     const lessonWords = validated.flow?.lesson_words;
     if (!lessonWords) throw new Error("LESSON_QUEUE_MISSING");
     const navigation = buildLessonNavigation(lessonWords, currentIndex, parsedInput.word);
-    const payload = { widget: "lesson", ...parsedInput, navigation };
+    const payload = lessonWidgetPayload({ widget: "lesson", ...parsedInput, navigation });
     return saveWidgetState({
       date: validated.date,
       knownActive: validated.active,

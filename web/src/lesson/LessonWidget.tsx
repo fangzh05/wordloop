@@ -5,11 +5,16 @@ import { FocusButton } from "../components/FocusButton.js";
 import { callServerTool, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 import { z } from "zod";
 import {
+  LESSON_WIDGET_VERSION,
   advanceStudySessionSchema,
   lessonNavigationSchema,
   lessonSubmissionSchema,
   type AdvanceStudySessionInput,
 } from "../../../shared/toolContracts.js";
+
+export { LESSON_WIDGET_VERSION } from "../../../shared/toolContracts.js";
+
+export const LESSON_WIDGET_LOAD_ERROR = "WordLoop 学习卡版本不兼容，请重新打开学习。";
 
 const exerciseSchema = z.object({
   activity_type: z.string().trim().min(1).max(80),
@@ -34,6 +39,7 @@ const payloadCommon = {
   phase: z.enum(["lesson_explain", "lesson_exercise", "lesson_feedback", "lesson_complete"]).optional(),
   current_index: z.number().int().min(0).optional(),
   word: z.string().trim().min(1).max(100),
+  widget_version: z.literal(LESSON_WIDGET_VERSION).optional(),
   // Old persisted payloads may omit this once; the server fills it on resume.
   navigation: lessonNavigationSchema.optional(),
 };
@@ -50,7 +56,7 @@ const explainPayloadSchema = z.object({
   example_en: z.string().trim().min(1).max(1000),
   note: z.string().trim().min(1).max(1000),
   exercise: exerciseSchema,
-}).strict();
+}).passthrough();
 
 const exercisePayloadSchema = z.object({
   ...payloadCommon,
@@ -60,7 +66,7 @@ const exercisePayloadSchema = z.object({
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
-}).strict();
+}).passthrough();
 
 const feedbackPayloadSchema = z.object({
   ...payloadCommon,
@@ -68,15 +74,15 @@ const feedbackPayloadSchema = z.object({
   progress: z.string().trim().min(1).max(40),
   exercise: exerciseSchema,
   feedback: feedbackSchema,
-}).strict();
+}).passthrough();
 
-const payloadSchema = z.discriminatedUnion("mode", [
+export const lessonPayloadSchema = z.discriminatedUnion("mode", [
   explainPayloadSchema,
   exercisePayloadSchema,
   feedbackPayloadSchema,
 ]);
 
-type Payload = z.infer<typeof payloadSchema>;
+type Payload = z.infer<typeof lessonPayloadSchema>;
 type Mode = "explain" | "exercise" | "feedback";
 type SubmitStatus = "idle" | "sending" | "sent" | "error";
 export type NextLessonStatus = "idle" | "sending" | "sent" | "error";
@@ -152,6 +158,7 @@ export function LessonWidget(): React.JSX.Element {
   const [nextStatus, setNextStatus] = useState<NextLessonStatus>("idle");
   const [error, setError] = useState("");
   const [playing, setPlaying] = useState(false);
+  const [widgetLoadError, setWidgetLoadError] = useState("");
   const signatureRef = useRef("");
   const nextStatusRef = useRef<NextLessonStatus>("idle");
   const answerRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
@@ -165,8 +172,24 @@ export function LessonWidget(): React.JSX.Element {
       const candidate = event.type === "toolinput"
         ? { widget: "lesson", ...event.value }
         : event.value.structuredContent;
-      const parsed = payloadSchema.safeParse(candidate);
-      if (!parsed.success) return;
+      const parsed = lessonPayloadSchema.safeParse(candidate);
+      if (!parsed.success) {
+        // A resume tool input is a control message, not a render payload; the
+        // following tool result is the authoritative payload for that call.
+        if (event.type === "toolinput"
+          && Object.keys(event.value).length === 1
+          && event.value.resume === true) return;
+        if (typeof process === "undefined" || process.env.NODE_ENV !== "production") {
+          console.error(
+            "LESSON_WIDGET_PAYLOAD_INVALID",
+            parsed.error.issues.map(({ code, path }) => ({ code, path })),
+          );
+        }
+        signatureRef.current = "";
+        setPayload(null);
+        setWidgetLoadError(LESSON_WIDGET_LOAD_ERROR);
+        return;
+      }
       const signature = JSON.stringify(parsed.data);
       if (signatureRef.current === signature) return;
       signatureRef.current = signature;
@@ -177,6 +200,7 @@ export function LessonWidget(): React.JSX.Element {
       nextStatusRef.current = "idle";
       setNextStatus("idle");
       setError("");
+      setWidgetLoadError("");
     });
     return unsubscribe;
   }, []);
@@ -280,6 +304,9 @@ export function LessonWidget(): React.JSX.Element {
   }
 
   if (!payload) {
+    if (widgetLoadError) {
+      return <section className="widget-card load-error" role="alert"><span>{widgetLoadError}</span></section>;
+    }
     return <section className="widget-card skeleton" aria-busy="true"><span>正在加载学习内容…</span></section>;
   }
 

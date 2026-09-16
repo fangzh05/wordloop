@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 /** Canonical values shared by the server-side tool schemas and Widgets. */
+export const LESSON_WIDGET_VERSION = 2;
+
 export const DIRECTIONS = ["cn_to_en", "en_definition"] as const;
 export type Direction = (typeof DIRECTIONS)[number];
 export const directionSchema = z.enum(DIRECTIONS);

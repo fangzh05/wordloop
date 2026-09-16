@@ -11,7 +11,7 @@ import { registerGetProgressTool } from "./tools/getProgress.js";
 import { registerImportWordsTool } from "./tools/importWords.js";
 import { registerRecordAttemptTool } from "./tools/recordAttempt.js";
 import { registerRecordPretestResultTool } from "./tools/recordPretestResult.js";
-import { registerRenderTools, WIDGET_URIS } from "./tools/renderWidgets.js";
+import { LEGACY_WIDGET_URIS, registerRenderTools, WIDGET_URIS } from "./tools/renderWidgets.js";
 import { registerSaveSentenceTool } from "./tools/saveSentence.js";
 import { registerRecordReviewResultTool } from "./tools/recordReviewResult.js";
 import { registerRecordReviewSubmissionTool } from "./tools/recordReviewSubmission.js";
@@ -55,8 +55,8 @@ After a successful render_pretest_widget, render_review_widget_v2, render_review
 `;
 
 function registerWidgetResources(server: McpServer, loadWidgetHtml: WidgetHtmlLoader): void {
-  for (const [kind, uri] of Object.entries(WIDGET_URIS) as Array<[WidgetKind, string]>) {
-    registerAppResource(server, `Wordloop ${kind} widget`, uri, {
+  const registerWidgetResource = (name: string, kind: WidgetKind, uri: string): void => {
+    registerAppResource(server, name, uri, {
       description: `Wordloop ${kind} interactive view`,
       mimeType: RESOURCE_MIME_TYPE,
       _meta: {
@@ -73,7 +73,12 @@ function registerWidgetResources(server: McpServer, loadWidgetHtml: WidgetHtmlLo
         _meta: { ui: { prefersBorder: true } },
       }],
     }));
+  };
+
+  for (const [kind, uri] of Object.entries(WIDGET_URIS) as Array<[WidgetKind, string]>) {
+    registerWidgetResource(`Wordloop ${kind} widget`, kind, uri);
   }
+  registerWidgetResource("Wordloop lesson legacy widget", "lesson", LEGACY_WIDGET_URIS.lesson);
 }
 
 export function createWordloopMcpServer(loadWidgetHtml: WidgetHtmlLoader): McpServer {

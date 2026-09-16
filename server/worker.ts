@@ -1,6 +1,7 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { configureRuntimeEnv } from "./db.js";
 import { createWordloopMcpServer, type WidgetKind } from "./mcpCore.js";
+import { LESSON_WIDGET_VERSION } from "../shared/toolContracts.js";
 
 declare const __SITE_HTML__: string;
 declare const __SITE_CSS__: string;
@@ -23,7 +24,8 @@ const widgetCss = typeof __WIDGET_CSS__ === "string" ? __WIDGET_CSS__ : "";
 const migrationSql = typeof __MIGRATION_SQL__ === "string" ? __MIGRATION_SQL__ : "-- Wordloop migration is embedded when the Site is built.\n";
 
 function widgetHtml(kind: WidgetKind): Promise<string> {
-  return Promise.resolve(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="wordloop-widget" content="${kind}"><style>${widgetCss}</style></head><body><div id="root"></div><script>${widgetJs}</script></body></html>`);
+  const versionAttribute = kind === "lesson" ? ` data-widget-version="${LESSON_WIDGET_VERSION}"` : "";
+  return Promise.resolve(`<!doctype html><html${versionAttribute}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="wordloop-widget" content="${kind}"><style>${widgetCss}</style></head><body><div id="root"></div><script>${widgetJs}</script></body></html>`);
 }
 
 function response(body: BodyInit | null, contentType: string, status = 200): Response {
