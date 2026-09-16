@@ -80,10 +80,18 @@ describe("frozen Lesson progression", () => {
 
   it("returns B after A and C after B even when live status would remove A/B", async () => {
     mocks.getActiveStudySession.mockResolvedValue(activeLesson("a", 0));
-    await expect(getNextLearningWord("a")).resolves.toMatchObject({ next_word: { word: "b" }, round_complete: false });
+    await expect(getNextLearningWord("a")).resolves.toMatchObject({
+      action: "next_word",
+      next_word: { word: "b" },
+      round_complete: false,
+    });
 
     mocks.getActiveStudySession.mockResolvedValue(activeLesson("b", 1));
-    await expect(getNextLearningWord("b")).resolves.toMatchObject({ next_word: { word: "c" }, round_complete: false });
+    await expect(getNextLearningWord("b")).resolves.toMatchObject({
+      action: "next_word",
+      next_word: { word: "c" },
+      round_complete: false,
+    });
     expect(mocks.getTodayWords).not.toHaveBeenCalled();
     expect(mocks.getVocabularyItemsByWords).toHaveBeenNthCalledWith(1, ["b"], {}, "user");
     expect(mocks.getVocabularyItemsByWords).toHaveBeenNthCalledWith(2, ["c"], {}, "user");
@@ -91,13 +99,21 @@ describe("frozen Lesson progression", () => {
 
   it("resumes the same frozen queue across a date boundary", async () => {
     mocks.getActiveStudySession.mockResolvedValue(activeLesson("b", 1));
-    await expect(getNextLearningWord("b")).resolves.toEqual({ next_word: item("c"), round_complete: false });
+    await expect(getNextLearningWord("b")).resolves.toEqual({
+      action: "next_word",
+      next_word: item("c"),
+      round_complete: false,
+    });
     expect(mocks.getTodayWords).not.toHaveBeenCalled();
   });
 
   it("returns the legal completion result only for the last frozen word", async () => {
     mocks.getActiveStudySession.mockResolvedValue(activeLesson("d", 3));
-    await expect(getNextLearningWord("d")).resolves.toEqual({ next_word: null, round_complete: true });
+    await expect(getNextLearningWord("d")).resolves.toEqual({
+      action: "round_complete",
+      next_word: null,
+      round_complete: true,
+    });
     expect(mocks.getVocabularyItemsByWords).not.toHaveBeenCalled();
   });
 

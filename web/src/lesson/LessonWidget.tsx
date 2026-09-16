@@ -140,7 +140,7 @@ export function buildNextLessonMessage(nextWord: string): string {
 }
 
 export function buildRoundCompleteMessage(): string {
-  return "WordLoop backend 确认本轮词汇学习完成。\n请进入本轮长难句收尾。";
+  return "WordLoop backend 返回 action=round_complete，确认本轮词汇学习成功完成。next_word=null 是有意的终态，不是错误；不要重试 get_next_learning_word 或补取其他单词。请直接进入本轮长难句收尾。";
 }
 
 export function LessonWidget(): React.JSX.Element {
@@ -237,12 +237,12 @@ export function LessonWidget(): React.JSX.Element {
       if (result.isError) throw new Error("WordLoop 未能确定下一个学习词，请重试。");
       const parsed = nextLearningWordResultSchema.safeParse(result.structuredContent);
       if (!parsed.success) throw new Error("WordLoop 返回的下一词结果无效，请重试。");
-      if (parsed.data.next_word) {
+      if (parsed.data.action === "next_word") {
         await sendUserMessage(buildNextLessonMessage(parsed.data.next_word.word));
-      } else if (parsed.data.round_complete) {
+      } else if (parsed.data.action === "round_complete") {
         await sendUserMessage(buildRoundCompleteMessage());
       } else {
-        throw new Error("WordLoop 未返回下一词或本轮完成状态，请重试。");
+        throw new Error("WordLoop 返回了未知的 Lesson action，请重试。");
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "无法进入下一个词，请重试。");

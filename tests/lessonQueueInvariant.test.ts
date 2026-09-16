@@ -77,19 +77,51 @@ describe("durable Lesson queue invariant", () => {
     expect(lessonWordAt(recovered, 7)).toBe("planet");
   });
 
-  it("accepts the legal null + round_complete result", () => {
-    expect(nextLearningWordResultSchema.parse({ next_word: null, round_complete: true })).toEqual({
+  it("accepts the explicit round_complete result", () => {
+    expect(nextLearningWordResultSchema.parse({
+      action: "round_complete",
+      next_word: null,
+      round_complete: true,
+    })).toEqual({
+      action: "round_complete",
       next_word: null,
       round_complete: true,
     });
   });
 
-  it("rejects both illegal output combinations with the invariant code", () => {
-    expect(nextLearningWordResultSchema.safeParse({ next_word: null, round_complete: false }).success).toBe(false);
-    expect(nextLearningWordResultSchema.safeParse({ next_word: { word: "planet" }, round_complete: true }).success).toBe(false);
-    expect(() => parseNextLearningWordResult({ next_word: null, round_complete: false }))
+  it("rejects illegal action combinations with the invariant code", () => {
+    expect(nextLearningWordResultSchema.safeParse({
+      action: "next_word",
+      next_word: null,
+      round_complete: false,
+    }).success).toBe(false);
+    expect(nextLearningWordResultSchema.safeParse({
+      action: "round_complete",
+      next_word: { word: "planet" },
+      round_complete: true,
+    }).success).toBe(false);
+    expect(nextLearningWordResultSchema.safeParse({
+      action: "round_complete",
+      next_word: null,
+      round_complete: false,
+    }).success).toBe(false);
+    expect(() => parseNextLearningWordResult({
+      action: "next_word",
+      next_word: null,
+      round_complete: false,
+    }))
       .toThrow("NEXT_LEARNING_WORD_INVARIANT");
-    expect(() => parseNextLearningWordResult({ next_word: { word: "planet" }, round_complete: true }))
+    expect(() => parseNextLearningWordResult({
+      action: "round_complete",
+      next_word: { word: "planet" },
+      round_complete: true,
+    }))
+      .toThrow("NEXT_LEARNING_WORD_INVARIANT");
+    expect(() => parseNextLearningWordResult({
+      action: "round_complete",
+      next_word: null,
+      round_complete: false,
+    }))
       .toThrow("NEXT_LEARNING_WORD_INVARIANT");
   });
 

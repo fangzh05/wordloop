@@ -286,13 +286,21 @@ export function findFirstLearningWord(todayWords: VocabularyItem[]): VocabularyI
   return todayWords.find((word) => !word.mastered && learningStatuses.has(word.status)) ?? null;
 }
 
+function nextLearningWordResult(nextWord: VocabularyItem | null): NextLearningWordResult {
+  return parseNextLearningWordResult({
+    action: nextWord ? "next_word" : "round_complete",
+    next_word: nextWord,
+    round_complete: nextWord === null,
+  });
+}
+
 export function findNextLearningWord(todayWords: VocabularyItem[], currentWord: string): NextLearningWordResult {
   const currentIndex = todayWords.findIndex((word) => normalizeWord(word.word) === normalizeWord(currentWord));
   if (currentIndex < 0) throw new Error("LESSON_CURSOR_MISMATCH");
   const nextWord = todayWords
     .slice(currentIndex + 1)
     .find((word) => !word.mastered && learningStatuses.has(word.status)) ?? null;
-  return parseNextLearningWordResult({ next_word: nextWord, round_complete: nextWord === null });
+  return nextLearningWordResult(nextWord);
 }
 
 async function getNextFrozenLessonWord(
@@ -311,11 +319,11 @@ async function getNextFrozenLessonWord(
   }
   const nextIndex = nextLessonWordIndex(lessonWords, currentWord, state.current_index);
   const nextWord = lessonWordAt(lessonWords, nextIndex);
-  if (!nextWord) return parseNextLearningWordResult({ next_word: null, round_complete: true });
+  if (!nextWord) return nextLearningWordResult(null);
 
   const [lexicalItem] = await getVocabularyItemsByWords([nextWord], db, userId);
   if (!lexicalItem) throw new Error("LESSON_WORD_NOT_FOUND");
-  return parseNextLearningWordResult({ next_word: lexicalItem, round_complete: false });
+  return nextLearningWordResult(lexicalItem);
 }
 
 export async function getNextLearningWord(currentWord: string): Promise<NextLearningWordResult> {

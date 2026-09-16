@@ -164,27 +164,45 @@ export const getNextLearningWordSchema = z.object({
 export type GetNextLearningWordInput = z.output<typeof getNextLearningWordSchema>;
 
 /**
- * Backend-owned Lesson progression result. A completed frozen queue is a
- * valid result, so `next_word: null` is only legal together with
- * `round_complete: true`.
+ * Backend-owned Lesson progression result. `action` is authoritative so a
+ * completed frozen queue is self-describing to both Widgets and the model.
  */
-export const nextLearningWordResultSchema = z.object({
-  next_word: z.object({
-    word: z.string().trim().min(1).max(100),
-  }).passthrough().nullable(),
-  round_complete: z.boolean(),
-}).superRefine((value, context) => {
-  const valid = value.next_word === null
-    ? value.round_complete
-    : !value.round_complete;
-  if (!valid) {
-    context.addIssue({
-      code: "custom",
-      message: "NEXT_LEARNING_WORD_INVARIANT",
-      path: ["round_complete"],
-    });
-  }
+const nextLearningWordItemSchema = z.object({
+  word: z.string().trim().min(1).max(100),
+}).passthrough();
+
+const nextLearningWordOutputItemSchema = z.object({
+  word: z.string().trim().min(1).max(100),
 });
+
+const nextLearningWordNextSchema = z.object({
+  action: z.literal("next_word"),
+  next_word: nextLearningWordItemSchema,
+  round_complete: z.literal(false),
+});
+
+const nextLearningWordCompleteSchema = z.object({
+  action: z.literal("round_complete"),
+  next_word: z.null(),
+  round_complete: z.literal(true),
+});
+
+export const nextLearningWordResultSchema = z.discriminatedUnion("action", [
+  nextLearningWordNextSchema,
+  nextLearningWordCompleteSchema,
+]);
+
+/**
+ * MCP's registerTool outputSchema API exposes an object schema. The
+ * discriminated union above remains the authoritative runtime validator;
+ * this object schema publishes all stable fields to tools/list while the
+ * server handler returns only values accepted by the union.
+ */
+export const nextLearningWordOutputSchema = z.object({
+  action: z.enum(["next_word", "round_complete"]),
+  next_word: nextLearningWordOutputItemSchema.nullable(),
+  round_complete: z.boolean(),
+}).strict();
 export type NextLearningWordResult = z.output<typeof nextLearningWordResultSchema>;
 
 export function parseNextLearningWordResult(value: unknown): NextLearningWordResult {

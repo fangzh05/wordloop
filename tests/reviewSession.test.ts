@@ -70,7 +70,11 @@ describe("single Review session gate", () => {
       ],
     });
     expect(queue.map((item) => item.word)).toEqual(["recur", "old-card", "today-card"]);
-    expect(findNextLearningWord(queue, "recur")).toMatchObject({ next_word: { word: "old-card" }, round_complete: false });
+    expect(findNextLearningWord(queue, "recur")).toMatchObject({
+      action: "next_word",
+      next_word: { word: "old-card" },
+      round_complete: false,
+    });
   });
 
   it("advances one immutable snapshot cursor and records failed cards once for re-learning", () => {

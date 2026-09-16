@@ -100,6 +100,28 @@ describe("Streamable HTTP server", () => {
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
     expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson.html");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
+    const nextLearningTool = response.tools.find((tool) => tool.name === "get_next_learning_word");
+    expect(nextLearningTool?.description).toContain('action="next_word"');
+    expect(nextLearningTool?.description).toContain('action="round_complete"');
+    expect(nextLearningTool?.description).toContain("this is SUCCESS, not an error");
+    const nextLearningOutput = nextLearningTool?.outputSchema as {
+      type?: string;
+      properties?: Record<string, { type?: string; enum?: string[]; anyOf?: Array<{ type?: string }> }>;
+      required?: string[];
+    } | undefined;
+    expect(nextLearningOutput?.type).toBe("object");
+    expect(nextLearningOutput?.properties?.action).toEqual({
+      type: "string",
+      enum: ["next_word", "round_complete"],
+    });
+    expect(nextLearningOutput?.properties?.next_word?.anyOf).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "object" }),
+      expect.objectContaining({ type: "null" }),
+    ]));
+    expect(nextLearningOutput?.properties?.round_complete).toEqual({ type: "boolean" });
+    expect(nextLearningOutput?.required ?? []).toEqual(expect.arrayContaining([
+      "action", "next_word", "round_complete",
+    ]));
     const invalidLesson = await client.callTool({
       name: "render_lesson_widget",
       arguments: { mode: "exercise", word: "plantation", activity_type: "sentence", instruction: "Use it.", multiline: false },

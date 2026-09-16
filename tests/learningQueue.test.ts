@@ -30,10 +30,12 @@ describe("deterministic daily learning queue", () => {
 
   it("returns the first unfinished word after the current queue position", () => {
     expect(findNextLearningWord(todayWords, "recur")).toMatchObject({
+      action: "next_word",
       next_word: { word: "planet" },
       round_complete: false,
     });
     expect(findNextLearningWord(todayWords, "planet")).toMatchObject({
+      action: "next_word",
       next_word: { word: "navigation" },
       round_complete: false,
     });
@@ -46,11 +48,19 @@ describe("deterministic daily learning queue", () => {
       item("navigation", "new", true),
       item("signal", "uncertain"),
     ];
-    expect(findNextLearningWord(words, "recur")).toMatchObject({ next_word: { word: "signal" }, round_complete: false });
+    expect(findNextLearningWord(words, "recur")).toMatchObject({
+      action: "next_word",
+      next_word: { word: "signal" },
+      round_complete: false,
+    });
   });
 
   it("reports the end of the queue instead of selecting a replacement", () => {
-    expect(findNextLearningWord(todayWords, "navigation")).toEqual({ next_word: null, round_complete: true });
+    expect(findNextLearningWord(todayWords, "navigation")).toEqual({
+      action: "round_complete",
+      next_word: null,
+      round_complete: true,
+    });
   });
 
   it("keeps the canonical queue order when finding the first lesson word", () => {
@@ -63,7 +73,11 @@ describe("deterministic daily learning queue", () => {
 
   it("can resume a yesterday queue after today's queue no longer contains the cursor", () => {
     const yesterday = [item("A", "known"), item("B", "unknown"), item("C", "new")];
-    expect(findNextLearningWord(yesterday, "B")).toMatchObject({ next_word: { word: "C" }, round_complete: false });
+    expect(findNextLearningWord(yesterday, "B")).toMatchObject({
+      action: "next_word",
+      next_word: { word: "C" },
+      round_complete: false,
+    });
   });
 
   it("resolves a matching active lesson cursor to its saved queue date", async () => {
