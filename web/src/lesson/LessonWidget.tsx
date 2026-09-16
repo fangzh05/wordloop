@@ -14,7 +14,8 @@ import {
 
 export { LESSON_WIDGET_VERSION } from "../../../shared/toolContracts.js";
 
-export const LESSON_WIDGET_LOAD_ERROR = "WordLoop 学习卡版本不兼容，请重新打开学习。";
+export const LESSON_WIDGET_LOAD_ERROR = "WordLoop 学习卡数据不完整，请重新进入学习。";
+export const LESSON_WIDGET_REFRESH_ERROR = "WordLoop 未能刷新学习卡，请重试。";
 
 const exerciseSchema = z.object({
   activity_type: z.string().trim().min(1).max(80),
@@ -82,10 +83,48 @@ export const lessonPayloadSchema = z.discriminatedUnion("mode", [
   feedbackPayloadSchema,
 ]);
 
-type Payload = z.infer<typeof lessonPayloadSchema>;
+export type LessonPayload = z.infer<typeof lessonPayloadSchema>;
+type Payload = LessonPayload;
 type Mode = "explain" | "exercise" | "feedback";
 type SubmitStatus = "idle" | "sending" | "sent" | "error";
 export type NextLessonStatus = "idle" | "sending" | "sent" | "error";
+
+export function isLessonRenderCandidate(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const mode = (value as { mode?: unknown }).mode;
+  return mode === "explain" || mode === "exercise" || mode === "feedback";
+}
+
+type LessonAppEvent =
+  | { type: "toolinput"; value: Record<string, unknown> }
+  | { type: "toolresult"; value: { structuredContent?: unknown } };
+
+export type LessonAppEventRoute =
+  | { kind: "ignore" }
+  | { kind: "invalid"; blocking: boolean; issues: z.ZodIssue[] }
+  | { kind: "render"; payload: LessonPayload; signature: string; duplicate: boolean };
+
+export function routeLessonAppEvent(
+  event: LessonAppEvent,
+  hasLastGoodPayload: boolean,
+  lastSignature = "",
+): LessonAppEventRoute {
+  let candidate: unknown;
+  if (event.type === "toolinput") {
+    if (event.value.resume === true || !isLessonRenderCandidate(event.value)) return { kind: "ignore" };
+    candidate = { widget: "lesson", ...event.value };
+  } else {
+    candidate = event.value.structuredContent;
+    if (!isLessonRenderCandidate(candidate)) return { kind: "ignore" };
+  }
+
+  const parsed = lessonPayloadSchema.safeParse(candidate);
+  if (!parsed.success) {
+    return { kind: "invalid", blocking: !hasLastGoodPayload, issues: parsed.error.issues };
+  }
+  const signature = JSON.stringify(parsed.data);
+  return { kind: "render", payload: parsed.data, signature, duplicate: signature === lastSignature };
+}
 
 type ExercisePayload = z.infer<typeof exerciseSchema>;
 type FeedbackPayload = z.infer<typeof feedbackSchema>;
@@ -160,6 +199,7 @@ export function LessonWidget(): React.JSX.Element {
   const [playing, setPlaying] = useState(false);
   const [widgetLoadError, setWidgetLoadError] = useState("");
   const signatureRef = useRef("");
+  const lastGoodPayloadRef = useRef<Payload | null>(null);
   const nextStatusRef = useRef<NextLessonStatus>("idle");
   const answerRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
   const speechAvailable = typeof window !== "undefined"
@@ -169,31 +209,23 @@ export function LessonWidget(): React.JSX.Element {
   useEffect(() => {
     const unsubscribe = subscribeToApp((event) => {
       if (event.type !== "toolinput" && event.type !== "toolresult") return;
-      const candidate = event.type === "toolinput"
-        ? { widget: "lesson", ...event.value }
-        : event.value.structuredContent;
-      const parsed = lessonPayloadSchema.safeParse(candidate);
-      if (!parsed.success) {
-        // A resume tool input is a control message, not a render payload; the
-        // following tool result is the authoritative payload for that call.
-        if (event.type === "toolinput"
-          && Object.keys(event.value).length === 1
-          && event.value.resume === true) return;
+      const routed = routeLessonAppEvent(event, lastGoodPayloadRef.current !== null, signatureRef.current);
+      if (routed.kind === "ignore") return;
+      if (routed.kind === "invalid") {
         if (typeof process === "undefined" || process.env.NODE_ENV !== "production") {
           console.error(
             "LESSON_WIDGET_PAYLOAD_INVALID",
-            parsed.error.issues.map(({ code, path }) => ({ code, path })),
+            routed.issues.map(({ code, path }) => ({ code, path })),
           );
         }
-        signatureRef.current = "";
-        setPayload(null);
-        setWidgetLoadError(LESSON_WIDGET_LOAD_ERROR);
+        if (routed.blocking) setWidgetLoadError(LESSON_WIDGET_LOAD_ERROR);
+        else setError(LESSON_WIDGET_REFRESH_ERROR);
         return;
       }
-      const signature = JSON.stringify(parsed.data);
-      if (signatureRef.current === signature) return;
-      signatureRef.current = signature;
-      setPayload(parsed.data);
+      if (routed.duplicate) return;
+      signatureRef.current = routed.signature;
+      lastGoodPayloadRef.current = routed.payload;
+      setPayload(routed.payload);
       setLocalMode(null);
       setAnswer("");
       setSubmitStatus("idle");

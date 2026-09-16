@@ -6,8 +6,11 @@ import {
   buildRoundCompleteMessage,
   canStartNextLesson,
   LESSON_WIDGET_LOAD_ERROR,
+  LESSON_WIDGET_REFRESH_ERROR,
   LESSON_WIDGET_VERSION,
+  isLessonRenderCandidate,
   lessonPayloadSchema,
+  routeLessonAppEvent,
   LessonWidget,
 } from "../web/src/lesson/LessonWidget.js";
 
@@ -24,7 +27,6 @@ describe("guided lesson widget", () => {
     expect(source).toContain("payload.navigation");
     expect(source).toContain("LESSON_WIDGET_PAYLOAD_INVALID");
     expect(source).toContain("widgetLoadError");
-    expect(source).not.toContain("if (!parsed.success) return;");
     expect(source).toContain('buildLessonSessionAdvance("lesson_complete")');
     expect(source).not.toContain('callServerTool("get_next_learning_word"');
     expect(source).not.toContain("resolveNextLessonToolResult");
@@ -48,6 +50,100 @@ describe("guided lesson widget", () => {
   it("renders a loading card before the host sends lesson data", () => {
     const markup = renderToStaticMarkup(<LessonWidget />);
     expect(markup).toContain("正在加载学习内容");
+  });
+
+  it("classifies only mode-bearing objects as Lesson render candidates", () => {
+    expect(isLessonRenderCandidate({ mode: "feedback" })).toBe(true);
+    expect(isLessonRenderCandidate({ mode: "explain" })).toBe(true);
+    expect(isLessonRenderCandidate({ mode: "exercise" })).toBe(true);
+    expect(isLessonRenderCandidate({ event: "lesson_retry" })).toBe(false);
+    expect(isLessonRenderCandidate({ active: true, widget: "lesson", phase: "lesson_exercise" })).toBe(false);
+    expect(isLessonRenderCandidate({ resume: true })).toBe(false);
+    expect(isLessonRenderCandidate(null)).toBe(false);
+  });
+
+  it("keeps the last-good Lesson payload through internal advance events", () => {
+    const explain = {
+      widget: "lesson",
+      mode: "explain" as const,
+      phase: "lesson_explain" as const,
+      word: "shrink",
+      ipa: "/ʃrɪŋk/",
+      part_of_speech: "v.",
+      meaning_zh: "收缩；缩小",
+      collocations: [],
+      derivations: [],
+      example_en: "The sample began to shrink.",
+      note: "Use this verb for becoming smaller.",
+      exercise: { activity_type: "sentence", instruction: "Use shrink.", prompt: "Describe a sample.", multiline: false },
+    };
+    const first = routeLessonAppEvent({ type: "toolresult", value: { structuredContent: explain } }, false);
+    expect(first.kind).toBe("render");
+    if (first.kind !== "render") throw new Error("expected a valid Lesson render");
+
+    const startInput = routeLessonAppEvent({ type: "toolinput", value: { event: "lesson_start_exercise" } }, true, first.signature);
+    const startResult = routeLessonAppEvent({
+      type: "toolresult",
+      value: { structuredContent: { active: true, widget: "lesson", phase: "lesson_exercise", current_word: "shrink", current_index: 8 } },
+    }, true, first.signature);
+
+    expect(startInput).toEqual({ kind: "ignore" });
+    expect(startResult).toEqual({ kind: "ignore" });
+    expect(first.payload.word).toBe("shrink");
+    expect(LESSON_WIDGET_REFRESH_ERROR).toBe("WordLoop 未能刷新学习卡，请重试。");
+  });
+
+  it("keeps feedback and round completion events isolated from the card", () => {
+    const feedback = {
+      widget: "lesson",
+      mode: "feedback" as const,
+      phase: "lesson_feedback" as const,
+      current_index: 8,
+      word: "shrink",
+      progress: "9 / 9",
+      navigation: { action: "round_complete" as const, next_word: null, next_index: null, total_count: 9 },
+      exercise: { activity_type: "sentence", instruction: "Use shrink.", prompt: "Describe a sample.", multiline: false },
+      feedback: { is_correct: true, user_answer: "The sample shrank.", reveal_answer: false },
+    };
+    const rendered = routeLessonAppEvent({ type: "toolresult", value: { structuredContent: feedback } }, false);
+    expect(rendered.kind).toBe("render");
+    if (rendered.kind !== "render") throw new Error("expected a valid feedback render");
+
+    const retryInput = routeLessonAppEvent({ type: "toolinput", value: { event: "lesson_retry" } }, true, rendered.signature);
+    const retryResult = routeLessonAppEvent({
+      type: "toolresult",
+      value: { structuredContent: { active: true, widget: "lesson", phase: "lesson_exercise", current_word: "shrink", current_index: 8 } },
+    }, true, rendered.signature);
+    const lessonCompleteInput = routeLessonAppEvent({ type: "toolinput", value: { event: "lesson_complete" } }, true, rendered.signature);
+    const lessonCompleteResult = routeLessonAppEvent({
+      type: "toolresult",
+      value: { structuredContent: { active: true, widget: "lesson", phase: "lesson_complete", current_word: "shrink", current_index: 8 } },
+    }, true, rendered.signature);
+
+    expect(retryInput).toEqual({ kind: "ignore" });
+    expect(retryResult).toEqual({ kind: "ignore" });
+    expect(lessonCompleteInput).toEqual({ kind: "ignore" });
+    expect(lessonCompleteResult).toEqual({ kind: "ignore" });
+    expect(rendered.payload).toMatchObject({ word: "shrink", current_index: 8, navigation: { action: "round_complete" } });
+  });
+
+  it("reports malformed render candidates without erasing a last-good payload", () => {
+    const malformed = routeLessonAppEvent({
+      type: "toolresult",
+      value: { structuredContent: { mode: "feedback", widget: "lesson", word: "shrink", progress: "9 / 9" } },
+    }, true);
+    expect(malformed.kind).toBe("invalid");
+    if (malformed.kind !== "invalid") throw new Error("expected an invalid render candidate");
+    expect(malformed.blocking).toBe(false);
+
+    const initialFailure = routeLessonAppEvent({
+      type: "toolresult",
+      value: { structuredContent: { mode: "feedback", widget: "lesson", word: "shrink", progress: "9 / 9" } },
+    }, false);
+    expect(initialFailure.kind).toBe("invalid");
+    if (initialFailure.kind !== "invalid") throw new Error("expected an invalid initial render candidate");
+    expect(initialFailure.blocking).toBe(true);
+    expect(LESSON_WIDGET_LOAD_ERROR).toBe("WordLoop 学习卡数据不完整，请重新进入学习。");
   });
 
   it("sends the minimum exercise data directly in the follow-up message", () => {
@@ -90,7 +186,7 @@ describe("guided lesson widget", () => {
       feedback: { is_correct: false, user_answer: "", reveal_answer: false },
     });
     expect(parsed.success).toBe(false);
-    expect(LESSON_WIDGET_LOAD_ERROR).toBe("WordLoop 学习卡版本不兼容，请重新打开学习。");
+    expect(LESSON_WIDGET_LOAD_ERROR).toBe("WordLoop 学习卡数据不完整，请重新进入学习。");
   });
 
   it("keeps the next lesson request locked while sending or after success", () => {

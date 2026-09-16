@@ -42,11 +42,12 @@ export const WIDGET_URIS = {
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
   dictation: "ui://wordloop/dictation.html",
-  lesson: "ui://wordloop/lesson-v2.html",
+  lesson: "ui://wordloop/lesson-v3.html",
 } as const;
 
-/** Resource aliases kept for conversations that still reference the old URI. */
+/** Resource aliases kept for conversations that still reference old Lesson URIs. */
 export const LEGACY_WIDGET_URIS = {
+  lessonV2: "ui://wordloop/lesson-v2.html",
   lesson: "ui://wordloop/lesson.html",
 } as const;
 

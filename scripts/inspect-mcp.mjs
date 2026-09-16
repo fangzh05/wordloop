@@ -56,23 +56,23 @@ try {
   const resourceList = await runInspector([target, "--transport", "http", "--method", "resources/list", "--format", "json"]);
   const resources = parseInspectorJson(resourceList.stdout, "resources/list");
   const resourceUris = Array.isArray(resources.resources) ? resources.resources.map((resource) => resource.uri) : [];
-  for (const uri of ["ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
+  for (const uri of ["ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
     if (!resourceUris.includes(uri)) throw new Error(`resources/list is missing ${uri}.`);
   }
   const resourceReads = {};
-  let v2Html;
-  for (const uri of ["ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
+  let latestHtml;
+  for (const uri of ["ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
     const read = await runInspector([target, "--transport", "http", "--method", "resources/read", "--uri", uri, "--format", "json"]);
     const result = parseInspectorJson(read.stdout, `resources/read ${uri}`);
     const text = result.contents?.[0]?.text;
-    if (typeof text !== "string" || !text.includes('data-widget-version="2"') || !text.includes('content="lesson"')) {
+    if (typeof text !== "string" || !text.includes('data-widget-version="3"') || !text.includes('content="lesson"')) {
       throw new Error(`resources/read ${uri} did not return the current LessonWidget HTML.`);
     }
-    resourceReads[uri] = { ok: true, widgetVersion: 2, htmlLength: text.length };
-    if (uri === "ui://wordloop/lesson-v2.html") v2Html = text;
-    else resourceReads.legacyMatchesV2 = text === v2Html;
+    resourceReads[uri] = { ok: true, widgetVersion: 3, htmlLength: text.length };
+    if (uri === "ui://wordloop/lesson-v3.html") latestHtml = text;
+    else resourceReads[uri === "ui://wordloop/lesson-v2.html" ? "v2MatchesV3" : "legacyMatchesV3"] = text === latestHtml;
   }
-  if (!resourceReads.legacyMatchesV2) throw new Error("Legacy Lesson resource does not match the v2 HTML.");
+  if (!resourceReads.v2MatchesV3 || !resourceReads.legacyMatchesV3) throw new Error("Lesson resource aliases do not match the v3 HTML.");
   process.stdout.write(strict.stdout);
   process.stdout.write("\n");
   process.stdout.write(appInfo.stdout);

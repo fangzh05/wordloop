@@ -234,7 +234,7 @@ npm start
 | `render_learning_dashboard` | `ui://wordloop/dashboard.html` |
 | `render_pronunciation_cards` | `ui://wordloop/pronunciation.html` |
 | `render_dictation_widget` | `ui://wordloop/dictation.html` |
-| `render_lesson_widget` | `ui://wordloop/lesson.html` |
+| `render_lesson_widget` | `ui://wordloop/lesson-v3.html` (aliases: `lesson-v2.html`, `lesson.html`) |
 
 The pretest, Lesson, and Dictation render tools persist their complete displayed payload before returning it and accept `resume: true`. Closing Chat or destroying a Widget therefore restores the exact saved card, phase, index, and retry cursor from the existing `study_sessions.state` JSONB. Review intentionally remains a live backend queue and is never copied into the session state.
 

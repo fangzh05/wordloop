@@ -388,7 +388,7 @@ describe("Review render tool schema compatibility", () => {
       const rendered = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: feedbackInput }));
       expect(rendered).toMatchObject({
         widget: "lesson",
-        widget_version: 2,
+        widget_version: 3,
         phase: "lesson_feedback",
         current_index: 8,
         navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
@@ -414,7 +414,7 @@ describe("Review render tool schema compatibility", () => {
       const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
       expect(resumed).toMatchObject({
         widget: "lesson",
-        widget_version: 2,
+        widget_version: 3,
         phase: "lesson_feedback",
         navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
       });
@@ -432,7 +432,7 @@ describe("Review render tool schema compatibility", () => {
       const completed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
       expect(completed).toMatchObject({
         widget: "lesson",
-        widget_version: 2,
+        widget_version: 3,
         phase: "lesson_complete",
         navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
       });
