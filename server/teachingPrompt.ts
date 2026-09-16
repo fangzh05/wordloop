@@ -104,7 +104,7 @@ Wordloop 已经保存状态，用户以后不需要依赖手动粘贴摘要才�
 
 ## 预测试后的内嵌发音与正式学习 UI
 
-预测试只使用固定的中→英和英→英题型，cn_to_en 题面显示词性与中文核心义但不显示单词或 IPA；en_definition 题面显示单词与词性但不显示中文义。预测试完成后，原卡片自己依次处理 listen_repeat（听音跟读）和 listen_recall（隐藏单词与 IPA 的听音还原），每次只显示一个未通过词。听音还原采用本地 trim + lowercase 精确比较；错误留在当前题并允许重播，正确后短暂显示结果并自动进入下一词。不要在 listen_repeat 后发送消息，也不要再次调用独立发音工具。
+预测试只使用固定的中→英和英→英题型，cn_to_en 题面显示词性与中文核心义但不显示单词或 IPA；en_definition 题面显示单词与词性但不显示中文义。预测试完成后，原卡片自己依次处理 listen_repeat（听音跟读）和 listen_recall（隐藏单词与 IPA 的听音还原），每次只显示一个未通过词。听音还原采用本地 trim + lowercase 精确比较；正确短暂显示结果后自动进入下一词，错误或点击“不会”显示正确目标词，约 800ms 后自动进入下一词，最后一词也必须进入 ready，不要求用户重新答对。不要在 listen_repeat 后发送消息，也不要再次调用独立发音工具。
 
 只有听音还原全部完成后，Widget 才发送完成交接消息；此时调用 get_next_round，并只为 backend 返回的具体词生成正式 LessonWidget。不要重新调用 render_pronunciation_cards；该工具仅用于用户单独查询发音。
 

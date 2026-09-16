@@ -49,9 +49,13 @@ export type PretestItem = Payload["items"][number];
 export type PretestResult = z.infer<typeof pretestResultSchema>;
 type AnswerStatus = "idle" | "sending" | "sent" | "error";
 type PronunciationStage = "result" | "listen_repeat" | "listen_recall" | "ready";
-type RecallStatus = "idle" | "correct" | "wrong";
+export type PronunciationRecallOutcome = "correct" | "wrong";
+type RecallStatus = "idle" | PronunciationRecallOutcome;
 type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
 type PretestSessionEvent = "pretest_question" | "pretest_result" | "listen_repeat" | "listen_recall";
+
+export const PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS = 600;
+export const PRETEST_RECALL_ADVANCE_DELAY_MS = 800;
 
 export function selectPronunciationWords(
   items: PretestItem[],
@@ -66,6 +70,16 @@ export function selectPronunciationWords(
 
 export function isExactPronunciationRecall(answer: string, target: string): boolean {
   return normalizePretestWord(answer) === normalizePretestWord(target);
+}
+
+export function classifyPronunciationRecall(
+  answer: string,
+  target: string,
+  markedUnknown = false,
+): PronunciationRecallOutcome {
+  return !markedUnknown && answer.trim().length > 0 && isExactPronunciationRecall(answer, target)
+    ? "correct"
+    : "wrong";
 }
 
 const gradeSchema = z.object({
@@ -149,16 +163,46 @@ function stageForPhase(phase: Payload["phase"]): { finished: boolean; stage: Pro
   return { finished: false, stage: "result" };
 }
 
-function pronunciationIndexForSourceIndex(
+export function sourceIndexForPronunciationWord(items: PretestItem[], word: string): number {
+  return items.findIndex((item) => normalizePretestWord(item.word) === normalizePretestWord(word));
+}
+
+export function pronunciationIndexForSourceIndex(
   items: PretestItem[],
   results: Array<{ word: string; result: PretestResult }>,
   sourceIndex: number,
 ): number {
   const target = items[sourceIndex];
-  if (!target) return 0;
+  if (!target) return -1;
   return selectPronunciationWords(items, results).findIndex(
     (item) => normalizePretestWord(item.word) === normalizePretestWord(target.word),
   );
+}
+
+export type PronunciationRecallAdvance = {
+  stage: "listen_repeat" | "ready";
+  pronunciationIndex: number;
+  sourceIndex: number;
+};
+
+export function buildPronunciationRecallAdvance(
+  items: PretestItem[],
+  results: Array<{ word: string; result: PretestResult }>,
+  pronunciationIndex: number,
+): PronunciationRecallAdvance {
+  const pronunciationWords = selectPronunciationWords(items, results);
+  if (!pronunciationWords[pronunciationIndex]) {
+    throw new Error("预测试发音阶段状态无效，请重试。");
+  }
+  const nextPronunciationIndex = pronunciationIndex + 1;
+  if (nextPronunciationIndex >= pronunciationWords.length) {
+    return { stage: "ready", pronunciationIndex, sourceIndex: items.length };
+  }
+  const next = pronunciationWords[nextPronunciationIndex];
+  if (!next) throw new Error("预测试发音阶段状态无效，请重试。");
+  const sourceIndex = sourceIndexForPronunciationWord(items, next.word);
+  if (sourceIndex < 0) throw new Error("预测试发音阶段状态无效，请重试。");
+  return { stage: "listen_repeat", pronunciationIndex: nextPronunciationIndex, sourceIndex };
 }
 
 type SamplingFunction = (prompt: string, systemPrompt: string) => Promise<string>;
@@ -255,12 +299,14 @@ export function PretestWidget(): React.JSX.Element {
   const [pronunciationIndex, setPronunciationIndex] = useState(0);
   const [recallAnswer, setRecallAnswer] = useState("");
   const [recallStatus, setRecallStatus] = useState<RecallStatus>("idle");
+  const [recallAdvancing, setRecallAdvancing] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
   const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const answerRef = useRef<HTMLInputElement>(null);
   const recallInputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
+  const recallAdvancingRef = useRef(false);
   const interactionStartedRef = useRef(false);
   const payloadSignatureRef = useRef("");
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -307,6 +353,8 @@ export function PretestWidget(): React.JSX.Element {
     setPronunciationIndex(0);
     setRecallAnswer("");
     setRecallStatus("idle");
+    recallAdvancingRef.current = false;
+    setRecallAdvancing(false);
     setContinueStatus("idle");
     setStatus("idle");
     interactionStartedRef.current = false;
@@ -339,6 +387,8 @@ export function PretestWidget(): React.JSX.Element {
       setPronunciationIndex(0);
       setRecallAnswer("");
       setRecallStatus("idle");
+      recallAdvancingRef.current = false;
+      setRecallAdvancing(false);
       setStatus("idle");
       setContinueStatus("idle");
       interactionStartedRef.current = false;
@@ -524,9 +574,7 @@ export function PretestWidget(): React.JSX.Element {
       await continueLearning();
       return;
     }
-    const sourceIndex = payload.items.findIndex(
-      (item) => normalizePretestWord(item.word) === normalizePretestWord(pronunciationWords[0]?.word ?? ""),
-    );
+    const sourceIndex = sourceIndexForPronunciationWord(payload.items, pronunciationWords[0]?.word ?? "");
     if (sourceIndex < 0) return;
     setError("");
     try {
@@ -545,7 +593,7 @@ export function PretestWidget(): React.JSX.Element {
     const pronunciationWords = selectPronunciationWords(payload.items, results);
     const current = pronunciationWords[pronunciationIndex];
     if (!current) return;
-    const sourceIndex = pronunciationIndexForSourceIndex(payload.items, results, payload.items.findIndex((item) => item.word === current.word));
+    const sourceIndex = sourceIndexForPronunciationWord(payload.items, current.word);
     if (sourceIndex < 0) return;
     setError("");
     try {
@@ -558,40 +606,41 @@ export function PretestWidget(): React.JSX.Element {
     }
   }
 
-  async function submitRecall(): Promise<void> {
+  async function advancePronunciationRecall(): Promise<void> {
+    if (!payload) return;
+    const transition = buildPronunciationRecallAdvance(payload.items, results, pronunciationIndex);
+    if (transition.stage === "ready") {
+      await advanceSession("listen_recall", transition.sourceIndex);
+      setStage("ready");
+    } else {
+      await advanceSession("listen_repeat", transition.sourceIndex);
+      setPronunciationIndex(transition.pronunciationIndex);
+      setStage("listen_repeat");
+    }
+    setRecallAnswer("");
+    setRecallStatus("idle");
+  }
+
+  async function submitRecall(markedUnknown = false): Promise<void> {
     const pronunciationWords = selectPronunciationWords(payload?.items ?? [], results);
     const current = pronunciationWords[pronunciationIndex];
-    if (!current || !recallAnswer.trim() || recallStatus === "correct") return;
+    if (!current || (!markedUnknown && !recallAnswer.trim()) || recallAdvancingRef.current) return;
     interactionStartedRef.current = true;
-    if (isExactPronunciationRecall(recallAnswer, current.word)) {
-      setRecallStatus("correct");
-      const isLast = pronunciationIndex === pronunciationWords.length - 1;
-      schedulePretestAdvance(advanceTimerRef, async () => {
-        try {
-          if (isLast) {
-            await advanceSession("listen_recall", payload?.items.length ?? 0);
-            setStage("ready");
-          } else {
-            const nextPronunciationIndex = pronunciationIndex + 1;
-            const next = pronunciationWords[nextPronunciationIndex];
-            const nextSourceIndex = payload
-              ? payload.items.findIndex((item) => normalizePretestWord(item.word) === normalizePretestWord(next?.word ?? ""))
-              : -1;
-            if (!next || nextSourceIndex < 0) throw new Error("预测试发音阶段状态无效，请重试。");
-            await advanceSession("listen_repeat", nextSourceIndex);
-            setPronunciationIndex(nextPronunciationIndex);
-            setStage("listen_repeat");
-          }
-          setRecallAnswer("");
-          setRecallStatus("idle");
-        } catch (caught) {
-          setRecallStatus("wrong");
-          setError(caught instanceof Error ? caught.message : "学习阶段保存失败，请重试。");
-        }
-      });
-    } else {
-      setRecallStatus("wrong");
-    }
+    recallAdvancingRef.current = true;
+    setRecallAdvancing(true);
+    const outcome = classifyPronunciationRecall(recallAnswer, current.word, markedUnknown);
+    setRecallStatus(outcome);
+    setError("");
+    schedulePretestAdvance(advanceTimerRef, async () => {
+      try {
+        await advancePronunciationRecall();
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "学习阶段保存失败，请重试。");
+      } finally {
+        recallAdvancingRef.current = false;
+        setRecallAdvancing(false);
+      }
+    }, outcome === "correct" ? PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS : PRETEST_RECALL_ADVANCE_DELAY_MS);
   }
 
   async function continueLearning(): Promise<void> {
@@ -701,10 +750,14 @@ export function PretestWidget(): React.JSX.Element {
           autoComplete="off"
           spellCheck={false}
           enterKeyHint="send"
+          disabled={recallAdvancing}
         />
         {recallStatus === "correct" ? <p className="answer-status" role="status">✓ 正确</p> : null}
-        {recallStatus === "wrong" ? <p className="error-text" role="status">× 再听一次</p> : null}
-        <Button onClick={() => void submitRecall()} disabled={!recallAnswer.trim()}>提交</Button>
+        {recallStatus === "wrong" ? <p className="error-text" role="status">× 正确答案：<strong>{currentPronunciation.word}</strong></p> : null}
+        <div className="pretest-actions">
+          <Button className="secondary unknown-action" onClick={() => void submitRecall(true)} disabled={recallAdvancing}>不会</Button>
+          <Button onClick={() => void submitRecall()} disabled={!recallAnswer.trim() || recallAdvancing}>提交</Button>
+        </div>
       </section>;
     }
 

@@ -45,4 +45,14 @@ describe("PretestQuestion", () => {
     expect(source).not.toContain("function nextQuestion()");
     expect(source).not.toContain("下一题");
   });
+
+  it("advances failed listening recall and sends the original source index", () => {
+    const source = readFileSync(new URL("../web/src/pretest/PretestWidget.tsx", import.meta.url), "utf8");
+    expect(source).toContain("classifyPronunciationRecall");
+    expect(source).toContain("submitRecall(true)");
+    expect(source).toContain("正确答案：<strong>{currentPronunciation.word}</strong>");
+    expect(source).toContain("sourceIndexForPronunciationWord(payload.items, current.word)");
+    expect(source).not.toContain("pronunciationIndexForSourceIndex(payload.items, results, payload.items.findIndex");
+    expect(source).not.toContain('callServerTool("record_review_result"');
+  });
 });

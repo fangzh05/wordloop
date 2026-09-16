@@ -1,14 +1,20 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildPronunciationRecallAdvance,
+  classifyPronunciationRecall,
   effectivePretestDirection,
   gradeCnToEn,
   gradePretestAnswer,
   isExactPronunciationRecall,
+  PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS,
+  PRETEST_RECALL_ADVANCE_DELAY_MS,
   pretestActivityType,
   PretestQuestion,
+  pronunciationIndexForSourceIndex,
   schedulePretestAdvance,
   selectPronunciationWords,
+  sourceIndexForPronunciationWord,
 } from "../web/src/pretest/PretestWidget.js";
 
 const item = {
@@ -124,5 +130,73 @@ describe("embedded pronunciation recall", () => {
     expect(pronunciationWords.map((entry) => entry.word)).toEqual(["recur", "subtle"]);
     expect(isExactPronunciationRecall("  RECUR ", "recur")).toBe(true);
     expect(isExactPronunciationRecall("recurred", "recur")).toBe(false);
+  });
+
+  const mixedItems = [
+    { ...item, word: "known" },
+    { ...item, word: "first" },
+    { ...item, word: "second" },
+  ];
+  const mixedResults = [
+    { word: "known", result: "known" as const },
+    { word: "first", result: "unknown" as const },
+    { word: "second", result: "uncertain" as const },
+  ];
+
+  it("advances the first wrong recall answer to the second pronunciation word", () => {
+    expect(classifyPronunciationRecall("not-first", "first")).toBe("wrong");
+    expect(buildPronunciationRecallAdvance(mixedItems, mixedResults, 0)).toEqual({
+      stage: "listen_repeat",
+      pronunciationIndex: 1,
+      sourceIndex: 2,
+    });
+  });
+
+  it("lets an empty 不会 action use the same advancing transition", () => {
+    expect(classifyPronunciationRecall("", "first", true)).toBe("wrong");
+    expect(buildPronunciationRecallAdvance(mixedItems, mixedResults, 0)).toEqual({
+      stage: "listen_repeat",
+      pronunciationIndex: 1,
+      sourceIndex: 2,
+    });
+  });
+
+  it("enters ready after the last wrong recall answer", () => {
+    expect(classifyPronunciationRecall("not-second", "second")).toBe("wrong");
+    expect(buildPronunciationRecallAdvance(mixedItems, mixedResults, 1)).toEqual({
+      stage: "ready",
+      pronunciationIndex: 1,
+      sourceIndex: mixedItems.length,
+    });
+  });
+
+  it("keeps source indexes separate from the pronunciation subset indexes", () => {
+    expect(selectPronunciationWords(mixedItems, mixedResults).map((entry) => entry.word)).toEqual(["first", "second"]);
+    expect(sourceIndexForPronunciationWord(mixedItems, "second")).toBe(2);
+    expect(pronunciationIndexForSourceIndex(mixedItems, mixedResults, 2)).toBe(1);
+  });
+
+  it("resumes listen_recall on the source word represented by the saved index", () => {
+    const pronunciationWords = selectPronunciationWords(mixedItems, mixedResults);
+    const restoredPronunciationIndex = pronunciationIndexForSourceIndex(mixedItems, mixedResults, 2);
+    expect(pronunciationWords[restoredPronunciationIndex]?.word).toBe("second");
+  });
+
+  it("auto-advances failed recall within the required delay", () => {
+    expect(PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS).toBe(600);
+    expect(PRETEST_RECALL_ADVANCE_DELAY_MS).toBeGreaterThanOrEqual(600);
+    expect(PRETEST_RECALL_ADVANCE_DELAY_MS).toBeLessThanOrEqual(1000);
+    vi.useFakeTimers();
+    try {
+      const timerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+      let advanced = false;
+      schedulePretestAdvance(timerRef, () => { advanced = true; }, PRETEST_RECALL_ADVANCE_DELAY_MS);
+      vi.advanceTimersByTime(PRETEST_RECALL_ADVANCE_DELAY_MS - 1);
+      expect(advanced).toBe(false);
+      vi.advanceTimersByTime(1);
+      expect(advanced).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
