@@ -83,6 +83,49 @@ describe("durable study session state", () => {
     expect(next.payload).toEqual(feedback.payload);
   });
 
+  it("commits lesson_complete only from the final frozen Lesson cursor", () => {
+    const feedback = sessionState({
+      phase: "lesson_feedback",
+      current_word: "c",
+      current_index: 2,
+      flow: { relearn_words: [], lesson_words: ["a", "b", "c"] },
+      payload: { widget: "lesson", mode: "feedback", word: "c" },
+    });
+    const completed = advanceStudyState(feedback, "lesson_complete");
+    expect(completed).toMatchObject({
+      phase: "lesson_complete",
+      current_word: "c",
+      current_index: 2,
+      flow: { lesson_words: ["a", "b", "c"] },
+      payload: feedback.payload,
+    });
+  });
+
+  it("rejects lesson_complete before the last word or with a mismatched cursor", () => {
+    const nonFinal = sessionState({
+      phase: "lesson_feedback",
+      current_word: "a",
+      current_index: 0,
+      flow: { relearn_words: [], lesson_words: ["a", "b", "c"] },
+      payload: { widget: "lesson", mode: "feedback", word: "a" },
+    });
+    expect(() => advanceStudyState(nonFinal, "lesson_complete")).toThrow("LESSON_NOT_COMPLETE");
+
+    const mismatch = { ...nonFinal, current_word: "wrong", current_index: 2 };
+    expect(() => advanceStudyState(mismatch, "lesson_complete")).toThrow("LESSON_NOT_COMPLETE");
+  });
+
+  it("makes repeated lesson_complete events idempotent", () => {
+    const completed = sessionState({
+      phase: "lesson_complete",
+      current_word: "c",
+      current_index: 2,
+      flow: { relearn_words: [], lesson_words: ["a", "b", "c"] },
+      payload: { widget: "lesson", mode: "feedback", word: "c" },
+    });
+    expect(advanceStudyState(completed, "lesson_complete")).toBe(completed);
+  });
+
   it("persists pretest phases and completes the final listen-recall cursor", () => {
     const pretest = makeStudyState({
       date: "2026-09-15",
@@ -187,6 +230,7 @@ describe("strict resumable widget schemas", () => {
     expect(lessonInputSchema.safeParse({ mode: "exercise", word: "plantation", progress: "1 / 3", activity_type: "sentence", instruction: "Use it.", multiline: false }).success).toBe(false);
     expect(lessonInputSchema.safeParse({ mode: "feedback", word: "plantation", progress: "1 / 3", feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false } }).success).toBe(false);
     expect(lessonInputSchema.safeParse({ mode: "feedback", word: "plantation", progress: "1 / 3", exercise, feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false } }).success).toBe(true);
+    expect(lessonInputSchema.safeParse({ ...explainPayload, navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 1 } }).success).toBe(false);
     expect(lessonInputSchema.safeParse({ resume: true }).success).toBe(true);
   });
 

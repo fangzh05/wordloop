@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   advanceStudySessionSchema,
   emptyToolArgsSchema,
-  getNextLearningWordSchema,
+  lessonNavigationSchema,
   lessonSubmissionSchema,
   recordAttemptSchema,
   recordPretestResultSchema,
@@ -11,7 +11,7 @@ import {
   reviewWidgetPayloadSchema,
   setDailyNewWordLimitSchema,
 } from "../shared/toolContracts.js";
-import { buildLessonSessionAdvance, buildLessonSubmissionMessage, buildNextLessonRequest } from "../web/src/lesson/LessonWidget.js";
+import { buildLessonSessionAdvance, buildLessonSubmissionMessage } from "../web/src/lesson/LessonWidget.js";
 import { buildDailyNewWordLimitRequest } from "../web/src/components/DailyNewWordControl.js";
 import { buildPretestActiveSessionRequest, buildPretestResultSubmission, buildPretestSessionAdvance } from "../web/src/pretest/PretestWidget.js";
 import { buildReviewAnswerSubmission, buildReviewSubmission, gradeReviewCnToEn } from "../web/src/review/ReviewWidget.js";
@@ -136,12 +136,32 @@ describe("Widget to tool contracts", () => {
     expect(lessonSubmissionSchema.parse(messageInput)).toEqual(messageInput);
     expect(buildLessonSubmissionMessage({ word: "planet", activityType: "sentence", prompt: messageInput.prompt, answer: "  My answer  " })).toContain("用户答案：My answer");
 
-    for (const event of ["lesson_start_exercise", "lesson_retry"] as const) {
+    for (const event of ["lesson_start_exercise", "lesson_retry", "lesson_complete"] as const) {
       const advance = buildLessonSessionAdvance(event);
       expect(advanceStudySessionSchema.parse(advance)).toEqual(advance);
     }
-    const next = buildNextLessonRequest("planet");
-    expect(getNextLearningWordSchema.parse(next)).toEqual(next);
+    expect(lessonNavigationSchema.parse({
+      action: "next_word",
+      next_word: "marine",
+      next_index: 1,
+      total_count: 3,
+    })).toEqual({
+      action: "next_word",
+      next_word: "marine",
+      next_index: 1,
+      total_count: 3,
+    });
+    expect(lessonNavigationSchema.parse({
+      action: "round_complete",
+      next_word: null,
+      next_index: null,
+      total_count: 3,
+    })).toEqual({
+      action: "round_complete",
+      next_word: null,
+      next_index: null,
+      total_count: 3,
+    });
   });
 
   it("validates the Daily limit Widget request", () => {

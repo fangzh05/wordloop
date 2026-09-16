@@ -19,6 +19,7 @@ import {
 import { getTodayWords } from "../services/words.js";
 import {
   buildLessonWords,
+  buildLessonNavigation,
   isLessonCursorAtCurrentWord,
   lessonWordAt,
 } from "../services/lessonQueue.js";
@@ -189,6 +190,36 @@ function resumablePayload(session: StudySessionRow | null, widget: StudyState["w
     throw new Error(`No resumable active ${widget} study session.`);
   }
   return widgetPayloadWithState(state.payload, state);
+}
+
+async function resumableLessonPayload(session: StudySessionRow | null): Promise<Record<string, unknown>> {
+  const db = getDatabase();
+  const userId = getAuthenticatedUserId();
+  let resolved = session?.state ? normalizeStudyStateForRead(session.state) : null;
+  let resolvedSession = session;
+  if (!resolved || resolved.widget !== "lesson") {
+    throw new Error("No resumable active lesson study session.");
+  }
+  if (resolved.flow.lesson_words === undefined && resolvedSession) {
+    resolvedSession = await normalizeLegacyLessonSession(resolvedSession, db, userId);
+    resolved = resolvedSession.state ? normalizeStudyStateForRead(resolvedSession.state) : null;
+  }
+  if (!resolved || resolved.widget !== "lesson" || !resolved.flow.lesson_words || !resolved.current_word) {
+    throw new Error("LESSON_QUEUE_MISSING");
+  }
+
+  const navigation = buildLessonNavigation(
+    resolved.flow.lesson_words,
+    resolved.current_index,
+    resolved.current_word,
+  );
+  const payload = { ...resolved.payload, navigation };
+  const navigationChanged = JSON.stringify(resolved.payload.navigation) !== JSON.stringify(navigation);
+  if (navigationChanged && resolvedSession) {
+    resolvedSession = await persistStudyState({ ...resolved, payload }, db, userId, resolvedSession);
+    resolved = resolvedSession.state ? normalizeStudyStateForRead(resolvedSession.state) : { ...resolved, payload };
+  }
+  return widgetPayloadWithState(resolved.payload, resolved);
 }
 
 async function saveWidgetState(input: {
@@ -489,17 +520,21 @@ export function registerRenderTools(server: McpServer): void {
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, (input) => safeTool(async () => {
     const parsedInput = lessonInput.parse(input);
-    if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "lesson");
+    if ("resume" in parsedInput) return resumableLessonPayload(await getActiveStudySession());
     const active = await getActiveStudySession();
     const validated = await validateLessonWord(parsedInput, active);
-    const payload = { widget: "lesson", ...parsedInput };
+    const currentIndex = lessonRenderIndex(validated.active, parsedInput);
+    const lessonWords = validated.flow?.lesson_words;
+    if (!lessonWords) throw new Error("LESSON_QUEUE_MISSING");
+    const navigation = buildLessonNavigation(lessonWords, currentIndex, parsedInput.word);
+    const payload = { widget: "lesson", ...parsedInput, navigation };
     return saveWidgetState({
       date: validated.date,
       knownActive: validated.active,
       widget: "lesson",
       phase: lessonPhaseByMode[parsedInput.mode],
       current_word: parsedInput.word,
-      current_index: lessonRenderIndex(validated.active, parsedInput),
+      current_index: currentIndex,
       retry_count: parsedInput.mode === "feedback" ? lessonRetryCount(validated.active, parsedInput) : validated.active?.state?.widget === "lesson" && validated.active.state.current_word === parsedInput.word ? validated.active.state.retry_count : 0,
       flow: validated.flow,
       payload,

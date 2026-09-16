@@ -131,7 +131,7 @@ describe("study bootstrap daily queue invariant", () => {
         version: 1,
         date: "2026-09-15",
         widget: "lesson",
-        phase: "explain",
+        phase: "lesson_explain",
         current_word: "carry",
         current_index: 0,
         retry_count: 0,
@@ -139,7 +139,7 @@ describe("study bootstrap daily queue invariant", () => {
       },
     });
 
-    await expect(getStudyBootstrap()).resolves.toEqual({ action: "resume", widget: "lesson" });
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "resume", widget: "lesson", phase: "lesson_explain" });
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
     expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
     expect(mocks.getTodayWords).not.toHaveBeenCalled();
@@ -238,5 +238,28 @@ describe("study bootstrap daily queue invariant", () => {
     mocks.getTodayWords.mockResolvedValue([word(1, "known")]);
     await expect(getStudyBootstrap()).resolves.toMatchObject({ action: "lesson", word: { word: "failed-word" } });
     expect(mocks.normalizeStudyStateForRead).toHaveBeenCalled();
+  });
+
+  it("returns an explicit completed Lesson resume instead of reopening lesson_feedback", async () => {
+    mocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "lesson",
+        phase: "lesson_complete",
+        current_word: "shrink",
+        current_index: 8,
+        retry_count: 0,
+        flow: { relearn_words: ["expression"], lesson_words: ["expression", "shrink"] },
+        payload: { widget: "lesson", mode: "feedback", word: "shrink" },
+      },
+    });
+
+    await expect(getStudyBootstrap()).resolves.toEqual({
+      action: "resume",
+      widget: "lesson",
+      phase: "lesson_complete",
+    });
+    expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
   });
 });

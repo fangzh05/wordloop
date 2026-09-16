@@ -39,7 +39,7 @@ export const REVIEW_SESSION_MAX = 200;
 export const STUDY_SESSION_EVENTS = [
   "pretest_question", "pretest_result", "listen_repeat", "listen_recall",
   "pretest_complete",
-  "lesson_start_exercise", "lesson_retry", "review_answer",
+  "lesson_start_exercise", "lesson_retry", "lesson_complete", "review_answer",
 ] as const;
 export type StudySessionEvent = (typeof STUDY_SESSION_EVENTS)[number];
 export const studySessionEventSchema = z.enum(STUDY_SESSION_EVENTS);
@@ -162,6 +162,27 @@ export const getNextLearningWordSchema = z.object({
   current_word: z.string().trim().min(1).max(100),
 });
 export type GetNextLearningWordInput = z.output<typeof getNextLearningWordSchema>;
+
+/** Server-owned navigation for the persisted Lesson Widget payload. */
+const lessonNextWordNavigationSchema = z.object({
+  action: z.literal("next_word"),
+  next_word: z.string().trim().min(1).max(100),
+  next_index: z.number().int().min(0).max(REVIEW_SESSION_MAX),
+  total_count: z.number().int().min(1).max(REVIEW_SESSION_MAX),
+}).strict();
+
+const lessonRoundCompleteNavigationSchema = z.object({
+  action: z.literal("round_complete"),
+  next_word: z.null(),
+  next_index: z.null(),
+  total_count: z.number().int().min(1).max(REVIEW_SESSION_MAX),
+}).strict();
+
+export const lessonNavigationSchema = z.discriminatedUnion("action", [
+  lessonNextWordNavigationSchema,
+  lessonRoundCompleteNavigationSchema,
+]);
+export type LessonNavigation = z.output<typeof lessonNavigationSchema>;
 
 /**
  * Backend-owned Lesson progression result. `action` is authoritative so a

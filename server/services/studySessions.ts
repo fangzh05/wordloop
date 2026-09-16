@@ -41,7 +41,7 @@ export const studyStateSchema = z.object({
   phase: z.enum([
     "pretest", "pretest_result", "listen_repeat", "listen_recall",
     "pretest_complete",
-    "lesson_explain", "lesson_exercise", "lesson_feedback", "dictation",
+    "lesson_explain", "lesson_exercise", "lesson_feedback", "lesson_complete", "dictation",
     "review", "review_complete",
   ]),
   current_word: z.string().trim().max(100).nullable(),
@@ -465,6 +465,22 @@ export function advanceStudyState(
       if (state.phase !== "lesson_feedback") throw stateError(event, state.phase);
       const nextPayload = exercisePayload(state);
       return { ...state, phase: "lesson_exercise", current_word: payloadWord(nextPayload) };
+    }
+    if (event === "lesson_complete") {
+      if (state.phase === "lesson_complete") return state;
+      if (state.phase !== "lesson_feedback") throw stateError(event, state.phase);
+      if (requestedIndex !== undefined && requestedIndex !== state.current_index) {
+        throw new Error("LESSON_CURSOR_MISMATCH");
+      }
+      const lessonWords = state.flow.lesson_words;
+      const lastIndex = (lessonWords?.length ?? 0) - 1;
+      if (!lessonWords || lessonWords.length === 0
+        || state.current_index !== lastIndex
+        || !state.current_word
+        || normalizeWord(state.current_word) !== normalizeWord(lessonWords[lastIndex] ?? "")) {
+        throw new Error("LESSON_NOT_COMPLETE");
+      }
+      return { ...state, phase: "lesson_complete" };
     }
     throw new Error(`Event ${event} is not valid for a lesson session.`);
   }

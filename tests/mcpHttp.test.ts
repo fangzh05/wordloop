@@ -52,6 +52,8 @@ describe("Streamable HTTP server", () => {
     expect(instructions).toContain("record_review_result");
     expect(instructions).toContain("record_review_submission");
     expect(instructions).toContain("原子");
+    expect(instructions).toContain("Lesson navigation is backend-owned and authoritative");
+    expect(instructions).toContain("lesson_complete");
     const reviewSubmissionTool = response.tools.find((tool) => tool.name === "record_review_submission");
     expect(reviewSubmissionTool?._meta).toMatchObject({
       ui: { resourceUri: "ui://wordloop/review.html", visibility: ["app"] },
@@ -100,6 +102,8 @@ describe("Streamable HTTP server", () => {
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
     expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson.html");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
+    const lessonInput = lessonTool?.inputSchema as { properties?: Record<string, unknown> } | undefined;
+    expect(lessonInput?.properties).not.toHaveProperty("navigation");
     const nextLearningTool = response.tools.find((tool) => tool.name === "get_next_learning_word");
     expect(nextLearningTool?.description).toContain('action="next_word"');
     expect(nextLearningTool?.description).toContain('action="round_complete"');

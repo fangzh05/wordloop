@@ -2,17 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
-import { callServerTool, sendUserMessage, subscribeToApp, toolResultData } from "../mcpBridge.js";
+import { callServerTool, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 import { z } from "zod";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   advanceStudySessionSchema,
-  getNextLearningWordSchema,
+  lessonNavigationSchema,
   lessonSubmissionSchema,
-  normalizeNextLearningWordResult,
   type AdvanceStudySessionInput,
-  type GetNextLearningWordInput,
-  type NextLearningWordResult,
 } from "../../../shared/toolContracts.js";
 
 const exerciseSchema = z.object({
@@ -35,9 +31,11 @@ const feedbackSchema = z.object({
 const payloadCommon = {
   widget: z.literal("lesson"),
   title: z.string().trim().max(120).optional(),
-  phase: z.enum(["lesson_explain", "lesson_exercise", "lesson_feedback"]).optional(),
+  phase: z.enum(["lesson_explain", "lesson_exercise", "lesson_feedback", "lesson_complete"]).optional(),
   current_index: z.number().int().min(0).optional(),
   word: z.string().trim().min(1).max(100),
+  // Old persisted payloads may omit this once; the server fills it on resume.
+  navigation: lessonNavigationSchema.optional(),
 };
 
 const explainPayloadSchema = z.object({
@@ -129,13 +127,9 @@ export function buildLessonSubmissionMessage(input: {
 }
 
 export function buildLessonSessionAdvance(
-  event: "lesson_start_exercise" | "lesson_retry",
+  event: "lesson_start_exercise" | "lesson_retry" | "lesson_complete",
 ): AdvanceStudySessionInput {
   return advanceStudySessionSchema.parse({ event });
-}
-
-export function buildNextLessonRequest(currentWord: string): GetNextLearningWordInput {
-  return getNextLearningWordSchema.parse({ current_word: currentWord });
 }
 
 export function buildNextLessonMessage(nextWord: string): string {
@@ -146,29 +140,8 @@ export function buildRoundCompleteMessage(): string {
   return "WORDLOOP_ROUND_COMPLETE\n\nThe backend-owned frozen Lesson queue is complete.\nDo not call get_next_learning_word again.\nDo not select another vocabulary word.\nContinue directly with the configured end-of-round activity.";
 }
 
-export function resolveNextLessonToolResult(result: CallToolResult): NextLearningWordResult {
-  const raw = toolResultData(result);
-  if (raw === undefined) throw new Error("NEXT_LEARNING_WORD_RESULT_MISSING");
-  return normalizeNextLearningWordResult(raw);
-}
-
 export function canStartNextLesson(status: NextLessonStatus): boolean {
   return status === "idle" || status === "error";
-}
-
-function nextLessonErrorMessage(caught: unknown): string {
-  if (caught instanceof Error) {
-    if (caught.message === "NEXT_LEARNING_WORD_RESULT_MISSING") {
-      return "WordLoop 没有返回下一步学习状态，请重新进入学习。";
-    }
-    if (caught.message === "NEXT_LEARNING_WORD_INVARIANT") {
-      return "WordLoop 下一词状态不一致，请重新进入学习。";
-    }
-    if (caught.message === "NEXT_LEARNING_WORD_TOOL_ERROR") {
-      return "WordLoop 未能确定下一个学习词，请重试。";
-    }
-  }
-  return "无法进入下一个词，请重试。";
 }
 
 export function LessonWidget(): React.JSX.Element {
@@ -268,12 +241,15 @@ export function LessonWidget(): React.JSX.Element {
     setNextStatus("sending");
     setError("");
     try {
-      const result = await callServerTool("get_next_learning_word", buildNextLessonRequest(currentWord));
-      if (result.isError) throw new Error("NEXT_LEARNING_WORD_TOOL_ERROR");
-      const next = resolveNextLessonToolResult(result);
-      if (next.action === "next_word") {
-        await sendUserMessage(buildNextLessonMessage(next.next_word.word));
+      const navigation = payload.navigation;
+      if (!navigation) throw new Error("LESSON_NAVIGATION_MISSING");
+      if (navigation.action === "next_word") {
+        await sendUserMessage(buildNextLessonMessage(navigation.next_word));
       } else {
+        if (payload.phase !== "lesson_complete" && !window.__WORDLOOP_PREVIEW__) {
+          const result = await callServerTool("advance_study_session", buildLessonSessionAdvance("lesson_complete"));
+          if (result.isError) throw new Error("无法保存本轮完成状态，请重试。");
+        }
         await sendUserMessage(buildRoundCompleteMessage());
       }
       nextStatusRef.current = "sent";
@@ -281,10 +257,7 @@ export function LessonWidget(): React.JSX.Element {
     } catch (caught) {
       nextStatusRef.current = "error";
       setNextStatus("error");
-      if (caught instanceof Error && ["NEXT_LEARNING_WORD_RESULT_MISSING", "NEXT_LEARNING_WORD_INVARIANT"].includes(caught.message)) {
-        console.error(caught.message);
-      }
-      setError(nextLessonErrorMessage(caught));
+      setError(caught instanceof Error ? caught.message : "无法进入下一步，请重试。");
     }
   }
 
@@ -367,12 +340,14 @@ export function LessonWidget(): React.JSX.Element {
     const feedback = payload.feedback;
     const correct = feedbackIsCorrect(feedback);
     const reveal = feedbackRevealsAnswer(feedback);
+    const roundComplete = payload.navigation?.action === "round_complete";
+    const completed = payload.phase === "lesson_complete";
     const nextDisabled = nextStatus === "sending" || nextStatus === "sent";
     return <section className="widget-card lesson-card" aria-labelledby="lesson-feedback-title">
       <header className="widget-header compact-header">
         <div>
           <span className="eyebrow">批改</span>
-          <h1 id="lesson-feedback-title">{correct ? "✓ 通过" : "需要修改"}</h1>
+          <h1 id="lesson-feedback-title">{completed ? "本轮词汇已完成" : correct ? "✓ 通过" : "需要修改"}</h1>
         </div>
         <FocusButton />
       </header>
@@ -384,9 +359,9 @@ export function LessonWidget(): React.JSX.Element {
         {reveal && feedback?.explanation ? <p><strong>解释：</strong>{feedback.explanation}</p> : null}
       </div> : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
-      {correct || reveal
+      {completed || roundComplete || correct || reveal
         ? <Button onClick={() => void nextLesson()} disabled={nextDisabled}>
-          {nextStatus === "sending" ? "正在进入下一步…" : nextStatus === "sent" ? "已进入下一步" : "下一词"}
+          {nextStatus === "sending" ? "正在进入下一步…" : nextStatus === "sent" ? "已进入下一步" : roundComplete || completed ? "继续本轮收尾" : "下一词"}
           {nextStatus === "idle" || nextStatus === "error" ? <ArrowIcon className="button-icon trailing" /> : null}
         </Button>
         : <Button className="secondary" onClick={() => void retryExercise()} disabled={submitStatus === "sending"}>再试一次</Button>}

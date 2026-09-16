@@ -15,6 +15,7 @@ export type {
   Direction,
   ErrorLayer,
   FsrsRating,
+  LessonNavigation,
   ReviewKind,
   ReviewWidgetItem,
   ReviewWidgetPayload,
@@ -32,7 +33,7 @@ export type StudyWidget = (typeof STUDY_WIDGETS)[number];
 export const STUDY_PHASES = [
   "pretest", "pretest_result", "listen_repeat", "listen_recall",
   "pretest_complete",
-  "lesson_explain", "lesson_exercise", "lesson_feedback", "dictation",
+  "lesson_explain", "lesson_exercise", "lesson_feedback", "lesson_complete", "dictation",
   "review", "review_complete",
 ] as const;
 export type StudyPhase = (typeof STUDY_PHASES)[number];

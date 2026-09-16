@@ -6,7 +6,7 @@ import { safeTool } from "./helpers.js";
 export function registerAdvanceStudySessionTool(server: McpServer): void {
   server.registerTool("advance_study_session", {
     title: "Advance study session",
-    description: "Advance one fixed WordLoop Widget transition. The backend validates the current phase and owns the durable cursor; arbitrary session JSON is not accepted.",
+    description: "Advance one fixed WordLoop Widget transition, including the idempotent final Lesson lesson_complete commit. The backend validates the current phase and owns the durable cursor; arbitrary session JSON is not accepted.",
     inputSchema: advanceStudySessionSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, (input) => safeTool(async () => {

@@ -1,5 +1,5 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { VocabularyItem } from "../types.js";
+import type { StudyPhase, VocabularyItem } from "../types.js";
 import { ensureTodayQueue } from "./dailyQueue.js";
 import {
   findFirstLearningWord,
@@ -17,7 +17,7 @@ import { perf } from "./perf.js";
 import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 
 export type StudyBootstrapResult =
-  | { action: "resume"; widget: "pretest" | "lesson" | "dictation" | "review" }
+  | { action: "resume"; widget: "pretest" | "lesson" | "dictation" | "review"; phase: StudyPhase }
   | { action: "review"; count: number }
   | { action: "pretest"; words: VocabularyItem[] }
   | { action: "lesson"; word: VocabularyItem }
@@ -111,7 +111,7 @@ export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
       if (normalizedActive.state.widget === "pretest" && normalizedActive.state.phase === "pretest_complete") {
         return continueCompletedPretest(normalizedActive);
       }
-      return { action: "resume", widget: normalizedActive.state.widget };
+      return { action: "resume", widget: normalizedActive.state.widget, phase: normalizedActive.state.phase };
     }
 
     const queue = await ensureTodayQueue(db, userId);

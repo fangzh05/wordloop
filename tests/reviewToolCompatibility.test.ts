@@ -343,4 +343,96 @@ describe("Review render tool schema compatibility", () => {
       expect(persisted.flow).toEqual({ relearn_words: ["failed-word"], lesson_words: ["failed-word"] });
     });
   });
+
+  it("persists backend-owned round-complete navigation on final feedback and restores it", async () => {
+    const lessonWords = ["expression", "marine", "thermometer", "rectify", "reed", "via", "interpret", "planet", "shrink"];
+    const feedbackInput = {
+      mode: "feedback" as const,
+      word: "shrink",
+      progress: "9 / 9",
+      exercise: {
+        activity_type: "sentence",
+        instruction: "Use the word in a new scene.",
+        prompt: "Describe a shrinking sample.",
+        multiline: false,
+      },
+      feedback: {
+        is_correct: true,
+        user_answer: "The sample shrank.",
+        reveal_answer: false,
+      },
+    };
+    const exerciseState = {
+      version: 1 as const,
+      date: "2026-09-16",
+      widget: "lesson" as const,
+      phase: "lesson_exercise" as const,
+      current_word: "shrink",
+      current_index: 8,
+      retry_count: 0,
+      flow: { relearn_words: [], lesson_words: lessonWords },
+      payload: { widget: "lesson", mode: "exercise", word: "shrink" },
+    };
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      id: "lesson-session",
+      user_id: "user",
+      started_at: "2026-09-16T00:00:00.000Z",
+      ended_at: null,
+      new_words_count: 0,
+      review_words_count: 0,
+      updated_at: "2026-09-16T00:00:00.000Z",
+      state: exerciseState,
+    });
+
+    await withReviewClient(async (client) => {
+      const rendered = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: feedbackInput }));
+      expect(rendered).toMatchObject({
+        widget: "lesson",
+        phase: "lesson_feedback",
+        current_index: 8,
+        navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
+      });
+      const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as { payload: Record<string, unknown> };
+      expect(persisted.payload.navigation).toEqual({ action: "round_complete", next_word: null, next_index: null, total_count: 9 });
+
+      const feedbackState = {
+        ...exerciseState,
+        phase: "lesson_feedback" as const,
+        payload: { ...feedbackInput, widget: "lesson", navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 } },
+      };
+      sessionMocks.getActiveStudySession.mockResolvedValue({
+        id: "lesson-session",
+        user_id: "user",
+        started_at: "2026-09-16T00:00:00.000Z",
+        ended_at: null,
+        new_words_count: 0,
+        review_words_count: 0,
+        updated_at: "2026-09-16T00:00:00.000Z",
+        state: feedbackState,
+      });
+      const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
+      expect(resumed).toMatchObject({
+        widget: "lesson",
+        phase: "lesson_feedback",
+        navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
+      });
+
+      sessionMocks.getActiveStudySession.mockResolvedValue({
+        id: "lesson-session",
+        user_id: "user",
+        started_at: "2026-09-16T00:00:00.000Z",
+        ended_at: null,
+        new_words_count: 0,
+        review_words_count: 0,
+        updated_at: "2026-09-16T00:00:00.000Z",
+        state: { ...feedbackState, phase: "lesson_complete" as const },
+      });
+      const completed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
+      expect(completed).toMatchObject({
+        widget: "lesson",
+        phase: "lesson_complete",
+        navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
+      });
+    });
+  });
 });

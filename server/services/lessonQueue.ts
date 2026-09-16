@@ -1,4 +1,8 @@
-import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
+import {
+  REVIEW_SESSION_MAX,
+  lessonNavigationSchema,
+  type LessonNavigation,
+} from "../../shared/toolContracts.js";
 import type { StudyFlow, VocabularyItem } from "../types.js";
 import { normalizeWord } from "./wordNormalization.js";
 
@@ -85,4 +89,36 @@ export function nextLessonWordIndex(
     throw new Error("LESSON_CURSOR_MISMATCH");
   }
   return currentIndex + 1;
+}
+
+/**
+ * Derive the next Lesson action from the immutable session queue. This never
+ * reads live word status or rebuilds the queue.
+ */
+export function buildLessonNavigation(
+  lessonWords: readonly string[],
+  currentIndex: number,
+  currentWord: string,
+): LessonNavigation {
+  if (!Number.isInteger(currentIndex)
+    || currentIndex < 0
+    || currentIndex >= lessonWords.length
+    || lessonWords[currentIndex] !== currentWord) {
+    throw new Error("LESSON_CURSOR_MISMATCH");
+  }
+
+  const nextIndex = currentIndex + 1;
+  return lessonNavigationSchema.parse(nextIndex < lessonWords.length
+    ? {
+      action: "next_word",
+      next_word: lessonWords[nextIndex],
+      next_index: nextIndex,
+      total_count: lessonWords.length,
+    }
+    : {
+      action: "round_complete",
+      next_word: null,
+      next_index: null,
+      total_count: lessonWords.length,
+    });
 }

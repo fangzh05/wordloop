@@ -7,6 +7,7 @@ import {
 import type { VocabularyItem } from "../server/types.js";
 import {
   buildLessonWords,
+  buildLessonNavigation,
   isLessonCursorAtCurrentWord,
   lessonWordAt,
   lessonWordIndex,
@@ -33,6 +34,18 @@ function item(word: string, status: VocabularyItem["status"] = "unknown"): Vocab
 }
 
 describe("durable Lesson queue invariant", () => {
+  it.each([
+    ["a", 0, { action: "next_word", next_word: "b", next_index: 1, total_count: 3 }],
+    ["b", 1, { action: "next_word", next_word: "c", next_index: 2, total_count: 3 }],
+    ["c", 2, { action: "round_complete", next_word: null, next_index: null, total_count: 3 }],
+  ] as const)("derives server-owned navigation from %s at index %s", (currentWord, currentIndex, expected) => {
+    expect(buildLessonNavigation(["a", "b", "c"], currentIndex, currentWord)).toEqual(expected);
+  });
+
+  it("rejects a navigation cursor that does not match the frozen queue", () => {
+    expect(() => buildLessonNavigation(["a", "b", "c"], 0, "b")).toThrow("LESSON_CURSOR_MISMATCH");
+  });
+
   it("freezes the queue before status changes and keeps A -> B -> C", () => {
     const lessonWords = buildLessonWords([], [item("A"), item("B"), item("C"), item("D")]);
     const afterAttempts = [
