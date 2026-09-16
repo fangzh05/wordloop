@@ -5,14 +5,23 @@ import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { ensureTodayQueue } from "../services/dailyQueue.js";
 import { getProgress } from "../services/progress.js";
 import {
-  findFirstLearningWord,
-  findNextLearningWord,
   getDueReviewSelection,
-  getFirstSessionLearningWord,
-  getSessionLearningQueue,
 } from "../services/review.js";
-import { getActiveStudySession, getStudyDate, makeStudyState, normalizeStudyStateForRead, persistStudyState } from "../services/studySessions.js";
+import {
+  freezeLessonQueueForSession,
+  getActiveStudySession,
+  getStudyDate,
+  makeStudyState,
+  normalizeLegacyLessonSession,
+  normalizeStudyStateForRead,
+  persistStudyState,
+} from "../services/studySessions.js";
 import { getTodayWords } from "../services/words.js";
+import {
+  buildLessonWords,
+  isLessonCursorAtCurrentWord,
+  lessonWordAt,
+} from "../services/lessonQueue.js";
 import { normalizeWord } from "../services/wordNormalization.js";
 import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
 import {
@@ -203,11 +212,14 @@ async function saveWidgetState(input: {
   return widgetPayloadWithState(input.payload, state);
 }
 
-function nextLessonIndex(active: StudySessionRow | null, word: string): number {
+function lessonRenderIndex(
+  active: StudySessionRow | null,
+  input: Exclude<LessonInput, { resume: true }>,
+): number {
   if (active?.state?.widget !== "lesson") return 0;
-  return active.state.current_word && normalizeWord(active.state.current_word) === normalizeWord(word)
-    ? active.state.current_index
-    : active.state.current_index + 1;
+  return input.mode === "explain"
+    ? (active.state.current_word ? active.state.current_index + 1 : active.state.current_index)
+    : active.state.current_index;
 }
 
 function lessonRetryCount(active: StudySessionRow | null, input: Extract<LessonInput, { mode: "feedback" }>): number {
@@ -277,48 +289,64 @@ export function assertLessonWordMatches(expectedWord: string | null, actualWord:
 async function validateLessonWord(
   input: Exclude<LessonInput, { resume: true }>,
   active: StudySessionRow | null,
-): Promise<{ date: string }> {
-  if (input.mode === "exercise" || input.mode === "feedback") {
-    assertLessonWordMatches(active?.state?.widget === "lesson" ? active.state.current_word : null, input.word);
-    return { date: active?.state?.date ?? await getStudyDate() };
+): Promise<{ date: string; active: StudySessionRow | null; flow?: StudyState["flow"] }> {
+  const db = getDatabase();
+  const userId = getAuthenticatedUserId();
+  let resolvedActive = active;
+
+  if (resolvedActive?.state?.widget === "lesson" && resolvedActive.state.flow.lesson_words === undefined) {
+    resolvedActive = await normalizeLegacyLessonSession(resolvedActive, db, userId);
   }
 
-  if (active?.state?.widget === "lesson") {
-    const date = active.state.date;
-    const db = getDatabase();
-    const userId = getAuthenticatedUserId();
-    const todayWords = await getTodayWords(date, db, userId);
-    const queue = await getSessionLearningQueue(active.state.flow.relearn_words, todayWords, db, userId, [active.state.current_word ?? ""]);
-    const expected = active.state.current_word
-      ? findNextLearningWord(queue, active.state.current_word).next_word?.word ?? null
-      : null;
+  if (input.mode === "exercise" || input.mode === "feedback") {
+    const state = resolvedActive?.state?.widget === "lesson" ? resolvedActive.state : null;
+    if (state?.flow.lesson_words
+      && !isLessonCursorAtCurrentWord(state.flow.lesson_words, state.current_word, state.current_index)) {
+      throw new Error("LESSON_CURSOR_MISMATCH");
+    }
+    assertLessonWordMatches(state?.current_word ?? null, input.word);
+    return { date: resolvedActive?.state?.date ?? await getStudyDate(), active: resolvedActive, flow: state?.flow };
+  }
+
+  if (resolvedActive?.state?.widget === "lesson") {
+    const state = resolvedActive.state;
+    const lessonWords = state.flow.lesson_words;
+    if (!lessonWords) throw new Error("LESSON_QUEUE_MISSING");
+    if (!state.current_word
+      || !isLessonCursorAtCurrentWord(lessonWords, state.current_word, state.current_index)) {
+      throw new Error("LESSON_CURSOR_MISMATCH");
+    }
+    const expected = lessonWordAt(lessonWords, state.current_index + 1);
     assertLessonWordMatches(expected, input.word);
-    return { date };
+    return { date: state.date, active: resolvedActive, flow: state.flow };
   }
-  if (active?.state?.widget === "review" && active.state.phase === "review_complete") {
-    const db = getDatabase();
-    const userId = getAuthenticatedUserId();
-    const date = active.state.date;
-    const todayWords = await getTodayWords(date, db, userId);
-    const expected = await getFirstSessionLearningWord(active.state.flow.relearn_words, todayWords, db, userId);
-    assertLessonWordMatches(expected?.word ?? null, input.word);
-    return { date };
+  if (resolvedActive?.state?.widget === "review" && resolvedActive.state.phase === "review_complete") {
+    const state = resolvedActive.state;
+    if (state.flow.lesson_words === undefined) {
+      const todayWords = await getTodayWords(state.date, db, userId);
+      resolvedActive = await freezeLessonQueueForSession(resolvedActive, todayWords, db, userId);
+    }
+    const lessonWords = resolvedActive.state?.flow.lesson_words ?? [];
+    assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
+    return { date: state.date, active: resolvedActive, flow: resolvedActive.state?.flow };
   }
-  if (active?.state?.widget === "pretest") {
-    const db = getDatabase();
-    const userId = getAuthenticatedUserId();
-    const state = normalizeStudyStateForRead(active.state);
+  if (resolvedActive?.state?.widget === "pretest") {
+    const state = normalizeStudyStateForRead(resolvedActive.state);
     if (state.phase !== "pretest_complete") throw new Error("PRETEST_NOT_COMPLETE");
-    const date = state.date;
-    const todayWords = await getTodayWords(date, db, userId);
-    const expected = await getFirstSessionLearningWord(state.flow.relearn_words, todayWords, db, userId);
-    assertLessonWordMatches(expected?.word ?? null, input.word);
-    return { date };
+    resolvedActive = { ...resolvedActive, state };
+    if (state.flow.lesson_words === undefined) {
+      const todayWords = await getTodayWords(state.date, db, userId);
+      resolvedActive = await freezeLessonQueueForSession(resolvedActive, todayWords, db, userId);
+    }
+    const lessonWords = resolvedActive.state?.flow.lesson_words ?? [];
+    assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
+    return { date: state.date, active: resolvedActive, flow: resolvedActive.state?.flow };
   }
   const date = await getStudyDate();
   const todayWords = await getTodayWords(date);
-  assertLessonWordMatches(findFirstLearningWord(todayWords)?.word ?? null, input.word);
-  return { date };
+  const lessonWords = buildLessonWords([], todayWords);
+  assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
+  return { date, active: null, flow: { relearn_words: [], lesson_words: lessonWords } };
 }
 
 export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): ReviewWidgetItem {
@@ -463,16 +491,17 @@ export function registerRenderTools(server: McpServer): void {
     const parsedInput = lessonInput.parse(input);
     if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "lesson");
     const active = await getActiveStudySession();
-    const { date } = await validateLessonWord(parsedInput, active);
+    const validated = await validateLessonWord(parsedInput, active);
     const payload = { widget: "lesson", ...parsedInput };
     return saveWidgetState({
-      date,
-      knownActive: active,
+      date: validated.date,
+      knownActive: validated.active,
       widget: "lesson",
       phase: lessonPhaseByMode[parsedInput.mode],
       current_word: parsedInput.word,
-      current_index: nextLessonIndex(active, parsedInput.word),
-      retry_count: parsedInput.mode === "feedback" ? lessonRetryCount(active, parsedInput) : active?.state?.widget === "lesson" && active.state.current_word === parsedInput.word ? active.state.retry_count : 0,
+      current_index: lessonRenderIndex(validated.active, parsedInput),
+      retry_count: parsedInput.mode === "feedback" ? lessonRetryCount(validated.active, parsedInput) : validated.active?.state?.widget === "lesson" && validated.active.state.current_word === parsedInput.word ? validated.active.state.retry_count : 0,
+      flow: validated.flow,
       payload,
     });
   }));

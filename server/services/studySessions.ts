@@ -6,10 +6,15 @@ import {
   reviewWidgetItemSchema,
   type ReviewAnswerInput,
 } from "../../shared/toolContracts.js";
-import type { StudyFlow, StudyPhase, StudySessionEvent, StudySessionRow, StudyState, StudyWidget } from "../types.js";
+import type { StudyFlow, StudyPhase, StudySessionEvent, StudySessionRow, StudyState, StudyWidget, VocabularyItem } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone } from "./shared.js";
-import { getUserTimeZone } from "./words.js";
+import { getTodayWords, getUserTimeZone } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
+import {
+  buildLessonWords,
+  lessonWordIndex,
+  recoverLegacyLessonWords,
+} from "./lessonQueue.js";
 
 const sessionColumns = "id,user_id,started_at,ended_at,new_words_count,review_words_count,state,updated_at";
 const pretestItemsSchema = z.array(z.object({ word: z.string().trim().min(1).max(100) })).max(7);
@@ -21,6 +26,7 @@ const lessonExerciseSchema = z.object({
 });
 const studyFlowSchema = z.object({
   relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX),
+  lesson_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX).optional(),
 }).strict().default({ relearn_words: [] });
 const reviewSessionPayloadSchema = z.object({
   widget: z.literal("review"),
@@ -186,6 +192,87 @@ export async function persistStudyState(
   }
   assertStudySessionDatabaseResult(error);
   return parseSession(data);
+}
+
+/** Freeze the first Lesson queue for an existing study flow. */
+export async function freezeLessonQueueForSession(
+  session: StudySessionRow,
+  todayWords: VocabularyItem[],
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<StudySessionRow> {
+  const state = session.state;
+  if (!state || state.flow.lesson_words !== undefined) return session;
+  const lessonWords = buildLessonWords(state.flow.relearn_words, todayWords);
+  if (lessonWords.length === 0) return session;
+  return persistStudyState({
+    ...state,
+    flow: { ...state.flow, lesson_words: lessonWords },
+  }, db, userId, session);
+}
+
+interface SessionAttemptRow {
+  activity_type: string;
+  created_at: string;
+  word: { normalized_word: string } | Array<{ normalized_word: string }>;
+}
+
+async function getLegacyLessonAttemptWords(
+  session: StudySessionRow,
+  db: StudySessionDb,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await db
+    .from("attempts")
+    .select("activity_type,created_at,word:words!inner(normalized_word)")
+    .eq("user_id", userId)
+    .gte("created_at", session.started_at)
+    .order("created_at", { ascending: true });
+  assertStudySessionDatabaseResult(error);
+  return ((data ?? []) as unknown as SessionAttemptRow[])
+    // Pretest and Review attempts prove those stages, not that the word was
+    // visited by the formal Lesson widget. Keep relearn words from the old
+    // flow pending unless a Lesson-side attempt actually visited them.
+    .filter((row) => !row.activity_type.startsWith("pretest_") && row.activity_type !== "review")
+    .map((row) => Array.isArray(row.word) ? row.word[0]?.normalized_word : row.word.normalized_word)
+    .filter((word): word is string => Boolean(word));
+}
+
+/**
+ * Normalize one pre-queue active Lesson session exactly once. The recovered
+ * queue uses durable attempts plus the old flow and session-date daily words;
+ * it never relies on the current live status alone.
+ */
+export async function normalizeLegacyLessonSession(
+  session: StudySessionRow,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<StudySessionRow> {
+  const state = session.state;
+  if (!state || state.widget !== "lesson" || state.flow.lesson_words !== undefined) return session;
+
+  const [todayWords, attemptWords] = await Promise.all([
+    getTodayWords(state.date, db, userId),
+    getLegacyLessonAttemptWords(session, db, userId),
+  ]);
+  const lessonWords = recoverLegacyLessonWords({
+    relearnWords: state.flow.relearn_words,
+    todayWords,
+    attemptWords,
+    currentWord: state.current_word,
+  });
+  if (lessonWords.length === 0) throw new Error("LESSON_QUEUE_EMPTY");
+
+  const currentIndex = state.current_word
+    ? lessonWordIndex(lessonWords, state.current_word)
+    : Math.min(state.current_index, lessonWords.length - 1);
+  if (state.current_word && currentIndex < 0) throw new Error("LESSON_CURSOR_MISMATCH");
+
+  return persistStudyState({
+    ...state,
+    current_index: Math.max(0, currentIndex),
+    flow: { ...state.flow, lesson_words: lessonWords },
+  }, db, userId, session);
 }
 
 function stateError(event: StudySessionEvent, phase: StudyPhase): Error {

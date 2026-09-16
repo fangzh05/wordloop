@@ -7,6 +7,8 @@ import type { ReviewVocabularyItem } from "../server/types.js";
 
 const sessionMocks = vi.hoisted(() => ({
   getActiveStudySession: vi.fn(),
+  freezeLessonQueueForSession: vi.fn(),
+  normalizeLegacyLessonSession: vi.fn(),
   getStudyDate: vi.fn(),
   makeStudyState: vi.fn(),
   normalizeStudyStateForRead: vi.fn((state: unknown) => state),
@@ -78,6 +80,17 @@ describe("Review render tool schema compatibility", () => {
   beforeEach(() => {
     mockedGetDueReviewSelection.mockReset();
     sessionMocks.getActiveStudySession.mockReset().mockResolvedValue(null);
+    sessionMocks.freezeLessonQueueForSession.mockReset().mockImplementation(async (active: any) => ({
+      ...active,
+      state: {
+        ...active.state,
+        flow: {
+          ...active.state.flow,
+          lesson_words: [...(active.state.flow?.relearn_words ?? [])],
+        },
+      },
+    }));
+    sessionMocks.normalizeLegacyLessonSession.mockReset().mockImplementation(async (active: any) => active);
     sessionMocks.getStudyDate.mockReset().mockResolvedValue("2026-09-16");
     sessionMocks.makeStudyState.mockReset().mockImplementation((input: Record<string, unknown>) => ({
       version: 1,
@@ -240,7 +253,7 @@ describe("Review render tool schema compatibility", () => {
         },
       });
       expect(payloadOf(result)).toMatchObject({ widget: "lesson", word: "failed-word" });
-      expect(vi.mocked(getFirstSessionLearningWord)).toHaveBeenCalledWith(["failed-word"], [], {}, "00000000-0000-0000-0000-000000000001");
+      expect(sessionMocks.freezeLessonQueueForSession).toHaveBeenCalled();
     });
   });
 
@@ -327,7 +340,7 @@ describe("Review render tool schema compatibility", () => {
       });
       expect(payloadOf(result)).toMatchObject({ widget: "lesson", phase: "lesson_explain", word: "failed-word" });
       const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as { flow?: { relearn_words: string[] } };
-      expect(persisted.flow).toEqual({ relearn_words: ["failed-word"] });
+      expect(persisted.flow).toEqual({ relearn_words: ["failed-word"], lesson_words: ["failed-word"] });
     });
   });
 });

@@ -62,11 +62,12 @@ describe("WordLoop hot-path query boundaries", () => {
       .toBeLessThan(renderer.indexOf("await getProgress()"));
   });
 
-  it("passes known lesson sessions through persistence and uses the pure queue selector", () => {
+  it("passes known lesson sessions through the frozen queue cursor", () => {
     const renderer = source("server/tools/renderWidgets.ts");
-    expect(renderer).toContain("findNextLearningWord(queue, active.state.current_word)");
-    expect(renderer).toContain("getSessionLearningQueue");
-    expect(renderer).toContain("knownActive: active");
+    expect(renderer).toContain("lessonWordAt(lessonWords, state.current_index + 1)");
+    expect(renderer).toContain("isLessonCursorAtCurrentWord");
+    expect(renderer).toContain("knownActive: validated.active");
+    expect(renderer).not.toContain("getSessionLearningQueue");
     expect(renderer).not.toContain("getNextLearningWord(active.state.current_word)");
   });
 });

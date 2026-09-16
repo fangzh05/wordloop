@@ -1,11 +1,20 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ActiveErrorLayer, ReviewKind, ReviewVocabularyItem, UserWordRow, VocabularyItem } from "../types.js";
-import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
+import {
+  REVIEW_SESSION_MAX,
+  parseNextLearningWordResult,
+  type NextLearningWordResult,
+} from "../../shared/toolContracts.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
 import { getTodayWords, getUserTimeZone, getVocabularyItemsByWords, vocabularyItemFromRpc, type RpcVocabularyRow } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
 import { getProgress } from "./progress.js";
-import { getActiveStudySession } from "./studySessions.js";
+import { getActiveStudySession, normalizeLegacyLessonSession } from "./studySessions.js";
+import {
+  isLessonCursorAtCurrentWord,
+  lessonWordAt,
+  nextLessonWordIndex,
+} from "./lessonQueue.js";
 import { perf } from "./perf.js";
 
 export function reviewDueAt(item: VocabularyItem, now: Date): boolean {
@@ -277,22 +286,50 @@ export function findFirstLearningWord(todayWords: VocabularyItem[]): VocabularyI
   return todayWords.find((word) => !word.mastered && learningStatuses.has(word.status)) ?? null;
 }
 
-export function findNextLearningWord(todayWords: VocabularyItem[], currentWord: string): {
-  next_word: VocabularyItem | null;
-  round_complete: boolean;
-} {
+export function findNextLearningWord(todayWords: VocabularyItem[], currentWord: string): NextLearningWordResult {
   const currentIndex = todayWords.findIndex((word) => normalizeWord(word.word) === normalizeWord(currentWord));
-  if (currentIndex < 0) return { next_word: null, round_complete: true };
+  if (currentIndex < 0) throw new Error("LESSON_CURSOR_MISMATCH");
   const nextWord = todayWords
     .slice(currentIndex + 1)
     .find((word) => !word.mastered && learningStatuses.has(word.status)) ?? null;
-  return { next_word: nextWord, round_complete: nextWord === null };
+  return parseNextLearningWordResult({ next_word: nextWord, round_complete: nextWord === null });
 }
 
-export async function getNextLearningWord(currentWord: string): Promise<ReturnType<typeof findNextLearningWord>> {
+async function getNextFrozenLessonWord(
+  state: NonNullable<NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>["state"]>,
+  currentWord: string,
+  db: Parameters<typeof getVocabularyItemsByWords>[1],
+  userId: string,
+): Promise<NextLearningWordResult> {
+  const lessonWords = state.flow.lesson_words;
+  if (!lessonWords) throw new Error("LESSON_QUEUE_MISSING");
+  if (!state.current_word || normalizeWord(state.current_word) !== normalizeWord(currentWord)) {
+    throw new Error("LESSON_CURSOR_MISMATCH");
+  }
+  if (!isLessonCursorAtCurrentWord(lessonWords, state.current_word, state.current_index)) {
+    throw new Error("LESSON_CURSOR_MISMATCH");
+  }
+  const nextIndex = nextLessonWordIndex(lessonWords, currentWord, state.current_index);
+  const nextWord = lessonWordAt(lessonWords, nextIndex);
+  if (!nextWord) return parseNextLearningWordResult({ next_word: null, round_complete: true });
+
+  const [lexicalItem] = await getVocabularyItemsByWords([nextWord], db, userId);
+  if (!lexicalItem) throw new Error("LESSON_WORD_NOT_FOUND");
+  return parseNextLearningWordResult({ next_word: lexicalItem, round_complete: false });
+}
+
+export async function getNextLearningWord(currentWord: string): Promise<NextLearningWordResult> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
-  const active = await getActiveStudySession(db, userId);
+  let active = await getActiveStudySession(db, userId);
+  if (active?.state?.widget === "lesson") {
+    if (active.state.flow.lesson_words === undefined) {
+      active = await normalizeLegacyLessonSession(active, db, userId);
+    }
+    if (active.state?.flow.lesson_words !== undefined) {
+      return getNextFrozenLessonWord(active.state, currentWord, db, userId);
+    }
+  }
   const date = active?.state
     && (active.state.widget === "lesson" || active.state.widget === "review")
     ? active.state.date

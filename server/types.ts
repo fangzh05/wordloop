@@ -108,6 +108,8 @@ export interface StudyState {
 
 export interface StudyFlow {
   relearn_words: string[];
+  /** Immutable server-owned Lesson queue for this study session. */
+  lesson_words?: string[];
 }
 
 export interface StudySessionRow {

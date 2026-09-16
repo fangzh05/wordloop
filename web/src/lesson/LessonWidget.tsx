@@ -8,6 +8,7 @@ import {
   advanceStudySessionSchema,
   getNextLearningWordSchema,
   lessonSubmissionSchema,
+  nextLearningWordResultSchema,
   type AdvanceStudySessionInput,
   type GetNextLearningWordInput,
 } from "../../../shared/toolContracts.js";
@@ -74,11 +75,6 @@ const payloadSchema = z.discriminatedUnion("mode", [
   exercisePayloadSchema,
   feedbackPayloadSchema,
 ]);
-
-const nextLearningResultSchema = z.object({
-  next_word: z.object({ word: z.string().trim().min(1).max(100) }).nullable(),
-  round_complete: z.boolean(),
-});
 
 type Payload = z.infer<typeof payloadSchema>;
 type Mode = "explain" | "exercise" | "feedback";
@@ -239,7 +235,7 @@ export function LessonWidget(): React.JSX.Element {
     try {
       const result = await callServerTool("get_next_learning_word", buildNextLessonRequest(currentWord));
       if (result.isError) throw new Error("WordLoop 未能确定下一个学习词，请重试。");
-      const parsed = nextLearningResultSchema.safeParse(result.structuredContent);
+      const parsed = nextLearningWordResultSchema.safeParse(result.structuredContent);
       if (!parsed.success) throw new Error("WordLoop 返回的下一词结果无效，请重试。");
       if (parsed.data.next_word) {
         await sendUserMessage(buildNextLessonMessage(parsed.data.next_word.word));

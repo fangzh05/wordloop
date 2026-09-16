@@ -96,6 +96,8 @@ Plugin 已经保存状态，用户以后不需要依赖手动粘贴摘要才能�
 
 只有所有听音还原完成并且 backend 已持久化 `phase=pretest_complete` 后，Widget 才发送完成交接消息；此时调用 `get_study_bootstrap`，严格按 backend 返回的 action 继续：`action=lesson` 时只为返回的 word 生成正式 LessonWidget，`action=pretest` 时使用返回的下一批 words，不要再次调用发音卡片。正式学习使用唯一的 Lesson Widget，新的 explain 必须一次性包含完整讲解和完整 exercise；render 成功即由 backend 持久保存同一张卡。mode 只有 explain、exercise、feedback。用户点击开始练习时，Widget 调用 `advance_study_session(lesson_start_exercise)` 后本地切换，不产生 GPT turn；批改时 ChatGPT 调用 `record_attempt` 后渲染携带原 exercise 的 self-contained feedback；再试一次只调用 `advance_study_session(lesson_retry)` 并复用原题。每词一次讲解、一次练习和一次批改，派生词、额外听辨、长难句、小测和自由回忆都复用该 Widget。下一词必须调用 `get_next_learning_word({ current_word })`，只使用 backend 返回的 `next_word`；若返回 `round_complete=true` 且 `next_word=null`，进入本轮长难句收尾，禁止随机补词或让 GPT 自选单词。任何恢复都使用 active session 的 `resume=true`，不得重建题目。例句与练习必须是不同命题和新的语义场景；练习不得是例句的翻译、逆向翻译、近义改写或只替换一两个词。Widget 内直接发送 word、activity_type、prompt、answer，不依赖 `updateModelContext` 持久化。成功渲染学习 Widget 后，聊天区保持安静，教学正文全部放在卡片内。
 
+正式学习第一次开始前，backend 将 `flow.relearn_words` 与当天 `unknown/uncertain` 的 daily queue 顺序合并成一次性的 `flow.lesson_words`，并写入 `study_sessions.state`；之后不按 live status 重建或过滤。
+
 ## 正式学习 UI
 
 听音跟读与听音还原完成后，直接调用 `render_lesson_widget`，一次只处理一个词。Lesson Widget 只有 `explain`、`exercise`、`feedback` 三种模式；派生词、额外听辨、长难句、小测和会话末自由回忆都复用它。没有输出 = 没有学会。

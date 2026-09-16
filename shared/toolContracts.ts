@@ -163,6 +163,36 @@ export const getNextLearningWordSchema = z.object({
 });
 export type GetNextLearningWordInput = z.output<typeof getNextLearningWordSchema>;
 
+/**
+ * Backend-owned Lesson progression result. A completed frozen queue is a
+ * valid result, so `next_word: null` is only legal together with
+ * `round_complete: true`.
+ */
+export const nextLearningWordResultSchema = z.object({
+  next_word: z.object({
+    word: z.string().trim().min(1).max(100),
+  }).passthrough().nullable(),
+  round_complete: z.boolean(),
+}).superRefine((value, context) => {
+  const valid = value.next_word === null
+    ? value.round_complete
+    : !value.round_complete;
+  if (!valid) {
+    context.addIssue({
+      code: "custom",
+      message: "NEXT_LEARNING_WORD_INVARIANT",
+      path: ["round_complete"],
+    });
+  }
+});
+export type NextLearningWordResult = z.output<typeof nextLearningWordResultSchema>;
+
+export function parseNextLearningWordResult(value: unknown): NextLearningWordResult {
+  const parsed = nextLearningWordResultSchema.safeParse(value);
+  if (!parsed.success) throw new Error("NEXT_LEARNING_WORD_INVARIANT");
+  return parsed.data;
+}
+
 export const setDailyNewWordLimitSchema = z.object({
   limit: z.number().int().min(1).max(200),
 });
