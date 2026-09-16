@@ -27,11 +27,11 @@
  * that widgets, server code and tests can all share exactly one implementation.
  */
 
-export const ERROR_LAYERS = ["meaning", "collocation", "grammar", "pronunciation", "spelling", "none"] as const;
-export type ErrorLayer = (typeof ERROR_LAYERS)[number];
+import { ERROR_LAYERS, FSRS_RATINGS } from "../../../shared/toolContracts.js";
+import type { ErrorLayer, FsrsRating } from "../../../shared/toolContracts.js";
 
-export const FSRS_RATINGS = ["again", "hard", "good", "easy"] as const;
-export type FsrsRating = (typeof FSRS_RATINGS)[number];
+export { ERROR_LAYERS, FSRS_RATINGS };
+export type { ErrorLayer, FsrsRating };
 
 /**
  * The single shape every grader produces. `rating` is optional on purpose:
@@ -266,6 +266,18 @@ export interface GradeContext {
 }
 
 /**
+ * The deterministic recall grader deliberately represents a one-edit answer
+ * as `correct + hard + spelling`. The FSRS rating is omitted when the same
+ * verdict is persisted through non-FSRS `record_attempt`, but the spelling
+ * layer remains part of that code-owned verdict.
+ */
+export function isDeterministicSpellingNearMiss(grade: GradeResult, context: GradeContext): boolean {
+  if (gradingRouteForDirection(context.activity_type, context.direction) !== "deterministic") return false;
+  if (!grade.is_correct || grade.error_layer !== "spelling" || grade.graded_by !== "deterministic") return false;
+  return grade.rating === "hard" || (!context.advancesFsrs && grade.rating === undefined);
+}
+
+/**
  * The single place that decides whether a GradeResult is allowed to be written.
  *
  * These rules exist because a wrong verdict here does not merely look bad, it
@@ -288,8 +300,10 @@ export function assertGradeInvariants(grade: GradeResult, context: GradeContext)
     throw new GradeInvariantError('Correct grade must not carry rating "again".');
   }
 
-  // A correct answer carries no error layer.
-  if (grade.is_correct && grade.error_layer !== "none") {
+  // A correct answer carries no error layer, except for the deterministic
+  // one-edit near miss described above. Its persisted non-FSRS form omits the
+  // FSRS-only rating, but it is still the same code-determined spelling case.
+  if (grade.is_correct && grade.error_layer !== "none" && !isDeterministicSpellingNearMiss(grade, context)) {
     throw new GradeInvariantError(`Correct grade must use error_layer "none", received "${grade.error_layer}".`);
   }
 
@@ -315,15 +329,14 @@ export function assertGradeInvariants(grade: GradeResult, context: GradeContext)
     );
   }
 
-  // Ordinary lesson practice never advances FSRS, so it must not carry a rating.
-  if (!context.advancesFsrs && grade.rating !== undefined) {
+  // Ordinary lesson practice never advances FSRS, so it must not carry a
+  // rating. The one exception is the grader's own `correct + hard + spelling`
+  // near-miss marker; record_attempt strips that FSRS-only field before the
+  // database call but must still accept the code-owned spelling layer.
+  if (!context.advancesFsrs && grade.rating !== undefined && !isDeterministicSpellingNearMiss(grade, context)) {
     throw new GradeInvariantError("Non-FSRS practice must not carry an FSRS rating.");
   }
 
-  // Only the atomic due-review submission may advance a card.
-  if (grade.rating !== undefined && !context.advancesFsrs) {
-    throw new GradeInvariantError("Rating supplied without FSRS advance permission.");
-  }
   if (context.reviewSubmission && grade.rating === undefined) {
     throw new GradeInvariantError("Review submission requires an FSRS rating.");
   }

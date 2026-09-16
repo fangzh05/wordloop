@@ -1,24 +1,29 @@
+import type { ActiveErrorLayer, ReviewKind } from "../shared/toolContracts.js";
+
+export {
+  ACTIVITY_TYPES,
+  ACTIVE_ERROR_LAYERS,
+  DIRECTIONS,
+  ERROR_LAYERS,
+  FSRS_RATINGS,
+  REVIEW_KINDS,
+  STUDY_SESSION_EVENTS,
+} from "../shared/toolContracts.js";
+export type {
+  ActivityType,
+  ActiveErrorLayer,
+  Direction,
+  ErrorLayer,
+  FsrsRating,
+  ReviewKind,
+  StudySessionEvent,
+} from "../shared/toolContracts.js";
+
 export const WORD_STATUSES = ["new", "known", "uncertain", "unknown", "review", "mastered"] as const;
 export type WordStatus = (typeof WORD_STATUSES)[number];
 
-export const ACTIVITY_TYPES = [
-  "pretest_cn_to_en", "pretest_en_definition", "translation_cn_to_en",
-  "translation_en_to_cn", "cloze", "derivation", "listening",
-  "collocation", "sentence", "review", "recall",
-] as const;
-export type ActivityType = (typeof ACTIVITY_TYPES)[number];
-
-export const ERROR_LAYERS = ["meaning", "collocation", "grammar", "pronunciation", "spelling", "none"] as const;
-export type ErrorLayer = (typeof ERROR_LAYERS)[number];
-export type ActiveErrorLayer = Exclude<ErrorLayer, "none">;
-
-export const FSRS_RATINGS = ["again", "hard", "good", "easy"] as const;
-export type FsrsRating = (typeof FSRS_RATINGS)[number];
 export const REVIEW_SOURCES = ["pretest", "review", "session_checkpoint"] as const;
 export type ReviewSource = (typeof REVIEW_SOURCES)[number];
-export const REVIEW_KINDS = ["error_repair", "fsrs_due", "both"] as const;
-export type ReviewKind = (typeof REVIEW_KINDS)[number];
-
 export const STUDY_WIDGETS = ["pretest", "lesson", "dictation"] as const;
 export type StudyWidget = (typeof STUDY_WIDGETS)[number];
 export const STUDY_PHASES = [
@@ -26,12 +31,6 @@ export const STUDY_PHASES = [
   "lesson_explain", "lesson_exercise", "lesson_feedback", "dictation",
 ] as const;
 export type StudyPhase = (typeof STUDY_PHASES)[number];
-export const STUDY_SESSION_EVENTS = [
-  "pretest_question", "pretest_result", "listen_repeat", "listen_recall",
-  "lesson_start_exercise", "lesson_retry",
-] as const;
-export type StudySessionEvent = (typeof STUDY_SESSION_EVENTS)[number];
-
 export interface LexicalSense {
   pos: string;
   definition_cn: string;

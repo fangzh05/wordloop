@@ -52,6 +52,19 @@ describe("Streamable HTTP server", () => {
     expect(instructions).toContain("record_review_result");
     expect(instructions).toContain("record_review_submission");
     expect(instructions).toContain("原子");
+    const reviewSubmissionTool = response.tools.find((tool) => tool.name === "record_review_submission");
+    expect(reviewSubmissionTool?._meta).toMatchObject({
+      ui: { resourceUri: "ui://wordloop/review.html", visibility: ["app"] },
+      "ui/resourceUri": "ui://wordloop/review.html",
+    });
+    const reviewSubmissionInput = reviewSubmissionTool?.inputSchema as { required?: string[] };
+    expect(reviewSubmissionInput.required ?? []).toContain("direction");
+    const missingDirection = await client.callTool({
+      name: "record_review_submission",
+      arguments: { word: "recur", is_correct: false, error_layer: "meaning", rating: "again" },
+    });
+    expect(missingDirection.isError).toBe(true);
+    expect(JSON.stringify(missingDirection.content)).toMatch(/direction/i);
     const contextTool = response.tools.find((tool) => tool.name === "get_learning_context");
     expect(contextTool?.description).toContain("prefer render_review_widget_v2");
     expect(contextTool?.description).toContain("legacy render_review_widget");

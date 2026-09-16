@@ -44,6 +44,13 @@ describe("attempt/review transaction boundary", () => {
     expect(body).not.toMatch(/fsrs_(stability|difficulty|state|reps|lapses)\s*=/);
   });
 
+  it("persists a deterministic spelling near miss as correct plus its spelling layer", () => {
+    const body = sql.slice(sql.indexOf("record_attempt_v2"), sql.indexOf("record_review_result_v1"));
+    expect(body).toContain("p_is_correct, p_error_layer");
+    expect(body).toContain("if p_error_layer <> 'none' then v_layer := p_error_layer;");
+    expect(body).toContain("if not p_is_correct then");
+  });
+
   it("record_review_result updates one card and persists its ReviewLog transactionally", () => {
     const body = sql.slice(sql.indexOf("record_review_result_v1"), sql.indexOf("record_pretest_result_v2"));
     expect(body).toContain("update user_words set");

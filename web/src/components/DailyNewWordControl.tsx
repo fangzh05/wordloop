@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Button } from "./Button.js";
 import { callServerTool, structuredContentOf } from "../mcpBridge.js";
+import { setDailyNewWordLimitSchema, type SetDailyNewWordLimitInput } from "../../../shared/toolContracts.js";
 
 const savedSchema = z.object({
   daily_new_word_limit: z.number().int().min(1).max(200),
@@ -9,6 +10,10 @@ const savedSchema = z.object({
   prepared: z.number().int().nonnegative(),
   added: z.number().int().nonnegative(),
 });
+
+export function buildDailyNewWordLimitRequest(limit: number): SetDailyNewWordLimitInput {
+  return setDailyNewWordLimitSchema.parse({ limit });
+}
 
 export function DailyNewWordControl({
   limit,
@@ -39,7 +44,7 @@ export function DailyNewWordControl({
     setSaving(true);
     setMessage("");
     try {
-      const result = await callServerTool("set_daily_new_word_limit", { limit: next });
+      const result = await callServerTool("set_daily_new_word_limit", buildDailyNewWordLimitRequest(next));
       const saved = savedSchema.safeParse(structuredContentOf(result));
       if (result.isError || !saved.success) throw new Error("每日新词数量未能保存，请重试。");
 

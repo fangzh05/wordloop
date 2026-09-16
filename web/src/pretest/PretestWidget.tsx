@@ -15,6 +15,16 @@ import {
   gradeExactRecall,
   normalizeAnswer,
 } from "../grading/deterministic.js";
+import {
+  advanceStudySessionSchema,
+  directionSchema,
+  emptyToolArgsSchema,
+  pretestResultSchema,
+  recordPretestResultSchema,
+  type AdvanceStudySessionInput,
+  type EmptyToolArgs,
+  type RecordPretestResultInput,
+} from "../../../shared/toolContracts.js";
 
 const itemSchema = z.object({
   word: z.string().trim().min(1).max(100),
@@ -23,7 +33,7 @@ const itemSchema = z.object({
   meaning_zh: z.string().trim().min(1).max(240),
   // Compatibility only. The fixed card never renders prompt.
   prompt: z.string().trim().max(1000).optional(),
-  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
+  direction: directionSchema.default("cn_to_en"),
 });
 
 const payloadSchema = z.object({
@@ -36,7 +46,7 @@ const payloadSchema = z.object({
 
 type Payload = z.infer<typeof payloadSchema>;
 export type PretestItem = Payload["items"][number];
-export type PretestResult = "known" | "uncertain" | "unknown";
+export type PretestResult = z.infer<typeof pretestResultSchema>;
 type AnswerStatus = "idle" | "sending" | "sent" | "error";
 type PronunciationStage = "result" | "listen_repeat" | "listen_recall" | "ready";
 type RecallStatus = "idle" | "correct" | "wrong";
@@ -59,7 +69,7 @@ export function isExactPronunciationRecall(answer: string, target: string): bool
 }
 
 const gradeSchema = z.object({
-  result: z.enum(["known", "uncertain", "unknown"]),
+  result: pretestResultSchema,
   feedback: z.string().trim().min(1).max(180),
 });
 
@@ -103,6 +113,33 @@ export function effectivePretestDirection(
 
 export function pretestActivityType(direction: PretestItem["direction"]): "pretest_cn_to_en" | "pretest_en_definition" {
   return direction === "cn_to_en" ? "pretest_cn_to_en" : "pretest_en_definition";
+}
+
+export function buildPretestResultSubmission(
+  item: Pick<PretestItem, "word" | "direction">,
+  cleanAnswer: string,
+  grade: Pick<z.infer<typeof gradeSchema>, "result" | "feedback">,
+): RecordPretestResultInput {
+  return recordPretestResultSchema.parse({
+    word: item.word,
+    result: grade.result,
+    user_answer: cleanAnswer,
+    activity_type: pretestActivityType(item.direction),
+  });
+}
+
+export function buildPretestSessionAdvance(
+  event: PretestSessionEvent,
+  currentIndex?: number,
+): AdvanceStudySessionInput {
+  return advanceStudySessionSchema.parse({
+    event,
+    ...(currentIndex === undefined ? {} : { current_index: currentIndex }),
+  });
+}
+
+export function buildPretestActiveSessionRequest(): EmptyToolArgs {
+  return emptyToolArgsSchema.parse({});
 }
 
 function stageForPhase(phase: Payload["phase"]): { finished: boolean; stage: PronunciationStage } {
@@ -320,7 +357,7 @@ export function PretestWidget(): React.JSX.Element {
 
   async function restoreSavedProgress(nextPayload: Payload): Promise<void> {
     try {
-      const stored = await callServerTool("get_active_study_session", {});
+      const stored = await callServerTool("get_active_study_session", buildPretestActiveSessionRequest());
       if (stored.isError) return;
       const context = z.object({
         active: z.boolean(),
@@ -369,10 +406,7 @@ export function PretestWidget(): React.JSX.Element {
 
   async function advanceSession(event: PretestSessionEvent, currentIndex?: number): Promise<void> {
     if (window.__WORDLOOP_PREVIEW__) return;
-    const result = await callServerTool("advance_study_session", {
-      event,
-      ...(currentIndex === undefined ? {} : { current_index: currentIndex }),
-    });
+    const result = await callServerTool("advance_study_session", buildPretestSessionAdvance(event, currentIndex));
     if (result.isError) throw new Error("学习阶段保存失败，请重试。");
   }
 
@@ -426,13 +460,7 @@ export function PretestWidget(): React.JSX.Element {
   ): Promise<void> {
     if (!payload) return;
     if (!window.__WORDLOOP_PREVIEW__) {
-      const stored = await callServerTool("record_pretest_result", {
-        word: item.word,
-        result: grade.result,
-        user_answer: cleanAnswer,
-        // The item direction has already been downgraded when sampling is unavailable.
-        activity_type: pretestActivityType(item.direction),
-      });
+      const stored = await callServerTool("record_pretest_result", buildPretestResultSubmission(item, cleanAnswer, grade));
       if (stored.isError) throw new Error("结果未能保存，请重试。");
     }
     const graded: GradedAnswer = { word: item.word, answer: cleanAnswer, ...grade };

@@ -14,8 +14,8 @@ describe("guided lesson widget", () => {
     expect(source).toContain("提交 WordLoop 正式学习答案。");
     expect(source).toContain("reference_answer");
     expect(source).toContain("get_next_learning_word");
-    expect(source).toContain('event: "lesson_start_exercise"');
-    expect(source).toContain('event: "lesson_retry"');
+    expect(source).toContain("buildLessonSessionAdvance(\"lesson_start_exercise\")");
+    expect(source).toContain("buildLessonSessionAdvance(\"lesson_retry\")");
     expect(source).not.toContain("exerciseContextRef");
     expect(source).not.toContain("retainedExercise");
     expect(source).not.toContain("请等待练习题目");

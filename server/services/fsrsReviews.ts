@@ -1,4 +1,5 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
+import type { RecordReviewSubmissionInput } from "../../shared/toolContracts.js";
 import type { ErrorLayer, FsrsRating, ReviewSource, UserWordRow } from "../types.js";
 import { assertGradeInvariants, gradingRouteForDirection } from "../../web/src/grading/deterministic.js";
 import { assertDatabaseResult } from "./shared.js";
@@ -55,15 +56,7 @@ export async function recordReviewResult(input: {
   return reviewSummary(word, input.rating, result);
 }
 
-export async function recordReviewSubmission(input: {
-  word: string;
-  user_answer: string;
-  is_correct: boolean;
-  error_layer: ErrorLayer;
-  rating: FsrsRating;
-  direction: "cn_to_en" | "en_definition";
-  session_id?: string;
-}, now = new Date(), enableFuzz = true): Promise<Record<string, unknown>> {
+export async function recordReviewSubmission(input: RecordReviewSubmissionInput, now = new Date(), enableFuzz = true): Promise<Record<string, unknown>> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const word = normalizeWord(input.word);

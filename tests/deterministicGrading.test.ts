@@ -8,6 +8,7 @@ import {
   gradeTargetWord,
   gradingRoute,
   gradingRouteForDirection,
+  isDeterministicSpellingNearMiss,
   isDeterministicActivityType,
   isDeterministicallyGraded,
   normalizeAnswer,
@@ -239,11 +240,31 @@ describe("grade invariants", () => {
     )).toThrow(GradeInvariantError);
   });
 
-  it("rejects a correct grade carrying an error layer", () => {
+  it("rejects a correct grade carrying an unrelated error layer", () => {
     expect(() => assertGradeInvariants(
       { ...deterministicCorrect, error_layer: "spelling" },
       { activity_type: "spelling", advancesFsrs: true },
     )).toThrow(GradeInvariantError);
+  });
+
+  it("accepts the code-defined correct, Hard, spelling near miss", () => {
+    const nearMiss = gradeExactRecall("recure", "recur");
+    const dueContext = { activity_type: "review", advancesFsrs: true, reviewSubmission: true, direction: "cn_to_en" as const };
+    expect(isDeterministicSpellingNearMiss(nearMiss, dueContext)).toBe(true);
+    expect(() => assertGradeInvariants(nearMiss, dueContext)).not.toThrow();
+    expect(() => assertGradeInvariants(nearMiss, {
+      activity_type: "spelling",
+      advancesFsrs: false,
+    })).not.toThrow();
+
+    // record_attempt intentionally omits the FSRS-only rating for error repair,
+    // while retaining the same code-owned spelling layer.
+    const persistedNearMiss = { ...nearMiss, rating: undefined };
+    expect(() => assertGradeInvariants(persistedNearMiss, {
+      activity_type: "review",
+      advancesFsrs: false,
+      direction: "cn_to_en",
+    })).not.toThrow();
   });
 
   it("rejects a model verdict over a deterministic question", () => {

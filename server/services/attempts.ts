@@ -1,19 +1,10 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { ActivityType, ErrorLayer } from "../types.js";
+import type { RecordAttemptInput as SharedRecordAttemptInput } from "../../shared/toolContracts.js";
 import { assertGradeInvariants, gradingRouteForDirection } from "../../web/src/grading/deterministic.js";
 import { assertDatabaseResult } from "./shared.js";
 import { normalizeWord } from "./wordNormalization.js";
 
-export interface RecordAttemptInput {
-  word: string;
-  session_id?: string;
-  activity_type: ActivityType;
-  /** Review cards only: the persisted direction, so the gate can route review verdicts correctly. */
-  direction?: "cn_to_en" | "en_definition";
-  user_answer: string;
-  is_correct: boolean;
-  error_layer: ErrorLayer;
-}
+export type RecordAttemptInput = SharedRecordAttemptInput;
 
 export async function recordAttempt(input: RecordAttemptInput): Promise<Record<string, unknown>> {
   // Fail-closed gate: no attempt reaches durable state unless its verdict obeys

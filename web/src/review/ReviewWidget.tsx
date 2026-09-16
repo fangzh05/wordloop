@@ -6,16 +6,28 @@ import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
 import { gradeTargetWord } from "../grading/deterministic.js";
 import { callServerTool, getSamplingAvailability, sampleHostText, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
+import {
+  activeErrorLayerSchema,
+  directionSchema,
+  errorLayerSchema,
+  fsrsRatingSchema,
+  recordAttemptSchema,
+  recordReviewSubmissionSchema,
+  reviewKindSchema,
+  type ErrorLayer,
+  type FsrsRating,
+  type RecordAttemptInput,
+  type RecordReviewSubmissionInput,
+} from "../../../shared/toolContracts.js";
 
-const errorLayerSchema = z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"]);
 const itemSchema = z.object({
   word: z.string().trim().min(1).max(100),
   meaning_zh: z.string().trim().min(1).max(240),
   part_of_speech: z.string().trim().max(40).optional(),
-  direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
-  error_layers: z.array(errorLayerSchema).max(5).default([]),
+  direction: directionSchema.default("cn_to_en"),
+  error_layers: z.array(activeErrorLayerSchema).max(5).default([]),
   is_due: z.boolean(),
-  review_kind: z.enum(["error_repair", "fsrs_due", "both"]),
+  review_kind: reviewKindSchema,
   next_review_at: z.string().nullable(),
 });
 
@@ -28,8 +40,8 @@ const payloadSchema = z.object({
 
 const gradeSchema = z.object({
   is_correct: z.boolean(),
-  rating: z.enum(["again", "hard", "good", "easy"]),
-  error_layer: z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling", "none"]),
+  rating: fsrsRatingSchema,
+  error_layer: errorLayerSchema,
   feedback: z.string().trim().min(1).max(120),
 });
 
@@ -37,16 +49,52 @@ const gradeSystemPrompt = "你只负责批改一次独立英语词汇复习。�
 const REVIEW_AUTO_ADVANCE_MS = 600;
 
 type Payload = z.infer<typeof payloadSchema>;
-type ReviewItem = Payload["items"][number];
+export type ReviewItem = Payload["items"][number];
 type AnswerStatus = "idle" | "sending" | "sent" | "error";
 type GradedAnswer = {
   word: string;
   answer: string;
   is_correct: boolean;
-  rating: "again" | "hard" | "good" | "easy";
-  error_layer: z.infer<typeof errorLayerSchema> | "none";
+  rating: FsrsRating;
+  error_layer: ErrorLayer;
   feedback: string;
 };
+
+export type ReviewToolCall =
+  | { name: "record_review_submission"; arguments: RecordReviewSubmissionInput }
+  | { name: "record_attempt"; arguments: RecordAttemptInput };
+
+/**
+ * Build every Review persistence call from one validated verdict. The
+ * error-repair route only removes the FSRS-only rating after the common review
+ * submission has been validated; it does not get a second hand-written shape.
+ */
+export function buildReviewSubmission(
+  item: Pick<ReviewItem, "word" | "direction" | "review_kind">,
+  draft: {
+    user_answer: string;
+    is_correct: boolean;
+    error_layer: ErrorLayer;
+    rating: FsrsRating;
+  },
+): ReviewToolCall {
+  const submission = recordReviewSubmissionSchema.parse({
+    word: item.word,
+    user_answer: draft.user_answer,
+    is_correct: draft.is_correct,
+    error_layer: draft.is_correct ? draft.error_layer : draft.error_layer === "none" ? "meaning" : draft.error_layer,
+    rating: draft.is_correct ? draft.rating : "again",
+    direction: item.direction,
+  });
+  if (shouldAdvanceFsrs(item.review_kind)) {
+    return { name: "record_review_submission", arguments: submission };
+  }
+  const { rating: _rating, ...attempt } = submission;
+  return {
+    name: "record_attempt",
+    arguments: recordAttemptSchema.parse({ ...attempt, activity_type: "review" }),
+  };
+}
 
 function parseGrade(raw: string): z.infer<typeof gradeSchema> {
   const match = raw.match(/\{[\s\S]*\}/);
@@ -237,18 +285,15 @@ export function ReviewWidget(): React.JSX.Element {
           throw caught;
         }
       }
-      const attemptErrorLayer = grade.is_correct
-        ? grade.error_layer
-        : grade.error_layer === "none" ? "meaning" : grade.error_layer;
-      if (shouldAdvanceFsrs(item.review_kind)) {
-        const submission = await callServerTool("record_review_submission", {
-          word: item.word,
-          user_answer: cleanAnswer,
-          is_correct: grade.is_correct,
-          error_layer: attemptErrorLayer,
-          rating: grade.is_correct ? grade.rating : "again",
-          direction: item.direction,
-        });
+      const reviewCall = buildReviewSubmission(item, {
+        user_answer: cleanAnswer,
+        is_correct: grade.is_correct,
+        error_layer: grade.error_layer,
+        rating: grade.rating,
+      });
+      const attemptErrorLayer = reviewCall.arguments.error_layer;
+      if (reviewCall.name === "record_review_submission") {
+        const submission = await callServerTool(reviewCall.name, reviewCall.arguments);
         if (submission.isError) {
           if (isReviewCardAlreadyCompleteResult(submission)) {
             const completed: GradedAnswer = {
@@ -267,14 +312,7 @@ export function ReviewWidget(): React.JSX.Element {
           throw new Error("到期复习结果未能保存，请重试。");
         }
       } else {
-        const attempt = await callServerTool("record_attempt", {
-          word: item.word,
-          activity_type: "review",
-          direction: item.direction,
-          user_answer: cleanAnswer,
-          is_correct: grade.is_correct,
-          error_layer: attemptErrorLayer,
-        });
+        const attempt = await callServerTool(reviewCall.name, reviewCall.arguments);
         if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
       }
       const graded: GradedAnswer = { word: item.word, answer: cleanAnswer, ...grade, error_layer: attemptErrorLayer };
@@ -295,14 +333,14 @@ export function ReviewWidget(): React.JSX.Element {
     setStatus("sending");
     setError("");
     try {
-      if (shouldAdvanceFsrs(item.review_kind)) {
-        const submission = await callServerTool("record_review_submission", {
-          word: item.word,
-          user_answer: "",
-          is_correct: false,
-          error_layer: item.error_layers[0] ?? "meaning",
-          rating: "again",
-        });
+      const reviewCall = buildReviewSubmission(item, {
+        user_answer: "",
+        is_correct: false,
+        error_layer: item.error_layers[0] ?? "meaning",
+        rating: "again",
+      });
+      if (reviewCall.name === "record_review_submission") {
+        const submission = await callServerTool(reviewCall.name, reviewCall.arguments);
         if (submission.isError) {
           if (isReviewCardAlreadyCompleteResult(submission)) {
             const completed: GradedAnswer = {
@@ -321,13 +359,7 @@ export function ReviewWidget(): React.JSX.Element {
           throw new Error("到期复习结果未能保存，请重试。");
         }
       } else {
-        const attempt = await callServerTool("record_attempt", {
-          word: item.word,
-          activity_type: "review",
-          user_answer: "",
-          is_correct: false,
-          error_layer: item.error_layers[0] ?? "meaning",
-        });
+        const attempt = await callServerTool(reviewCall.name, reviewCall.arguments);
         if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
       }
       const graded: GradedAnswer = {

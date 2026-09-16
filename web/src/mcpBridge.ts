@@ -108,14 +108,12 @@ export async function getSamplingAvailability(): Promise<boolean> {
 export async function callServerTool(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
   const previewResult = window.__WORDLOOP_PREVIEW__?.toolResults?.[name];
   if (previewResult) return { content: [], structuredContent: previewResult };
-  try {
-    await connectApp();
-    if (app.getHostCapabilities()?.serverTools) {
-      return await app.callServerTool({ name, arguments: args });
-    }
-  } catch {
-    // A legacy ChatGPT host may expose only window.openai.callTool.
-  }
+  // Capability detection is the only compatibility branch. Once a host has
+  // advertised serverTools, an app.callServerTool failure is the real failure
+  // and must reach the Widget unchanged. Connection or capability errors are
+  // not evidence of a legacy host, so they also propagate unchanged.
+  await connectApp();
+  if (app.getHostCapabilities()?.serverTools) return app.callServerTool({ name, arguments: args });
   if (typeof window.openai?.callTool === "function") return window.openai.callTool(name, args);
   throw new Error("This host cannot call Wordloop tools from the widget.");
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { gradeReviewCnToEn, isReviewCardAlreadyCompleteResult, ReviewQuestion, shouldAdvanceFsrs } from "../web/src/review/ReviewWidget.js";
+import { buildReviewSubmission, gradeReviewCnToEn, isReviewCardAlreadyCompleteResult, ReviewQuestion, shouldAdvanceFsrs } from "../web/src/review/ReviewWidget.js";
 
 const base = {
   meaning_zh: "再次发生；复发",
@@ -43,8 +43,33 @@ describe("ReviewQuestion", () => {
     expect(shouldAdvanceFsrs("both")).toBe(true);
     expect(source).not.toContain('callServerTool("get_learning_context"');
     expect(source).not.toContain("dueByWord");
-    expect(source).toContain('callServerTool("record_review_submission"');
+    expect(source).toContain("buildReviewSubmission");
+    expect(source).toContain("callServerTool(reviewCall.name");
     expect(source).not.toContain('callServerTool("record_review_result"');
+  });
+
+  it("routes both no-answer persistence paths through the shared builder", () => {
+    const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
+    const markUnknown = source.slice(source.indexOf("async function markUnknown"), source.indexOf("function nextQuestion"));
+    expect(markUnknown.match(/buildReviewSubmission\(item/g) ?? []).toHaveLength(1);
+    expect(markUnknown.match(/callServerTool\(reviewCall\.name/g) ?? []).toHaveLength(2);
+    expect(markUnknown).not.toContain("direction: item.direction");
+  });
+
+  it("builds the shared review call used by the UI", () => {
+    const call = buildReviewSubmission(
+      { word: "recur", direction: "cn_to_en", review_kind: "fsrs_due" },
+      { user_answer: "recure", is_correct: true, error_layer: "spelling", rating: "hard" },
+    );
+    expect(call).toMatchObject({ name: "record_review_submission" });
+    expect(call.arguments).toMatchObject({
+      word: "recur",
+      user_answer: "recure",
+      is_correct: true,
+      error_layer: "spelling",
+      rating: "hard",
+      direction: "cn_to_en",
+    });
   });
 
   it("hides stale-widget due errors behind the completed-card message", () => {

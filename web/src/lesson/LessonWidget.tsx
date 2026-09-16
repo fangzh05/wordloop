@@ -4,6 +4,13 @@ import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
 import { callServerTool, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 import { z } from "zod";
+import {
+  advanceStudySessionSchema,
+  getNextLearningWordSchema,
+  lessonSubmissionSchema,
+  type AdvanceStudySessionInput,
+  type GetNextLearningWordInput,
+} from "../../../shared/toolContracts.js";
 
 const exerciseSchema = z.object({
   activity_type: z.string().trim().min(1).max(80),
@@ -113,7 +120,23 @@ export function buildLessonSubmissionMessage(input: {
   prompt: string;
   answer: string;
 }): string {
-  return `提交 WordLoop 正式学习答案。\n\n目标词：${input.word}\n练习类型：${input.activityType}\n题目：${input.prompt}\n用户答案：${input.answer.trim()}\n\n判定规则：若练习类型属于确定性题型（pretest_cn_to_en、listen_recall、spelling、word_recall），用确定性判分得到 is_correct 与 error_layer（不要凭语感判断；错误层只允许 none/spelling/meaning）；其余题型按 Teaching Prompt 做语义批改。然后调用 record_attempt 记录本次作答（record_attempt 只负责持久化，不会替你判分）。最后调用 render_lesson_widget mode=feedback，批改用词与解释由你负责。`;
+  const submission = lessonSubmissionSchema.parse({
+    word: input.word,
+    activity_type: input.activityType,
+    prompt: input.prompt,
+    answer: input.answer,
+  });
+  return `提交 WordLoop 正式学习答案。\n\n目标词：${submission.word}\n练习类型：${submission.activity_type}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n判定规则：若练习类型属于确定性题型（pretest_cn_to_en、listen_recall、spelling、word_recall），用确定性判分得到 is_correct 与 error_layer（不要凭语感判断；错误层只允许 none/spelling/meaning）；其余题型按 Teaching Prompt 做语义批改。然后调用 record_attempt 记录本次作答（record_attempt 只负责持久化，不会替你判分）。最后调用 render_lesson_widget mode=feedback，批改用词与解释由你负责。`;
+}
+
+export function buildLessonSessionAdvance(
+  event: "lesson_start_exercise" | "lesson_retry",
+): AdvanceStudySessionInput {
+  return advanceStudySessionSchema.parse({ event });
+}
+
+export function buildNextLessonRequest(currentWord: string): GetNextLearningWordInput {
+  return getNextLearningWordSchema.parse({ current_word: currentWord });
 }
 
 export function buildNextLessonMessage(nextWord: string): string {
@@ -184,7 +207,7 @@ export function LessonWidget(): React.JSX.Element {
     setSubmitStatus("idle");
     try {
       if (!window.__WORDLOOP_PREVIEW__) {
-        const result = await callServerTool("advance_study_session", { event: "lesson_start_exercise" });
+        const result = await callServerTool("advance_study_session", buildLessonSessionAdvance("lesson_start_exercise"));
         if (result.isError) throw new Error("无法保存练习阶段，请重试。");
       }
       setLocalMode("exercise");
@@ -214,7 +237,7 @@ export function LessonWidget(): React.JSX.Element {
   async function nextLesson(): Promise<void> {
     if (!payload) return;
     try {
-      const result = await callServerTool("get_next_learning_word", { current_word: currentWord });
+      const result = await callServerTool("get_next_learning_word", buildNextLessonRequest(currentWord));
       if (result.isError) throw new Error("WordLoop 未能确定下一个学习词，请重试。");
       const parsed = nextLearningResultSchema.safeParse(result.structuredContent);
       if (!parsed.success) throw new Error("WordLoop 返回的下一词结果无效，请重试。");
@@ -236,7 +259,7 @@ export function LessonWidget(): React.JSX.Element {
     setError("");
     try {
       if (!window.__WORDLOOP_PREVIEW__) {
-        const result = await callServerTool("advance_study_session", { event: "lesson_retry" });
+        const result = await callServerTool("advance_study_session", buildLessonSessionAdvance("lesson_retry"));
         if (result.isError) throw new Error("无法保存重试阶段，请重试。");
       }
       setLocalMode("exercise");

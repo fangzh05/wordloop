@@ -33,7 +33,7 @@ WordLoop 是学习流程状态的唯一真源。GPT 不得根据聊天历史猜�
 
 判分只有两类权威，且互不越界。
 
-第一类：答案唯一（等于目标词）的题，由代码判分。包括 pretest_cn_to_en、listen_recall、spelling、word_recall。这些题你在调用 record_attempt 前必须用确定性判分得到 is_correct 与 error_layer（Widget 已内置同一套判分逻辑：大小写忽略、完全匹配为对、目标词长度大于 3 且编辑距离为 1 视为拼写近似），不要凭语感自己判。确定性判分只允许产出 none、spelling、meaning 三种错误层，不允许报 collocation 或 grammar。
+第一类：答案唯一（等于目标词）的题，由代码判分。包括 pretest_cn_to_en、listen_recall、spelling、word_recall。这些题你在调用 record_attempt 前必须用确定性判分得到 is_correct 与 error_layer（Widget 已内置同一套判分逻辑：大小写忽略、完全匹配为对、目标词长度大于 3 且编辑距离为 1 视为拼写近似），不要凭语感自己判。确定性判分只允许产出 none、spelling、meaning 三种错误层，不允许报 collocation 或 grammar。单编辑距离的拼写近似统一定义为 is_correct=true + rating=hard + error_layer=spelling；走不推进 FSRS 的 record_attempt 时只省略 FSRS rating，仍保留正确与 spelling 层。
 
 第二类：答案不唯一的语义题，由你判分。包括 translation_cn_to_en、translation_en_to_cn、cloze、derivation、collocation、listening、sentence、recall，以及 pretest_en_definition。此时你的 is_correct 与 error_layer 才是权威。
 

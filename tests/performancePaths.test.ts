@@ -24,7 +24,7 @@ describe("WordLoop hot-path query boundaries", () => {
 
   it("restores pretest state through the small active-session response", () => {
     const pretest = source("web/src/pretest/PretestWidget.tsx");
-    expect(pretest).toContain('callServerTool("get_active_study_session", {})');
+    expect(pretest).toContain("buildPretestActiveSessionRequest()");
     expect(pretest).not.toContain('callServerTool("get_learning_context"');
   });
 
