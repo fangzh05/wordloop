@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Button } from "../components/Button.js";
 import { DailyNewWordControl } from "../components/DailyNewWordControl.js";
 import { ArrowIcon } from "../components/Icons.js";
-import { callServerTool, sendUserMessage, structuredContentOf, subscribeToApp, updateModelContext } from "../mcpBridge.js";
+import { sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 
 const progressSchema = z.object({
   today: z.object({ total: z.number(), known: z.number(), uncertain: z.number(), unknown: z.number(), completed: z.number() }),
@@ -27,14 +27,7 @@ export function LearningDashboard(): React.JSX.Element {
   const learningToday = Math.max(0, progress.today.completed - progress.today.known);
 
   async function followUp(text: string): Promise<void> {
-    await updateModelContext("Current Wordloop progress is attached.", { wordloopProgress: progress });
     await sendUserMessage(text);
-  }
-
-  async function refreshProgress(): Promise<void> {
-    const result = await callServerTool("get_progress", {});
-    const parsed = progressSchema.safeParse(structuredContentOf(result));
-    if (!result.isError && parsed.success) setProgress(parsed.data);
   }
 
   return <section className="widget-card" aria-labelledby="dashboard-title">
@@ -50,7 +43,15 @@ export function LearningDashboard(): React.JSX.Element {
       <div><dt>学习中</dt><dd>{learningToday}</dd></div>
       <div><dt>错词</dt><dd>{progress.all_time.error_book}</dd></div>
     </dl>
-    <DailyNewWordControl limit={progress.settings.daily_new_word_limit} todayPrepared={progress.today.total} onSaved={() => void refreshProgress()} />
+    <DailyNewWordControl
+      limit={progress.settings.daily_new_word_limit}
+      todayPrepared={progress.today.total}
+      onSaved={(value) => setProgress((current) => current ? {
+        ...current,
+        settings: { ...current.settings, daily_new_word_limit: value.limit },
+        today: { ...current.today, total: value.prepared },
+      } : current)}
+    />
     <div className="section-divider" />
     <span className="eyebrow">复习安排</span>
     <dl className="metrics fsrs-metrics">

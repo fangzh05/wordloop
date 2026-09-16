@@ -43,7 +43,7 @@ describe("Streamable HTTP server", () => {
       "record_attempt", "get_error_book", "save_sentence", "get_progress",
       "record_review_result", "record_review_submission",
       "render_word_import", "render_pretest_widget", "render_review_widget", "render_review_widget_v2", "render_learning_dashboard", "render_lesson_widget", "render_pronunciation_cards", "render_dictation_widget",
-      "get_active_study_session", "advance_study_session", "finish_study_session",
+      "get_active_study_session", "get_study_bootstrap", "advance_study_session", "finish_study_session",
     ]));
     expect(instructions).toContain("active error");
     expect(instructions).toContain("Prefer render_review_widget_v2");

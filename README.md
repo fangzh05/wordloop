@@ -164,7 +164,7 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001, 002, 003, and 004 in that order. If a real database already ran the older setup, execute only the missing migration files in order; migration 004 adds resumable state to the existing `study_sessions` table and preserves all imports, attempts, FSRS cards, and error layers.
+3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001–006 in order. If a real database already ran the older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes without changing user data.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 
@@ -206,7 +206,8 @@ npm start
 | Tool | Role |
 | --- | --- |
 | `import_words` | Normalize, deduplicate, and persist a daily ordered list. |
-| `get_learning_context` | Read today's persisted statuses, recent answer history, review queue, stats, and session rules. |
+| `get_study_bootstrap` | Start or resume study with one short-circuiting backend decision. |
+| `get_learning_context` | Legacy-compatible read of today's persisted statuses, recent answer history, review queue, stats, and session rules. |
 | `get_active_study_session` | Read only the active durable Widget cursor; the full payload stays server-side. |
 | `get_next_learning_word` | Return the first unfinished word after the current word in today's prepared queue. |
 | `get_next_round` | Select 5–7 unfinished words. |

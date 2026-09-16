@@ -3,8 +3,12 @@ import { z } from "zod";
 import { Button } from "./Button.js";
 import { callServerTool, structuredContentOf } from "../mcpBridge.js";
 
-const limitSchema = z.object({ daily_new_word_limit: z.number().int().min(1).max(200) });
-const preparedSchema = z.object({ date: z.string(), prepared: z.number().int().nonnegative(), added: z.number().int().nonnegative(), limit: z.number().int().min(1).max(200) });
+const savedSchema = z.object({
+  daily_new_word_limit: z.number().int().min(1).max(200),
+  date: z.string(),
+  prepared: z.number().int().nonnegative(),
+  added: z.number().int().nonnegative(),
+});
 
 export function DailyNewWordControl({
   limit,
@@ -35,23 +39,18 @@ export function DailyNewWordControl({
     setSaving(true);
     setMessage("");
     try {
-      const limitResult = await callServerTool("set_daily_new_word_limit", { limit: next });
-      const storedLimit = limitSchema.safeParse(structuredContentOf(limitResult));
-      if (limitResult.isError || !storedLimit.success) throw new Error("每日新词数量未能保存，请重试。");
+      const result = await callServerTool("set_daily_new_word_limit", { limit: next });
+      const saved = savedSchema.safeParse(structuredContentOf(result));
+      if (result.isError || !saved.success) throw new Error("每日新词数量未能保存，请重试。");
 
-      const prepareResult = await callServerTool("prepare_daily_new_words", {});
-      const prepared = preparedSchema.safeParse(structuredContentOf(prepareResult));
-      if (prepareResult.isError || !prepared.success) throw new Error("数量已保存，但今日新词暂时无法补充。");
-
-      const result = prepared.data;
       if (todayPrepared > next) {
         setMessage(`每日新词已设为 ${next}。今天已经准备 ${todayPrepared} 个，不会删除；之后按 ${next} 个执行。`);
-      } else if (result.added > 0) {
-        setMessage(`每日新词已设为 ${next}，今天新增 ${result.added} 个。`);
+      } else if (saved.data.added > 0) {
+        setMessage(`每日新词已设为 ${next}，今天新增 ${saved.data.added} 个。`);
       } else {
         setMessage(`每日新词已设为 ${next}。`);
       }
-      onSaved?.({ limit: storedLimit.data.daily_new_word_limit, prepared: result.prepared, added: result.added });
+      onSaved?.({ limit: saved.data.daily_new_word_limit, prepared: saved.data.prepared, added: saved.data.added });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "每日新词数量未能保存，请重试。");
     } finally {

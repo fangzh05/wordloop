@@ -320,16 +320,17 @@ export function PretestWidget(): React.JSX.Element {
 
   async function restoreSavedProgress(nextPayload: Payload): Promise<void> {
     try {
-      const stored = await callServerTool("get_learning_context", {});
+      const stored = await callServerTool("get_active_study_session", {});
       if (stored.isError) return;
       const context = z.object({
-        today_words: z.array(z.object({
+        active: z.boolean(),
+        pretest_results: z.array(z.object({
           word: z.string(),
-          status: z.enum(["new", "known", "uncertain", "unknown", "review", "mastered"]),
-        })),
+          status: z.string(),
+        })).optional(),
       }).safeParse(stored.structuredContent);
-      if (!context.success || interactionStartedRef.current) return;
-      const statusByWord = new Map(context.data.today_words.map((entry) => [normalizePretestWord(entry.word), entry.status]));
+      if (!context.success || !context.data.active || !context.data.pretest_results || interactionStartedRef.current) return;
+      const statusByWord = new Map(context.data.pretest_results.map((entry) => [normalizePretestWord(entry.word), entry.status]));
       const restored = nextPayload.items.flatMap((entry): GradedAnswer[] => {
         const saved = statusByWord.get(normalizePretestWord(entry.word));
         if (!saved || saved === "new") return [];
@@ -746,4 +747,3 @@ export function PretestWidget(): React.JSX.Element {
     </div>
   </section>;
 }
-

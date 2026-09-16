@@ -1,10 +1,11 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ActiveErrorLayer, ReviewKind, ReviewVocabularyItem, UserWordRow, VocabularyItem } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
-import { getAllUserWords, getDailyNewWordLimit, getTodayWords, getUserTimeZone } from "./words.js";
+import { getTodayWords, getUserTimeZone, vocabularyItemFromRpc, type RpcVocabularyRow } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
-import { fsrsForecast } from "./progress.js";
+import { getProgress } from "./progress.js";
 import { getActiveStudySession } from "./studySessions.js";
+import { perf } from "./perf.js";
 
 function reviewDueAt(item: VocabularyItem, now: Date): boolean {
   if (!item.next_review_at) return false;
@@ -47,13 +48,28 @@ export function selectReviewWords(all: VocabularyItem[], limit: number, now = ne
     .slice(0, limit);
 }
 
-export async function getReviewSelection(limit = 5): Promise<{
+export async function getReviewSelection(
+  limit = 5,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+  now = new Date(),
+): Promise<{
   rollingReview: ReviewVocabularyItem[];
   oldRandomReview: VocabularyItem[];
 }> {
-  const all = await getAllUserWords(getDatabase(), getAuthenticatedUserId());
-  const priority = selectReviewWords(all, limit);
-  return { rollingReview: priority, oldRandomReview: [] };
+  return perf("get_review_selection", async () => {
+    const { data, error } = await db.rpc("get_review_candidates_v1", {
+      p_user_id: userId,
+      p_now: now.toISOString(),
+      p_limit: limit,
+    });
+    assertDatabaseResult(error);
+    const candidates = ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
+    return {
+      rollingReview: candidates.map((item) => decorateReviewWord(item, now)),
+      oldRandomReview: [],
+    };
+  });
 }
 
 export async function getLearningContext(): Promise<{
@@ -71,14 +87,12 @@ export async function getLearningContext(): Promise<{
   const userId = getAuthenticatedUserId();
   const timeZone = await getUserTimeZone(db, userId);
   const date = dateInTimeZone(timeZone);
-  const [todayWords, all, recentActivity, dailyNewWordLimit] = await Promise.all([
+  const [todayWords, reviews, progress, recentActivity] = await Promise.all([
     getTodayWords(date, db, userId),
-    getAllUserWords(db, userId),
+    getReviewSelection(5, db, userId),
+    getProgress(),
     getRecentActivity(db, userId),
-    getDailyNewWordLimit(db, userId),
   ]);
-  const reviews = { rollingReview: selectReviewWords(all, 5), oldRandomReview: [] as VocabularyItem[] };
-  const forecast = fsrsForecast(all, timeZone);
   return {
     date,
     today_words: todayWords,
@@ -86,17 +100,17 @@ export async function getLearningContext(): Promise<{
     old_random_review: reviews.oldRandomReview,
     recent_activity: recentActivity,
     fsrs: {
-      due_now: forecast.due_now,
-      due_today: forecast.due_today,
-      due_next_7_days: forecast.due_next_7_days,
+      due_now: progress.fsrs.due_now,
+      due_today: progress.fsrs.due_today,
+      due_next_7_days: progress.fsrs.due_next_7_days,
     },
     stats: {
       today_total: todayWords.length,
       today_completed: todayWords.filter((word) => word.status !== "new").length,
-      total_learned: all.filter((word) => word.status !== "new").length,
-      error_book: all.filter((word) => word.error_layers.length > 0).length,
+      total_learned: Math.max(0, progress.all_time.total_words - progress.all_time.learning),
+      error_book: progress.all_time.error_book,
     },
-    settings: { daily_new_word_limit: dailyNewWordLimit },
+    settings: progress.settings,
     session_rules: {
       initial_review_count: 5,
       round_size_min: 5,

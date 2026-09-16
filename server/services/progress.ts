@@ -1,19 +1,17 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { ProgressResult } from "../types.js";
-import { dateInTimeZone } from "./shared.js";
-import { getAllUserWords, getDailyNewWordLimit, getTodayWords, getUserTimeZone } from "./words.js";
+import type { ProgressResult, VocabularyItem } from "../types.js";
+import { assertDatabaseResult, dateInTimeZone } from "./shared.js";
+import { perf } from "./perf.js";
 
 export async function getProgress(): Promise<ProgressResult> {
-  const db = getDatabase();
-  const userId = getAuthenticatedUserId();
-  const timeZone = await getUserTimeZone(db, userId);
-  const date = dateInTimeZone(timeZone);
-  const [today, all, dailyNewWordLimit] = await Promise.all([
-    getTodayWords(date, db, userId),
-    getAllUserWords(db, userId),
-    getDailyNewWordLimit(db, userId),
-  ]);
-  return calculateProgress(today, all, timeZone, dailyNewWordLimit);
+  return perf("get_progress", async () => {
+    const { data, error } = await getDatabase().rpc("get_progress_snapshot_v1", {
+      p_user_id: getAuthenticatedUserId(),
+      p_now: new Date().toISOString(),
+    });
+    assertDatabaseResult(error);
+    return data as ProgressResult;
+  });
 }
 
 function addCalendarDays(date: string, days: number): string {
@@ -22,23 +20,28 @@ function addCalendarDays(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-export function fsrsForecast(all: Awaited<ReturnType<typeof getAllUserWords>>, timeZone = "Asia/Shanghai", now = new Date()) {
+export function fsrsForecast(all: VocabularyItem[], timeZone = "Asia/Shanghai", now = new Date()) {
   const today = dateInTimeZone(timeZone, now);
   const tomorrow = addCalendarDays(today, 1);
   const day7 = addCalendarDays(today, 7);
-  const due = all.map((word) => word.next_review_at ? new Date(word.next_review_at) : null).filter((date): date is Date => date !== null);
+  const due = all
+    .map((word) => word.next_review_at ? new Date(word.next_review_at) : null)
+    .filter((date): date is Date => date !== null);
   return {
     due_now: due.filter((date) => date <= now).length,
     due_today: due.filter((date) => dateInTimeZone(timeZone, date) <= today).length,
     tomorrow: due.filter((date) => dateInTimeZone(timeZone, date) === tomorrow).length,
     due_next_7_days: due.filter((date) => dateInTimeZone(timeZone, date) <= day7).length,
-    average_stability: all.length === 0 ? 0 : Number((all.reduce((sum, word) => sum + (word.fsrs_stability ?? 0), 0) / all.length).toFixed(1)),
+    average_stability: all.length === 0
+      ? 0
+      : Number((all.reduce((sum, word) => sum + (word.fsrs_stability ?? 0), 0) / all.length).toFixed(1)),
   };
 }
 
+/** Kept as a pure compatibility helper; production reads use the snapshot RPC. */
 export function calculateProgress(
-  today: Awaited<ReturnType<typeof getTodayWords>>,
-  all: Awaited<ReturnType<typeof getAllUserWords>>,
+  today: VocabularyItem[],
+  all: VocabularyItem[],
   timeZone = "Asia/Shanghai",
   dailyNewWordLimit = 50,
 ): ProgressResult {

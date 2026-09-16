@@ -25,6 +25,29 @@ interface JoinedUserWord extends UserWordRow {
   word: WordEntity | WordEntity[];
 }
 
+export interface RpcVocabularyRow {
+  word: string;
+  display_word: string;
+  status: WordStatus;
+  source: string | null;
+  consecutive_correct: number;
+  wrong_count: number;
+  mastered: boolean;
+  next_review_at: string | null;
+  meaning_error: boolean;
+  collocation_error: boolean;
+  grammar_error: boolean;
+  pronunciation_error: boolean;
+  spelling_error: boolean;
+  fsrs_stability: number;
+  fsrs_difficulty: number;
+  fsrs_scheduled_days: number;
+  fsrs_state: number;
+  ipa_us: string | null;
+  ipa_uk: string | null;
+  senses: Array<{ pos: string; definition_cn: string }>;
+}
+
 interface DailyWordJoin {
   import_id: string;
   position: number;
@@ -131,48 +154,12 @@ export async function getTodayWords(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
 ): Promise<VocabularyItem[]> {
-  const { data: imports, error: importError } = await db
-    .from("daily_imports")
-    .select("id,created_at")
-    .eq("user_id", userId)
-    .eq("import_date", date)
-    .order("created_at", { ascending: true })
-    .order("id", { ascending: true });
-  assertDatabaseResult(importError);
-  const orderedImports = (imports ?? []) as Array<{ id: string; created_at: string }>;
-  const importIds = orderedImports.map((row) => row.id);
-  if (importIds.length === 0) return [];
-  const importRank = new Map(importIds.map((id, index) => [id, index]));
-
-  const { data: joins, error: joinError } = await db
-    .from("daily_import_words")
-    .select("import_id,position,word_id,words!inner(normalized_word,display_word,ipa_us,ipa_uk,senses)")
-    .in("import_id", importIds)
-    .order("position", { ascending: true });
-  assertDatabaseResult(joinError);
-  const dailyRows = (joins ?? []) as unknown as DailyWordJoin[];
-  const orderedDailyRows = sortDailyWordRows(dailyRows, importRank);
-  const wordIds = [...new Set(orderedDailyRows.map((row) => row.word_id))];
-  if (wordIds.length === 0) return [];
-
-  const { data: states, error: stateError } = await db
-    .from("user_words")
-    .select("*")
-    .eq("user_id", userId)
-    .in("word_id", wordIds);
-  assertDatabaseResult(stateError);
-  const stateByWord = new Map((states as UserWordRow[] | null ?? []).map((state) => [state.word_id, state]));
-  const emitted = new Set<string>();
-  const output: VocabularyItem[] = [];
-  for (const row of orderedDailyRows) {
-    if (emitted.has(row.word_id)) continue;
-    const state = stateByWord.get(row.word_id);
-    if (!state) continue;
-    const word = relationOne(row.words);
-    emitted.add(row.word_id);
-    output.push(toVocabularyItem(state, word));
-  }
-  return output;
+  const { data, error } = await db.rpc("get_today_words_v2", {
+    p_user_id: userId,
+    p_date: date,
+  });
+  assertDatabaseResult(error);
+  return ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
 }
 
 export async function getAllUserWords(
@@ -221,6 +208,27 @@ export function toVocabularyItem(
   };
 }
 
+export function vocabularyItemFromRpc(row: RpcVocabularyRow): VocabularyItem {
+  return {
+    word: row.word,
+    display_word: row.display_word,
+    status: row.status,
+    source: row.source,
+    consecutive_correct: row.consecutive_correct,
+    wrong_count: row.wrong_count,
+    mastered: row.mastered,
+    next_review_at: row.next_review_at,
+    error_layers: errorLayers(row),
+    fsrs_stability: row.fsrs_stability ?? 0,
+    fsrs_difficulty: row.fsrs_difficulty ?? 0,
+    fsrs_scheduled_days: row.fsrs_scheduled_days ?? 0,
+    fsrs_state: row.fsrs_state ?? 0,
+    ipa_us: row.ipa_us,
+    ipa_uk: row.ipa_uk,
+    senses: Array.isArray(row.senses) ? row.senses : [],
+  };
+}
+
 export async function prepareDailyNewWords(
   db = getDatabase(), userId = getAuthenticatedUserId(), date?: string,
 ): Promise<{ date: string; prepared: number; added: number; limit: number }> {
@@ -230,12 +238,23 @@ export async function prepareDailyNewWords(
   return data as { date: string; prepared: number; added: number; limit: number };
 }
 
-export async function setDailyNewWordLimit(limit: number): Promise<{ daily_new_word_limit: number }> {
-  const { data, error } = await getDatabase().rpc("set_daily_new_word_limit_v1", {
-    p_user_id: getAuthenticatedUserId(), p_limit: limit,
+export async function setDailyNewWordLimit(
+  limit: number,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<{ daily_new_word_limit: number; date: string; prepared: number; added: number }> {
+  const { data, error } = await db.rpc("set_daily_new_word_limit_v1", {
+    p_user_id: userId, p_limit: limit,
   });
   assertDatabaseResult(error);
-  return data as { daily_new_word_limit: number };
+  const date = dateInTimeZone(await getUserTimeZone(db, userId));
+  const prepared = await prepareDailyNewWords(db, userId, date);
+  return {
+    daily_new_word_limit: (data as { daily_new_word_limit: number }).daily_new_word_limit,
+    date: prepared.date,
+    prepared: prepared.prepared,
+    added: prepared.added,
+  };
 }
 
 export type DbClient = SupabaseClient;

@@ -6,7 +6,7 @@ import { assertDatabaseResult, dateInTimeZone } from "./shared.js";
 import { getUserTimeZone } from "./words.js";
 
 const sessionColumns = "id,user_id,started_at,ended_at,new_words_count,review_words_count,state,updated_at";
-const pretestItemsSchema = z.array(z.object({ word: z.string().trim().min(1).max(100) }));
+const pretestItemsSchema = z.array(z.object({ word: z.string().trim().min(1).max(100) })).max(7);
 const lessonExerciseSchema = z.object({
   activity_type: z.string().trim().min(1).max(80),
   instruction: z.string().trim().min(1).max(300),
@@ -153,9 +153,10 @@ export async function persistStudyState(
   state: StudyState,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  knownActive?: StudySessionRow | null,
 ): Promise<StudySessionRow> {
   const nextState = assertState(state);
-  const active = await getActiveStudySession(db, userId);
+  const active = knownActive === undefined ? await getActiveStudySession(db, userId) : knownActive;
   if (active) return updateSessionState(active, nextState, db, userId);
   const { data, error } = await db
     .from("study_sessions")
@@ -285,21 +286,53 @@ export async function advanceStudySession(
   return updateSessionState(active, nextState, db, userId);
 }
 
-export function studySessionSummary(session: StudySessionRow | null): {
+export async function getPretestResults(
+  session: StudySessionRow | null,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<Array<{ word: string; status: string }>> {
+  if (!session?.state || session.state.widget !== "pretest") return [];
+  const parsedItems = pretestItemsSchema.safeParse(session.state.payload.items);
+  if (!parsedItems.success) return [];
+  const words = parsedItems.data.map((item) => item.word);
+  if (words.length === 0) return [];
+  const { data, error } = await db
+    .from("user_words")
+    .select("status,word:words!inner(normalized_word)")
+    .eq("user_id", userId)
+    .in("word.normalized_word", words);
+  assertStudySessionDatabaseResult(error);
+  type ResultRow = { status: string; word: { normalized_word: string } | Array<{ normalized_word: string }> };
+  const byWord = new Map(((data ?? []) as unknown as ResultRow[]).map((row) => {
+    const word = Array.isArray(row.word) ? row.word[0]?.normalized_word : row.word.normalized_word;
+    return [word, row.status] as const;
+  }));
+  return words.flatMap((word) => {
+    const status = byWord.get(word);
+    return status ? [{ word, status }] : [];
+  });
+}
+
+export function studySessionSummary(session: StudySessionRow | null, pretestResults?: Array<{ word: string; status: string }>): {
   active: boolean;
   widget?: StudyWidget;
   phase?: StudyPhase;
   current_word?: string | null;
   current_index?: number;
+  pretest_results?: Array<{ word: string; status: string }>;
 } {
   if (!session || session.ended_at || !session.state) return { active: false };
-  return {
+  const summary = {
     active: true,
     widget: session.state.widget,
     phase: session.state.phase,
     current_word: session.state.current_word,
     current_index: session.state.current_index,
   };
+  if (session.state.widget === "pretest" && pretestResults) {
+    return { ...summary, pretest_results: pretestResults };
+  }
+  return summary;
 }
 
 export async function finishStudySession(

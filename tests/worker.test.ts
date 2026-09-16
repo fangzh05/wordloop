@@ -26,7 +26,7 @@ describe("Sites Worker", () => {
     }), {});
     const payload = await result.json() as { result: { tools: Array<{ name: string }> } };
     expect(result.status).toBe(200);
-    expect(payload.result.tools).toHaveLength(27);
+    expect(payload.result.tools).toHaveLength(28);
     expect(payload.result.tools.some((tool) => tool.name === "get_learning_context")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "get_next_learning_word")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "render_pretest_widget")).toBe(true);
@@ -38,6 +38,7 @@ describe("Sites Worker", () => {
     expect(payload.result.tools.some((tool) => tool.name === "render_learning_dashboard")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "render_lesson_widget")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "get_active_study_session")).toBe(true);
+    expect(payload.result.tools.some((tool) => tool.name === "get_study_bootstrap")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "advance_study_session")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "finish_study_session")).toBe(true);
   });

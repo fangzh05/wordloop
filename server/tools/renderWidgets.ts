@@ -1,8 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
+import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { getProgress } from "../services/progress.js";
-import { getFirstLearningWord, getNextLearningWord, getReviewSelection } from "../services/review.js";
+import { findFirstLearningWord, findNextLearningWord, getReviewSelection } from "../services/review.js";
 import { getActiveStudySession, getStudyDate, makeStudyState, persistStudyState } from "../services/studySessions.js";
 import { getTodayWords } from "../services/words.js";
 import { normalizeWord } from "../services/wordNormalization.js";
@@ -168,6 +169,7 @@ function resumablePayload(session: StudySessionRow | null, widget: StudyState["w
 
 async function saveWidgetState(input: {
   date?: string;
+  knownActive?: StudySessionRow | null;
   widget: StudyState["widget"];
   phase: StudyPhase;
   current_word: string | null;
@@ -175,9 +177,9 @@ async function saveWidgetState(input: {
   retry_count: number;
   payload: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
-  const { date, ...stateInput } = input;
+  const { date, knownActive, ...stateInput } = input;
   const state = makeStudyState({ date: date ?? await getStudyDate(), ...stateInput });
-  await persistStudyState(state);
+  await persistStudyState(state, getDatabase(), getAuthenticatedUserId(), knownActive);
   return widgetPayloadWithState(input.payload, state);
 }
 
@@ -255,20 +257,25 @@ export function assertLessonWordMatches(expectedWord: string | null, actualWord:
 async function validateLessonWord(
   input: Exclude<LessonInput, { resume: true }>,
   active: StudySessionRow | null,
-): Promise<void> {
+): Promise<{ date: string }> {
   if (input.mode === "exercise" || input.mode === "feedback") {
     assertLessonWordMatches(active?.state?.widget === "lesson" ? active.state.current_word : null, input.word);
-    return;
+    return { date: active?.state?.date ?? await getStudyDate() };
   }
 
   if (active?.state?.widget === "lesson") {
+    const date = active.state.date;
+    const todayWords = await getTodayWords(date);
     const expected = active.state.current_word
-      ? (await getNextLearningWord(active.state.current_word)).next_word?.word ?? null
+      ? findNextLearningWord(todayWords, active.state.current_word).next_word?.word ?? null
       : null;
     assertLessonWordMatches(expected, input.word);
-    return;
+    return { date };
   }
-  assertLessonWordMatches((await getFirstLearningWord())?.word ?? null, input.word);
+  const date = await getStudyDate();
+  const todayWords = await getTodayWords(date);
+  assertLessonWordMatches(findFirstLearningWord(todayWords)?.word ?? null, input.word);
+  return { date };
 }
 
 export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): {
@@ -352,10 +359,13 @@ export function registerRenderTools(server: McpServer): void {
     const parsedInput = pretestInput.parse(input);
     if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "pretest");
     const date = await getStudyDate();
+    const active = await getActiveStudySession();
     const todayWords = await getTodayWords(date);
     const items = validatePretestItems(parsedInput.items, todayWords);
     const payload = { widget: "pretest", ...parsedInput, items };
     return saveWidgetState({
+      date,
+      knownActive: active,
       widget: "pretest",
       phase: "pretest",
       current_word: items[0]?.word ?? null,
@@ -383,7 +393,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_learning_dashboard", {
     title: "显示学习进度",
-    description: "显示今日词汇进度和学习操作。用户询问进度时，应先调用 get_progress，再调用此工具显示交互式面板；卡片成功显示后保持聊天区安静，不要重复进度或操作说明。",
+    description: "显示今日词汇进度和学习操作。用户询问进度时直接调用此工具；工具内部从 WordLoop 实时读取一次进度。卡片成功显示后保持聊天区安静，不要重复进度或操作说明。",
     inputSchema: z.object({}),
     _meta: { ui: { resourceUri: WIDGET_URIS.dashboard } },
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -399,10 +409,11 @@ export function registerRenderTools(server: McpServer): void {
     const parsedInput = lessonInput.parse(input);
     if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "lesson");
     const active = await getActiveStudySession();
-    await validateLessonWord(parsedInput, active);
+    const { date } = await validateLessonWord(parsedInput, active);
     const payload = { widget: "lesson", ...parsedInput };
     return saveWidgetState({
-      ...(active?.state?.widget === "lesson" ? { date: active.state.date } : {}),
+      date,
+      knownActive: active,
       widget: "lesson",
       phase: lessonPhaseByMode[parsedInput.mode],
       current_word: parsedInput.word,
@@ -429,8 +440,11 @@ export function registerRenderTools(server: McpServer): void {
   }, (input) => safeTool(async () => {
     const parsedInput = dictationInput.parse(input);
     if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "dictation");
+    const active = await getActiveStudySession();
     const payload = { widget: "dictation", ...parsedInput };
     return saveWidgetState({
+      date: active?.state?.date ?? await getStudyDate(),
+      knownActive: active,
       widget: "dictation",
       phase: "dictation",
       current_word: null,
