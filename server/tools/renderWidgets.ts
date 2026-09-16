@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
+import { ensureTodayQueue } from "../services/dailyQueue.js";
 import { getProgress } from "../services/progress.js";
 import { findFirstLearningWord, findNextLearningWord, getReviewSelection } from "../services/review.js";
 import { getActiveStudySession, getStudyDate, makeStudyState, persistStudyState } from "../services/studySessions.js";
@@ -393,11 +394,14 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_learning_dashboard", {
     title: "显示学习进度",
-    description: "显示今日词汇进度和学习操作。用户询问进度时直接调用此工具；工具内部从 WordLoop 实时读取一次进度。卡片成功显示后保持聊天区安静，不要重复进度或操作说明。",
+    description: "显示今日词汇进度和学习操作。用户询问进度时直接调用此工具；工具内部先确保今日队列，再从 WordLoop 实时读取一次进度。卡片成功显示后保持聊天区安静，不要重复进度或操作说明。",
     inputSchema: z.object({}),
     _meta: { ui: { resourceUri: WIDGET_URIS.dashboard } },
     annotations: { readOnlyHint: true, openWorldHint: false },
-  }, () => safeTool(async () => ({ widget: "dashboard", progress: await getProgress() })));
+  }, () => safeTool(async () => {
+    await ensureTodayQueue();
+    return { widget: "dashboard", progress: await getProgress() };
+  }));
 
   registerAppTool(server, "render_lesson_widget", {
     title: "打开单词学习",

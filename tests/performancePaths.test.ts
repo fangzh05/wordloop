@@ -46,8 +46,17 @@ describe("WordLoop hot-path query boundaries", () => {
     expect(bootstrap).not.toContain("getAllUserWords(");
     expect(bootstrap.indexOf("if (active?.state)"))
       .toBeLessThan(bootstrap.indexOf("const review = await getReviewSelection"));
-    expect(bootstrap).toContain("prepareDailyNewWords(db, userId, date)");
-    expect(bootstrap).toContain("getTodayWords(date, db, userId)");
+    expect(bootstrap).toContain("ensureTodayQueue(db, userId)");
+    expect(bootstrap.indexOf("const queue = await ensureTodayQueue"))
+      .toBeLessThan(bootstrap.indexOf("const review = await getReviewSelection"));
+    expect(bootstrap).toContain("getTodayWords(queue.date, db, userId)");
+  });
+
+  it("ensures the daily queue before the dashboard reads progress", () => {
+    const renderer = source("server/tools/renderWidgets.ts");
+    expect(renderer).toContain("await ensureTodayQueue();");
+    expect(renderer.indexOf("await ensureTodayQueue();"))
+      .toBeLessThan(renderer.indexOf("await getProgress()"));
   });
 
   it("passes known lesson sessions through persistence and uses the pure queue selector", () => {

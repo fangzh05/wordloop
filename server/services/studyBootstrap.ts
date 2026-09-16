@@ -1,9 +1,9 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { VocabularyItem } from "../types.js";
-import { dateInTimeZone } from "./shared.js";
+import { ensureTodayQueue } from "./dailyQueue.js";
 import { getReviewSelection, findFirstLearningWord } from "./review.js";
 import { getActiveStudySession } from "./studySessions.js";
-import { getTodayWords, getUserTimeZone, prepareDailyNewWords } from "./words.js";
+import { getTodayWords } from "./words.js";
 import { perf } from "./perf.js";
 
 export type StudyBootstrapResult =
@@ -23,15 +23,14 @@ export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
       return { action: "resume", widget: active.state.widget };
     }
 
+    const queue = await ensureTodayQueue(db, userId);
+
     const review = await getReviewSelection(1, db, userId);
     if (review.rollingReview.length > 0) {
       return { action: "review", count: review.rollingReview.length };
     }
 
-    const timeZone = await getUserTimeZone(db, userId);
-    const date = dateInTimeZone(timeZone);
-    await prepareDailyNewWords(db, userId, date);
-    const todayWords = await getTodayWords(date, db, userId);
+    const todayWords = await getTodayWords(queue.date, db, userId);
     const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
     if (newWords.length > 0) {
       return { action: "pretest", words: newWords.slice(0, 6) };
