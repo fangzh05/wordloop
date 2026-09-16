@@ -51,8 +51,9 @@ describe("ReviewQuestion", () => {
   it("routes both no-answer persistence paths through the shared builder", () => {
     const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
     const markUnknown = source.slice(source.indexOf("async function markUnknown"), source.indexOf("function nextQuestion"));
-    expect(markUnknown.match(/buildReviewSubmission\(item/g) ?? []).toHaveLength(1);
-    expect(markUnknown.match(/callServerTool\(reviewCall\.name/g) ?? []).toHaveLength(2);
+    expect(source.match(/buildReviewSubmission\(reviewItem/g) ?? []).toHaveLength(1);
+    expect(markUnknown).toContain("persistReviewDraft(item, index");
+    expect(markUnknown).not.toContain("record_review_submission");
     expect(markUnknown).not.toContain("direction: item.direction");
   });
 

@@ -7,12 +7,14 @@ import {
   recordAttemptSchema,
   recordPretestResultSchema,
   recordReviewSubmissionSchema,
+  REVIEW_SESSION_MAX,
+  reviewWidgetPayloadSchema,
   setDailyNewWordLimitSchema,
 } from "../shared/toolContracts.js";
 import { buildLessonSessionAdvance, buildLessonSubmissionMessage, buildNextLessonRequest } from "../web/src/lesson/LessonWidget.js";
 import { buildDailyNewWordLimitRequest } from "../web/src/components/DailyNewWordControl.js";
 import { buildPretestActiveSessionRequest, buildPretestResultSubmission, buildPretestSessionAdvance } from "../web/src/pretest/PretestWidget.js";
-import { buildReviewSubmission, gradeReviewCnToEn } from "../web/src/review/ReviewWidget.js";
+import { buildReviewAnswerSubmission, buildReviewSubmission, gradeReviewCnToEn } from "../web/src/review/ReviewWidget.js";
 
 const reviewKinds = ["error_repair", "fsrs_due", "both"] as const;
 const directions = ["cn_to_en", "en_definition"] as const;
@@ -56,6 +58,8 @@ describe("Widget to tool contracts", () => {
           const parsed = call.name === "record_review_submission"
             ? recordReviewSubmissionSchema.parse(call.arguments)
             : recordAttemptSchema.parse(call.arguments);
+          const cursor = buildReviewAnswerSubmission(item, verdict.is_correct, 0);
+          expect(advanceStudySessionSchema.parse(cursor)).toEqual(cursor);
           expect(parsed, `${direction}/${review_kind}/${verdict.label}`).toMatchObject({
             word: "recur",
             user_answer: verdict.user_answer,
@@ -111,6 +115,20 @@ describe("Widget to tool contracts", () => {
       const advance = buildPretestSessionAdvance(event, 1);
       expect(advanceStudySessionSchema.parse(advance)).toEqual(advance);
     }
+  });
+
+  it("keeps the server-owned Review payload bounded at 200 cards", () => {
+    const items = Array.from({ length: REVIEW_SESSION_MAX }, (_, index) => ({
+      word: `word-${index}`,
+      meaning_zh: "测试含义",
+      direction: "cn_to_en" as const,
+      error_layers: [],
+      is_due: true,
+      review_kind: "fsrs_due" as const,
+      next_review_at: "2026-09-16T00:00:00Z",
+    }));
+    expect(reviewWidgetPayloadSchema.parse({ widget: "review", items, current_index: REVIEW_SESSION_MAX }).items).toHaveLength(REVIEW_SESSION_MAX);
+    expect(() => reviewWidgetPayloadSchema.parse({ widget: "review", items: [...items, items[0]] })).toThrow();
   });
 
   it("validates Lesson Widget submissions and backend-owned navigation", () => {

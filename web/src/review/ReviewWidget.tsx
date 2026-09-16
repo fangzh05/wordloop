@@ -7,36 +7,21 @@ import { FocusButton } from "../components/FocusButton.js";
 import { gradeTargetWord } from "../grading/deterministic.js";
 import { callServerTool, getSamplingAvailability, sampleHostText, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 import {
-  activeErrorLayerSchema,
-  directionSchema,
+  advanceStudySessionSchema,
   errorLayerSchema,
   fsrsRatingSchema,
   recordAttemptSchema,
   recordReviewSubmissionSchema,
-  reviewKindSchema,
+  reviewAnswerSchema,
+  reviewWidgetPayloadSchema,
   type ErrorLayer,
   type FsrsRating,
   type RecordAttemptInput,
   type RecordReviewSubmissionInput,
+  type ReviewAnswerInput,
 } from "../../../shared/toolContracts.js";
 
-const itemSchema = z.object({
-  word: z.string().trim().min(1).max(100),
-  meaning_zh: z.string().trim().min(1).max(240),
-  part_of_speech: z.string().trim().max(40).optional(),
-  direction: directionSchema.default("cn_to_en"),
-  error_layers: z.array(activeErrorLayerSchema).max(5).default([]),
-  is_due: z.boolean(),
-  review_kind: reviewKindSchema,
-  next_review_at: z.string().nullable(),
-});
-
-const payloadSchema = z.object({
-  widget: z.literal("review"),
-  items: z.array(itemSchema).min(1).max(5),
-  current_index: z.number().int().min(0).max(4).optional(),
-  title: z.string().trim().min(1).max(100).optional(),
-});
+const payloadSchema = reviewWidgetPayloadSchema;
 
 const gradeSchema = z.object({
   is_correct: z.boolean(),
@@ -94,6 +79,21 @@ export function buildReviewSubmission(
     name: "record_attempt",
     arguments: recordAttemptSchema.parse({ ...attempt, activity_type: "review" }),
   };
+}
+
+export function buildReviewAnswerSubmission(
+  item: Pick<ReviewItem, "word">,
+  isCorrect: boolean,
+  currentIndex: number,
+): ReviewAnswerInput {
+  const answer = reviewAnswerSchema.parse({
+    event: "review_answer",
+    word: item.word,
+    is_correct: isCorrect,
+    current_index: currentIndex,
+  });
+  advanceStudySessionSchema.parse(answer);
+  return answer;
 }
 
 function parseGrade(raw: string): z.infer<typeof gradeSchema> {
@@ -189,13 +189,15 @@ export function ReviewWidget(): React.JSX.Element {
     };
     setSamplingAvailable(available);
     setPayload(effectivePayload);
-    setIndex(Math.min(effectivePayload.current_index ?? 0, effectivePayload.items.length - 1));
+    const persistedIndex = effectivePayload.current_index ?? 0;
+    const isComplete = effectivePayload.phase === "review_complete" || persistedIndex >= effectivePayload.items.length;
+    setIndex(Math.min(persistedIndex, effectivePayload.items.length - 1));
     setAnswer("");
     setStatus("idle");
     setError("");
     setFeedback(null);
     setResults([]);
-    setCompleted(false);
+    setCompleted(isComplete);
     setContinueStatus("idle");
   }
 
@@ -240,6 +242,12 @@ export function ReviewWidget(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [status, feedback, index, payload]);
 
+  useEffect(() => {
+    if (!completed || !payload || continueStatus !== "idle") return;
+    const timer = setTimeout(() => void continueLearning(), 0);
+    return () => clearTimeout(timer);
+  }, [completed, payload, continueStatus]);
+
   const item = payload?.items[index];
 
   function switchCurrentToChineseTest(): void {
@@ -252,6 +260,45 @@ export function ReviewWidget(): React.JSX.Element {
     setFeedback(null);
     setStatus("idle");
     setError("当前环境已切换为中→英测试。");
+  }
+
+  async function persistReviewDraft(
+    reviewItem: ReviewItem,
+    reviewIndex: number,
+    draft: {
+      user_answer: string;
+      is_correct: boolean;
+      error_layer: ErrorLayer;
+      rating: FsrsRating;
+      feedback: string;
+    },
+  ): Promise<GradedAnswer> {
+    const reviewCall = buildReviewSubmission(reviewItem, draft);
+    let alreadyPersisted = false;
+    const result = await callServerTool(reviewCall.name, reviewCall.arguments);
+    if (result.isError) {
+      if (!isReviewCardAlreadyCompleteResult(result)) {
+        throw new Error(reviewCall.name === "record_review_submission"
+          ? "到期复习结果未能保存，请重试。"
+          : "答题记录未能保存，请重试。");
+      }
+      alreadyPersisted = true;
+    }
+
+    if (!window.__WORDLOOP_PREVIEW__) {
+      const cursor = buildReviewAnswerSubmission(reviewItem, draft.is_correct, reviewIndex);
+      const advanced = await callServerTool("advance_study_session", cursor);
+      if (advanced.isError) throw new Error("复习进度未能保存，请重试。");
+    }
+
+    return {
+      word: reviewItem.word,
+      answer: draft.user_answer,
+      is_correct: draft.is_correct,
+      rating: draft.rating,
+      error_layer: reviewCall.arguments.error_layer,
+      feedback: alreadyPersisted ? "这张卡已经完成复习。" : draft.feedback,
+    };
   }
 
   async function submit(): Promise<void> {
@@ -285,37 +332,13 @@ export function ReviewWidget(): React.JSX.Element {
           throw caught;
         }
       }
-      const reviewCall = buildReviewSubmission(item, {
+      const graded = await persistReviewDraft(item, index, {
         user_answer: cleanAnswer,
         is_correct: grade.is_correct,
         error_layer: grade.error_layer,
         rating: grade.rating,
+        feedback: grade.feedback,
       });
-      const attemptErrorLayer = reviewCall.arguments.error_layer;
-      if (reviewCall.name === "record_review_submission") {
-        const submission = await callServerTool(reviewCall.name, reviewCall.arguments);
-        if (submission.isError) {
-          if (isReviewCardAlreadyCompleteResult(submission)) {
-            const completed: GradedAnswer = {
-              word: item.word,
-              answer: cleanAnswer,
-              is_correct: true,
-              rating: "good",
-              error_layer: "none",
-              feedback: "这张卡已经完成复习。",
-            };
-            setResults((current) => [...current.filter((entry) => entry.word !== item.word), completed]);
-            setFeedback(completed);
-            setStatus("sent");
-            return;
-          }
-          throw new Error("到期复习结果未能保存，请重试。");
-        }
-      } else {
-        const attempt = await callServerTool(reviewCall.name, reviewCall.arguments);
-        if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
-      }
-      const graded: GradedAnswer = { word: item.word, answer: cleanAnswer, ...grade, error_layer: attemptErrorLayer };
       setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
       setFeedback(graded);
       setStatus("sent");
@@ -333,43 +356,13 @@ export function ReviewWidget(): React.JSX.Element {
     setStatus("sending");
     setError("");
     try {
-      const reviewCall = buildReviewSubmission(item, {
+      const graded = await persistReviewDraft(item, index, {
         user_answer: "",
         is_correct: false,
         error_layer: item.error_layers[0] ?? "meaning",
         rating: "again",
-      });
-      if (reviewCall.name === "record_review_submission") {
-        const submission = await callServerTool(reviewCall.name, reviewCall.arguments);
-        if (submission.isError) {
-          if (isReviewCardAlreadyCompleteResult(submission)) {
-            const completed: GradedAnswer = {
-              word: item.word,
-              answer: "",
-              is_correct: true,
-              rating: "good",
-              error_layer: "none",
-              feedback: "这张卡已经完成复习。",
-            };
-            setResults((current) => [...current.filter((entry) => entry.word !== item.word), completed]);
-            setFeedback(completed);
-            setStatus("sent");
-            return;
-          }
-          throw new Error("到期复习结果未能保存，请重试。");
-        }
-      } else {
-        const attempt = await callServerTool(reviewCall.name, reviewCall.arguments);
-        if (attempt.isError) throw new Error("答题记录未能保存，请重试。");
-      }
-      const graded: GradedAnswer = {
-        word: item.word,
-        answer: "",
-        is_correct: false,
-        rating: "again",
-        error_layer: item.error_layers[0] ?? "meaning",
         feedback: "已标记为不会。",
-      };
+      });
       setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
       setFeedback(graded);
       setStatus("sent");
@@ -397,7 +390,7 @@ export function ReviewWidget(): React.JSX.Element {
   }
 
   async function continueLearning(): Promise<void> {
-    if (!payload || results.length !== payload.items.length || continueStatus === "sending" || continueStatus === "sent") return;
+    if (!payload || !completed || continueStatus === "sending" || continueStatus === "sent") return;
     setContinueStatus("sending");
     setError("");
     try {

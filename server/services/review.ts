@@ -1,13 +1,14 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ActiveErrorLayer, ReviewKind, ReviewVocabularyItem, UserWordRow, VocabularyItem } from "../types.js";
+import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
-import { getTodayWords, getUserTimeZone, vocabularyItemFromRpc, type RpcVocabularyRow } from "./words.js";
+import { getTodayWords, getUserTimeZone, getVocabularyItemsByWords, vocabularyItemFromRpc, type RpcVocabularyRow } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
 import { getProgress } from "./progress.js";
 import { getActiveStudySession } from "./studySessions.js";
 import { perf } from "./perf.js";
 
-function reviewDueAt(item: VocabularyItem, now: Date): boolean {
+export function reviewDueAt(item: VocabularyItem, now: Date): boolean {
   if (!item.next_review_at) return false;
   const timestamp = Date.parse(item.next_review_at);
   return Number.isFinite(timestamp) && timestamp <= now.getTime();
@@ -48,8 +49,30 @@ export function selectReviewWords(all: VocabularyItem[], limit: number, now = ne
     .slice(0, limit);
 }
 
+function byDuePriority(a: ReviewVocabularyItem, b: ReviewVocabularyItem): number {
+  const aTime = a.next_review_at ? Date.parse(a.next_review_at) : Number.MAX_SAFE_INTEGER;
+  const bTime = b.next_review_at ? Date.parse(b.next_review_at) : Number.MAX_SAFE_INTEGER;
+  const aSortableTime = Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER;
+  const bSortableTime = Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER;
+  return aSortableTime - bSortableTime || normalizeWord(a.word).localeCompare(normalizeWord(b.word));
+}
+
+/** Initial Review is strictly the due FSRS queue; active errors alone do not gate it. */
+export function selectDueReviewWords(
+  all: VocabularyItem[],
+  limit = REVIEW_SESSION_MAX,
+  now = new Date(),
+): ReviewVocabularyItem[] {
+  const boundedLimit = Math.max(0, Math.min(REVIEW_SESSION_MAX, limit));
+  return all
+    .filter((word) => reviewDueAt(word, now))
+    .map((word) => decorateReviewWord(word, now))
+    .sort(byDuePriority)
+    .slice(0, boundedLimit);
+}
+
 export async function getReviewSelection(
-  limit = 5,
+  limit = REVIEW_SESSION_MAX,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
   now = new Date(),
@@ -62,6 +85,30 @@ export async function getReviewSelection(
       p_user_id: userId,
       p_now: now.toISOString(),
       p_limit: limit,
+    });
+    assertDatabaseResult(error);
+    const candidates = ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
+    return {
+      rollingReview: candidates.map((item) => decorateReviewWord(item, now)),
+      oldRandomReview: [],
+    };
+  });
+}
+
+export async function getDueReviewSelection(
+  limit = REVIEW_SESSION_MAX,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+  now = new Date(),
+): Promise<{
+  rollingReview: ReviewVocabularyItem[];
+  oldRandomReview: VocabularyItem[];
+}> {
+  return perf("get_due_review_selection", async () => {
+    const { data, error } = await db.rpc("get_due_review_candidates_v1", {
+      p_user_id: userId,
+      p_now: now.toISOString(),
+      p_limit: Math.max(0, Math.min(REVIEW_SESSION_MAX, limit)),
     });
     assertDatabaseResult(error);
     const candidates = ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
@@ -89,7 +136,7 @@ export async function getLearningContext(): Promise<{
   const date = dateInTimeZone(timeZone);
   const [todayWords, reviews, progress, recentActivity] = await Promise.all([
     getTodayWords(date, db, userId),
-    getReviewSelection(5, db, userId),
+    getDueReviewSelection(REVIEW_SESSION_MAX, db, userId),
     getProgress(),
     getRecentActivity(db, userId),
   ]);
@@ -112,7 +159,7 @@ export async function getLearningContext(): Promise<{
     },
     settings: progress.settings,
     session_rules: {
-      initial_review_count: 5,
+      initial_review_count: REVIEW_SESSION_MAX,
       round_size_min: 5,
       round_size_max: 7,
       error_clear_after_consecutive_correct: 2,
@@ -161,6 +208,70 @@ export async function getNextRound(limit: number): Promise<{ words: VocabularyIt
 }
 
 const learningStatuses = new Set(["unknown", "uncertain", "new"]);
+const sessionLessonStatuses = new Set(["unknown", "uncertain"]);
+
+function placeholderRelearnWord(word: string): VocabularyItem {
+  return {
+    word,
+    display_word: word,
+    status: "unknown",
+    source: "review",
+    consecutive_correct: 0,
+    wrong_count: 0,
+    mastered: false,
+    next_review_at: null,
+    error_layers: [],
+    fsrs_stability: 0,
+    fsrs_difficulty: 0,
+    fsrs_scheduled_days: 0,
+    fsrs_state: 0,
+  };
+}
+
+export function buildLearningQueue(input: {
+  relearnWords: Array<string | VocabularyItem>;
+  todayWords: VocabularyItem[];
+  anchorWords?: string[];
+}): VocabularyItem[] {
+  const queue: VocabularyItem[] = [];
+  const seen = new Set<string>();
+  const anchors = new Set((input.anchorWords ?? []).map(normalizeWord));
+  const append = (word: VocabularyItem): void => {
+    const normalized = normalizeWord(word.word);
+    if (!normalized || word.mastered || seen.has(normalized)) return;
+    seen.add(normalized);
+    queue.push(word);
+  };
+  for (const entry of input.relearnWords) {
+    append(typeof entry === "string" ? placeholderRelearnWord(entry) : entry);
+  }
+  for (const word of input.todayWords) {
+    if (sessionLessonStatuses.has(word.status) || anchors.has(normalizeWord(word.word))) append(word);
+  }
+  return queue;
+}
+
+export async function getSessionLearningQueue(
+  relearnWords: string[],
+  todayWords: VocabularyItem[],
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+  anchorWords: string[] = [],
+): Promise<VocabularyItem[]> {
+  const persisted = await getVocabularyItemsByWords(relearnWords, db, userId);
+  const persistedByWord = new Map(persisted.map((word) => [normalizeWord(word.word), word]));
+  const resolved = relearnWords.map((word) => persistedByWord.get(normalizeWord(word)) ?? word);
+  return buildLearningQueue({ relearnWords: resolved, todayWords, anchorWords });
+}
+
+export async function getFirstSessionLearningWord(
+  relearnWords: string[],
+  todayWords: VocabularyItem[],
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<VocabularyItem | null> {
+  return (await getSessionLearningQueue(relearnWords, todayWords, db, userId))[0] ?? null;
+}
 
 export function findFirstLearningWord(todayWords: VocabularyItem[]): VocabularyItem | null {
   return todayWords.find((word) => !word.mastered && learningStatuses.has(word.status)) ?? null;
@@ -181,9 +292,23 @@ export function findNextLearningWord(todayWords: VocabularyItem[], currentWord: 
 export async function getNextLearningWord(currentWord: string): Promise<ReturnType<typeof findNextLearningWord>> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
-  const date = await resolveLearningQueueDate(currentWord, db, userId);
-  const todayWords = await getTodayWords(date, db, userId);
-  return findNextLearningWord(todayWords, currentWord);
+  const active = await getActiveStudySession(db, userId);
+  const date = active?.state
+    && (active.state.widget === "lesson" || active.state.widget === "review")
+    ? active.state.date
+    : dateInTimeZone(await getUserTimeZone(db, userId));
+  const relearnWords = active?.state?.flow?.relearn_words ?? [];
+  const [todayWords, persistedRelearnWords] = await Promise.all([
+    getTodayWords(date, db, userId),
+    getVocabularyItemsByWords(relearnWords, db, userId),
+  ]);
+  const persistedByWord = new Map(persistedRelearnWords.map((word) => [normalizeWord(word.word), word]));
+  const resolvedRelearnWords = relearnWords.map((word) => persistedByWord.get(normalizeWord(word)) ?? word);
+  return findNextLearningWord(buildLearningQueue({
+    relearnWords: resolvedRelearnWords,
+    todayWords,
+    anchorWords: [currentWord],
+  }), currentWord);
 }
 
 export async function resolveLearningQueueDate(

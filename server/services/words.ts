@@ -162,6 +162,23 @@ export async function getTodayWords(
   return ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
 }
 
+/** Read only the persisted words needed to resume a session-aware lesson queue. */
+export async function getVocabularyItemsByWords(
+  words: string[],
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<VocabularyItem[]> {
+  const normalizedWords = [...new Set(words.map(normalizeWord).filter(Boolean))];
+  if (normalizedWords.length === 0) return [];
+  const { data, error } = await db
+    .from("user_words")
+    .select("*,word:words!inner(normalized_word,display_word,ipa_us,ipa_uk,senses)")
+    .eq("user_id", userId)
+    .in("word.normalized_word", normalizedWords);
+  assertDatabaseResult(error);
+  return ((data ?? []) as unknown as JoinedUserWord[]).map((row) => toVocabularyItem(row, relationOne(row.word)));
+}
+
 export async function getAllUserWords(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),

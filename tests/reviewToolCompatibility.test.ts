@@ -2,17 +2,36 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getReviewSelection } from "../server/services/review.js";
 import { registerRenderTools } from "../server/tools/renderWidgets.js";
 import type { ReviewVocabularyItem } from "../server/types.js";
 
-vi.mock("../server/services/review.js", () => ({
-  getReviewSelection: vi.fn(),
-  getFirstLearningWord: vi.fn(),
-  getNextLearningWord: vi.fn(),
+const sessionMocks = vi.hoisted(() => ({
+  getActiveStudySession: vi.fn(),
+  getStudyDate: vi.fn(),
+  makeStudyState: vi.fn(),
+  persistStudyState: vi.fn(),
 }));
 
-const mockedGetReviewSelection = vi.mocked(getReviewSelection);
+vi.mock("../server/db.js", () => ({
+  getAuthenticatedUserId: vi.fn(() => "00000000-0000-0000-0000-000000000001"),
+  getDatabase: vi.fn(() => ({})),
+}));
+
+vi.mock("../server/services/studySessions.js", () => sessionMocks);
+
+vi.mock("../server/services/review.js", () => ({
+  getDueReviewSelection: vi.fn(),
+  findFirstLearningWord: vi.fn(),
+  findNextLearningWord: vi.fn(),
+  getFirstSessionLearningWord: vi.fn(),
+  getSessionLearningQueue: vi.fn(),
+}));
+const wordMocks = vi.hoisted(() => ({ getTodayWords: vi.fn() }));
+vi.mock("../server/services/words.js", () => wordMocks);
+
+import { getDueReviewSelection } from "../server/services/review.js";
+
+const mockedGetDueReviewSelection = vi.mocked(getDueReviewSelection);
 
 function reviewItem(word: string, nextReviewAt = "2026-09-12T00:00:00Z"): ReviewVocabularyItem {
   return {
@@ -56,11 +75,20 @@ function payloadOf(result: Awaited<ReturnType<Client["callTool"]>>): Record<stri
 
 describe("Review render tool schema compatibility", () => {
   beforeEach(() => {
-    mockedGetReviewSelection.mockReset();
+    mockedGetDueReviewSelection.mockReset();
+    sessionMocks.getActiveStudySession.mockReset().mockResolvedValue(null);
+    sessionMocks.getStudyDate.mockReset().mockResolvedValue("2026-09-16");
+    sessionMocks.makeStudyState.mockReset().mockImplementation((input: Record<string, unknown>) => ({
+      version: 1,
+      flow: { relearn_words: [] },
+      ...input,
+    }));
+    sessionMocks.persistStudyState.mockReset().mockImplementation(async (state: unknown) => ({ state }));
+    wordMocks.getTodayWords.mockReset().mockResolvedValue([]);
   });
 
   it("accepts legacy items but never returns the fake word", async () => {
-    mockedGetReviewSelection.mockResolvedValue({
+    mockedGetDueReviewSelection.mockResolvedValue({
       rollingReview: [reviewItem("backend-word")],
       oldRandomReview: [],
     });
@@ -80,7 +108,7 @@ describe("Review render tool schema compatibility", () => {
   });
 
   it("accepts an empty legacy call", async () => {
-    mockedGetReviewSelection.mockResolvedValue({
+    mockedGetDueReviewSelection.mockResolvedValue({
       rollingReview: [reviewItem("backend-word")],
       oldRandomReview: [],
     });
@@ -92,7 +120,7 @@ describe("Review render tool schema compatibility", () => {
   });
 
   it("accepts an empty v2 call", async () => {
-    mockedGetReviewSelection.mockResolvedValue({
+    mockedGetDueReviewSelection.mockResolvedValue({
       rollingReview: [reviewItem("backend-word")],
       oldRandomReview: [],
     });
@@ -104,7 +132,7 @@ describe("Review render tool schema compatibility", () => {
   });
 
   it("keeps the legacy and v2 payloads identical", async () => {
-    mockedGetReviewSelection.mockResolvedValue({
+    mockedGetDueReviewSelection.mockResolvedValue({
       rollingReview: [reviewItem("backend-word"), reviewItem("second-word")],
       oldRandomReview: [],
     });
@@ -113,12 +141,12 @@ describe("Review render tool schema compatibility", () => {
       const legacy = payloadOf(await client.callTool({ name: "render_review_widget", arguments: {} }));
       const v2 = payloadOf(await client.callTool({ name: "render_review_widget_v2", arguments: {} }));
       expect(v2).toEqual(legacy);
-      expect(mockedGetReviewSelection).toHaveBeenCalledWith(25);
+      expect(mockedGetDueReviewSelection).toHaveBeenCalledWith(200, {}, "00000000-0000-0000-0000-000000000001");
     });
   });
 
   it("does not pad a short backend queue with future cards", async () => {
-    mockedGetReviewSelection.mockResolvedValue({
+    mockedGetDueReviewSelection.mockResolvedValue({
       rollingReview: [reviewItem("due-word"), reviewItem("error-word")],
       oldRandomReview: [reviewItem("future-word", "2099-01-01T00:00:00Z")],
     });
@@ -129,8 +157,89 @@ describe("Review render tool schema compatibility", () => {
         arguments: { current_index: 4 },
       }));
       expect((payload.items as Array<{ word: string }>).map((item) => item.word)).toEqual(["due-word", "error-word"]);
-      expect(payload.current_index).toBe(1);
+      expect(payload.current_index).toBe(0);
       expect(JSON.stringify(payload)).not.toContain("future-word");
+    });
+  });
+
+  it("resumes the persisted snapshot and cursor without querying a new queue", async () => {
+    const saved = reviewItem("saved-word");
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "review",
+        phase: "review",
+        current_word: "saved-word",
+        current_index: 1,
+        retry_count: 0,
+        flow: { relearn_words: [] },
+        payload: {
+          widget: "review",
+          items: [{
+            word: saved.word,
+            meaning_zh: "测试含义",
+            part_of_speech: "n.",
+            direction: "cn_to_en",
+            error_layers: [],
+            is_due: true,
+            review_kind: "fsrs_due",
+            next_review_at: saved.next_review_at,
+          }],
+          title: "复习",
+        },
+      },
+    });
+
+    await withReviewClient(async (client) => {
+      const payload = payloadOf(await client.callTool({ name: "render_review_widget_v2", arguments: { current_index: 0 } }));
+      expect(payload).toMatchObject({ widget: "review", phase: "review", current_index: 1, items: [{ word: "saved-word" }] });
+      expect(mockedGetDueReviewSelection).not.toHaveBeenCalled();
+      expect(sessionMocks.persistStudyState).not.toHaveBeenCalled();
+    });
+  });
+
+  it("routes a completed pretest into the same session's failed-review lesson queue", async () => {
+    const failedWord = reviewItem("failed-word");
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "pretest",
+        phase: "listen_recall",
+        current_word: null,
+        current_index: 6,
+        retry_count: 0,
+        flow: { relearn_words: [failedWord.word] },
+        payload: { widget: "pretest", items: [] },
+      },
+    });
+    const { getFirstSessionLearningWord } = await import("../server/services/review.js");
+    vi.mocked(getFirstSessionLearningWord).mockResolvedValue(failedWord);
+
+    await withReviewClient(async (client) => {
+      const result = await client.callTool({
+        name: "render_lesson_widget",
+        arguments: {
+          mode: "explain",
+          word: "failed-word",
+          ipa: "/feɪld/",
+          part_of_speech: "v.",
+          meaning_zh: "测试含义",
+          collocations: [],
+          derivations: [],
+          example_en: "A complete example.",
+          note: "测试备注",
+          exercise: {
+            activity_type: "sentence",
+            instruction: "造句",
+            prompt: "Use the word in a new scene.",
+            multiline: true,
+          },
+        },
+      });
+      expect(payloadOf(result)).toMatchObject({ widget: "lesson", word: "failed-word" });
+      expect(vi.mocked(getFirstSessionLearningWord)).toHaveBeenCalledWith(["failed-word"], [], {}, "00000000-0000-0000-0000-000000000001");
     });
   });
 });

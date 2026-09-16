@@ -16,6 +16,9 @@ export type {
   ErrorLayer,
   FsrsRating,
   ReviewKind,
+  ReviewWidgetItem,
+  ReviewWidgetPayload,
+  ReviewAnswerInput,
   StudySessionEvent,
 } from "../shared/toolContracts.js";
 
@@ -24,11 +27,12 @@ export type WordStatus = (typeof WORD_STATUSES)[number];
 
 export const REVIEW_SOURCES = ["pretest", "review", "session_checkpoint"] as const;
 export type ReviewSource = (typeof REVIEW_SOURCES)[number];
-export const STUDY_WIDGETS = ["pretest", "lesson", "dictation"] as const;
+export const STUDY_WIDGETS = ["pretest", "lesson", "dictation", "review"] as const;
 export type StudyWidget = (typeof STUDY_WIDGETS)[number];
 export const STUDY_PHASES = [
   "pretest", "pretest_result", "listen_repeat", "listen_recall",
   "lesson_explain", "lesson_exercise", "lesson_feedback", "dictation",
+  "review", "review_complete",
 ] as const;
 export type StudyPhase = (typeof STUDY_PHASES)[number];
 export interface LexicalSense {
@@ -97,7 +101,12 @@ export interface StudyState {
   current_word: string | null;
   current_index: number;
   retry_count: number;
+  flow: StudyFlow;
   payload: Record<string, unknown>;
+}
+
+export interface StudyFlow {
+  relearn_words: string[];
 }
 
 export interface StudySessionRow {

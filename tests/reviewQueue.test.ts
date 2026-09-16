@@ -73,4 +73,9 @@ describe("server-owned review widget payload", () => {
       warn.mockRestore();
     }
   });
+
+  it("does not truncate a server-owned review snapshot to the old five-card batch", () => {
+    const candidates = Array.from({ length: 11 }, (_, index) => item(`word-${index}`));
+    expect(buildReviewWidgetItems(candidates)).toHaveLength(11);
+  });
 });

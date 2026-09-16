@@ -162,6 +162,16 @@ describe("study session migration", () => {
     expect(sql).not.toMatch(/create table/i);
   });
 
+  it("adds a bounded due-only Review snapshot RPC", () => {
+    const sql = readFileSync(new URL("../supabase/migrations/202609160007_review_session.sql", import.meta.url), "utf8");
+    expect(sql).toContain("get_due_review_candidates_v1");
+    expect(sql).toContain("uw.next_review_at is not null");
+    expect(sql).toContain("uw.next_review_at <= p_now");
+    expect(sql).toContain("order by uw.next_review_at asc, w.normalized_word asc");
+    expect(sql).toContain("limit least(greatest(coalesce(p_limit, 0), 0), 200)");
+    expect(sql).not.toMatch(/meaning_error\s+or|collocation_error\s+or|spelling_error\s+or/);
+  });
+
   it("recognizes only the explicit pre-004 study-session column mismatch", () => {
     expect(isStudySessionSchemaMismatch({ message: "Could not find the 'state' column of 'study_sessions' in the schema cache" })).toBe(true);
     expect(isStudySessionSchemaMismatch({ message: "column public.study_sessions.updated_at does not exist", code: "42703" })).toBe(true);

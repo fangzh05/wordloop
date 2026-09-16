@@ -33,9 +33,12 @@ export const PRETEST_RESULTS = ["known", "uncertain", "unknown"] as const;
 export type PretestResult = (typeof PRETEST_RESULTS)[number];
 export const pretestResultSchema = z.enum(PRETEST_RESULTS);
 
+/** Maximum number of cards in one immutable initial-review snapshot. */
+export const REVIEW_SESSION_MAX = 200;
+
 export const STUDY_SESSION_EVENTS = [
   "pretest_question", "pretest_result", "listen_repeat", "listen_recall",
-  "lesson_start_exercise", "lesson_retry",
+  "lesson_start_exercise", "lesson_retry", "review_answer",
 ] as const;
 export type StudySessionEvent = (typeof STUDY_SESSION_EVENTS)[number];
 export const studySessionEventSchema = z.enum(STUDY_SESSION_EVENTS);
@@ -107,11 +110,52 @@ export const recordPretestResultSchema = z.object({
 });
 export type RecordPretestResultInput = z.output<typeof recordPretestResultSchema>;
 
+export const reviewAnswerSchema = z.object({
+  event: z.literal("review_answer"),
+  word: z.string().trim().min(1).max(100),
+  is_correct: z.boolean(),
+  current_index: z.number().int().min(0).max(REVIEW_SESSION_MAX),
+}).strict();
+
 export const advanceStudySessionSchema = z.object({
   event: studySessionEventSchema,
   current_index: z.number().int().min(0).max(499).optional(),
-}).strict();
+  word: z.string().trim().min(1).max(100).optional(),
+  is_correct: z.boolean().optional(),
+}).strict().superRefine((value, context) => {
+  if (value.event === "review_answer") {
+    if (value.current_index === undefined) context.addIssue({ code: "custom", message: "Review answers require current_index.", path: ["current_index"] });
+    if (value.word === undefined) context.addIssue({ code: "custom", message: "Review answers require word.", path: ["word"] });
+    if (value.is_correct === undefined) context.addIssue({ code: "custom", message: "Review answers require is_correct.", path: ["is_correct"] });
+    return;
+  }
+  if (value.word !== undefined || value.is_correct !== undefined) {
+    context.addIssue({ code: "custom", message: "Only review_answer accepts word and is_correct.", path: ["event"] });
+  }
+});
 export type AdvanceStudySessionInput = z.output<typeof advanceStudySessionSchema>;
+export type ReviewAnswerInput = z.output<typeof reviewAnswerSchema>;
+
+export const reviewWidgetItemSchema = z.object({
+  word: z.string().trim().min(1).max(100),
+  meaning_zh: z.string().trim().min(1).max(240),
+  part_of_speech: z.string().trim().max(40).optional(),
+  direction: directionSchema.default("cn_to_en"),
+  error_layers: z.array(activeErrorLayerSchema).max(5).default([]),
+  is_due: z.boolean(),
+  review_kind: reviewKindSchema,
+  next_review_at: z.string().nullable(),
+}).strict();
+export type ReviewWidgetItem = z.output<typeof reviewWidgetItemSchema>;
+
+export const reviewWidgetPayloadSchema = z.object({
+  widget: z.literal("review"),
+  items: z.array(reviewWidgetItemSchema).min(1).max(REVIEW_SESSION_MAX),
+  phase: z.enum(["review", "review_complete"]).optional(),
+  current_index: z.number().int().min(0).max(REVIEW_SESSION_MAX).optional(),
+  title: z.string().trim().min(1).max(100).optional(),
+}).strict();
+export type ReviewWidgetPayload = z.output<typeof reviewWidgetPayloadSchema>;
 
 export const getNextLearningWordSchema = z.object({
   current_word: z.string().trim().min(1).max(100),

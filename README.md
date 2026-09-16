@@ -164,7 +164,7 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001–006 in order. If a real database already ran the older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes without changing user data.
+3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001–007 in order. If a real database already ran the older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes, and migration 007 adds the due-only review snapshot RPC, without changing user data.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 

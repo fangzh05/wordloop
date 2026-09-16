@@ -4,11 +4,24 @@ import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { ensureTodayQueue } from "../services/dailyQueue.js";
 import { getProgress } from "../services/progress.js";
-import { findFirstLearningWord, findNextLearningWord, getReviewSelection } from "../services/review.js";
+import {
+  findFirstLearningWord,
+  findNextLearningWord,
+  getDueReviewSelection,
+  getFirstSessionLearningWord,
+  getSessionLearningQueue,
+} from "../services/review.js";
 import { getActiveStudySession, getStudyDate, makeStudyState, persistStudyState } from "../services/studySessions.js";
 import { getTodayWords } from "../services/words.js";
 import { normalizeWord } from "../services/wordNormalization.js";
 import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
+import {
+  REVIEW_SESSION_MAX,
+  reviewWidgetItemSchema,
+  reviewWidgetPayloadSchema,
+  type ReviewWidgetItem,
+  type ReviewWidgetPayload,
+} from "../../shared/toolContracts.js";
 import { safeTool } from "./helpers.js";
 
 export const WIDGET_URIS = {
@@ -138,12 +151,12 @@ const legacyReviewItem = z.object({
   error_layers: z.array(z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"])).max(5).default([]),
 });
 const legacyReviewToolInputSchema = z.object({
-  items: z.array(legacyReviewItem).min(1).max(5).optional(),
-  current_index: z.number().int().min(0).max(4).optional(),
+  items: z.array(legacyReviewItem).min(1).max(REVIEW_SESSION_MAX).optional(),
+  current_index: z.number().int().min(0).max(REVIEW_SESSION_MAX).optional(),
   title: z.string().trim().min(1).max(100).optional(),
 }).strict();
 const reviewV2ToolInputSchema = z.object({
-  current_index: z.number().int().min(0).max(4).optional(),
+  current_index: z.number().int().min(0).max(REVIEW_SESSION_MAX).optional(),
 }).strict();
 
 export const lessonInputSchema = lessonInput;
@@ -176,10 +189,15 @@ async function saveWidgetState(input: {
   current_word: string | null;
   current_index: number;
   retry_count: number;
+  flow?: StudyState["flow"];
   payload: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
-  const { date, knownActive, ...stateInput } = input;
-  const state = makeStudyState({ date: date ?? await getStudyDate(), ...stateInput });
+  const { date, knownActive, flow, ...stateInput } = input;
+  const state = makeStudyState({
+    date: date ?? await getStudyDate(),
+    flow: flow ?? knownActive?.state?.flow,
+    ...stateInput,
+  });
   await persistStudyState(state, getDatabase(), getAuthenticatedUserId(), knownActive);
   return widgetPayloadWithState(input.payload, state);
 }
@@ -266,11 +284,32 @@ async function validateLessonWord(
 
   if (active?.state?.widget === "lesson") {
     const date = active.state.date;
-    const todayWords = await getTodayWords(date);
+    const db = getDatabase();
+    const userId = getAuthenticatedUserId();
+    const todayWords = await getTodayWords(date, db, userId);
+    const queue = await getSessionLearningQueue(active.state.flow.relearn_words, todayWords, db, userId, [active.state.current_word ?? ""]);
     const expected = active.state.current_word
-      ? findNextLearningWord(todayWords, active.state.current_word).next_word?.word ?? null
+      ? findNextLearningWord(queue, active.state.current_word).next_word?.word ?? null
       : null;
     assertLessonWordMatches(expected, input.word);
+    return { date };
+  }
+  if (active?.state?.widget === "review" && active.state.phase === "review_complete") {
+    const db = getDatabase();
+    const userId = getAuthenticatedUserId();
+    const date = active.state.date;
+    const todayWords = await getTodayWords(date, db, userId);
+    const expected = await getFirstSessionLearningWord(active.state.flow.relearn_words, todayWords, db, userId);
+    assertLessonWordMatches(expected?.word ?? null, input.word);
+    return { date };
+  }
+  if (active?.state?.widget === "pretest") {
+    const db = getDatabase();
+    const userId = getAuthenticatedUserId();
+    const date = active.state.date;
+    const todayWords = await getTodayWords(date, db, userId);
+    const expected = await getFirstSessionLearningWord(active.state.flow.relearn_words, todayWords, db, userId);
+    assertLessonWordMatches(expected?.word ?? null, input.word);
     return { date };
   }
   const date = await getStudyDate();
@@ -279,21 +318,12 @@ async function validateLessonWord(
   return { date };
 }
 
-export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): {
-  word: string;
-  meaning_zh: string;
-  part_of_speech?: string;
-  error_layers: ReviewVocabularyItem["error_layers"];
-  is_due: boolean;
-  review_kind: ReviewVocabularyItem["review_kind"];
-  next_review_at: string | null;
-  direction: "cn_to_en";
-} {
+export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): ReviewWidgetItem {
   const senses = Array.isArray(item.senses) ? item.senses : [];
   const meaning = senses.map((sense) => typeof sense?.definition_cn === "string" ? sense.definition_cn.trim() : "").filter(Boolean).join("；");
   if (!meaning) throw new Error(`Review word ${item.word} has no persisted meaning.`);
   const partOfSpeech = senses.find((sense) => typeof sense?.pos === "string" && sense.pos.trim())?.pos.trim();
-  return {
+  return reviewWidgetItemSchema.parse({
     word: item.word,
     meaning_zh: meaning,
     ...(partOfSpeech ? { part_of_speech: partOfSpeech } : {}),
@@ -302,15 +332,15 @@ export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): {
     review_kind: item.review_kind,
     next_review_at: item.next_review_at,
     direction: "cn_to_en",
-  };
+  });
 }
 
 export function buildReviewWidgetItems(
   candidates: ReviewVocabularyItem[],
-  limit = 5,
-): ReturnType<typeof reviewWidgetItemFromVocabulary>[] {
-  const items: ReturnType<typeof reviewWidgetItemFromVocabulary>[] = [];
-  for (const candidate of candidates.slice(0, 25)) {
+  limit = REVIEW_SESSION_MAX,
+): ReviewWidgetItem[] {
+  const items: ReviewWidgetItem[] = [];
+  for (const candidate of candidates) {
     try {
       items.push(reviewWidgetItemFromVocabulary(candidate));
     } catch (error) {
@@ -323,22 +353,39 @@ export function buildReviewWidgetItems(
   return items;
 }
 
-export async function buildReviewWidgetPayload(currentIndex = 0): Promise<{
-  widget: "review";
-  items: ReturnType<typeof reviewWidgetItemFromVocabulary>[];
-  current_index: number;
-  title: string;
-}> {
-  const { rollingReview } = await getReviewSelection(25);
-  if (rollingReview.length === 0) throw new Error("No review words are currently due or have active errors.");
-  const items = buildReviewWidgetItems(rollingReview, 5);
+export async function buildReviewWidgetPayload(currentIndex = 0): Promise<ReviewWidgetPayload> {
+  void currentIndex;
+  const db = getDatabase();
+  const userId = getAuthenticatedUserId();
+  const active = await getActiveStudySession(db, userId);
+  if (active?.state?.widget === "review") {
+    const resumed = reviewWidgetPayloadSchema.safeParse(widgetPayloadWithState(active.state.payload, active.state));
+    if (!resumed.success) throw new Error("Saved review session payload is invalid.");
+    return resumed.data;
+  }
+  if (active?.state) throw new Error("A different WordLoop study session is already active.");
+
+  const { rollingReview } = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
+  if (rollingReview.length === 0) throw new Error("No review words are currently due.");
+  const items = buildReviewWidgetItems(rollingReview, REVIEW_SESSION_MAX);
   if (items.length === 0) throw new Error("到期复习词缺少释义数据。");
-  return {
+  const payload = reviewWidgetPayloadSchema.parse({
     widget: "review",
     items,
-    current_index: Math.min(currentIndex, items.length - 1),
     title: "复习",
-  };
+  });
+  const state = makeStudyState({
+    date: await getStudyDate(db, userId),
+    widget: "review",
+    phase: "review",
+    current_word: items[0]?.word ?? null,
+    current_index: 0,
+    retry_count: 0,
+    flow: { relearn_words: [] },
+    payload,
+  });
+  const persisted = await persistStudyState(state, db, userId, active);
+  return reviewWidgetPayloadSchema.parse(widgetPayloadWithState(persisted.state?.payload ?? payload, persisted.state ?? state));
 }
 
 export function registerRenderTools(server: McpServer): void {
@@ -378,19 +425,19 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_review_widget", {
     title: "打开复习",
-    description: "兼容旧客户端。传入 items 会被忽略，实际复习队列由 WordLoop backend 生成。在卡片内完成 backend 选择的错误词和 FSRS 到期词复习；模型不能传入、替换或排序复习词。",
+    description: "兼容旧客户端。传入 items 会被忽略，实际复习队列由 WordLoop backend 生成：只取 next_review_at <= now 的 due-only snapshot，单次最多 200 张；模型不能传入、替换或排序复习词。",
     inputSchema: legacyReviewToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.review } },
     annotations: { readOnlyHint: true, openWorldHint: false },
-  }, ({ current_index }) => safeTool(async () => buildReviewWidgetPayload(current_index)));
+  }, () => safeTool(async () => buildReviewWidgetPayload()));
 
   registerAppTool(server, "render_review_widget_v2", {
     title: "打开复习（v2）",
-    description: "新客户端使用的复习卡片。复习词和顺序始终由 WordLoop backend 从实时复习队列生成，模型不能传入、替换或排序 items。",
+    description: "新客户端使用的复习卡片。复习词和顺序始终由 WordLoop backend 从 next_review_at <= now 的 immutable snapshot 生成，单次最多 200 张；模型不能传入、替换或排序 items。",
     inputSchema: reviewV2ToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.review } },
     annotations: { readOnlyHint: true, openWorldHint: false },
-  }, ({ current_index }) => safeTool(async () => buildReviewWidgetPayload(current_index)));
+  }, () => safeTool(async () => buildReviewWidgetPayload()));
 
   registerAppTool(server, "render_learning_dashboard", {
     title: "显示学习进度",

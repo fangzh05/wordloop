@@ -38,6 +38,11 @@ const rpcChecks: RpcCheck[] = [
     args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_now: new Date(0).toISOString() },
     migration: "202609160006",
   },
+  {
+    name: "get_due_review_candidates_v1",
+    args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_now: new Date(0).toISOString(), p_limit: 1 },
+    migration: "202609160007",
+  },
 ];
 
 function isSchemaMismatch(message: string): boolean {

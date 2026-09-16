@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   getDatabase: vi.fn(() => ({})),
   getActiveStudySession: vi.fn(),
   ensureTodayQueue: vi.fn(),
-  getReviewSelection: vi.fn(),
+  getDueReviewSelection: vi.fn(),
+  getFirstSessionLearningWord: vi.fn(),
   findFirstLearningWord: vi.fn(),
   getTodayWords: vi.fn(),
 }));
@@ -22,7 +23,8 @@ vi.mock("../server/services/dailyQueue.js", () => ({
   ensureTodayQueue: mocks.ensureTodayQueue,
 }));
 vi.mock("../server/services/review.js", () => ({
-  getReviewSelection: mocks.getReviewSelection,
+  getDueReviewSelection: mocks.getDueReviewSelection,
+  getFirstSessionLearningWord: mocks.getFirstSessionLearningWord,
   findFirstLearningWord: mocks.findFirstLearningWord,
 }));
 vi.mock("../server/services/words.js", () => ({
@@ -57,7 +59,8 @@ describe("study bootstrap daily queue invariant", () => {
     vi.clearAllMocks();
     mocks.getActiveStudySession.mockResolvedValue(null);
     mocks.ensureTodayQueue.mockResolvedValue(queue);
-    mocks.getReviewSelection.mockResolvedValue({ rollingReview: [], oldRandomReview: [] });
+    mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [], oldRandomReview: [] });
+    mocks.getFirstSessionLearningWord.mockResolvedValue(null);
     mocks.getTodayWords.mockResolvedValue([]);
     mocks.findFirstLearningWord.mockReturnValue(null);
   });
@@ -70,14 +73,14 @@ describe("study bootstrap daily queue invariant", () => {
     expect(result).toMatchObject({ action: "pretest" });
     expect((result as { action: "pretest"; words: VocabularyItem[] }).words).toHaveLength(6);
     expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
-    expect(mocks.getReviewSelection).toHaveBeenCalledOnce();
+    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
     expect(mocks.ensureTodayQueue.mock.invocationCallOrder[0]!)
-      .toBeLessThan(mocks.getReviewSelection.mock.invocationCallOrder[0]!);
+      .toBeLessThan(mocks.getDueReviewSelection.mock.invocationCallOrder[0]!);
     expect(mocks.getTodayWords).toHaveBeenCalledWith(queue.date, {}, expect.any(String));
   });
 
   it("prepares today's queue before short-circuiting to review", async () => {
-    mocks.getReviewSelection.mockResolvedValue({
+    mocks.getDueReviewSelection.mockResolvedValue({
       rollingReview: [word(1, "review")],
       oldRandomReview: [],
     });
@@ -86,7 +89,7 @@ describe("study bootstrap daily queue invariant", () => {
     expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
     expect(mocks.getTodayWords).not.toHaveBeenCalled();
     expect(mocks.ensureTodayQueue.mock.invocationCallOrder[0]!)
-      .toBeLessThan(mocks.getReviewSelection.mock.invocationCallOrder[0]!);
+      .toBeLessThan(mocks.getDueReviewSelection.mock.invocationCallOrder[0]!);
   });
 
   it("returns an active resume before any daily queue or review work", async () => {
@@ -105,7 +108,36 @@ describe("study bootstrap daily queue invariant", () => {
 
     await expect(getStudyBootstrap()).resolves.toEqual({ action: "resume", widget: "lesson" });
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
-    expect(mocks.getReviewSelection).not.toHaveBeenCalled();
+    expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
     expect(mocks.getTodayWords).not.toHaveBeenCalled();
+  });
+
+  it("does not gate a new study flow on active errors whose cards are not due", async () => {
+    mocks.getTodayWords.mockResolvedValue([word(1, "known")]);
+
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+  });
+
+  it("continues a completed Review session into its re-learn queue", async () => {
+    mocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "review",
+        phase: "review_complete",
+        current_word: null,
+        current_index: 2,
+        retry_count: 0,
+        flow: { relearn_words: ["failed-word"] },
+        payload: { widget: "review", items: [] },
+      },
+    });
+    mocks.getTodayWords.mockResolvedValue([word(1, "known")]);
+    mocks.getFirstSessionLearningWord.mockResolvedValue(word(2, "unknown"));
+
+    await expect(getStudyBootstrap()).resolves.toMatchObject({ action: "lesson", word: { word: "word-2" } });
+    expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
+    expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
   });
 });

@@ -1,17 +1,40 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { VocabularyItem } from "../types.js";
 import { ensureTodayQueue } from "./dailyQueue.js";
-import { getReviewSelection, findFirstLearningWord } from "./review.js";
+import {
+  findFirstLearningWord,
+  getDueReviewSelection,
+  getFirstSessionLearningWord,
+} from "./review.js";
 import { getActiveStudySession } from "./studySessions.js";
 import { getTodayWords } from "./words.js";
 import { perf } from "./perf.js";
+import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 
 export type StudyBootstrapResult =
-  | { action: "resume"; widget: "pretest" | "lesson" | "dictation" }
+  | { action: "resume"; widget: "pretest" | "lesson" | "dictation" | "review" }
   | { action: "review"; count: number }
   | { action: "pretest"; words: VocabularyItem[] }
   | { action: "lesson"; word: VocabularyItem }
   | { action: "done" };
+
+async function continueCompletedReview(active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>): Promise<StudyBootstrapResult> {
+  const db = getDatabase();
+  const userId = getAuthenticatedUserId();
+  const date = active.state?.date;
+  if (!date) return { action: "done" };
+  const todayWords = await getTodayWords(date, db, userId);
+  const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
+  if (newWords.length > 0) return { action: "pretest", words: newWords.slice(0, 6) };
+
+  const lessonWord = await getFirstSessionLearningWord(
+    active.state?.flow?.relearn_words ?? [],
+    todayWords,
+    db,
+    userId,
+  );
+  return lessonWord ? { action: "lesson", word: lessonWord } : { action: "done" };
+}
 
 export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
   return perf("get_study_bootstrap", async () => {
@@ -20,12 +43,15 @@ export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
 
     const active = await getActiveStudySession(db, userId);
     if (active?.state) {
+      if (active.state.widget === "review" && active.state.phase === "review_complete") {
+        return continueCompletedReview(active);
+      }
       return { action: "resume", widget: active.state.widget };
     }
 
     const queue = await ensureTodayQueue(db, userId);
 
-    const review = await getReviewSelection(1, db, userId);
+    const review = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
     if (review.rollingReview.length > 0) {
       return { action: "review", count: review.rollingReview.length };
     }

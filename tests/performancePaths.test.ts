@@ -18,6 +18,8 @@ describe("WordLoop hot-path query boundaries", () => {
   it("uses review candidates from SQL and keeps learning context lightweight", () => {
     const review = source("server/services/review.ts");
     expect(review).toContain("get_review_candidates_v1");
+    expect(review).toContain("get_due_review_candidates_v1");
+    expect(review).toContain("selectDueReviewWords");
     expect(review).not.toContain("getAllUserWords(");
     expect(review).toContain("Promise.all");
   });
@@ -43,12 +45,13 @@ describe("WordLoop hot-path query boundaries", () => {
 
   it("short-circuits bootstrap before review and queue work when a session is active", () => {
     const bootstrap = source("server/services/studyBootstrap.ts");
+    const reviewCall = bootstrap.indexOf("const review = await getDueReviewSelection");
     expect(bootstrap).not.toContain("getAllUserWords(");
     expect(bootstrap.indexOf("if (active?.state)"))
-      .toBeLessThan(bootstrap.indexOf("const review = await getReviewSelection"));
+      .toBeLessThan(reviewCall);
     expect(bootstrap).toContain("ensureTodayQueue(db, userId)");
     expect(bootstrap.indexOf("const queue = await ensureTodayQueue"))
-      .toBeLessThan(bootstrap.indexOf("const review = await getReviewSelection"));
+      .toBeLessThan(reviewCall);
     expect(bootstrap).toContain("getTodayWords(queue.date, db, userId)");
   });
 
@@ -61,7 +64,8 @@ describe("WordLoop hot-path query boundaries", () => {
 
   it("passes known lesson sessions through persistence and uses the pure queue selector", () => {
     const renderer = source("server/tools/renderWidgets.ts");
-    expect(renderer).toContain("findNextLearningWord(todayWords, active.state.current_word)");
+    expect(renderer).toContain("findNextLearningWord(queue, active.state.current_word)");
+    expect(renderer).toContain("getSessionLearningQueue");
     expect(renderer).toContain("knownActive: active");
     expect(renderer).not.toContain("getNextLearningWord(active.state.current_word)");
   });

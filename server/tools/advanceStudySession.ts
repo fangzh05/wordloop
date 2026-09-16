@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { advanceStudySession } from "../services/studySessions.js";
-import { advanceStudySessionSchema } from "../../shared/toolContracts.js";
+import { advanceStudySessionSchema, reviewAnswerSchema } from "../../shared/toolContracts.js";
 import { safeTool } from "./helpers.js";
 
 export function registerAdvanceStudySessionTool(server: McpServer): void {
@@ -9,8 +9,11 @@ export function registerAdvanceStudySessionTool(server: McpServer): void {
     description: "Advance one fixed WordLoop Widget transition. The backend validates the current phase and owns the durable cursor; arbitrary session JSON is not accepted.",
     inputSchema: advanceStudySessionSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  }, ({ event, current_index }) => safeTool(async () => {
-    const session = await advanceStudySession(event, current_index);
+  }, (input) => safeTool(async () => {
+    const reviewAnswer = input.event === "review_answer"
+      ? reviewAnswerSchema.parse(input)
+      : undefined;
+    const session = await advanceStudySession(input.event, input.current_index, reviewAnswer);
     return {
       active: true,
       widget: session.state?.widget,

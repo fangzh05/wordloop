@@ -1,9 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { StudyPhase, StudySessionEvent, StudySessionRow, StudyState, StudyWidget } from "../types.js";
+import {
+  REVIEW_SESSION_MAX,
+  reviewWidgetItemSchema,
+  type ReviewAnswerInput,
+} from "../../shared/toolContracts.js";
+import type { StudyFlow, StudyPhase, StudySessionEvent, StudySessionRow, StudyState, StudyWidget } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone } from "./shared.js";
 import { getUserTimeZone } from "./words.js";
+import { normalizeWord } from "./wordNormalization.js";
 
 const sessionColumns = "id,user_id,started_at,ended_at,new_words_count,review_words_count,state,updated_at";
 const pretestItemsSchema = z.array(z.object({ word: z.string().trim().min(1).max(100) })).max(7);
@@ -13,18 +19,28 @@ const lessonExerciseSchema = z.object({
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
 });
+const studyFlowSchema = z.object({
+  relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX),
+}).strict().default({ relearn_words: [] });
+const reviewSessionPayloadSchema = z.object({
+  widget: z.literal("review"),
+  items: z.array(reviewWidgetItemSchema).min(1).max(REVIEW_SESSION_MAX),
+  title: z.string().trim().min(1).max(100).optional(),
+}).strict();
 
 export const studyStateSchema = z.object({
   version: z.literal(1),
   date: z.string().trim().min(1),
-  widget: z.enum(["pretest", "lesson", "dictation"]),
+  widget: z.enum(["pretest", "lesson", "dictation", "review"]),
   phase: z.enum([
     "pretest", "pretest_result", "listen_repeat", "listen_recall",
     "lesson_explain", "lesson_exercise", "lesson_feedback", "dictation",
+    "review", "review_complete",
   ]),
   current_word: z.string().trim().max(100).nullable(),
   current_index: z.number().int().min(0),
   retry_count: z.number().int().min(0),
+  flow: studyFlowSchema,
   payload: z.record(z.string(), z.unknown()),
 }).strict();
 
@@ -211,6 +227,64 @@ function exercisePayload(state: StudyState): Record<string, unknown> {
   };
 }
 
+function reviewItems(state: StudyState): z.infer<typeof reviewSessionPayloadSchema>["items"] {
+  const parsed = reviewSessionPayloadSchema.safeParse(state.payload);
+  if (!parsed.success) throw new Error("Study session review payload is invalid.");
+  return parsed.data.items;
+}
+
+function reviewWordAt(items: ReturnType<typeof reviewItems>, index: number): string {
+  const item = items[index];
+  if (!item) throw new Error("Study session index is outside the review payload.");
+  return item.word;
+}
+
+function reviewAnswerMatches(
+  answer: ReviewAnswerInput,
+  items: ReturnType<typeof reviewItems>,
+): boolean {
+  if (answer.current_index < 0 || answer.current_index >= items.length) return false;
+  return normalizeWord(reviewWordAt(items, answer.current_index)) === normalizeWord(answer.word);
+}
+
+function appendRelearnWord(flow: StudyFlow, word: string, isCorrect: boolean): StudyFlow {
+  if (isCorrect) return flow;
+  const normalized = normalizeWord(word);
+  if (flow.relearn_words.some((entry) => normalizeWord(entry) === normalized)) return flow;
+  return {
+    ...flow,
+    relearn_words: [...flow.relearn_words, word].slice(0, REVIEW_SESSION_MAX),
+  };
+}
+
+function advanceReviewState(state: StudyState, answer: ReviewAnswerInput): StudyState {
+  const items = reviewItems(state);
+  const currentIndex = answer.current_index;
+  const expectedWord = reviewWordAt(items, currentIndex);
+
+  if (state.phase === "review_complete") {
+    if (currentIndex === state.current_index - 1 && reviewAnswerMatches(answer, items)) return state;
+    throw stateError(answer.event, state.phase);
+  }
+  if (state.phase !== "review") throw stateError(answer.event, state.phase);
+  if (currentIndex !== state.current_index) {
+    // A lost response can cause the Widget to retry the same cursor. Accept
+    // that exact transition idempotently, but reject stale or future cards.
+    if (currentIndex === state.current_index - 1 && reviewAnswerMatches(answer, items)) return state;
+    throw new Error("REVIEW_CURSOR_MISMATCH");
+  }
+  if (!reviewAnswerMatches(answer, items)) throw new Error("REVIEW_WORD_MISMATCH");
+
+  const nextIndex = currentIndex + 1;
+  return {
+    ...state,
+    phase: nextIndex >= items.length ? "review_complete" : "review",
+    current_word: nextIndex >= items.length ? null : reviewWordAt(items, nextIndex),
+    current_index: nextIndex,
+    flow: appendRelearnWord(state.flow, expectedWord, answer.is_correct),
+  };
+}
+
 export function makeStudyState(input: {
   date: string;
   widget: StudyWidget;
@@ -218,16 +292,25 @@ export function makeStudyState(input: {
   current_word: string | null;
   current_index: number;
   retry_count: number;
+  flow?: StudyFlow;
   payload: Record<string, unknown>;
 }): StudyState {
-  return assertState({ version: 1, ...input });
+  return assertState({ version: 1, flow: { relearn_words: [] }, ...input });
 }
 
 export function advanceStudyState(
   state: StudyState,
   event: StudySessionEvent,
   requestedIndex?: number,
+  reviewAnswer?: ReviewAnswerInput,
 ): StudyState {
+  if (state.widget === "review") {
+    if (event !== "review_answer" || !reviewAnswer) throw stateError(event, state.phase);
+    if (requestedIndex !== undefined && requestedIndex !== reviewAnswer.current_index) {
+      throw new Error("REVIEW_CURSOR_MISMATCH");
+    }
+    return advanceReviewState(state, reviewAnswer);
+  }
   const currentIndex = requestedIndex ?? state.current_index;
   if (!Number.isInteger(currentIndex) || currentIndex < 0) throw new Error("Study session index must be a non-negative integer.");
 
@@ -277,12 +360,13 @@ export function advanceStudyState(
 export async function advanceStudySession(
   event: StudySessionEvent,
   requestedIndex?: number,
+  reviewAnswer?: ReviewAnswerInput,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
 ): Promise<StudySessionRow> {
   const active = await getActiveStudySession(db, userId);
   if (!active?.state) throw new Error("No resumable active study session.");
-  const nextState = advanceStudyState(active.state, event, requestedIndex);
+  const nextState = advanceStudyState(active.state, event, requestedIndex, reviewAnswer);
   return updateSessionState(active, nextState, db, userId);
 }
 
