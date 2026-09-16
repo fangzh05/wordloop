@@ -1,7 +1,22 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { buildLessonSubmissionMessage, LessonWidget } from "../web/src/lesson/LessonWidget.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import {
+  buildLessonSubmissionMessage,
+  buildRoundCompleteMessage,
+  canStartNextLesson,
+  LessonWidget,
+  resolveNextLessonToolResult,
+} from "../web/src/lesson/LessonWidget.js";
+
+function structuredResult(structuredContent: Record<string, unknown>): CallToolResult {
+  return { content: [], structuredContent };
+}
+
+function textResult(value: Record<string, unknown>): CallToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
+}
 
 describe("guided lesson widget", () => {
   it("has the three fixed modes and keeps exercise submission in the card", () => {
@@ -14,6 +29,8 @@ describe("guided lesson widget", () => {
     expect(source).toContain("提交 WordLoop 正式学习答案。");
     expect(source).toContain("reference_answer");
     expect(source).toContain("get_next_learning_word");
+    expect(source).toContain("nextStatusRef");
+    expect(source).toContain('setNextStatus("sending")');
     expect(source).toContain("buildLessonSessionAdvance(\"lesson_start_exercise\")");
     expect(source).toContain("buildLessonSessionAdvance(\"lesson_retry\")");
     expect(source).not.toContain("exerciseContextRef");
@@ -40,5 +57,49 @@ describe("guided lesson widget", () => {
     expect(message).toContain("练习类型：sentence");
     expect(message).toContain("题目：Use planet in a new scene.");
     expect(message).toContain("用户答案：My answer");
+  });
+
+  it("resolves modern and legacy structured/text tool results", () => {
+    const modern = { action: "round_complete", next_word: null, round_complete: true };
+    const legacy = { next_word: null, round_complete: true };
+    expect(resolveNextLessonToolResult(structuredResult(modern))).toEqual({
+      action: "round_complete",
+      next_word: null,
+      round_complete: true,
+    });
+    expect(resolveNextLessonToolResult(structuredResult(legacy))).toMatchObject({ action: "round_complete" });
+    expect(resolveNextLessonToolResult(textResult(modern))).toMatchObject({ action: "round_complete" });
+    expect(resolveNextLessonToolResult(textResult(legacy))).toMatchObject({ action: "round_complete" });
+  });
+
+  it("resolves next_word results and rejects invalid or missing tool data", () => {
+    expect(resolveNextLessonToolResult(structuredResult({
+      action: "next_word",
+      next_word: { word: "example" },
+      round_complete: false,
+    }))).toMatchObject({ action: "next_word", next_word: { word: "example" } });
+    expect(() => resolveNextLessonToolResult(structuredResult({
+      next_word: null,
+      round_complete: false,
+    }))).toThrow("NEXT_LEARNING_WORD_INVARIANT");
+    expect(() => resolveNextLessonToolResult({ content: [{ type: "text", text: "not JSON" }] })).toThrow("NEXT_LEARNING_WORD_RESULT_MISSING");
+  });
+
+  it("keeps the next lesson request locked while sending or after success", () => {
+    expect(canStartNextLesson("idle")).toBe(true);
+    expect(canStartNextLesson("error")).toBe(true);
+    expect(canStartNextLesson("sending")).toBe(false);
+    expect(canStartNextLesson("sent")).toBe(false);
+  });
+
+  it("gives the model a direct round-complete fact", () => {
+    expect(buildRoundCompleteMessage()).toBe([
+      "WORDLOOP_ROUND_COMPLETE",
+      "",
+      "The backend-owned frozen Lesson queue is complete.",
+      "Do not call get_next_learning_word again.",
+      "Do not select another vocabulary word.",
+      "Continue directly with the configured end-of-round activity.",
+    ].join("\n"));
   });
 });

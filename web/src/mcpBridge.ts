@@ -170,3 +170,23 @@ export async function updateModelContext(text: string, structuredContent?: Recor
 export function structuredContentOf(result: CallToolResult): unknown {
   return result.structuredContent;
 }
+
+/**
+ * Resolve tool data across modern MCP hosts and legacy bridges.
+ * structuredContent is authoritative whenever it is present; content text is
+ * only a compatibility fallback for hosts that omit structuredContent.
+ */
+export function toolResultData(result: CallToolResult): unknown {
+  if (result.structuredContent !== undefined) return result.structuredContent;
+
+  const content = Array.isArray(result.content) ? result.content : [];
+  for (const block of content) {
+    if (block.type !== "text" || typeof block.text !== "string") continue;
+    try {
+      return JSON.parse(block.text) as unknown;
+    } catch {
+      // Non-JSON text blocks are not tool data. Keep looking for a later JSON block.
+    }
+  }
+  return undefined;
+}

@@ -205,6 +205,44 @@ export const nextLearningWordOutputSchema = z.object({
 }).strict();
 export type NextLearningWordResult = z.output<typeof nextLearningWordResultSchema>;
 
+const legacyNextLearningWordResultSchema = z.object({
+  next_word: nextLearningWordItemSchema.nullable(),
+  round_complete: z.boolean(),
+}).passthrough();
+
+function throwNextLearningWordInvariant(): never {
+  throw new Error("NEXT_LEARNING_WORD_INVARIANT");
+}
+
+/**
+ * Normalize the current action-bearing result and the legacy action-less
+ * result without weakening the next_word/round_complete invariants.
+ */
+export function normalizeNextLearningWordResult(value: unknown): NextLearningWordResult {
+  const modern = nextLearningWordResultSchema.safeParse(value);
+  if (modern.success) return modern.data;
+
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return throwNextLearningWordInvariant();
+  }
+
+  // Compatibility is limited to a genuinely missing action. An explicitly
+  // supplied but invalid/conflicting action must never be repaired locally.
+  if (Object.prototype.hasOwnProperty.call(value, "action")) {
+    return throwNextLearningWordInvariant();
+  }
+
+  const legacy = legacyNextLearningWordResultSchema.safeParse(value);
+  if (!legacy.success) return throwNextLearningWordInvariant();
+
+  const normalized = nextLearningWordResultSchema.safeParse({
+    ...legacy.data,
+    action: legacy.data.round_complete ? "round_complete" : "next_word",
+  });
+  if (!normalized.success) return throwNextLearningWordInvariant();
+  return normalized.data;
+}
+
 export function parseNextLearningWordResult(value: unknown): NextLearningWordResult {
   const parsed = nextLearningWordResultSchema.safeParse(value);
   if (!parsed.success) throw new Error("NEXT_LEARNING_WORD_INVARIANT");

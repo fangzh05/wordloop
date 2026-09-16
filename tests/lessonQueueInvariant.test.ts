@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  normalizeNextLearningWordResult,
   nextLearningWordResultSchema,
   parseNextLearningWordResult,
 } from "../shared/toolContracts.js";
@@ -89,6 +90,28 @@ describe("durable Lesson queue invariant", () => {
     });
   });
 
+  it("normalizes a legacy round_complete result without changing its invariant", () => {
+    expect(normalizeNextLearningWordResult({
+      next_word: null,
+      round_complete: true,
+    })).toEqual({
+      action: "round_complete",
+      next_word: null,
+      round_complete: true,
+    });
+  });
+
+  it("normalizes a legacy next_word result", () => {
+    expect(normalizeNextLearningWordResult({
+      next_word: { word: "example", source: "test" },
+      round_complete: false,
+    })).toEqual({
+      action: "next_word",
+      next_word: { word: "example", source: "test" },
+      round_complete: false,
+    });
+  });
+
   it("rejects illegal action combinations with the invariant code", () => {
     expect(nextLearningWordResultSchema.safeParse({
       action: "next_word",
@@ -123,6 +146,14 @@ describe("durable Lesson queue invariant", () => {
       round_complete: false,
     }))
       .toThrow("NEXT_LEARNING_WORD_INVARIANT");
+    expect(() => normalizeNextLearningWordResult({
+      next_word: null,
+      round_complete: false,
+    })).toThrow("NEXT_LEARNING_WORD_INVARIANT");
+    expect(() => normalizeNextLearningWordResult({
+      next_word: { word: "example" },
+      round_complete: true,
+    })).toThrow("NEXT_LEARNING_WORD_INVARIANT");
   });
 
   it("marks only the final frozen word as complete", () => {

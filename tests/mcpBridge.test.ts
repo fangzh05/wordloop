@@ -31,7 +31,7 @@ vi.mock("@modelcontextprotocol/ext-apps", () => ({
   },
 }));
 
-import { callServerTool } from "../web/src/mcpBridge.js";
+import { callServerTool, toolResultData } from "../web/src/mcpBridge.js";
 
 const originalWindow = globalThis.window;
 
@@ -48,6 +48,28 @@ afterEach(() => {
 });
 
 describe("widget server-tool bridge", () => {
+  it("prefers structuredContent over content text", () => {
+    const structuredContent = { action: "round_complete", next_word: null, round_complete: true };
+    expect(toolResultData({
+      structuredContent,
+      content: [{ type: "text", text: JSON.stringify({ action: "next_word" }) }],
+    })).toBe(structuredContent);
+  });
+
+  it("falls back to the first parseable text JSON and ignores non-JSON text", () => {
+    const expected = { action: "round_complete", next_word: null, round_complete: true };
+    expect(toolResultData({
+      content: [
+        { type: "text", text: "legacy host status" },
+        { type: "text", text: JSON.stringify(expected) },
+      ],
+    })).toEqual(expected);
+  });
+
+  it("returns undefined when no structured or JSON tool data exists", () => {
+    expect(toolResultData({ content: [{ type: "text", text: "not JSON" }] })).toBeUndefined();
+  });
+
   it("propagates app server-tool errors without invoking the legacy fallback", async () => {
     const serverError = new Error("Invalid input for tool record_review_submission: direction is required");
     appMocks.callServerTool.mockRejectedValue(serverError);
