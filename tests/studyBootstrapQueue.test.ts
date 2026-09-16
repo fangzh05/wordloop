@@ -5,6 +5,15 @@ const mocks = vi.hoisted(() => ({
   getAuthenticatedUserId: vi.fn(() => "00000000-0000-0000-0000-000000000001"),
   getDatabase: vi.fn(() => ({})),
   getActiveStudySession: vi.fn(),
+  normalizeStudyStateForRead: vi.fn((state: any) => {
+    const items = state?.payload?.items;
+    return state?.widget === "pretest"
+      && state?.phase === "listen_recall"
+      && Array.isArray(items)
+      && state.current_index === items.length
+      ? { ...state, phase: "pretest_complete", current_word: null }
+      : state;
+  }),
   ensureTodayQueue: vi.fn(),
   getDueReviewSelection: vi.fn(),
   getFirstSessionLearningWord: vi.fn(),
@@ -16,9 +25,10 @@ vi.mock("../server/db.js", () => ({
   getAuthenticatedUserId: mocks.getAuthenticatedUserId,
   getDatabase: mocks.getDatabase,
 }));
-vi.mock("../server/services/studySessions.js", () => ({
-  getActiveStudySession: mocks.getActiveStudySession,
-}));
+  vi.mock("../server/services/studySessions.js", () => ({
+    getActiveStudySession: mocks.getActiveStudySession,
+    normalizeStudyStateForRead: mocks.normalizeStudyStateForRead,
+  }));
 vi.mock("../server/services/dailyQueue.js", () => ({
   ensureTodayQueue: mocks.ensureTodayQueue,
 }));
@@ -139,5 +149,85 @@ describe("study bootstrap daily queue invariant", () => {
     await expect(getStudyBootstrap()).resolves.toMatchObject({ action: "lesson", word: { word: "word-2" } });
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
     expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
+  });
+
+  it("continues a completed pretest into the session learning queue before new words", async () => {
+    mocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "pretest",
+        phase: "pretest_complete",
+        current_word: null,
+        current_index: 6,
+        retry_count: 0,
+        flow: { relearn_words: ["failed-word"] },
+        payload: { widget: "pretest", items: [] },
+      },
+    });
+    mocks.getTodayWords.mockResolvedValue([word(1, "unknown"), word(2, "uncertain"), word(3, "new")]);
+    mocks.getFirstSessionLearningWord.mockResolvedValue(word(1, "unknown"));
+
+    await expect(getStudyBootstrap()).resolves.toMatchObject({ action: "lesson", word: { word: "word-1" } });
+    expect(mocks.getFirstSessionLearningWord).toHaveBeenCalledWith(
+      ["failed-word"],
+      expect.any(Array),
+      {},
+      "00000000-0000-0000-0000-000000000001",
+    );
+    expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
+    expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
+  });
+
+  it("starts the next new-word pretest only after a completed batch has no learning word", async () => {
+    mocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "pretest",
+        phase: "pretest_complete",
+        current_word: null,
+        current_index: 6,
+        retry_count: 0,
+        flow: { relearn_words: [] },
+        payload: { widget: "pretest", items: [] },
+      },
+    });
+    mocks.getTodayWords.mockResolvedValue([
+      word(1, "known"),
+      word(2, "new"),
+      word(3, "new"),
+      word(4, "new"),
+      word(5, "new"),
+      word(6, "new"),
+      word(7, "new"),
+    ]);
+    mocks.getFirstSessionLearningWord.mockResolvedValue(null);
+
+    const result = await getStudyBootstrap();
+    expect(result).toMatchObject({ action: "pretest" });
+    expect((result as { action: "pretest"; words: VocabularyItem[] }).words.map((entry) => entry.word))
+      .toEqual(["word-2", "word-3", "word-4", "word-5", "word-6", "word-7"]);
+  });
+
+  it("treats the legacy listen_recall item-count cursor as completed pretest", async () => {
+    mocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "pretest",
+        phase: "listen_recall",
+        current_word: null,
+        current_index: 2,
+        retry_count: 0,
+        flow: { relearn_words: ["failed-word"] },
+        payload: { widget: "pretest", items: [{ word: "first" }, { word: "second" }] },
+      },
+    });
+    mocks.getTodayWords.mockResolvedValue([word(1, "known")]);
+    mocks.getFirstSessionLearningWord.mockResolvedValue(word(9, "unknown"));
+
+    await expect(getStudyBootstrap()).resolves.toMatchObject({ action: "lesson", word: { word: "word-9" } });
+    expect(mocks.normalizeStudyStateForRead).toHaveBeenCalled();
   });
 });

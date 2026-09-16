@@ -38,6 +38,7 @@ export const REVIEW_SESSION_MAX = 200;
 
 export const STUDY_SESSION_EVENTS = [
   "pretest_question", "pretest_result", "listen_repeat", "listen_recall",
+  "pretest_complete",
   "lesson_start_exercise", "lesson_retry", "review_answer",
 ] as const;
 export type StudySessionEvent = (typeof STUDY_SESSION_EVENTS)[number];

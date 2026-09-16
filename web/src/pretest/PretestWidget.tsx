@@ -39,7 +39,7 @@ const itemSchema = z.object({
 const payloadSchema = z.object({
   widget: z.literal("pretest"),
   items: z.array(itemSchema).min(1).max(7),
-  phase: z.enum(["pretest", "pretest_result", "listen_repeat", "listen_recall"]).optional(),
+  phase: z.enum(["pretest", "pretest_result", "listen_repeat", "listen_recall", "pretest_complete"]).optional(),
   current_index: z.number().int().min(0).max(7).optional(),
   title: z.string().trim().min(1).max(100).optional(),
 });
@@ -52,7 +52,7 @@ type PronunciationStage = "result" | "listen_repeat" | "listen_recall" | "ready"
 export type PronunciationRecallOutcome = "correct" | "wrong";
 type RecallStatus = "idle" | PronunciationRecallOutcome;
 type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
-type PretestSessionEvent = "pretest_question" | "pretest_result" | "listen_repeat" | "listen_recall";
+type PretestSessionEvent = "pretest_question" | "pretest_result" | "listen_repeat" | "listen_recall" | "pretest_complete";
 
 export const PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS = 600;
 export const PRETEST_RECALL_ADVANCE_DELAY_MS = 800;
@@ -156,10 +156,11 @@ export function buildPretestActiveSessionRequest(): EmptyToolArgs {
   return emptyToolArgsSchema.parse({});
 }
 
-function stageForPhase(phase: Payload["phase"]): { finished: boolean; stage: PronunciationStage } {
+export function stageForPhase(phase: Payload["phase"]): { finished: boolean; stage: PronunciationStage } {
   if (phase === "pretest_result") return { finished: true, stage: "result" };
   if (phase === "listen_repeat") return { finished: true, stage: "listen_repeat" };
   if (phase === "listen_recall") return { finished: true, stage: "listen_recall" };
+  if (phase === "pretest_complete") return { finished: true, stage: "ready" };
   return { finished: false, stage: "result" };
 }
 
@@ -343,7 +344,7 @@ export function PretestWidget(): React.JSX.Element {
     setPayload(effectivePayload);
     const phaseState = stageForPhase(effectivePayload.phase);
     const restoredIndex = effectivePayload.current_index ?? 0;
-    setIndex(Math.min(restoredIndex, effectivePayload.items.length - 1));
+    setIndex(Math.min(Math.max(restoredIndex, 0), effectivePayload.items.length));
     setAnswer("");
     setError("");
     setFeedback(null);
@@ -429,6 +430,13 @@ export function PretestWidget(): React.JSX.Element {
       setResults(restored);
       const persistedIndex = nextPayload.current_index ?? 0;
       const phaseState = stageForPhase(nextPayload.phase);
+      if (nextPayload.phase === "pretest_complete") {
+        setIndex(Math.min(Math.max(persistedIndex, 0), nextPayload.items.length));
+        setFinished(true);
+        setStage("ready");
+        setPronunciationIndex(0);
+        return;
+      }
       if (nextPayload.phase && nextPayload.phase !== "pretest") {
         setIndex(Math.min(persistedIndex, nextPayload.items.length));
         setFinished(true);
@@ -570,8 +578,17 @@ export function PretestWidget(): React.JSX.Element {
 
   async function enterListenRepeat(): Promise<void> {
     const pronunciationWords = selectPronunciationWords(payload?.items ?? [], results);
-    if (!payload || pronunciationWords.length === 0) {
-      await continueLearning();
+    if (!payload) return;
+    if (pronunciationWords.length === 0) {
+      setError("");
+      try {
+        await advanceSession("pretest_complete", payload.items.length);
+        setFinished(true);
+        setStage("ready");
+        await continueLearning();
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "学习阶段保存失败，请重试。");
+      }
       return;
     }
     const sourceIndex = sourceIndexForPronunciationWord(payload.items, pronunciationWords[0]?.word ?? "");
@@ -610,7 +627,7 @@ export function PretestWidget(): React.JSX.Element {
     if (!payload) return;
     const transition = buildPronunciationRecallAdvance(payload.items, results, pronunciationIndex);
     if (transition.stage === "ready") {
-      await advanceSession("listen_recall", transition.sourceIndex);
+      await advanceSession("pretest_complete", transition.sourceIndex);
       setStage("ready");
     } else {
       await advanceSession("listen_repeat", transition.sourceIndex);
@@ -648,7 +665,7 @@ export function PretestWidget(): React.JSX.Element {
     setContinueStatus("sending");
     setError("");
     try {
-      await sendUserMessage("WordLoop 预测试、听音跟读和听音还原已完成。请调用 get_next_round，并只为 backend 返回的第一个未完成词生成并渲染完整 LessonWidget mode=explain；不要重新调用预测试或独立发音卡片。");
+      await sendUserMessage("WordLoop 当前预测试与听音阶段已完成。请调用 get_study_bootstrap，并严格按 backend 返回的 action 继续；若 action=lesson，只为 backend 返回的 word 渲染 LessonWidget mode=explain；不要重新调用预测试或独立发音卡片。");
       setContinueStatus("sent");
     } catch (caught) {
       setContinueStatus("error");

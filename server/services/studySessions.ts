@@ -34,6 +34,7 @@ export const studyStateSchema = z.object({
   widget: z.enum(["pretest", "lesson", "dictation", "review"]),
   phase: z.enum([
     "pretest", "pretest_result", "listen_repeat", "listen_recall",
+    "pretest_complete",
     "lesson_explain", "lesson_exercise", "lesson_feedback", "dictation",
     "review", "review_complete",
   ]),
@@ -89,7 +90,7 @@ function parseSession(data: unknown): StudySessionRow {
     ended_at: row.ended_at,
     new_words_count: row.new_words_count,
     review_words_count: row.review_words_count,
-    state: parsedState.success ? parsedState.data : null,
+    state: parsedState.success ? normalizeStudyStateForRead(parsedState.data) : null,
     updated_at: row.updated_at,
   };
 }
@@ -209,6 +210,26 @@ function pretestItemCount(payload: Record<string, unknown>): number {
   const parsedItems = pretestItemsSchema.safeParse(payload.items);
   if (!parsedItems.success) throw new Error("Study session pretest payload is invalid.");
   return parsedItems.data.length;
+}
+
+/**
+ * b8a766a1 used listen_recall + the item-count cursor as the pretest
+ * terminal state. Treat only that exact shape as the completed-pretest
+ * compatibility state; an in-progress recall cursor must remain resumable.
+ */
+export function isLegacyCompletedPretestState(state: StudyState): boolean {
+  if (state.widget !== "pretest" || state.phase !== "listen_recall") return false;
+  const items = pretestItemsSchema.safeParse(state.payload.items);
+  return items.success && state.current_index === items.data.length;
+}
+
+export function normalizeStudyStateForRead(state: StudyState): StudyState {
+  if (!isLegacyCompletedPretestState(state)) return state;
+  return {
+    ...state,
+    phase: "pretest_complete",
+    current_word: null,
+  };
 }
 
 function exercisePayload(state: StudyState): Record<string, unknown> {
@@ -336,6 +357,13 @@ export function advanceStudyState(
     if (event === "listen_recall") {
       if (state.phase !== "listen_repeat" && state.phase !== "listen_recall") throw stateError(event, state.phase);
       return { ...state, phase: "listen_recall", current_word: currentWord, current_index: currentIndex };
+    }
+    if (event === "pretest_complete") {
+      if (state.phase !== "pretest_result" && state.phase !== "listen_repeat" && state.phase !== "listen_recall") {
+        throw stateError(event, state.phase);
+      }
+      if (!isEndOfPretest) throw new Error("Study session pretest completion requires the terminal cursor.");
+      return { ...state, phase: "pretest_complete", current_word: null, current_index: currentIndex };
     }
     throw new Error(`Event ${event} is not valid for a pretest session.`);
   }

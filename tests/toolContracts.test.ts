@@ -111,7 +111,7 @@ describe("Widget to tool contracts", () => {
         expect(recordPretestResultSchema.parse(payload)).toEqual(payload);
       }
     }
-    for (const event of ["pretest_question", "pretest_result", "listen_repeat", "listen_recall"] as const) {
+    for (const event of ["pretest_question", "pretest_result", "listen_repeat", "listen_recall", "pretest_complete"] as const) {
       const advance = buildPretestSessionAdvance(event, 1);
       expect(advanceStudySessionSchema.parse(advance)).toEqual(advance);
     }

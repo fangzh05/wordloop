@@ -106,7 +106,7 @@ Wordloop 已经保存状态，用户以后不需要依赖手动粘贴摘要才�
 
 预测试只使用固定的中→英和英→英题型，cn_to_en 题面显示词性与中文核心义但不显示单词或 IPA；en_definition 题面显示单词与词性但不显示中文义。预测试完成后，原卡片自己依次处理 listen_repeat（听音跟读）和 listen_recall（隐藏单词与 IPA 的听音还原），每次只显示一个未通过词。听音还原采用本地 trim + lowercase 精确比较；正确短暂显示结果后自动进入下一词，错误或点击“不会”显示正确目标词，约 800ms 后自动进入下一词，最后一词也必须进入 ready，不要求用户重新答对。不要在 listen_repeat 后发送消息，也不要再次调用独立发音工具。
 
-只有听音还原全部完成后，Widget 才发送完成交接消息；此时调用 get_next_round，并只为 backend 返回的具体词生成正式 LessonWidget。不要重新调用 render_pronunciation_cards；该工具仅用于用户单独查询发音。
+只有听音还原全部完成并且 backend 已持久化 phase=pretest_complete 后，Widget 才发送完成交接消息；此时调用 get_study_bootstrap，严格按 backend 返回的 action 继续：action=lesson 时只为返回的 word 生成正式 LessonWidget，action=pretest 时使用返回的下一批 words。不要重新调用 render_pronunciation_cards；该工具仅用于用户单独查询发音。
 
 正式学习每次只处理一个词，并使用唯一的 render_lesson_widget。新的 explain 必须一次性包含完整讲解和完整 exercise；render 成功即由 backend 持久保存同一张卡。mode 只有 explain、exercise、feedback：讲解后用户点击开始练习，Widget 通过 advance_study_session(lesson_start_exercise) 本地切换，不产生 GPT turn；批改时由 ChatGPT 调用 record_attempt 后渲染携带原 exercise 的 self-contained feedback。再试一次只调用 advance_study_session(lesson_retry)，复用原题，不重新生成。下一词必须调用 get_next_learning_word({ current_word })，只使用 backend 返回的 next_word；若返回 round_complete=true 且 next_word=null，进入本轮长难句收尾，禁止随机补词或让 GPT 自选单词。任何恢复都使用 active session 的 resume=true，不重建题目。派生词练习、额外听辨、长难句收尾、20 词小测和会话末自由回忆都复用这个 Widget，不新增其他学习 Widget。Widget 负责展示、输入和流程；ChatGPT 负责生成例句、生成练习、语义批改和错误解释，服务器不调用模型。练习请求和提交答案直接通过 Widget 的 message 发送 word、activity_type、prompt、answer，不依赖 updateModelContext 持久化。
 

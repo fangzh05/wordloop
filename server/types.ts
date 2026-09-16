@@ -31,6 +31,7 @@ export const STUDY_WIDGETS = ["pretest", "lesson", "dictation", "review"] as con
 export type StudyWidget = (typeof STUDY_WIDGETS)[number];
 export const STUDY_PHASES = [
   "pretest", "pretest_result", "listen_repeat", "listen_recall",
+  "pretest_complete",
   "lesson_explain", "lesson_exercise", "lesson_feedback", "dictation",
   "review", "review_complete",
 ] as const;

@@ -9,6 +9,7 @@ const sessionMocks = vi.hoisted(() => ({
   getActiveStudySession: vi.fn(),
   getStudyDate: vi.fn(),
   makeStudyState: vi.fn(),
+  normalizeStudyStateForRead: vi.fn((state: unknown) => state),
   persistStudyState: vi.fn(),
 }));
 
@@ -206,7 +207,7 @@ describe("Review render tool schema compatibility", () => {
         version: 1,
         date: "2026-09-16",
         widget: "pretest",
-        phase: "listen_recall",
+        phase: "pretest_complete",
         current_word: null,
         current_index: 6,
         retry_count: 0,
@@ -240,6 +241,93 @@ describe("Review render tool schema compatibility", () => {
       });
       expect(payloadOf(result)).toMatchObject({ widget: "lesson", word: "failed-word" });
       expect(vi.mocked(getFirstSessionLearningWord)).toHaveBeenCalledWith(["failed-word"], [], {}, "00000000-0000-0000-0000-000000000001");
+    });
+  });
+
+  it("rejects a Lesson explain before the pretest is durably complete", async () => {
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "pretest",
+        phase: "listen_repeat",
+        current_word: "failed-word",
+        current_index: 0,
+        retry_count: 0,
+        flow: { relearn_words: ["failed-word"] },
+        payload: { widget: "pretest", items: [{ word: "failed-word" }] },
+      },
+    });
+
+    await withReviewClient(async (client) => {
+      const result = await client.callTool({
+        name: "render_lesson_widget",
+        arguments: {
+          mode: "explain",
+          word: "failed-word",
+          ipa: "/feɪld/",
+          part_of_speech: "v.",
+          meaning_zh: "测试含义",
+          collocations: [],
+          derivations: [],
+          example_en: "A complete example.",
+          note: "测试备注",
+          exercise: {
+            activity_type: "sentence",
+            instruction: "造句",
+            prompt: "Use the word in a new scene.",
+            multiline: true,
+          },
+        },
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([{ type: "text", text: "PRETEST_NOT_COMPLETE" }]);
+      expect(sessionMocks.persistStudyState).not.toHaveBeenCalled();
+    });
+  });
+
+  it("accepts the backend-selected Lesson word after pretest_complete and preserves flow", async () => {
+    const failedWord = reviewItem("failed-word");
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "pretest",
+        phase: "pretest_complete",
+        current_word: null,
+        current_index: 6,
+        retry_count: 0,
+        flow: { relearn_words: [failedWord.word] },
+        payload: { widget: "pretest", items: [] },
+      },
+    });
+    const { getFirstSessionLearningWord } = await import("../server/services/review.js");
+    vi.mocked(getFirstSessionLearningWord).mockResolvedValue(failedWord);
+
+    await withReviewClient(async (client) => {
+      const result = await client.callTool({
+        name: "render_lesson_widget",
+        arguments: {
+          mode: "explain",
+          word: "failed-word",
+          ipa: "/feɪld/",
+          part_of_speech: "v.",
+          meaning_zh: "测试含义",
+          collocations: [],
+          derivations: [],
+          example_en: "A complete example.",
+          note: "测试备注",
+          exercise: {
+            activity_type: "sentence",
+            instruction: "造句",
+            prompt: "Use the word in a new scene.",
+            multiline: true,
+          },
+        },
+      });
+      expect(payloadOf(result)).toMatchObject({ widget: "lesson", phase: "lesson_explain", word: "failed-word" });
+      const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as { flow?: { relearn_words: string[] } };
+      expect(persisted.flow).toEqual({ relearn_words: ["failed-word"] });
     });
   });
 });

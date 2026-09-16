@@ -14,6 +14,7 @@ import {
   pronunciationIndexForSourceIndex,
   schedulePretestAdvance,
   selectPronunciationWords,
+  stageForPhase,
   sourceIndexForPronunciationWord,
 } from "../web/src/pretest/PretestWidget.js";
 
@@ -115,6 +116,10 @@ describe("pretest auto advance", () => {
 });
 
 describe("embedded pronunciation recall", () => {
+  it("resumes a durably completed pretest directly at ready", () => {
+    expect(stageForPhase("pretest_complete")).toEqual({ finished: true, stage: "ready" });
+  });
+
   it("selects only uncertain and unknown words and compares recall locally", () => {
     const words = [
       item,

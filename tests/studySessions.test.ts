@@ -4,6 +4,8 @@ import {
   advanceStudyState,
   isStudySessionSchemaMismatch,
   makeStudyState,
+  isLegacyCompletedPretestState,
+  normalizeStudyStateForRead,
   studySessionSummary,
 } from "../server/services/studySessions.js";
 import {
@@ -81,7 +83,7 @@ describe("durable study session state", () => {
     expect(next.payload).toEqual(feedback.payload);
   });
 
-  it("persists pretest phases and supports the final listen-recall sentinel", () => {
+  it("persists pretest phases and completes the final listen-recall cursor", () => {
     const pretest = makeStudyState({
       date: "2026-09-15",
       widget: "pretest",
@@ -99,8 +101,62 @@ describe("durable study session state", () => {
     const repeat = advanceStudyState(result, "listen_repeat", 0);
     const recall = advanceStudyState(repeat, "listen_recall", 0);
     expect(recall).toMatchObject({ phase: "listen_recall", current_word: "recur", current_index: 0 });
-    const ready = advanceStudyState(recall, "listen_recall", 2);
-    expect(ready).toMatchObject({ phase: "listen_recall", current_word: null, current_index: 2 });
+    const ready = advanceStudyState(recall, "pretest_complete", 2);
+    expect(ready).toMatchObject({ phase: "pretest_complete", current_word: null, current_index: 2 });
+  });
+
+  it("uses one durable pretest_complete transition for every legal final stage", () => {
+    const phases = ["pretest_result", "listen_repeat", "listen_recall"] as const;
+    for (const phase of phases) {
+      const state = makeStudyState({
+        date: "2026-09-15",
+        widget: "pretest",
+        phase,
+        current_word: "recur",
+        current_index: 1,
+        retry_count: 2,
+        flow: { relearn_words: ["failed-word"] },
+        payload: { widget: "pretest", items: [{ word: "recur" }, { word: "planet" }] },
+      });
+      expect(advanceStudyState(state, "pretest_complete", 2)).toMatchObject({
+        phase: "pretest_complete",
+        current_word: null,
+        current_index: 2,
+        retry_count: 2,
+        flow: { relearn_words: ["failed-word"] },
+      });
+    }
+  });
+
+  it("rejects pretest completion before the terminal cursor", () => {
+    const state = makeStudyState({
+      date: "2026-09-15",
+      widget: "pretest",
+      phase: "listen_recall",
+      current_word: "recur",
+      current_index: 0,
+      retry_count: 0,
+      payload: { widget: "pretest", items: [{ word: "recur" }, { word: "planet" }] },
+    });
+    expect(() => advanceStudyState(state, "pretest_complete", 1)).toThrow("terminal cursor");
+  });
+
+  it("normalizes only the legacy listen_recall item-count terminal state", () => {
+    const legacy = makeStudyState({
+      date: "2026-09-15",
+      widget: "pretest",
+      phase: "listen_recall",
+      current_word: null,
+      current_index: 2,
+      retry_count: 0,
+      flow: { relearn_words: ["failed-word"] },
+      payload: { widget: "pretest", items: [{ word: "recur" }, { word: "planet" }] },
+    });
+    const inProgress = { ...legacy, current_index: 1, current_word: "planet" };
+    expect(isLegacyCompletedPretestState(legacy)).toBe(true);
+    expect(normalizeStudyStateForRead(legacy)).toMatchObject({ phase: "pretest_complete", current_word: null, current_index: 2 });
+    expect(isLegacyCompletedPretestState(inProgress)).toBe(false);
+    expect(normalizeStudyStateForRead(inProgress)).toBe(inProgress);
   });
 
   it("returns only the durable session summary", () => {

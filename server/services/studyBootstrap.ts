@@ -6,7 +6,7 @@ import {
   getDueReviewSelection,
   getFirstSessionLearningWord,
 } from "./review.js";
-import { getActiveStudySession } from "./studySessions.js";
+import { getActiveStudySession, normalizeStudyStateForRead } from "./studySessions.js";
 import { getTodayWords } from "./words.js";
 import { perf } from "./perf.js";
 import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
@@ -36,17 +36,44 @@ async function continueCompletedReview(active: NonNullable<Awaited<ReturnType<ty
   return lessonWord ? { action: "lesson", word: lessonWord } : { action: "done" };
 }
 
+export async function continueCompletedPretest(active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>): Promise<StudyBootstrapResult> {
+  const db = getDatabase();
+  const userId = getAuthenticatedUserId();
+  const date = active.state?.date;
+  if (!date) return { action: "done" };
+
+  const todayWords = await getTodayWords(date, db, userId);
+  const lessonWord = await getFirstSessionLearningWord(
+    active.state?.flow?.relearn_words ?? [],
+    todayWords,
+    db,
+    userId,
+  );
+  if (lessonWord) return { action: "lesson", word: lessonWord };
+
+  const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
+  return newWords.length > 0
+    ? { action: "pretest", words: newWords.slice(0, 6) }
+    : { action: "done" };
+}
+
 export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
   return perf("get_study_bootstrap", async () => {
     const db = getDatabase();
     const userId = getAuthenticatedUserId();
 
     const active = await getActiveStudySession(db, userId);
-    if (active?.state) {
-      if (active.state.widget === "review" && active.state.phase === "review_complete") {
-        return continueCompletedReview(active);
+    const normalizedActive = active?.state
+      ? { ...active, state: normalizeStudyStateForRead(active.state) }
+      : active;
+    if (normalizedActive?.state) {
+      if (normalizedActive.state.widget === "review" && normalizedActive.state.phase === "review_complete") {
+        return continueCompletedReview(normalizedActive);
       }
-      return { action: "resume", widget: active.state.widget };
+      if (normalizedActive.state.widget === "pretest" && normalizedActive.state.phase === "pretest_complete") {
+        return continueCompletedPretest(normalizedActive);
+      }
+      return { action: "resume", widget: normalizedActive.state.widget };
     }
 
     const queue = await ensureTodayQueue(db, userId);

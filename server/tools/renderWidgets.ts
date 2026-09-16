@@ -11,7 +11,7 @@ import {
   getFirstSessionLearningWord,
   getSessionLearningQueue,
 } from "../services/review.js";
-import { getActiveStudySession, getStudyDate, makeStudyState, persistStudyState } from "../services/studySessions.js";
+import { getActiveStudySession, getStudyDate, makeStudyState, normalizeStudyStateForRead, persistStudyState } from "../services/studySessions.js";
 import { getTodayWords } from "../services/words.js";
 import { normalizeWord } from "../services/wordNormalization.js";
 import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
@@ -175,10 +175,11 @@ function widgetPayloadWithState(payload: Record<string, unknown>, state: StudySt
 }
 
 function resumablePayload(session: StudySessionRow | null, widget: StudyState["widget"]): Record<string, unknown> {
-  if (!session?.state || session.state.widget !== widget) {
+  const state = session?.state ? normalizeStudyStateForRead(session.state) : null;
+  if (!state || state.widget !== widget) {
     throw new Error(`No resumable active ${widget} study session.`);
   }
-  return widgetPayloadWithState(session.state.payload, session.state);
+  return widgetPayloadWithState(state.payload, state);
 }
 
 async function saveWidgetState(input: {
@@ -306,9 +307,11 @@ async function validateLessonWord(
   if (active?.state?.widget === "pretest") {
     const db = getDatabase();
     const userId = getAuthenticatedUserId();
-    const date = active.state.date;
+    const state = normalizeStudyStateForRead(active.state);
+    if (state.phase !== "pretest_complete") throw new Error("PRETEST_NOT_COMPLETE");
+    const date = state.date;
     const todayWords = await getTodayWords(date, db, userId);
-    const expected = await getFirstSessionLearningWord(active.state.flow.relearn_words, todayWords, db, userId);
+    const expected = await getFirstSessionLearningWord(state.flow.relearn_words, todayWords, db, userId);
     assertLessonWordMatches(expected?.word ?? null, input.word);
     return { date };
   }
