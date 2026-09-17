@@ -78,6 +78,7 @@ function registerWidgetResources(server: McpServer, loadWidgetHtml: WidgetHtmlLo
   for (const [kind, uri] of Object.entries(WIDGET_URIS) as Array<[WidgetKind, string]>) {
     registerWidgetResource(`Wordloop ${kind} widget`, kind, uri);
   }
+  registerWidgetResource("Wordloop lesson v3 alias", "lesson", LEGACY_WIDGET_URIS.lessonV3);
   registerWidgetResource("Wordloop lesson v2 alias", "lesson", LEGACY_WIDGET_URIS.lessonV2);
   registerWidgetResource("Wordloop lesson legacy widget", "lesson", LEGACY_WIDGET_URIS.lesson);
 }
