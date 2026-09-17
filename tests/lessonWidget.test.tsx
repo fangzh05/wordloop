@@ -62,6 +62,42 @@ describe("guided lesson widget", () => {
     expect(isLessonRenderCandidate(null)).toBe(false);
   });
 
+  it("ignores every Lesson tool input", () => {
+    expect(routeLessonAppEvent({ type: "toolinput", value: { mode: "feedback", word: "shrink" } }, false)).toEqual({ kind: "ignore" });
+    expect(routeLessonAppEvent({ type: "toolinput", value: { event: "lesson_complete" } }, false)).toEqual({ kind: "ignore" });
+  });
+
+  it("ignores incomplete session tool results without a render mode", () => {
+    expect(routeLessonAppEvent({
+      type: "toolresult",
+      value: { structuredContent: { active: true, widget: "lesson", phase: "lesson_complete", current_word: "shrink", current_index: 8 } },
+    }, false)).toEqual({ kind: "ignore" });
+  });
+
+  it("renders the complete production Lesson feedback payload", () => {
+    const routed = routeLessonAppEvent({
+      type: "toolresult",
+      value: {
+        structuredContent: {
+          widget: "lesson",
+          widget_version: 3,
+          mode: "feedback",
+          phase: "lesson_complete",
+          current_index: 8,
+          word: "shrink",
+          progress: "9/50",
+          exercise: { activity_type: "sentence", instruction: "Use shrink.", prompt: "Describe a shrinking sample.", multiline: false },
+          feedback: { is_correct: true, user_answer: "The sample shrank.", reveal_answer: false },
+          navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
+        },
+      },
+    }, false);
+
+    expect(routed.kind).toBe("render");
+    if (routed.kind !== "render") throw new Error("expected a valid production Lesson feedback render");
+    expect(routed.payload).toMatchObject({ widget: "lesson", widget_version: 3, mode: "feedback", word: "shrink", current_index: 8 });
+  });
+
   it("keeps the last-good Lesson payload through internal advance events", () => {
     const explain = {
       widget: "lesson",

@@ -109,13 +109,11 @@ export function routeLessonAppEvent(
   hasLastGoodPayload: boolean,
   lastSignature = "",
 ): LessonAppEventRoute {
-  let candidate: unknown;
-  if (event.type === "toolinput") {
-    if (event.value.resume === true || !isLessonRenderCandidate(event.value)) return { kind: "ignore" };
-    candidate = { widget: "lesson", ...event.value };
-  } else {
-    candidate = event.value.structuredContent;
-    if (!isLessonRenderCandidate(candidate)) return { kind: "ignore" };
+  if (event.type === "toolinput") return { kind: "ignore" };
+
+  const candidate = event.value.structuredContent;
+  if (!isLessonRenderCandidate(candidate) || (candidate as { widget?: unknown }).widget !== "lesson") {
+    return { kind: "ignore" };
   }
 
   const parsed = lessonPayloadSchema.safeParse(candidate);
