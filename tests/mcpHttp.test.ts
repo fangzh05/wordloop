@@ -116,6 +116,8 @@ describe("Streamable HTTP server", () => {
     expect(finishTool?.description).toContain("not the session-end free recall trigger");
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
     expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson-v6.html");
+    expect(lessonTool?.description).toContain("mode=exercise、wrapup=true");
+    expect(lessonTool?.description).toContain("mode=feedback、wrapup=true");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
     const lessonInput = lessonTool?.inputSchema as { properties?: Record<string, unknown> } | undefined;
     expect(lessonInput?.properties).not.toHaveProperty("navigation");

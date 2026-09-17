@@ -605,7 +605,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_lesson_widget", {
     title: "打开单词学习",
-    description: "显示一个单词的讲解、练习或批改卡片。正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考句；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
+    description: "显示一个单词的讲解、练习或批改卡片。正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。收到 WORDLOOP_ROUND_COMPLETE 时必须在此工具中用 mode=exercise、wrapup=true 显示唯一长难句收尾题，用户作答后再用 mode=feedback、wrapup=true 显示批改；不要把长句只写在聊天区，也不要提前 finish_study_session。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考句；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
     inputSchema: lessonToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.lesson } },
     annotations: { readOnlyHint: true, openWorldHint: false },
