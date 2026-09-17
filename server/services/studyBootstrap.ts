@@ -7,6 +7,7 @@ import {
 } from "./review.js";
 import {
   freezeLessonQueueForSession,
+  finishStudySession,
   getActiveStudySession,
   normalizeLegacyLessonSession,
   normalizeStudyStateForRead,
@@ -90,6 +91,27 @@ export async function continueCompletedPretest(active: NonNullable<Awaited<Retur
     : { action: "done" };
 }
 
+async function bootstrapFreshFlow(
+  db: ReturnType<typeof getDatabase>,
+  userId: string,
+): Promise<StudyBootstrapResult> {
+  const queue = await ensureTodayQueue(db, userId);
+
+  const review = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
+  if (review.rollingReview.length > 0) {
+    return { action: "review", count: review.rollingReview.length };
+  }
+
+  const todayWords = await getTodayWords(queue.date, db, userId);
+  const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
+  if (newWords.length > 0) {
+    return { action: "pretest", words: newWords.slice(0, 6) };
+  }
+
+  const lessonWord = findFirstLearningWord(todayWords);
+  return lessonWord ? { action: "lesson", word: lessonWord } : { action: "done" };
+}
+
 export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
   return perf("get_study_bootstrap", async () => {
     const db = getDatabase();
@@ -106,7 +128,8 @@ export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
     }
     if (normalizedActive?.state) {
       if (normalizedActive.state.widget === "lesson" && normalizedActive.state.phase === "lesson_complete") {
-        return { action: "done" };
+        await finishStudySession(db, userId);
+        return bootstrapFreshFlow(db, userId);
       }
       if (normalizedActive.state.widget === "review" && normalizedActive.state.phase === "review_complete") {
         return continueCompletedReview(normalizedActive);
@@ -117,20 +140,6 @@ export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
       return { action: "resume", widget: normalizedActive.state.widget, phase: normalizedActive.state.phase };
     }
 
-    const queue = await ensureTodayQueue(db, userId);
-
-    const review = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
-    if (review.rollingReview.length > 0) {
-      return { action: "review", count: review.rollingReview.length };
-    }
-
-    const todayWords = await getTodayWords(queue.date, db, userId);
-    const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
-    if (newWords.length > 0) {
-      return { action: "pretest", words: newWords.slice(0, 6) };
-    }
-
-    const lessonWord = findFirstLearningWord(todayWords);
-    return lessonWord ? { action: "lesson", word: lessonWord } : { action: "done" };
+    return bootstrapFreshFlow(db, userId);
   });
 }

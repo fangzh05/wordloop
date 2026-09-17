@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getAuthenticatedUserId: vi.fn(() => "00000000-0000-0000-0000-000000000001"),
   getDatabase: vi.fn(() => ({})),
   getActiveStudySession: vi.fn(),
+  finishStudySession: vi.fn(),
   freezeLessonQueueForSession: vi.fn(),
   normalizeLegacyLessonSession: vi.fn(),
   normalizeStudyStateForRead: vi.fn((state: any) => {
@@ -30,6 +31,7 @@ vi.mock("../server/db.js", () => ({
 }));
   vi.mock("../server/services/studySessions.js", () => ({
     getActiveStudySession: mocks.getActiveStudySession,
+    finishStudySession: mocks.finishStudySession,
     freezeLessonQueueForSession: mocks.freezeLessonQueueForSession,
     normalizeLegacyLessonSession: mocks.normalizeLegacyLessonSession,
     normalizeStudyStateForRead: mocks.normalizeStudyStateForRead,
@@ -74,6 +76,7 @@ describe("study bootstrap daily queue invariant", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getActiveStudySession.mockResolvedValue(null);
+    mocks.finishStudySession.mockResolvedValue(null);
     mocks.freezeLessonQueueForSession.mockImplementation(async (active: any, todayWords: VocabularyItem[]) => ({
       ...active,
       state: {
@@ -240,8 +243,10 @@ describe("study bootstrap daily queue invariant", () => {
     expect(mocks.normalizeStudyStateForRead).toHaveBeenCalled();
   });
 
-  it("returns done for a completed Lesson instead of reopening lesson_feedback", async () => {
-    mocks.getActiveStudySession.mockResolvedValue({
+  it("releases a completed Lesson and continues to the remaining daily pretest", async () => {
+    const completed = {
+      id: "completed-session",
+      ended_at: null as string | null,
       state: {
         version: 1,
         date: "2026-09-16",
@@ -253,15 +258,32 @@ describe("study bootstrap daily queue invariant", () => {
         flow: { relearn_words: ["expression"], lesson_words: ["expression", "shrink"] },
         payload: { widget: "lesson", mode: "feedback", word: "shrink" },
       },
+    };
+    mocks.getActiveStudySession.mockResolvedValue(completed);
+    mocks.finishStudySession.mockImplementation(async () => {
+      completed.ended_at = new Date().toISOString();
+      return completed;
     });
+    mocks.getTodayWords.mockResolvedValue([
+      word(0, "known"),
+      ...Array.from({ length: 44 }, (_, index) => word(index + 1, "new")),
+    ]);
 
-    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
-    expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
+    const result = await getStudyBootstrap();
+
+    expect(result).toMatchObject({ action: "pretest" });
+    expect((result as { action: "pretest"; words: VocabularyItem[] }).words).toHaveLength(6);
+    expect(completed.ended_at).not.toBeNull();
+    expect(mocks.finishStudySession).toHaveBeenCalledOnce();
+    expect(mocks.finishStudySession).toHaveBeenCalledWith({}, expect.any(String));
+    expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
   });
 
-  it("continues remaining daily new words after the completed Lesson session is finished", async () => {
+  it("continues remaining daily new words and is idempotent across a second bootstrap", async () => {
     mocks.getActiveStudySession
       .mockResolvedValueOnce({
+        id: "completed-session",
+        ended_at: null as string | null,
         state: {
           version: 1,
           date: queue.date,
@@ -274,44 +296,82 @@ describe("study bootstrap daily queue invariant", () => {
           payload: { widget: "lesson", mode: "feedback", word: "word-8" },
         },
       })
-      // finish_study_session releases the active row; the next bootstrap sees no active session.
       .mockResolvedValueOnce(null);
+    mocks.finishStudySession.mockResolvedValue({ ended_at: new Date().toISOString() });
     mocks.getTodayWords.mockResolvedValue([
       word(0, "known"),
       ...Array.from({ length: 44 }, (_, index) => word(index + 1, "new")),
     ]);
 
-    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    const first = await getStudyBootstrap();
     const next = await getStudyBootstrap();
 
+    expect(first).toMatchObject({ action: "pretest" });
     expect(next).toMatchObject({ action: "pretest" });
     expect((next as { action: "pretest"; words: VocabularyItem[] }).words).toHaveLength(6);
-    expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
-    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+    expect(mocks.finishStudySession).toHaveBeenCalledOnce();
+    expect(mocks.ensureTodayQueue).toHaveBeenCalledTimes(2);
+    expect(mocks.getDueReviewSelection).toHaveBeenCalledTimes(2);
     expect(mocks.getTodayWords).toHaveBeenCalledWith(queue.date, {}, expect.any(String));
   });
 
-  it("keeps done as the true all-done result after the completed Lesson session is finished", async () => {
-    mocks.getActiveStudySession
-      .mockResolvedValueOnce({
-        state: {
-          version: 1,
-          date: queue.date,
-          widget: "lesson",
-          phase: "lesson_complete",
-          current_word: "word-8",
-          current_index: 8,
-          retry_count: 0,
-          flow: { relearn_words: [], lesson_words: Array.from({ length: 9 }, (_, index) => `word-${index}`) },
-          payload: { widget: "lesson", mode: "feedback", word: "word-8" },
-        },
-      })
-      .mockResolvedValueOnce(null);
+  it("returns done after releasing a completed Lesson when the daily flow is truly empty", async () => {
+    const completed = {
+      id: "completed-session",
+      ended_at: null as string | null,
+      state: {
+        version: 1,
+        date: queue.date,
+        widget: "lesson",
+        phase: "lesson_complete",
+        current_word: "word-8",
+        current_index: 8,
+        retry_count: 0,
+        flow: { relearn_words: [], lesson_words: Array.from({ length: 9 }, (_, index) => `word-${index}`) },
+        payload: { widget: "lesson", mode: "feedback", word: "word-8" },
+      },
+    };
+    mocks.getActiveStudySession.mockResolvedValueOnce(completed);
+    mocks.finishStudySession.mockImplementation(async () => {
+      completed.ended_at = new Date().toISOString();
+      return completed;
+    });
     mocks.getTodayWords.mockResolvedValue([word(0, "known")]);
 
     await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
-    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    expect(completed.ended_at).not.toBeNull();
+    expect(mocks.finishStudySession).toHaveBeenCalledOnce();
     expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
     expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+  });
+
+  it("checks due review after releasing a completed Lesson", async () => {
+    const completed = {
+      id: "completed-session",
+      ended_at: null as string | null,
+      state: {
+        version: 1,
+        date: queue.date,
+        widget: "lesson",
+        phase: "lesson_complete",
+        current_word: "word-8",
+        current_index: 8,
+        retry_count: 0,
+        flow: { relearn_words: [], lesson_words: ["word-8"] },
+        payload: { widget: "lesson", mode: "feedback", word: "word-8" },
+      },
+    };
+    mocks.getActiveStudySession.mockResolvedValue(completed);
+    mocks.finishStudySession.mockImplementation(async () => {
+      completed.ended_at = new Date().toISOString();
+      return completed;
+    });
+    mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [word(99, "review")], oldRandomReview: [] });
+
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "review", count: 1 });
+    expect(completed.ended_at).not.toBeNull();
+    expect(mocks.finishStudySession).toHaveBeenCalledOnce();
+    expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
+    expect(mocks.getTodayWords).not.toHaveBeenCalled();
   });
 });
