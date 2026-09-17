@@ -258,4 +258,60 @@ describe("study bootstrap daily queue invariant", () => {
     await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
   });
+
+  it("continues remaining daily new words after the completed Lesson session is finished", async () => {
+    mocks.getActiveStudySession
+      .mockResolvedValueOnce({
+        state: {
+          version: 1,
+          date: queue.date,
+          widget: "lesson",
+          phase: "lesson_complete",
+          current_word: "word-8",
+          current_index: 8,
+          retry_count: 0,
+          flow: { relearn_words: ["word-1"], lesson_words: Array.from({ length: 9 }, (_, index) => `word-${index}`) },
+          payload: { widget: "lesson", mode: "feedback", word: "word-8" },
+        },
+      })
+      // finish_study_session releases the active row; the next bootstrap sees no active session.
+      .mockResolvedValueOnce(null);
+    mocks.getTodayWords.mockResolvedValue([
+      word(0, "known"),
+      ...Array.from({ length: 44 }, (_, index) => word(index + 1, "new")),
+    ]);
+
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    const next = await getStudyBootstrap();
+
+    expect(next).toMatchObject({ action: "pretest" });
+    expect((next as { action: "pretest"; words: VocabularyItem[] }).words).toHaveLength(6);
+    expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
+    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+    expect(mocks.getTodayWords).toHaveBeenCalledWith(queue.date, {}, expect.any(String));
+  });
+
+  it("keeps done as the true all-done result after the completed Lesson session is finished", async () => {
+    mocks.getActiveStudySession
+      .mockResolvedValueOnce({
+        state: {
+          version: 1,
+          date: queue.date,
+          widget: "lesson",
+          phase: "lesson_complete",
+          current_word: "word-8",
+          current_index: 8,
+          retry_count: 0,
+          flow: { relearn_words: [], lesson_words: Array.from({ length: 9 }, (_, index) => `word-${index}`) },
+          payload: { widget: "lesson", mode: "feedback", word: "word-8" },
+        },
+      })
+      .mockResolvedValueOnce(null);
+    mocks.getTodayWords.mockResolvedValue([word(0, "known")]);
+
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
+    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+  });
 });

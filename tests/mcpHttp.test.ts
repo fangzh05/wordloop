@@ -60,11 +60,18 @@ describe("Streamable HTTP server", () => {
     expect(instructions).toContain("round_complete 只触发长难句收尾，不得触发会话收尾");
     expect(instructions).toContain("会话收尾必须由用户明确结束学习触发");
     expect(instructions).toContain("If it returns { action: \"done\" } for an active lesson_complete state");
+    expect(instructions).toContain("do not call finish_study_session immediately");
+    expect(instructions).toContain("call finish_study_session exactly once");
+    expect(instructions).toContain("then immediately call get_study_bootstrap");
+    expect(instructions).toContain("do not call finish_study_session before the wrap-up is answered and graded");
+    expect(instructions).toContain("Only a done result after the active session has been released");
     expect(instructions).toContain("do not repeat the round-complete handoff");
     const bootstrapTool = response.tools.find((tool) => tool.name === "get_study_bootstrap");
     expect(bootstrapTool?.description).toContain("active Lesson phase=lesson_complete");
-    expect(bootstrapTool?.description).toContain("不表示整个 session 或今天的学习完成");
-    expect(bootstrapTool?.description).toContain("不得因此触发会话末自由回忆");
+    expect(bootstrapTool?.description).toContain("current vocabulary round has no more words");
+    expect(bootstrapTool?.description).toContain("当前 active round 仍等待既有的 round-end wrap-up");
+    expect(bootstrapTool?.description).toContain("不得在 round wrap-up 完成之前调用 finish_study_session");
+    expect(bootstrapTool?.description).toContain("get_study_bootstrap 发现今天剩余的 daily words");
     const reviewSubmissionTool = response.tools.find((tool) => tool.name === "record_review_submission");
     expect(reviewSubmissionTool?._meta).toMatchObject({
       ui: { resourceUri: "ui://wordloop/review.html", visibility: ["app"] },
@@ -110,6 +117,9 @@ describe("Streamable HTTP server", () => {
     expect(JSON.stringify(advanceTool?.inputSchema)).toContain("lesson_retry");
     const finishTool = response.tools.find((tool) => tool.name === "finish_study_session");
     expect(finishTool?.inputSchema).toMatchObject({ type: "object" });
+    expect(finishTool?.description).toContain("exactly once after the current Lesson round's long-sentence wrap-up");
+    expect(finishTool?.description).toContain("immediately call get_study_bootstrap");
+    expect(finishTool?.description).toContain("not the session-end free recall trigger");
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
     expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson-v5.html");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");

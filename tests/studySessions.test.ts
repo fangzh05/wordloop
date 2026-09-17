@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   advanceStudyState,
+  finishStudySession,
+  getActiveStudySession,
   isStudySessionSchemaMismatch,
   makeStudyState,
   isLegacyCompletedPretestState,
@@ -222,6 +224,65 @@ describe("durable study session state", () => {
       current_index: 0,
     });
     expect(studySessionSummary(null)).toEqual({ active: false });
+  });
+
+  it("releases the active session through the existing finish boundary", async () => {
+    const activeRow: StudySessionRow = {
+      id: "session",
+      user_id: "user",
+      started_at: "2026-09-15T00:00:00.000Z",
+      ended_at: null,
+      new_words_count: 9,
+      review_words_count: 0,
+      state: sessionState({ phase: "lesson_complete", current_word: "plantation" }),
+      updated_at: "2026-09-15T00:00:00.000Z",
+    };
+    const finishedRow = { ...activeRow, ended_at: "2026-09-15T01:00:00.000Z", state: {} };
+    let fromCalls = 0;
+    let updateValues: Record<string, unknown> | undefined;
+    const readBuilder = (result: unknown) => {
+      const builder: Record<string, any> = {};
+      builder.select = vi.fn(() => builder);
+      builder.eq = vi.fn(() => builder);
+      builder.is = vi.fn(() => builder);
+      builder.order = vi.fn(() => builder);
+      builder.limit = vi.fn(() => builder);
+      builder.maybeSingle = vi.fn(async () => result);
+      return builder;
+    };
+    const updateBuilder: Record<string, any> = {};
+    updateBuilder.eq = vi.fn(() => updateBuilder);
+    updateBuilder.is = vi.fn(() => updateBuilder);
+    updateBuilder.select = vi.fn(() => ({
+      single: vi.fn(async () => ({ data: finishedRow, error: null })),
+    }));
+    const db = {
+      from: vi.fn((table: string) => {
+        if (table !== "study_sessions") throw new Error(`unexpected table ${table}`);
+        const call = fromCalls++;
+        if (call === 0) return readBuilder({ data: activeRow, error: null });
+        if (call === 1) {
+          return {
+            update: vi.fn((values: Record<string, unknown>) => {
+              updateValues = values;
+              return updateBuilder;
+            }),
+          };
+        }
+        return readBuilder({ data: null, error: null });
+      }),
+    };
+
+    await expect(finishStudySession(db as any, "user")).resolves.toMatchObject({
+      id: "session",
+      ended_at: finishedRow.ended_at,
+    });
+    expect(updateValues).toMatchObject({
+      ended_at: expect.any(String),
+      state: {},
+      updated_at: expect.any(String),
+    });
+    await expect(getActiveStudySession(db as any, "user")).resolves.toBeNull();
   });
 });
 
