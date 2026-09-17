@@ -104,6 +104,26 @@ export type LessonAppEventRoute =
   | { kind: "invalid"; blocking: boolean; issues: z.ZodIssue[] }
   | { kind: "render"; payload: LessonPayload; signature: string; duplicate: boolean };
 
+function normalizeLessonTransportPayload(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+  const candidate = value as Record<string, unknown>;
+  const navigation = candidate.navigation;
+  if (typeof navigation !== "object" || navigation === null || Array.isArray(navigation)) return value;
+  const navigationRecord = navigation as Record<string, unknown>;
+  if (navigationRecord.action !== "round_complete") return value;
+
+  // Some ChatGPT transports omit null-valued object fields. Restore the
+  // explicit terminal values before validating against the strict contract.
+  return {
+    ...candidate,
+    navigation: {
+      ...navigationRecord,
+      next_word: navigationRecord.next_word ?? null,
+      next_index: navigationRecord.next_index ?? null,
+    },
+  };
+}
+
 export function routeLessonAppEvent(
   event: LessonAppEvent,
   hasLastGoodPayload: boolean,
@@ -116,7 +136,7 @@ export function routeLessonAppEvent(
     return { kind: "ignore" };
   }
 
-  const parsed = lessonPayloadSchema.safeParse(candidate);
+  const parsed = lessonPayloadSchema.safeParse(normalizeLessonTransportPayload(candidate));
   if (!parsed.success) {
     return { kind: "invalid", blocking: !hasLastGoodPayload, issues: parsed.error.issues };
   }
