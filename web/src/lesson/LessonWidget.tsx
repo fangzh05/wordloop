@@ -213,7 +213,7 @@ export function LessonWidget(): React.JSX.Element {
         if (typeof process === "undefined" || process.env.NODE_ENV !== "production") {
           console.error(
             "LESSON_WIDGET_PAYLOAD_INVALID",
-            routed.issues.map(({ code, path }) => ({ code, path })),
+            JSON.stringify(routed.issues.map(({ code, path }) => ({ code, path }))),
           );
         }
         if (routed.blocking) setWidgetLoadError(LESSON_WIDGET_LOAD_ERROR);
