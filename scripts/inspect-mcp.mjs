@@ -56,12 +56,12 @@ try {
   const resourceList = await runInspector([target, "--transport", "http", "--method", "resources/list", "--format", "json"]);
   const resources = parseInspectorJson(resourceList.stdout, "resources/list");
   const resourceUris = Array.isArray(resources.resources) ? resources.resources.map((resource) => resource.uri) : [];
-  for (const uri of ["ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
+  for (const uri of ["ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
     if (!resourceUris.includes(uri)) throw new Error(`resources/list is missing ${uri}.`);
   }
   const resourceReads = {};
   let latestHtml;
-  for (const uri of ["ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
+  for (const uri of ["ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
     const read = await runInspector([target, "--transport", "http", "--method", "resources/read", "--uri", uri, "--format", "json"]);
     const result = parseInspectorJson(read.stdout, `resources/read ${uri}`);
     const text = result.contents?.[0]?.text;
@@ -69,12 +69,13 @@ try {
       throw new Error(`resources/read ${uri} did not return the current LessonWidget HTML.`);
     }
     resourceReads[uri] = { ok: true, widgetVersion: 3, htmlLength: text.length };
-    if (uri === "ui://wordloop/lesson-v4.html") latestHtml = text;
-    else if (uri === "ui://wordloop/lesson-v3.html") resourceReads.v3MatchesV4 = text === latestHtml;
-    else if (uri === "ui://wordloop/lesson-v2.html") resourceReads.v2MatchesV4 = text === latestHtml;
-    else resourceReads.legacyMatchesV4 = text === latestHtml;
+    if (uri === "ui://wordloop/lesson-v5.html") latestHtml = text;
+    else if (uri === "ui://wordloop/lesson-v4.html") resourceReads.v4MatchesV5 = text === latestHtml;
+    else if (uri === "ui://wordloop/lesson-v3.html") resourceReads.v3MatchesV5 = text === latestHtml;
+    else if (uri === "ui://wordloop/lesson-v2.html") resourceReads.v2MatchesV5 = text === latestHtml;
+    else resourceReads.legacyMatchesV5 = text === latestHtml;
   }
-  if (!resourceReads.v3MatchesV4 || !resourceReads.v2MatchesV4 || !resourceReads.legacyMatchesV4) throw new Error("Lesson resource aliases do not match the current HTML.");
+  if (!resourceReads.v4MatchesV5 || !resourceReads.v3MatchesV5 || !resourceReads.v2MatchesV5 || !resourceReads.legacyMatchesV5) throw new Error("Lesson resource aliases do not match the current HTML.");
   process.stdout.write(strict.stdout);
   process.stdout.write("\n");
   process.stdout.write(appInfo.stdout);

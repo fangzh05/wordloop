@@ -42,13 +42,14 @@ export const WIDGET_URIS = {
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
   dictation: "ui://wordloop/dictation.html",
-  // Keep the old resource URI registered below, but move the primary URI when
-  // the host has cached an older embedded HTML bundle for the stable URI.
-  lesson: "ui://wordloop/lesson-v4.html",
+  // Move the primary URI whenever the host may have cached an older embedded
+  // HTML bundle for the previous URI.
+  lesson: "ui://wordloop/lesson-v5.html",
 } as const;
 
 /** Resource aliases kept for conversations that still reference old Lesson URIs. */
 export const LEGACY_WIDGET_URIS = {
+  lessonV4: "ui://wordloop/lesson-v4.html",
   lessonV3: "ui://wordloop/lesson-v3.html",
   lessonV2: "ui://wordloop/lesson-v2.html",
   lesson: "ui://wordloop/lesson.html",
