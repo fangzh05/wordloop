@@ -187,6 +187,47 @@ const lessonPhaseByMode = {
 } as const;
 type LessonInput = z.infer<typeof lessonInput>;
 
+const lessonExerciseKeys = ["activity_type", "instruction", "prompt", "multiline"] as const;
+const lessonFeedbackKeys = [
+  "is_correct",
+  "user_answer",
+  "error_layer",
+  "message",
+  "reference_answer",
+  "explanation",
+  "reveal_answer",
+] as const;
+
+function projectPersistedFields(
+  value: unknown,
+  keys: readonly string[],
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const source = value as Record<string, unknown>;
+  return Object.fromEntries(
+    keys
+      .filter((key) => Object.prototype.hasOwnProperty.call(source, key))
+      .map((key) => [key, source[key]]),
+  );
+}
+
+function normalizePersistedLessonPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  if (payload.mode === "explain") {
+    const exercise = lessonExercise.parse(projectPersistedFields(payload.exercise, lessonExerciseKeys));
+    return { ...payload, exercise };
+  }
+  if (payload.mode === "exercise") {
+    const exercise = lessonExercise.parse(projectPersistedFields(payload, lessonExerciseKeys));
+    return { ...payload, ...exercise };
+  }
+  if (payload.mode === "feedback") {
+    const exercise = lessonExercise.parse(projectPersistedFields(payload.exercise, lessonExerciseKeys));
+    const feedback = lessonFeedback.parse(projectPersistedFields(payload.feedback, lessonFeedbackKeys));
+    return { ...payload, exercise, feedback };
+  }
+  throw new Error("Study session lesson payload has an unsupported mode.");
+}
+
 function widgetPayloadWithState(payload: Record<string, unknown>, state: StudyState): Record<string, unknown> {
   return { ...payload, widget: state.widget, phase: state.phase, current_index: state.current_index };
 }
@@ -224,12 +265,20 @@ async function resumableLessonPayload(session: StudySessionRow | null): Promise<
     resolved.current_index,
     resolved.current_word,
   );
-  const payload = lessonWidgetPayload({ ...resolved.payload, navigation });
+  // Persisted Lesson payloads from older versions may contain extra keys in
+  // nested exercise/feedback objects. The Widget keeps those nested schemas
+  // strict, so project only their canonical fields on resume while retaining
+  // unknown top-level fields for forward compatibility.
+  const normalizedPayload = normalizePersistedLessonPayload(resolved.payload);
+  const payload = lessonWidgetPayload({ ...normalizedPayload, navigation });
+  const payloadChanged = JSON.stringify(resolved.payload) !== JSON.stringify(normalizedPayload);
   const navigationChanged = JSON.stringify(resolved.payload.navigation) !== JSON.stringify(navigation);
   const versionChanged = resolved.payload.widget_version !== LESSON_WIDGET_VERSION;
-  if ((navigationChanged || versionChanged) && resolvedSession) {
+  if ((payloadChanged || navigationChanged || versionChanged) && resolvedSession) {
     resolvedSession = await persistStudyState({ ...resolved, payload }, db, userId, resolvedSession);
     resolved = resolvedSession.state ? normalizeStudyStateForRead(resolvedSession.state) : { ...resolved, payload };
+  } else {
+    resolved = { ...resolved, payload };
   }
   return widgetPayloadWithState(resolved.payload, resolved);
 }

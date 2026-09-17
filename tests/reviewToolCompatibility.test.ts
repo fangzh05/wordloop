@@ -344,6 +344,60 @@ describe("Review render tool schema compatibility", () => {
     });
   });
 
+  it("projects legacy nested Lesson fields before resuming the Widget", async () => {
+    const lessonWords = ["expression", "marine", "thermometer", "rectify", "reed", "via", "interpret", "planet", "shrink"];
+    const exercise = {
+      activity_type: "translation_cn_to_en",
+      instruction: "用 shrink 完成中译英。",
+      prompt: "治疗两个月后，影像显示肿瘤明显缩小了。",
+      multiline: false,
+    };
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      id: "lesson-session",
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "lesson",
+        phase: "lesson_explain",
+        current_word: "shrink",
+        current_index: 8,
+        retry_count: 0,
+        flow: { relearn_words: [], lesson_words: lessonWords },
+        payload: {
+          widget: "lesson",
+          mode: "explain",
+          word: "shrink",
+          ipa: "ʃrɪŋk",
+          part_of_speech: "v./n.",
+          meaning_zh: "缩小；收缩；减少；畏缩",
+          collocations: ["shrink in size"],
+          derivations: ["shrinkage n. 收缩；缩水"],
+          example_en: "The tumor began to shrink after treatment.",
+          note: "医学语境里 tumor shrinkage = 肿瘤缩小。",
+          exercise: { ...exercise, legacy_context: { source: "old-widget" } },
+          future_server_field: "keep",
+          widget_version: 3,
+        },
+      },
+    });
+
+    await withReviewClient(async (client) => {
+      const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
+      expect(resumed).toMatchObject({
+        widget: "lesson",
+        mode: "explain",
+        phase: "lesson_explain",
+        current_index: 8,
+        navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
+        future_server_field: "keep",
+        exercise,
+      });
+      expect((resumed.exercise as Record<string, unknown>).legacy_context).toBeUndefined();
+      const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as { payload: Record<string, unknown> } | undefined;
+      expect(persisted?.payload.exercise).toEqual(exercise);
+    });
+  });
+
   it("persists backend-owned round-complete navigation on final feedback and restores it", async () => {
     const lessonWords = ["expression", "marine", "thermometer", "rectify", "reed", "via", "interpret", "planet", "shrink"];
     const feedbackInput = {
@@ -399,7 +453,13 @@ describe("Review render tool schema compatibility", () => {
       const feedbackState = {
         ...exerciseState,
         phase: "lesson_feedback" as const,
-        payload: { ...feedbackInput, widget: "lesson", navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 } },
+        payload: {
+          ...feedbackInput,
+          widget: "lesson",
+          navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
+          exercise: { ...feedbackInput.exercise, legacy_context: "old" },
+          feedback: { ...feedbackInput.feedback, legacy_context: "old" },
+        },
       };
       sessionMocks.getActiveStudySession.mockResolvedValue({
         id: "lesson-session",
@@ -418,6 +478,8 @@ describe("Review render tool schema compatibility", () => {
         phase: "lesson_feedback",
         navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
       });
+      expect(resumed.exercise).toEqual(feedbackInput.exercise);
+      expect(resumed.feedback).toEqual(feedbackInput.feedback);
 
       sessionMocks.getActiveStudySession.mockResolvedValue({
         id: "lesson-session",
