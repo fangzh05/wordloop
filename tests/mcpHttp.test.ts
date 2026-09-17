@@ -54,6 +54,11 @@ describe("Streamable HTTP server", () => {
     expect(instructions).toContain("原子");
     expect(instructions).toContain("Lesson navigation is backend-owned and authoritative");
     expect(instructions).toContain("lesson_complete");
+    expect(instructions).toContain("round_complete means one vocabulary ROUND has ended, not that the whole study SESSION has ended");
+    expect(instructions).toContain("After WORDLOOP_ROUND_COMPLETE");
+    expect(instructions).toContain("do not emit two equivalent wrap-up prompts");
+    expect(instructions).toContain("round_complete 只触发长难句收尾，不得触发会话收尾");
+    expect(instructions).toContain("会话收尾必须由用户明确结束学习触发");
     const reviewSubmissionTool = response.tools.find((tool) => tool.name === "record_review_submission");
     expect(reviewSubmissionTool?._meta).toMatchObject({
       ui: { resourceUri: "ui://wordloop/review.html", visibility: ["app"] },

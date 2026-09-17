@@ -240,7 +240,7 @@ describe("study bootstrap daily queue invariant", () => {
     expect(mocks.normalizeStudyStateForRead).toHaveBeenCalled();
   });
 
-  it("returns an explicit completed Lesson resume instead of reopening lesson_feedback", async () => {
+  it("returns done for a completed Lesson instead of reopening lesson_feedback", async () => {
     mocks.getActiveStudySession.mockResolvedValue({
       state: {
         version: 1,
@@ -255,11 +255,7 @@ describe("study bootstrap daily queue invariant", () => {
       },
     });
 
-    await expect(getStudyBootstrap()).resolves.toEqual({
-      action: "resume",
-      widget: "lesson",
-      phase: "lesson_complete",
-    });
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
   });
 });

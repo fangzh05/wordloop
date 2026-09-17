@@ -105,6 +105,9 @@ export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
       normalizedActive = await normalizeLegacyLessonSession(normalizedActive, db, userId);
     }
     if (normalizedActive?.state) {
+      if (normalizedActive.state.widget === "lesson" && normalizedActive.state.phase === "lesson_complete") {
+        return { action: "done" };
+      }
       if (normalizedActive.state.widget === "review" && normalizedActive.state.phase === "review_complete") {
         return continueCompletedReview(normalizedActive);
       }

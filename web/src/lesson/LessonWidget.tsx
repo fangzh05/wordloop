@@ -200,7 +200,30 @@ export function buildNextLessonMessage(nextWord: string): string {
 }
 
 export function buildRoundCompleteMessage(): string {
-  return "WORDLOOP_ROUND_COMPLETE\n\nThe backend-owned frozen Lesson queue is complete.\nDo not call get_next_learning_word again.\nDo not select another vocabulary word.\nContinue directly with the configured end-of-round activity.";
+  return [
+    "WORDLOOP_ROUND_COMPLETE",
+    "",
+    "The current Lesson round is complete.",
+    "",
+    "This is ROUND completion, not SESSION completion.",
+    "",
+    "Do exactly one round-end activity:",
+    "generate one 考研英语一难度 long sentence naturally using",
+    "2–3 words from this completed round.",
+    "",
+    "Ask the user to identify the sentence backbone first,",
+    "then translate it.",
+    "",
+    "Do NOT start session-end free recall.",
+    "Do NOT ask the user to list all learned words.",
+    "Do NOT repeat this round-complete instruction.",
+    "Do NOT render another vocabulary Lesson card.",
+    "",
+    "Only when the user explicitly says:",
+    "结束学习 / 今天到这里 / 不学了",
+    "",
+    "enter session-end free recall.",
+  ].join("\n");
 }
 
 export function canStartNextLesson(status: NextLessonStatus): boolean {
