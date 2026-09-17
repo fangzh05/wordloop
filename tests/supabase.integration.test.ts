@@ -208,6 +208,7 @@ describe.runIf(canRun)("Supabase persistence", () => {
       current_word: "plantation",
       current_index: 0,
       retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["plantation"] },
       payload: {
         widget: "lesson",
         mode: "explain",
@@ -234,15 +235,16 @@ describe.runIf(canRun)("Supabase persistence", () => {
 
     const feedback = makeStudyState({
       ...explain,
-      phase: "lesson_feedback",
+      phase: "lesson_complete",
       retry_count: 1,
       payload: {
         widget: "lesson",
         mode: "feedback",
+        wrapup: true,
         word: "plantation",
         progress: "1 / 3",
-        exercise,
-        feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false },
+        exercise: { ...exercise, multiline: true },
+        feedback: { is_correct: true, user_answer: "The wrap-up answer is complete.", reveal_answer: false },
       },
     });
     const second = await persistStudyState(feedback);

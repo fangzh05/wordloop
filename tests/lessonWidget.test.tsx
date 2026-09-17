@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildLessonSubmissionMessage,
+  buildLessonWrapupSubmissionMessage,
   buildRoundCompleteMessage,
   canStartNextLesson,
+  feedbackGuidanceLabel,
   LESSON_WIDGET_LOAD_ERROR,
   LESSON_WIDGET_REFRESH_ERROR,
   LESSON_WIDGET_VERSION,
@@ -24,6 +26,9 @@ describe("guided lesson widget", () => {
     expect(source).toContain("modeForPhase");
     expect(source).toContain("提交 WordLoop 正式学习答案。");
     expect(source).toContain("reference_answer");
+    expect(source).toContain("feedbackGuidanceLabel(reveal)");
+    expect(source).not.toContain("reveal && feedback?.explanation");
+    expect(source).not.toContain("feedback?.reveal_answer || feedback?.reference_answer");
     expect(source).toContain("payload.navigation");
     expect(source).toContain("LESSON_WIDGET_PAYLOAD_INVALID");
     expect(source).toContain("widgetLoadError");
@@ -211,6 +216,27 @@ describe("guided lesson widget", () => {
     expect(message).toContain("练习类型：sentence");
     expect(message).toContain("题目：Use planet in a new scene.");
     expect(message).toContain("用户答案：My answer");
+    expect(message).toContain("具体错误片段或位置");
+    expect(message).toContain("下一步改哪里/怎么改");
+    expect(message).toContain("省略 reference_answer");
+  });
+
+  it("sends long-sentence wrap-up answers back through the same Lesson Widget", () => {
+    const message = buildLessonWrapupSubmissionMessage({
+      word: "shrink",
+      prompt: "Although the sample began to shrink, the researchers continued monitoring it.",
+      answer: "主干：researchers continued monitoring; 尽管样本开始缩小，研究人员仍继续监测。",
+    });
+    expect(message).toContain("长难句收尾");
+    expect(message).toContain("word 必须使用上面的精确锚点");
+    expect(message).toContain("mode=feedback、wrapup=true");
+    expect(message).toContain("record_attempt");
+    expect(message).toContain("finish_study_session exactly once");
+  });
+
+  it("labels first-error guidance separately from a revealed explanation", () => {
+    expect(feedbackGuidanceLabel(false)).toBe("错因与改法");
+    expect(feedbackGuidanceLabel(true)).toBe("解释");
   });
 
   it("accepts future server metadata without dropping a valid feedback card", () => {
@@ -267,13 +293,18 @@ describe("guided lesson widget", () => {
       "generate one 考研英语一难度 long sentence naturally using",
       "2–3 words from this completed round.",
       "",
-      "Ask the user to identify the sentence backbone first,",
-      "then translate it.",
+      "Render that sentence in the existing LessonWidget, not as chat text.",
+      "Call render_lesson_widget with mode=exercise, wrapup=true,",
+      "word set to the exact final Lesson word from the completed card,",
+      "activity_type=sentence, multiline=true, and an instruction to",
+      "identify the sentence backbone first (subject + verb + core object",
+      "or predicative), then translate it.",
       "",
       "Do NOT start session-end free recall.",
       "Do NOT ask the user to list all learned words.",
       "Do NOT repeat this round-complete instruction.",
-      "Do NOT render another vocabulary Lesson card.",
+      "Do NOT render another vocabulary explain card or send the sentence",
+      "only in the chat; the required wrap-up exercise must be in the card.",
       "",
       "Only when the user explicitly says:",
       "结束学习 / 今天到这里 / 不学了",

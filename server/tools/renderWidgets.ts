@@ -44,11 +44,12 @@ export const WIDGET_URIS = {
   dictation: "ui://wordloop/dictation.html",
   // Move the primary URI whenever the host may have cached an older embedded
   // HTML bundle for the previous URI.
-  lesson: "ui://wordloop/lesson-v5.html",
+  lesson: "ui://wordloop/lesson-v6.html",
 } as const;
 
 /** Resource aliases kept for conversations that still reference old Lesson URIs. */
 export const LEGACY_WIDGET_URIS = {
+  lessonV5: "ui://wordloop/lesson-v5.html",
   lessonV4: "ui://wordloop/lesson-v4.html",
   lessonV3: "ui://wordloop/lesson-v3.html",
   lessonV2: "ui://wordloop/lesson-v2.html",
@@ -92,10 +93,10 @@ const lessonExercise = z.object({
 const lessonFeedback = z.object({
   is_correct: z.boolean(),
   user_answer: z.string().max(4000),
-  error_layer: z.string().trim().max(80).optional(),
-  message: z.string().trim().max(1000).optional(),
+  error_layer: z.string().trim().max(80).optional().describe("具体错误层级：词义、搭配、语法、发音或拼写。"),
+  message: z.string().trim().max(1000).optional().describe("错误时必须指出用户答案中的具体错误片段或位置，不要只写笼统的错误数量。"),
   reference_answer: z.string().trim().max(4000).optional(),
-  explanation: z.string().trim().max(4000).optional(),
+  explanation: z.string().trim().max(4000).optional().describe("错误时说明错因和下一步改哪里/怎么改；第一次错误只能给自纠提示，不得给完整改后句。"),
   reveal_answer: z.boolean(),
 }).strict();
 const lessonCommon = {
@@ -117,6 +118,7 @@ const explainPayload = z.object({
 const exercisePayload = z.object({
   ...lessonCommon,
   mode: z.literal("exercise"),
+  wrapup: z.literal(true).optional(),
   word: z.string().trim().min(1).max(100),
   progress: z.string().trim().min(1).max(40),
   activity_type: z.string().trim().min(1).max(80),
@@ -127,6 +129,7 @@ const exercisePayload = z.object({
 const feedbackPayload = z.object({
   ...lessonCommon,
   mode: z.literal("feedback"),
+  wrapup: z.literal(true).optional(),
   word: z.string().trim().min(1).max(100),
   progress: z.string().trim().min(1).max(40),
   exercise: lessonExercise,
@@ -137,6 +140,7 @@ const lessonInput = z.union([lessonPayload, z.object({ resume: z.literal(true) }
 const lessonToolInputSchema = z.object({
   resume: z.literal(true).optional(),
   mode: z.enum(["explain", "exercise", "feedback"]).optional(),
+  wrapup: z.literal(true).optional(),
   title: z.string().trim().max(120).optional(),
   word: z.string().trim().min(1).max(100).optional(),
   ipa: z.string().trim().min(1).max(120).optional(),
@@ -396,6 +400,28 @@ async function validateLessonWord(
 
   if (input.mode === "exercise" || input.mode === "feedback") {
     const state = resolvedActive?.state?.widget === "lesson" ? resolvedActive.state : null;
+    if (input.wrapup === true) {
+      const lessonWords = state?.flow.lesson_words;
+      const lastIndex = (lessonWords?.length ?? 0) - 1;
+      if (!state || state.phase !== "lesson_complete" || !lessonWords || lessonWords.length === 0
+        || state.current_index !== lastIndex
+        || !state.current_word
+        || normalizeWord(state.current_word) !== normalizeWord(lessonWords[lastIndex] ?? "")) {
+        throw new Error("LESSON_WRAPUP_NOT_READY");
+      }
+      assertLessonWordMatches(state.current_word, input.word);
+      if (input.mode === "exercise" && input.activity_type !== "sentence") {
+        throw new Error("LESSON_WRAPUP_ACTIVITY_INVALID");
+      }
+      if (input.mode === "feedback"
+        && (input.exercise.activity_type !== "sentence"
+          || (state.payload.mode !== "exercise" && state.payload.mode !== "feedback")
+          || state.payload.wrapup !== true)) {
+        throw new Error("LESSON_WRAPUP_EXERCISE_MISSING");
+      }
+      return { date: state.date, active: resolvedActive, flow: state.flow };
+    }
+    if (state?.phase === "lesson_complete") throw new Error("LESSON_WRAPUP_REQUIRED");
     if (state?.flow.lesson_words
       && !isLessonCursorAtCurrentWord(state.flow.lesson_words, state.current_word, state.current_index)) {
       throw new Error("LESSON_CURSOR_MISMATCH");
@@ -579,7 +605,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_lesson_widget", {
     title: "打开单词学习",
-    description: "显示一个单词的讲解、练习或批改卡片。正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。成功显示后不要在聊天区重复教学正文或操作说明。",
+    description: "显示一个单词的讲解、练习或批改卡片。正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考句；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
     inputSchema: lessonToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.lesson } },
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -597,7 +623,9 @@ export function registerRenderTools(server: McpServer): void {
       date: validated.date,
       knownActive: validated.active,
       widget: "lesson",
-      phase: lessonPhaseByMode[parsedInput.mode],
+      phase: parsedInput.mode !== "explain" && parsedInput.wrapup === true
+        ? "lesson_complete"
+        : lessonPhaseByMode[parsedInput.mode],
       current_word: parsedInput.word,
       current_index: currentIndex,
       retry_count: parsedInput.mode === "feedback" ? lessonRetryCount(validated.active, parsedInput) : validated.active?.state?.widget === "lesson" && validated.active.state.current_word === parsedInput.word ? validated.active.state.retry_count : 0,

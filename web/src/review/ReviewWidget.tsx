@@ -32,6 +32,7 @@ const gradeSchema = z.object({
 
 const gradeSystemPrompt = "你只负责批改一次独立英语词汇复习。只返回严格 JSON，不教学，不加 Markdown。";
 const REVIEW_AUTO_ADVANCE_MS = 600;
+const REVIEW_SPELLING_AUTO_ADVANCE_MS = 1400;
 
 type Payload = z.infer<typeof payloadSchema>;
 export type ReviewItem = Payload["items"][number];
@@ -43,6 +44,7 @@ type GradedAnswer = {
   rating: FsrsRating;
   error_layer: ErrorLayer;
   feedback: string;
+  correct_spelling?: string;
 };
 
 export type ReviewToolCall =
@@ -131,6 +133,19 @@ export function gradeReviewCnToEn(answer: string, target: string): {
   feedback: string;
 } {
   return gradeTargetWord(answer, target);
+}
+
+/** The deterministic grader keeps the near miss correct, but the UI must
+ * teach the exact target spelling before advancing to the next card. */
+export function correctSpellingForReview(
+  item: Pick<ReviewItem, "word" | "direction">,
+  errorLayer: ErrorLayer,
+): string | undefined {
+  return item.direction === "cn_to_en" && errorLayer === "spelling" ? item.word : undefined;
+}
+
+export function reviewAutoAdvanceDelay(errorLayer: ErrorLayer): number {
+  return errorLayer === "spelling" ? REVIEW_SPELLING_AUTO_ADVANCE_MS : REVIEW_AUTO_ADVANCE_MS;
 }
 
 function isSamplingCapabilityError(caught: unknown): boolean {
@@ -238,7 +253,7 @@ export function ReviewWidget(): React.JSX.Element {
       setFeedback(null);
       setStatus("idle");
       requestAnimationFrame(() => answerRef.current?.focus());
-    }, REVIEW_AUTO_ADVANCE_MS);
+    }, reviewAutoAdvanceDelay(feedback.error_layer));
     return () => clearTimeout(timer);
   }, [status, feedback, index, payload]);
 
@@ -271,6 +286,7 @@ export function ReviewWidget(): React.JSX.Element {
       error_layer: ErrorLayer;
       rating: FsrsRating;
       feedback: string;
+      correct_spelling?: string;
     },
   ): Promise<GradedAnswer> {
     const reviewCall = buildReviewSubmission(reviewItem, draft);
@@ -298,6 +314,7 @@ export function ReviewWidget(): React.JSX.Element {
       rating: draft.rating,
       error_layer: reviewCall.arguments.error_layer,
       feedback: alreadyPersisted ? "这张卡已经完成复习。" : draft.feedback,
+      ...(draft.correct_spelling ? { correct_spelling: draft.correct_spelling } : {}),
     };
   }
 
@@ -338,6 +355,7 @@ export function ReviewWidget(): React.JSX.Element {
         error_layer: grade.error_layer,
         rating: grade.rating,
         feedback: grade.feedback,
+        correct_spelling: correctSpellingForReview(item, grade.error_layer),
       });
       setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
       setFeedback(graded);
@@ -456,6 +474,7 @@ export function ReviewWidget(): React.JSX.Element {
     {status === "error" ? <p className="error-text" role="alert">{error}</p> : null}
     {feedback ? <div className={`inline-feedback status-only ${feedback.is_correct ? "known" : "unknown"}`} role="status">
       <strong>{resultLabel(feedback)}</strong><span>{feedback.feedback}</span>
+      {feedback.correct_spelling ? <span className="correct-spelling"><strong>正确拼法：</strong>{feedback.correct_spelling}</span> : null}
     </div> : null}
     <div className="pretest-actions">
       {status === "sent" ? <Button onClick={nextQuestion}>{index === payload.items.length - 1 ? "查看结果" : "下一题"}{index === payload.items.length - 1 ? null : <ArrowIcon className="button-icon trailing" />}</Button> : <>

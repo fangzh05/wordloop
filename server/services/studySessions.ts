@@ -550,12 +550,31 @@ export function studySessionSummary(session: StudySessionRow | null, pretestResu
   return summary;
 }
 
+/**
+ * A Lesson round is not a finished study session until its one long-sentence
+ * wrap-up has produced an accepted or fully revealed feedback payload. Keep
+ * this boundary server-owned so a bootstrap retry or an eager model call
+ * cannot release the session before the wrap-up is durable.
+ */
+export function isCompletedLessonWrapup(state: StudyState | null): boolean {
+  if (!state || state.widget !== "lesson" || state.phase !== "lesson_complete") return false;
+  const lessonWords = state.flow.lesson_words;
+  const lastIndex = (lessonWords?.length ?? 0) - 1;
+  if (!lessonWords || lessonWords.length === 0 || state.current_index !== lastIndex
+    || !state.current_word || normalizeWord(state.current_word) !== normalizeWord(lessonWords[lastIndex] ?? "")) return false;
+  if (state.payload.mode !== "feedback" || state.payload.wrapup !== true) return false;
+  if (typeof state.payload.feedback !== "object" || state.payload.feedback === null || Array.isArray(state.payload.feedback)) return false;
+  const feedback = state.payload.feedback as Record<string, unknown>;
+  return feedback.is_correct === true || feedback.reveal_answer === true;
+}
+
 export async function finishStudySession(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
 ): Promise<StudySessionRow> {
   const active = await getActiveStudySession(db, userId);
   if (!active) throw new Error("No active study session to finish.");
+  if (!isCompletedLessonWrapup(active.state)) throw new Error("LESSON_WRAPUP_NOT_COMPLETE");
   const now = new Date().toISOString();
   const { data, error } = await db
     .from("study_sessions")

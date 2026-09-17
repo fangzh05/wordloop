@@ -7,7 +7,6 @@ import {
 } from "./review.js";
 import {
   freezeLessonQueueForSession,
-  finishStudySession,
   getActiveStudySession,
   normalizeLegacyLessonSession,
   normalizeStudyStateForRead,
@@ -128,8 +127,11 @@ export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
     }
     if (normalizedActive?.state) {
       if (normalizedActive.state.widget === "lesson" && normalizedActive.state.phase === "lesson_complete") {
-        await finishStudySession(db, userId);
-        return bootstrapFreshFlow(db, userId);
+        // The vocabulary cursor is complete, but the active study session is
+        // intentionally still open until the persisted long-sentence
+        // wrap-up has been answered and graded. Returning resume lets the
+        // Lesson Widget restore either the round handoff or its wrap-up card.
+        return { action: "resume", widget: "lesson", phase: "lesson_complete" };
       }
       if (normalizedActive.state.widget === "review" && normalizedActive.state.phase === "review_complete") {
         return continueCompletedReview(normalizedActive);

@@ -38,6 +38,20 @@ const explainPayload = {
   exercise,
 };
 
+const completedWrapupPayload = {
+  widget: "lesson",
+  mode: "feedback" as const,
+  wrapup: true as const,
+  word: "plantation",
+  progress: "长难句收尾",
+  exercise: { ...exercise, multiline: true },
+  feedback: {
+    is_correct: true,
+    user_answer: "主干：The plantation changed hands; 翻译：收获后种植园易主。",
+    reveal_answer: false,
+  },
+};
+
 function sessionState(overrides: Partial<Parameters<typeof makeStudyState>[0]> = {}) {
   return makeStudyState({
     date: "2026-09-15",
@@ -234,7 +248,7 @@ describe("durable study session state", () => {
       ended_at: null,
       new_words_count: 9,
       review_words_count: 0,
-      state: sessionState({ phase: "lesson_complete", current_word: "plantation" }),
+      state: sessionState({ phase: "lesson_complete", current_word: "plantation", flow: { relearn_words: [], lesson_words: ["plantation"] }, payload: completedWrapupPayload }),
       updated_at: "2026-09-15T00:00:00.000Z",
     };
     const finishedRow = { ...activeRow, ended_at: "2026-09-15T01:00:00.000Z", state: {} };
@@ -283,6 +297,31 @@ describe("durable study session state", () => {
       updated_at: expect.any(String),
     });
     await expect(getActiveStudySession(db as any, "user")).resolves.toBeNull();
+  });
+
+  it("rejects finishing before a persisted wrap-up feedback", async () => {
+    const activeRow: StudySessionRow = {
+      id: "session",
+      user_id: "user",
+      started_at: "2026-09-15T00:00:00.000Z",
+      ended_at: null,
+      new_words_count: 9,
+      review_words_count: 0,
+      state: sessionState({ phase: "lesson_complete", current_word: "plantation" }),
+      updated_at: "2026-09-15T00:00:00.000Z",
+    };
+    const db = { from: vi.fn(() => {
+      const builder: Record<string, any> = {};
+      builder.select = vi.fn(() => builder);
+      builder.eq = vi.fn(() => builder);
+      builder.is = vi.fn(() => builder);
+      builder.order = vi.fn(() => builder);
+      builder.limit = vi.fn(() => builder);
+      builder.maybeSingle = vi.fn(async () => ({ data: activeRow, error: null }));
+      return builder;
+    }) };
+
+    await expect(finishStudySession(db as any, "user")).rejects.toThrow("LESSON_WRAPUP_NOT_COMPLETE");
   });
 });
 

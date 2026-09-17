@@ -500,4 +500,91 @@ describe("Review render tool schema compatibility", () => {
       });
     });
   });
+
+  it("renders and resumes the durable long-sentence wrap-up in the same Lesson tool", async () => {
+    const lessonWords = ["expression", "shrink"];
+    const activeBase = {
+      id: "lesson-session",
+      user_id: "user",
+      started_at: "2026-09-16T00:00:00.000Z",
+      ended_at: null,
+      new_words_count: 0,
+      review_words_count: 0,
+      updated_at: "2026-09-16T00:00:00.000Z",
+    };
+    const exerciseInput = {
+      mode: "exercise" as const,
+      wrapup: true as const,
+      word: "shrink",
+      progress: "长难句收尾",
+      activity_type: "sentence",
+      instruction: "先标出主干，再翻译。",
+      prompt: "Although the sample began to shrink, the researchers continued monitoring it.",
+      multiline: true,
+    };
+    const exerciseState = {
+      version: 1 as const,
+      date: "2026-09-16",
+      widget: "lesson" as const,
+      phase: "lesson_complete" as const,
+      current_word: "shrink",
+      current_index: 1,
+      retry_count: 0,
+      flow: { relearn_words: [], lesson_words: lessonWords },
+      payload: { widget: "lesson", ...exerciseInput },
+    };
+    sessionMocks.getActiveStudySession.mockResolvedValue({ ...activeBase, state: {
+      ...exerciseState,
+      payload: { widget: "lesson", mode: "feedback", word: "shrink" },
+    }});
+
+    await withReviewClient(async (client) => {
+      const exercise = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: exerciseInput }));
+      expect(exercise).toMatchObject({
+        widget: "lesson",
+        mode: "exercise",
+        wrapup: true,
+        phase: "lesson_complete",
+        navigation: { action: "round_complete" },
+      });
+
+      const feedbackInput = {
+        mode: "feedback" as const,
+        wrapup: true as const,
+        word: "shrink",
+        progress: "长难句收尾",
+        exercise: {
+          activity_type: "sentence",
+          instruction: "先标出主干，再翻译。",
+          prompt: exerciseInput.prompt,
+          multiline: true,
+        },
+        feedback: {
+          is_correct: true,
+          user_answer: "主干是 researchers continued monitoring；尽管样本开始缩小，研究人员仍继续监测。",
+          reveal_answer: false,
+        },
+      };
+      sessionMocks.getActiveStudySession.mockResolvedValue({
+        ...activeBase,
+        state: { ...exerciseState, payload: { ...exerciseInput, widget: "lesson" } },
+      });
+      const feedback = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: feedbackInput }));
+      expect(feedback).toMatchObject({ mode: "feedback", wrapup: true, phase: "lesson_complete" });
+
+      sessionMocks.getActiveStudySession.mockResolvedValue({
+        ...activeBase,
+        state: {
+          ...exerciseState,
+          payload: {
+            ...feedbackInput,
+            widget: "lesson",
+            navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 2 },
+          },
+        },
+      });
+      const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
+      expect(resumed).toMatchObject({ mode: "feedback", wrapup: true, phase: "lesson_complete" });
+    });
+  });
 });

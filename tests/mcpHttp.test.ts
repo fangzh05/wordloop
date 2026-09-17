@@ -59,10 +59,11 @@ describe("Streamable HTTP server", () => {
     expect(instructions).toContain("do not emit two equivalent wrap-up prompts");
     expect(instructions).toContain("round_complete 只触发长难句收尾，不得触发会话收尾");
     expect(instructions).toContain("会话收尾必须由用户明确结束学习触发");
-    expect(instructions).toContain("When bootstrap encounters an already completed Lesson round, it transparently closes that round and continues discovery of remaining daily work.");
+    expect(instructions).toContain("When bootstrap sees an active lesson_complete state, it returns resume for the existing Lesson Widget");
+    expect(instructions).toContain("mode=exercise, wrapup=true");
     expect(instructions).not.toContain("If it returns { action: \"done\" } for an active lesson_complete state");
     const bootstrapTool = response.tools.find((tool) => tool.name === "get_study_bootstrap");
-    expect(bootstrapTool?.description).toContain("When bootstrap encounters an already completed Lesson round, it transparently closes that round and continues discovery of remaining daily work.");
+    expect(bootstrapTool?.description).toContain("active Lesson phase=lesson_complete 时只恢复现有 Lesson 收尾状态");
     expect(bootstrapTool?.description).not.toContain("action: done");
     expect(bootstrapTool?.annotations).toMatchObject({ readOnlyHint: false, idempotentHint: true });
     const reviewSubmissionTool = response.tools.find((tool) => tool.name === "record_review_submission");
@@ -114,13 +115,14 @@ describe("Streamable HTTP server", () => {
     expect(finishTool?.description).toContain("immediately call get_study_bootstrap");
     expect(finishTool?.description).toContain("not the session-end free recall trigger");
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
-    expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson-v5.html");
+    expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson-v6.html");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
     const lessonInput = lessonTool?.inputSchema as { properties?: Record<string, unknown> } | undefined;
     expect(lessonInput?.properties).not.toHaveProperty("navigation");
     const resources = await client.listResources();
     const resourceUris = resources.resources.map((resource) => resource.uri);
     expect(resourceUris).toEqual(expect.arrayContaining([
+      "ui://wordloop/lesson-v6.html",
       "ui://wordloop/lesson-v5.html",
       "ui://wordloop/lesson-v4.html",
       "ui://wordloop/lesson-v3.html",

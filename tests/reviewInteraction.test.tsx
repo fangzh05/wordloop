@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { buildReviewSubmission, gradeReviewCnToEn, isReviewCardAlreadyCompleteResult, ReviewQuestion, shouldAdvanceFsrs } from "../web/src/review/ReviewWidget.js";
+import { buildReviewSubmission, correctSpellingForReview, gradeReviewCnToEn, isReviewCardAlreadyCompleteResult, ReviewQuestion, reviewAutoAdvanceDelay, shouldAdvanceFsrs } from "../web/src/review/ReviewWidget.js";
 
 const base = {
   meaning_zh: "再次发生；复发",
@@ -34,6 +34,16 @@ describe("ReviewQuestion", () => {
     expect(gradeReviewCnToEn(" RECUR ", "recur")).toMatchObject({ is_correct: true, rating: "good", error_layer: "none" });
     expect(gradeReviewCnToEn("recure", "recur")).toMatchObject({ is_correct: true, rating: "hard", error_layer: "spelling" });
     expect(gradeReviewCnToEn("navigate", "recur")).toMatchObject({ is_correct: false, rating: "again", error_layer: "meaning" });
+  });
+
+  it("shows the exact spelling for a near miss before moving on", () => {
+    const item = { word: "recur", direction: "cn_to_en" as const };
+    expect(correctSpellingForReview(item, "spelling")).toBe("recur");
+    expect(correctSpellingForReview(item, "meaning")).toBeUndefined();
+    expect(correctSpellingForReview({ ...item, direction: "en_definition" }, "spelling")).toBeUndefined();
+    expect(reviewAutoAdvanceDelay("spelling")).toBeGreaterThan(reviewAutoAdvanceDelay("none"));
+    const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
+    expect(source).toContain("正确拼法：");
   });
 
   it("uses the backend review kind without re-querying due state", () => {
