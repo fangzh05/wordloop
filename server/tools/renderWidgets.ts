@@ -89,7 +89,17 @@ const lessonExercise = z.object({
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.activity_type === "cloze" && !value.prompt.includes("___")) {
+    context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["prompt"] });
+  }
+  if (value.activity_type === "translation_cn_to_en" && !/\p{Script=Han}/u.test(value.prompt)) {
+    context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["prompt"] });
+  }
+  if (value.activity_type === "translation_en_to_cn" && !/[A-Za-z]/.test(value.prompt)) {
+    context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["prompt"] });
+  }
+});
 const lessonFeedback = z.object({
   is_correct: z.boolean(),
   user_answer: z.string().max(4000),

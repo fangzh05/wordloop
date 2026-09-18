@@ -326,6 +326,29 @@ describe("durable study session state", () => {
 });
 
 describe("strict resumable widget schemas", () => {
+  it("enforces structural Lesson exercise prompt boundaries", () => {
+    const base = {
+      mode: "explain" as const,
+      word: "reel",
+      ipa: "/riːl/",
+      part_of_speech: "v.",
+      meaning_zh: "受到冲击",
+      collocations: [],
+      derivations: [],
+      example_en: "The team reeled from the result.",
+      note: "Use reel from for a strong reaction.",
+    };
+    expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "cloze", instruction: "完成题目。", prompt: "The course requires ___ study.", multiline: false } }).success).toBe(true);
+    const invalidCloze = lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "cloze", instruction: "完成题目。", prompt: "先理解词义与搭配，再进入练习。", multiline: false } });
+    expect(invalidCloze.success).toBe(false);
+    if (!invalidCloze.success) {
+      expect(invalidCloze.error.issues).toContainEqual(expect.objectContaining({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["exercise", "prompt"] }));
+    }
+    expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "translation_cn_to_en", instruction: "完成题目。", prompt: "这次试验失败后，团队仍深受冲击。", multiline: false } }).success).toBe(true);
+    expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "translation_cn_to_en", instruction: "完成题目。", prompt: "Use reel from.", multiline: false } }).success).toBe(false);
+    expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "translation_en_to_cn", instruction: "完成题目。", prompt: "The team was reeling from the result.", multiline: false } }).success).toBe(true);
+  });
+
   it("rejects incomplete lesson exercise and feedback payloads", () => {
     expect(lessonInputSchema.safeParse({ mode: "exercise", word: "plantation", progress: "1 / 3", activity_type: "sentence", instruction: "Use it.", multiline: false }).success).toBe(false);
     expect(lessonInputSchema.safeParse({ mode: "feedback", word: "plantation", progress: "1 / 3", feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false } }).success).toBe(false);
