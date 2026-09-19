@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import {
   REVIEW_SESSION_MAX,
+  reviewAnswerSchema,
   reviewWidgetItemSchema,
   type ReviewAnswerInput,
 } from "../../shared/toolContracts.js";
@@ -355,6 +356,24 @@ function reviewAnswerMatches(
   return normalizeWord(reviewWordAt(items, answer.current_index)) === normalizeWord(answer.word);
 }
 
+export type ReviewCursorPosition = "current" | "passed" | "mismatch";
+
+/**
+ * Classify a server-owned Review cursor without advancing it. The position
+ * lookup is shared by the normal submission and the lost-response recovery;
+ * the actual transition remains in advanceReviewState.
+ */
+export function reviewCursorPosition(state: StudyState | null, word: string): ReviewCursorPosition {
+  if (!state || state.widget !== "review") return "mismatch";
+  const items = reviewItems(state);
+  const targetIndex = items.findIndex((item) => normalizeWord(item.word) === normalizeWord(word));
+  if (targetIndex < 0) return "mismatch";
+  if (targetIndex < state.current_index) return "passed";
+  if (state.phase !== "review" || targetIndex !== state.current_index) return "mismatch";
+  if (!state.current_word || normalizeWord(state.current_word) !== normalizeWord(word)) return "mismatch";
+  return "current";
+}
+
 function appendRelearnWord(flow: StudyFlow, word: string, isCorrect: boolean): StudyFlow {
   if (isCorrect) return flow;
   const normalized = normalizeWord(word);
@@ -382,6 +401,9 @@ function advanceReviewState(state: StudyState, answer: ReviewAnswerInput): Study
     throw new Error("REVIEW_CURSOR_MISMATCH");
   }
   if (!reviewAnswerMatches(answer, items)) throw new Error("REVIEW_WORD_MISMATCH");
+  if (!state.current_word || normalizeWord(state.current_word) !== normalizeWord(answer.word)) {
+    throw new Error("REVIEW_WORD_MISMATCH");
+  }
 
   const nextIndex = currentIndex + 1;
   return {
@@ -499,6 +521,37 @@ export async function advanceStudySession(
   if (!active?.state) throw new Error("No resumable active study session.");
   const nextState = advanceStudyState(active.state, event, requestedIndex, reviewAnswer);
   return updateSessionState(active, nextState, db, userId);
+}
+
+/**
+ * Advance the current Review answer using the cursor stored in the active
+ * session. A retry after a lost response is idempotent: an already-passed
+ * word is accepted without writing the cursor a second time.
+ */
+export async function advanceReviewAnswerFromServer(
+  word: string,
+  isCorrect: boolean,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<{ session: StudySessionRow; position: Exclude<ReviewCursorPosition, "mismatch"> }> {
+  const active = await getActiveStudySession(db, userId);
+  if (!active?.state) throw new Error("No resumable active study session.");
+  const position = reviewCursorPosition(active.state, word);
+  if (position === "passed") return { session: active, position };
+  if (position !== "current") {
+    if (active.state.widget !== "review") throw new Error("REVIEW_SESSION_NOT_ACTIVE");
+    if (active.state.phase !== "review") throw stateError("review_answer", active.state.phase);
+    throw new Error("REVIEW_WORD_MISMATCH");
+  }
+  const answer = reviewAnswerSchema.parse({
+    event: "review_answer",
+    word,
+    is_correct: isCorrect,
+    current_index: active.state.current_index,
+  });
+  const nextState = advanceStudyState(active.state, "review_answer", active.state.current_index, answer);
+  const session = await updateSessionState(active, nextState, db, userId);
+  return { session, position: "current" };
 }
 
 export async function getPretestResults(

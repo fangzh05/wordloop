@@ -41,9 +41,22 @@ describe("ReviewQuestion", () => {
     expect(correctSpellingForReview(item, "spelling")).toBe("recur");
     expect(correctSpellingForReview(item, "meaning")).toBeUndefined();
     expect(correctSpellingForReview({ ...item, direction: "en_definition" }, "spelling")).toBeUndefined();
-    expect(reviewAutoAdvanceDelay("spelling")).toBeGreaterThan(reviewAutoAdvanceDelay("none"));
+    expect(reviewAutoAdvanceDelay(true, "spelling")).toBe(900);
+    expect(reviewAutoAdvanceDelay(true, "none")).toBe(150);
+    expect(reviewAutoAdvanceDelay(false, "meaning")).toBe(450);
     const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
     expect(source).toContain("正确拼法：");
+  });
+
+  it("renders immediately and only checks sampling for legacy English-definition cards", () => {
+    const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
+    const initialize = source.slice(source.indexOf("function initializePayload"), source.indexOf("useEffect(() => subscribeToApp"));
+    expect(initialize).toContain("setPayload(nextPayload)");
+    expect(initialize).toContain("setIndex(Math.min(persistedIndex");
+    expect(initialize).not.toContain("await getSamplingAvailability");
+    expect(initialize).toContain('entry.direction === "en_definition"');
+    expect(initialize).toContain("void getSamplingAvailability().then");
+    expect(initialize).toContain("effectiveReviewDirection(entry.direction, available)");
   });
 
   it("uses the backend review kind without re-querying due state", () => {
@@ -56,6 +69,15 @@ describe("ReviewQuestion", () => {
     expect(source).toContain("buildReviewSubmission");
     expect(source).toContain("callServerTool(reviewCall.name");
     expect(source).not.toContain('callServerTool("record_review_result"');
+  });
+
+  it("uses one MCP write for due cards and keeps the legacy error-repair advance", () => {
+    const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
+    const persist = source.slice(source.indexOf("async function persistReviewDraft"), source.indexOf("async function submit"));
+    expect(persist).toContain("callServerTool(reviewCall.name, reviewCall.arguments)");
+    expect(persist).toContain("!shouldAdvanceFsrs(reviewItem.review_kind)");
+    expect(persist).toContain('callServerTool("advance_study_session", cursor)');
+    expect(persist).not.toContain("Promise.all");
   });
 
   it("routes both no-answer persistence paths through the shared builder", () => {

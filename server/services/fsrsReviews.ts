@@ -3,6 +3,7 @@ import type { RecordReviewSubmissionInput } from "../../shared/toolContracts.js"
 import type { ErrorLayer, FsrsRating, ReviewSource, UserWordRow } from "../types.js";
 import { assertGradeInvariants, gradingRouteForDirection } from "../../web/src/grading/deterministic.js";
 import { assertDatabaseResult } from "./shared.js";
+import { advanceReviewAnswerFromServer } from "./studySessions.js";
 import { normalizeWord } from "./wordNormalization.js";
 import { cardToDatabase, reviewLogToDatabase, scheduleReview, stateName } from "./fsrsScheduler.js";
 
@@ -11,6 +12,11 @@ export function assertReviewCardDue(nextReviewAt: string | null, now = new Date(
   if (!Number.isFinite(timestamp) || timestamp > now.getTime()) {
     throw new Error("FSRS card is not due.");
   }
+}
+
+function isCardNotDueError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return /FSRS_CARD_NOT_DUE|FSRS card is not due/i.test(message);
 }
 
 async function loadUserWord(word: string, db = getDatabase(), userId = getAuthenticatedUserId()): Promise<UserWordRow> {
@@ -56,9 +62,13 @@ export async function recordReviewResult(input: {
   return reviewSummary(word, input.rating, result);
 }
 
-export async function recordReviewSubmission(input: RecordReviewSubmissionInput, now = new Date(), enableFuzz = true): Promise<Record<string, unknown>> {
-  const db = getDatabase();
-  const userId = getAuthenticatedUserId();
+export async function recordReviewSubmission(
+  input: RecordReviewSubmissionInput,
+  now = new Date(),
+  enableFuzz = true,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<Record<string, unknown>> {
   const word = normalizeWord(input.word);
   // The atomic due-review submission is the one path allowed to advance FSRS, so
   // it is the one path that must carry a rating — and that rating must agree with
@@ -79,7 +89,18 @@ export async function recordReviewSubmission(input: RecordReviewSubmissionInput,
     { activity_type: "review", advancesFsrs: true, reviewSubmission: true, direction: input.direction },
   );
   const row = await loadUserWord(word, db, userId);
-  assertReviewCardDue(row.next_review_at, now);
+  try {
+    assertReviewCardDue(row.next_review_at, now);
+  } catch (caught) {
+    if (!isCardNotDueError(caught)) throw caught;
+
+    // A successful FSRS RPC followed by a lost cursor response leaves the
+    // card not due while the server-owned cursor still points at this word.
+    // Recover only that cursor transition; never schedule FSRS a second time.
+    await advanceReviewAnswerFromServer(word, input.is_correct, db, userId);
+    return { attempt: null, review: null };
+  }
+
   const result = scheduleReview(row, input.rating, now, enableFuzz);
   const { data, error } = await db.rpc("record_review_submission_v1", {
     p_user_id: userId,
@@ -93,6 +114,7 @@ export async function recordReviewSubmission(input: RecordReviewSubmissionInput,
     p_log: reviewLogToDatabase(result.log),
   });
   assertDatabaseResult(error);
+  await advanceReviewAnswerFromServer(word, input.is_correct, db, userId);
   const persisted = data as { attempt?: unknown; review?: unknown } | null;
   const persistedReview = persisted?.review && typeof persisted.review === "object"
     ? persisted.review as Record<string, unknown>

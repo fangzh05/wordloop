@@ -31,8 +31,9 @@ const gradeSchema = z.object({
 });
 
 const gradeSystemPrompt = "你只负责批改一次独立英语词汇复习。只返回严格 JSON，不教学，不加 Markdown。";
-const REVIEW_AUTO_ADVANCE_MS = 600;
-const REVIEW_SPELLING_AUTO_ADVANCE_MS = 1400;
+const REVIEW_AUTO_ADVANCE_MS = 450;
+const REVIEW_CORRECT_AUTO_ADVANCE_MS = 150;
+const REVIEW_SPELLING_AUTO_ADVANCE_MS = 900;
 
 type Payload = z.infer<typeof payloadSchema>;
 export type ReviewItem = Payload["items"][number];
@@ -144,8 +145,13 @@ export function correctSpellingForReview(
   return item.direction === "cn_to_en" && errorLayer === "spelling" ? item.word : undefined;
 }
 
-export function reviewAutoAdvanceDelay(errorLayer: ErrorLayer): number {
-  return errorLayer === "spelling" ? REVIEW_SPELLING_AUTO_ADVANCE_MS : REVIEW_AUTO_ADVANCE_MS;
+export function reviewAutoAdvanceDelay(isCorrect: boolean, errorLayer: ErrorLayer): number;
+export function reviewAutoAdvanceDelay(errorLayer: ErrorLayer): number;
+export function reviewAutoAdvanceDelay(isCorrectOrErrorLayer: boolean | ErrorLayer, maybeErrorLayer?: ErrorLayer): number {
+  const isCorrect = typeof isCorrectOrErrorLayer === "boolean" ? isCorrectOrErrorLayer : true;
+  const errorLayer = typeof isCorrectOrErrorLayer === "boolean" ? maybeErrorLayer : isCorrectOrErrorLayer;
+  if (errorLayer === "spelling") return REVIEW_SPELLING_AUTO_ADVANCE_MS;
+  return isCorrect ? REVIEW_CORRECT_AUTO_ADVANCE_MS : REVIEW_AUTO_ADVANCE_MS;
 }
 
 function isSamplingCapabilityError(caught: unknown): boolean {
@@ -192,21 +198,11 @@ export function ReviewWidget(): React.JSX.Element {
   const submittingRef = useRef(false);
   const payloadSignatureRef = useRef("");
 
-  async function initializePayload(nextPayload: Payload, signature: string): Promise<void> {
-    const available = await getSamplingAvailability();
-    if (payloadSignatureRef.current !== signature) return;
-    const effectivePayload: Payload = {
-      ...nextPayload,
-      items: nextPayload.items.map((entry) => ({
-        ...entry,
-        direction: effectiveReviewDirection(entry.direction, available),
-      })),
-    };
-    setSamplingAvailable(available);
-    setPayload(effectivePayload);
-    const persistedIndex = effectivePayload.current_index ?? 0;
-    const isComplete = effectivePayload.phase === "review_complete" || persistedIndex >= effectivePayload.items.length;
-    setIndex(Math.min(persistedIndex, effectivePayload.items.length - 1));
+  function initializePayload(nextPayload: Payload, signature: string): void {
+    const persistedIndex = nextPayload.current_index ?? 0;
+    const isComplete = nextPayload.phase === "review_complete" || persistedIndex >= nextPayload.items.length;
+    setPayload(nextPayload);
+    setIndex(Math.min(persistedIndex, nextPayload.items.length - 1));
     setAnswer("");
     setStatus("idle");
     setError("");
@@ -214,6 +210,20 @@ export function ReviewWidget(): React.JSX.Element {
     setResults([]);
     setCompleted(isComplete);
     setContinueStatus("idle");
+
+    if (!nextPayload.items.some((entry) => entry.direction === "en_definition")) return;
+    void getSamplingAvailability().then((available) => {
+      if (payloadSignatureRef.current !== signature) return;
+      setSamplingAvailable(available);
+      if (available) return;
+      setPayload((current) => current ? {
+        ...current,
+        items: current.items.map((entry) => ({
+          ...entry,
+          direction: effectiveReviewDirection(entry.direction, available),
+        })),
+      } : current);
+    });
   }
 
   useEffect(() => subscribeToApp((event) => {
@@ -253,7 +263,7 @@ export function ReviewWidget(): React.JSX.Element {
       setFeedback(null);
       setStatus("idle");
       requestAnimationFrame(() => answerRef.current?.focus());
-    }, reviewAutoAdvanceDelay(feedback.error_layer));
+    }, reviewAutoAdvanceDelay(feedback.is_correct, feedback.error_layer));
     return () => clearTimeout(timer);
   }, [status, feedback, index, payload]);
 
@@ -301,7 +311,7 @@ export function ReviewWidget(): React.JSX.Element {
       alreadyPersisted = true;
     }
 
-    if (!window.__WORDLOOP_PREVIEW__) {
+    if (!window.__WORDLOOP_PREVIEW__ && !shouldAdvanceFsrs(reviewItem.review_kind)) {
       const cursor = buildReviewAnswerSubmission(reviewItem, draft.is_correct, reviewIndex);
       const advanced = await callServerTool("advance_study_session", cursor);
       if (advanced.isError) throw new Error("复习进度未能保存，请重试。");
