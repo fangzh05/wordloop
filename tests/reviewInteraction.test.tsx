@@ -67,6 +67,25 @@ describe("ReviewQuestion", () => {
     expect(markUnknown).not.toContain("direction: item.direction");
   });
 
+  it("uses meaning for 不会 regardless of historical error layers", () => {
+    const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
+    const markUnknown = source.slice(source.indexOf("async function markUnknown"), source.indexOf("function nextQuestion"));
+    for (const error_layers of [["collocation", "grammar"], ["pronunciation"]] as const) {
+      const call = buildReviewSubmission(
+        { word: "recur", direction: "cn_to_en", review_kind: "both" },
+        { user_answer: "", is_correct: false, error_layer: "meaning", rating: "again" },
+      );
+      expect({ error_layers, ...call.arguments }).toMatchObject({
+        error_layers,
+        is_correct: false,
+        rating: "again",
+        error_layer: "meaning",
+      });
+    }
+    expect(markUnknown).toContain('error_layer: "meaning"');
+    expect(markUnknown).not.toContain("item.error_layers[0]");
+  });
+
   it("builds the shared review call used by the UI", () => {
     const call = buildReviewSubmission(
       { word: "recur", direction: "cn_to_en", review_kind: "fsrs_due" },

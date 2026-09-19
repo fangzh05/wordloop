@@ -377,7 +377,7 @@ export function ReviewWidget(): React.JSX.Element {
       const graded = await persistReviewDraft(item, index, {
         user_answer: "",
         is_correct: false,
-        error_layer: item.error_layers[0] ?? "meaning",
+        error_layer: "meaning",
         rating: "again",
         feedback: "已标记为不会。",
       });
