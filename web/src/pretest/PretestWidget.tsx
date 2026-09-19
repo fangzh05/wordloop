@@ -54,6 +54,12 @@ type RecallStatus = "idle" | PronunciationRecallOutcome;
 type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
 type PretestSessionEvent = "pretest_question" | "pretest_result" | "listen_repeat" | "listen_recall" | "pretest_complete";
 
+function selectEnglishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  return voices.find((voice) => voice.lang.toLowerCase() === "en-us")
+    ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en-"))
+    ?? null;
+}
+
 export const PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS = 600;
 export const PRETEST_RECALL_ADVANCE_DELAY_MS = 800;
 
@@ -304,6 +310,7 @@ export function PretestWidget(): React.JSX.Element {
   const [playing, setPlaying] = useState<string | null>(null);
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
   const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
+  const [englishVoiceAvailable, setEnglishVoiceAvailable] = useState(false);
   const answerRef = useRef<HTMLInputElement>(null);
   const recallInputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
@@ -314,6 +321,17 @@ export function PretestWidget(): React.JSX.Element {
   const speechAvailable = typeof window !== "undefined"
     && "speechSynthesis" in window
     && "SpeechSynthesisUtterance" in window;
+
+  useEffect(() => {
+    if (!speechAvailable) return;
+    const synthesis = window.speechSynthesis;
+    const updateVoiceAvailability = (): void => {
+      setEnglishVoiceAvailable(selectEnglishVoice(synthesis.getVoices()) !== null);
+    };
+    updateVoiceAvailability();
+    synthesis.addEventListener("voiceschanged", updateVoiceAvailability);
+    return () => synthesis.removeEventListener("voiceschanged", updateVoiceAvailability);
+  }, [speechAvailable]);
 
   function clearAdvanceTimer(): void {
     if (advanceTimerRef.current !== null) {
@@ -566,9 +584,12 @@ export function PretestWidget(): React.JSX.Element {
 
   function play(word: string): void {
     if (!speechAvailable) return;
+    const selectedEnglishVoice = selectEnglishVoice(window.speechSynthesis.getVoices());
+    if (!selectedEnglishVoice) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(word);
-    utterance.lang = "en-US";
+    utterance.voice = selectedEnglishVoice;
+    utterance.lang = selectedEnglishVoice.lang;
     utterance.rate = 0.9;
     utterance.onstart = () => setPlaying(word);
     utterance.onend = () => setPlaying(null);
@@ -722,8 +743,8 @@ export function PretestWidget(): React.JSX.Element {
           <span className="ipa">{currentPronunciation.ipa}</span>
           <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
         </div>
-        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable} aria-label="播放音频">
-          <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
+        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable || !englishVoiceAvailable} aria-label="播放音频">
+          <span className="play-icon"><PlayIcon /></span>{speechAvailable && englishVoiceAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
         </button>
         <Button onClick={() => void enterListenRecall()}>我已听读 <ArrowIcon className="button-icon trailing" /></Button>
       </section>;
@@ -742,8 +763,8 @@ export function PretestWidget(): React.JSX.Element {
           <span className="part-of-speech">{currentPronunciation.part_of_speech}</span>
           <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
         </div>
-        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable} aria-label="播放音频">
-          <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
+        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable || !englishVoiceAvailable} aria-label="播放音频">
+          <span className="play-icon"><PlayIcon /></span>{speechAvailable && englishVoiceAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
         </button>
         <label className="answer-label" htmlFor="pronunciation-recall-answer">你的答案</label>
         <input

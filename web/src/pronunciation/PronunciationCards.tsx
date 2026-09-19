@@ -15,10 +15,27 @@ const payloadSchema = z.object({
 });
 type PronunciationWord = z.infer<typeof payloadSchema>["words"][number];
 
+function selectEnglishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  return voices.find((voice) => voice.lang.toLowerCase() === "en-us")
+    ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en-"))
+    ?? null;
+}
+
 export function PronunciationCards(): React.JSX.Element {
   const [words, setWords] = useState<PronunciationWord[]>([]);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [englishVoiceAvailable, setEnglishVoiceAvailable] = useState(false);
   const speechAvailable = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  useEffect(() => {
+    if (!speechAvailable) return;
+    const synthesis = window.speechSynthesis;
+    const updateVoiceAvailability = (): void => {
+      setEnglishVoiceAvailable(selectEnglishVoice(synthesis.getVoices()) !== null);
+    };
+    updateVoiceAvailability();
+    synthesis.addEventListener("voiceschanged", updateVoiceAvailability);
+    return () => synthesis.removeEventListener("voiceschanged", updateVoiceAvailability);
+  }, [speechAvailable]);
   useEffect(() => subscribeToApp((event) => {
     if (event.type !== "toolinput" && event.type !== "toolresult") return;
     const candidate = event.type === "toolinput" ? { widget: "pronunciation", ...event.value } : event.value.structuredContent;
@@ -28,9 +45,12 @@ export function PronunciationCards(): React.JSX.Element {
 
   function play(word: string): void {
     if (!speechAvailable) return;
+    const selectedEnglishVoice = selectEnglishVoice(window.speechSynthesis.getVoices());
+    if (!selectedEnglishVoice) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(word);
-    utterance.lang = "en-US";
+    utterance.voice = selectedEnglishVoice;
+    utterance.lang = selectedEnglishVoice.lang;
     utterance.rate = 0.9;
     utterance.onstart = () => setPlaying(word);
     utterance.onend = () => setPlaying(null);
@@ -47,8 +67,8 @@ export function PronunciationCards(): React.JSX.Element {
           <span className="ipa">{item.ipa}</span>
           {item.meaning_zh ? <span className="meaning-zh">{item.meaning_zh}</span> : null}
         </div>
-        <button className="play-button" type="button" onClick={() => play(item.word)} disabled={!speechAvailable} aria-label={`播放 ${item.word}`}>
-          <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing === item.word ? "正在播放" : "播放") : "当前设备无法播放"}
+        <button className="play-button" type="button" onClick={() => play(item.word)} disabled={!speechAvailable || !englishVoiceAvailable} aria-label={`播放 ${item.word}`}>
+          <span className="play-icon"><PlayIcon /></span>{speechAvailable && englishVoiceAvailable ? (playing === item.word ? "正在播放" : "播放") : "当前设备无法播放"}
         </button>
       </div>)}
     </div>
