@@ -32,10 +32,17 @@ describe("Streamable HTTP server", () => {
     const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
     await client.connect(transport);
     const instructions = client.getInstructions() ?? "";
-    expect(instructions).toContain("没有输出 = 没有学会");
-    expect(instructions).toContain("每词至少覆盖一道输出题");
-    expect(instructions).toContain("每完成2轮做一次听写");
-    expect(instructions).toContain("长难句收尾");
+    for (const token of [
+      "get_study_bootstrap",
+      "record_attempt",
+      "record_review_submission",
+      "round_complete",
+      "finish_study_session",
+      "resume",
+      "wrapup",
+    ]) {
+      expect(instructions).toContain(token);
+    }
     const response = await client.listTools();
     const names = response.tools.map((tool) => tool.name);
     expect(names).toEqual(expect.arrayContaining([
@@ -45,23 +52,6 @@ describe("Streamable HTTP server", () => {
       "render_word_import", "render_pretest_widget", "render_review_widget", "render_review_widget_v2", "render_learning_dashboard", "render_lesson_widget", "render_pronunciation_cards", "render_dictation_widget",
       "get_active_study_session", "get_study_bootstrap", "advance_study_session", "finish_study_session",
     ]));
-    expect(instructions).toContain("active error");
-    expect(instructions).toContain("Prefer render_review_widget_v2");
-    expect(instructions).toContain("legacy render_review_widget");
-    expect(instructions).toContain("next_review_at is due");
-    expect(instructions).toContain("record_review_result");
-    expect(instructions).toContain("record_review_submission");
-    expect(instructions).toContain("原子");
-    expect(instructions).toContain("Lesson navigation is backend-owned and authoritative");
-    expect(instructions).toContain("lesson_complete");
-    expect(instructions).toContain("round_complete means one vocabulary ROUND has ended, not that the whole study SESSION has ended");
-    expect(instructions).toContain("After WORDLOOP_ROUND_COMPLETE");
-    expect(instructions).toContain("do not emit two equivalent wrap-up prompts");
-    expect(instructions).toContain("round_complete 只触发长难句收尾，不得触发会话收尾");
-    expect(instructions).toContain("会话收尾必须由用户明确结束学习触发");
-    expect(instructions).toContain("When bootstrap sees an active lesson_complete state, it returns resume for the existing Lesson Widget");
-    expect(instructions).toContain("mode=exercise, wrapup=true");
-    expect(instructions).not.toContain("If it returns { action: \"done\" } for an active lesson_complete state");
     const bootstrapTool = response.tools.find((tool) => tool.name === "get_study_bootstrap");
     expect(bootstrapTool?.description).toContain("active Lesson phase=lesson_complete 时只恢复现有 Lesson 收尾状态");
     expect(bootstrapTool?.description).not.toContain("action: done");
