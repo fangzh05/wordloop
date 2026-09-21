@@ -4,11 +4,12 @@ import { build } from "esbuild";
 
 const root = process.cwd();
 const outputRoot = path.join(root, "dist");
-const values = await Promise.all([
+const widgetKinds = ["import", "pretest", "review", "dashboard", "pronunciation", "dictation", "lesson"] as const;
+const [siteHtml, siteCss, siteJs, widgetJs, widgetCss, ...migrationSql] = await Promise.all([
   readFile(path.join(root, "build", "index.html"), "utf8"),
   readFile(path.join(root, "build", "styles.css"), "utf8"),
   readFile(path.join(root, "build", "app.js"), "utf8"),
-  readFile(path.join(root, "web", "dist", "widget.js"), "utf8"),
+  Promise.all(widgetKinds.map((kind) => readFile(path.join(root, "web", "dist", `${kind}.js`), "utf8"))),
   readFile(path.join(root, "web", "dist", "widget.css"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609130001_initial_wordloop.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609130002_fsrs_shanbay.sql"), "utf8"),
@@ -35,12 +36,12 @@ await build({
   conditions: ["worker", "browser", "import"],
   legalComments: "none",
   define: {
-    __SITE_HTML__: JSON.stringify(values[0]),
-    __SITE_CSS__: JSON.stringify(values[1]),
-    __SITE_JS__: JSON.stringify(values[2]),
-    __WIDGET_JS__: JSON.stringify(values[3]),
-    __WIDGET_CSS__: JSON.stringify(values[4]),
-    __MIGRATION_SQL__: JSON.stringify(`${values[5]}\n\n${values[6]}\n\n${values[7]}\n\n${values[8]}\n\n${values[9]}\n\n${values[10]}\n\n${values[11]}`),
+    __SITE_HTML__: JSON.stringify(siteHtml),
+    __SITE_CSS__: JSON.stringify(siteCss),
+    __SITE_JS__: JSON.stringify(siteJs),
+    __WIDGET_JS__: JSON.stringify(Object.fromEntries(widgetKinds.map((kind, index) => [kind, widgetJs[index] ?? ""]))),
+    __WIDGET_CSS__: JSON.stringify(widgetCss),
+    __MIGRATION_SQL__: JSON.stringify(migrationSql.join("\n\n")),
     "process.env.NODE_ENV": '"production"',
   },
 });

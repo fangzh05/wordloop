@@ -9,7 +9,7 @@ const projectRoot = path.resolve(process.env.WORDLOOP_ROOT ?? process.cwd());
 export async function widgetHtml(kind: WidgetKind, preview?: Record<string, unknown>): Promise<string> {
   const webDist = path.join(projectRoot, "web", "dist");
   const [javascript, css] = await Promise.all([
-    readFile(path.join(webDist, "widget.js"), "utf8"),
+    readFile(path.join(webDist, `${kind}.js`), "utf8"),
     readFile(path.join(webDist, "widget.css"), "utf8"),
   ]);
   const previewScript = preview

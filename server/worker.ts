@@ -6,7 +6,7 @@ import { LESSON_WIDGET_VERSION } from "../shared/toolContracts.js";
 declare const __SITE_HTML__: string;
 declare const __SITE_CSS__: string;
 declare const __SITE_JS__: string;
-declare const __WIDGET_JS__: string;
+declare const __WIDGET_JS__: Record<WidgetKind, string>;
 declare const __WIDGET_CSS__: string;
 declare const __MIGRATION_SQL__: string;
 
@@ -19,13 +19,13 @@ type WorkerEnv = {
 const siteHtml = typeof __SITE_HTML__ === "string" ? __SITE_HTML__ : "<!doctype html><title>Wordloop</title>";
 const siteCss = typeof __SITE_CSS__ === "string" ? __SITE_CSS__ : "";
 const siteJs = typeof __SITE_JS__ === "string" ? __SITE_JS__ : "";
-const widgetJs = typeof __WIDGET_JS__ === "string" ? __WIDGET_JS__ : "";
+const widgetJs: Partial<Record<WidgetKind, string>> = typeof __WIDGET_JS__ === "object" && __WIDGET_JS__ !== null ? __WIDGET_JS__ : {};
 const widgetCss = typeof __WIDGET_CSS__ === "string" ? __WIDGET_CSS__ : "";
 const migrationSql = typeof __MIGRATION_SQL__ === "string" ? __MIGRATION_SQL__ : "-- Wordloop migration is embedded when the Site is built.\n";
 
 function widgetHtml(kind: WidgetKind): Promise<string> {
   const versionAttribute = kind === "lesson" ? ` data-widget-version="${LESSON_WIDGET_VERSION}"` : "";
-  return Promise.resolve(`<!doctype html><html${versionAttribute}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="wordloop-widget" content="${kind}"><style>${widgetCss}</style></head><body><div id="root"></div><script>${widgetJs}</script></body></html>`);
+  return Promise.resolve(`<!doctype html><html${versionAttribute}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="wordloop-widget" content="${kind}"><style>${widgetCss}</style></head><body><div id="root"></div><script>${widgetJs[kind] ?? ""}</script></body></html>`);
 }
 
 function response(body: BodyInit | null, contentType: string, status = 200): Response {
