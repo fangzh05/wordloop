@@ -8,6 +8,7 @@ import { registerGetLearningContextTool } from "./tools/getLearningContext.js";
 import { registerGetNextLearningWordTool } from "./tools/getNextLearningWord.js";
 import { registerGetNextRoundTool } from "./tools/getNextRound.js";
 import { registerGetProgressTool } from "./tools/getProgress.js";
+import { registerGetPronunciationAudioTool } from "./tools/getPronunciationAudio.js";
 import { registerImportWordsTool } from "./tools/importWords.js";
 import { registerRecordAttemptTool } from "./tools/recordAttempt.js";
 import { registerRecordPretestResultTool } from "./tools/recordPretestResult.js";
@@ -67,7 +68,7 @@ function registerWidgetResources(server: McpServer, loadWidgetHtml: WidgetHtmlLo
       _meta: {
         ui: {
           prefersBorder: true,
-          csp: { connectDomains: [], resourceDomains: [] },
+          csp: { connectDomains: [], resourceDomains: ["https://media.merriam-webster.com"] },
         },
       },
     }, async () => ({
@@ -115,6 +116,7 @@ export function createWordloopMcpServer(loadWidgetHtml: WidgetHtmlLoader): McpSe
   registerGetErrorBookTool(server);
   registerSaveSentenceTool(server);
   registerGetProgressTool(server);
+  registerGetPronunciationAudioTool(server);
   registerRenderTools(server);
   registerWidgetResources(server, loadWidgetHtml);
   return server;
