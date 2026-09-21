@@ -16,6 +16,11 @@ import {
   normalizeAnswer,
 } from "../grading/deterministic.js";
 import {
+  loadDictionaryPronunciationAudio,
+  playPronunciation,
+  selectEnglishVoice,
+} from "../pronunciation/audio.js";
+import {
   advanceStudySessionSchema,
   directionSchema,
   emptyToolArgsSchema,
@@ -53,12 +58,6 @@ export type PronunciationRecallOutcome = "correct" | "wrong";
 type RecallStatus = "idle" | PronunciationRecallOutcome;
 type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
 type PretestSessionEvent = "pretest_question" | "pretest_result" | "listen_repeat" | "listen_recall" | "pretest_complete";
-
-function selectEnglishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  return voices.find((voice) => voice.lang.toLowerCase() === "en-us")
-    ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en-"))
-    ?? null;
-}
 
 export const PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS = 600;
 export const PRETEST_RECALL_ADVANCE_DELAY_MS = 800;
@@ -311,6 +310,8 @@ export function PretestWidget(): React.JSX.Element {
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
   const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const [englishVoiceAvailable, setEnglishVoiceAvailable] = useState(false);
+  const [dictionaryAudio, setDictionaryAudio] = useState<Record<string, string>>({});
+  const [dictionaryReady, setDictionaryReady] = useState(false);
   const answerRef = useRef<HTMLInputElement>(null);
   const recallInputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
@@ -360,6 +361,12 @@ export function PretestWidget(): React.JSX.Element {
     };
     setSamplingAvailable(available);
     setPayload(effectivePayload);
+    setDictionaryAudio({});
+    setDictionaryReady(false);
+    void loadDictionaryPronunciationAudio(effectivePayload.items.map((entry) => entry.word))
+      .then(setDictionaryAudio)
+      .catch(() => setDictionaryAudio({}))
+      .finally(() => setDictionaryReady(true));
     const phaseState = stageForPhase(effectivePayload.phase);
     const restoredIndex = effectivePayload.current_index ?? 0;
     setIndex(Math.min(Math.max(restoredIndex, 0), effectivePayload.items.length));
@@ -583,18 +590,12 @@ export function PretestWidget(): React.JSX.Element {
   }
 
   function play(word: string): void {
-    if (!speechAvailable) return;
-    const selectedEnglishVoice = selectEnglishVoice(window.speechSynthesis.getVoices());
-    if (!selectedEnglishVoice) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(word);
-    utterance.voice = selectedEnglishVoice;
-    utterance.lang = selectedEnglishVoice.lang;
-    utterance.rate = 0.9;
-    utterance.onstart = () => setPlaying(word);
-    utterance.onend = () => setPlaying(null);
-    utterance.onerror = () => setPlaying(null);
-    window.speechSynthesis.speak(utterance);
+    playPronunciation(
+      word,
+      dictionaryAudio[word],
+      () => setPlaying(word),
+      () => setPlaying(null),
+    );
   }
 
   async function enterListenRepeat(): Promise<void> {
@@ -743,9 +744,23 @@ export function PretestWidget(): React.JSX.Element {
           <span className="ipa">{currentPronunciation.ipa}</span>
           <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
         </div>
-        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable || !englishVoiceAvailable} aria-label="播放音频">
-          <span className="play-icon"><PlayIcon /></span>{speechAvailable && englishVoiceAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
+        <button
+          className="play-button pronunciation-play"
+          type="button"
+          onClick={() => play(currentPronunciation.word)}
+          disabled={!dictionaryReady || (!dictionaryAudio[currentPronunciation.word] && !(speechAvailable && englishVoiceAvailable))}
+          aria-label="播放音频"
+        >
+          <span className="play-icon"><PlayIcon /></span>{!dictionaryReady
+            ? "正在准备"
+            : dictionaryAudio[currentPronunciation.word] || (speechAvailable && englishVoiceAvailable)
+              ? (playing === currentPronunciation.word ? "正在播放" : "播放")
+              : "当前设备无法播放"}
         </button>
+        {dictionaryAudio[currentPronunciation.word] ? <div className="dictionary-attribution compact" aria-label="Pronunciation audio by Merriam-Webster">
+          <img src="https://dictionaryapi.com/images/info/branding-guidelines/MWLogo_LightBG_120x120_2x.png" width="50" height="50" alt="Merriam-Webster" />
+          <span>发音来自 Merriam-Webster's Learner's Dictionary</span>
+        </div> : null}
         <Button onClick={() => void enterListenRecall()}>我已听读 <ArrowIcon className="button-icon trailing" /></Button>
       </section>;
     }
@@ -763,9 +778,23 @@ export function PretestWidget(): React.JSX.Element {
           <span className="part-of-speech">{currentPronunciation.part_of_speech}</span>
           <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
         </div>
-        <button className="play-button pronunciation-play" type="button" onClick={() => play(currentPronunciation.word)} disabled={!speechAvailable || !englishVoiceAvailable} aria-label="播放音频">
-          <span className="play-icon"><PlayIcon /></span>{speechAvailable && englishVoiceAvailable ? (playing === currentPronunciation.word ? "正在播放" : "播放") : "当前设备无法播放"}
+        <button
+          className="play-button pronunciation-play"
+          type="button"
+          onClick={() => play(currentPronunciation.word)}
+          disabled={!dictionaryReady || (!dictionaryAudio[currentPronunciation.word] && !(speechAvailable && englishVoiceAvailable))}
+          aria-label="播放音频"
+        >
+          <span className="play-icon"><PlayIcon /></span>{!dictionaryReady
+            ? "正在准备"
+            : dictionaryAudio[currentPronunciation.word] || (speechAvailable && englishVoiceAvailable)
+              ? (playing === currentPronunciation.word ? "正在播放" : "播放")
+              : "当前设备无法播放"}
         </button>
+        {dictionaryAudio[currentPronunciation.word] ? <div className="dictionary-attribution compact" aria-label="Pronunciation audio by Merriam-Webster">
+          <img src="https://dictionaryapi.com/images/info/branding-guidelines/MWLogo_LightBG_120x120_2x.png" width="50" height="50" alt="Merriam-Webster" />
+          <span>发音来自 Merriam-Webster's Learner's Dictionary</span>
+        </div> : null}
         <label className="answer-label" htmlFor="pronunciation-recall-answer">你的答案</label>
         <input
           ref={recallInputRef}
