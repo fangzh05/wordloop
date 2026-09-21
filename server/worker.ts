@@ -14,6 +14,7 @@ type WorkerEnv = {
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   DEV_USER_ID?: string;
+  MERRIAM_WEBSTER_API_KEY?: string;
 };
 
 const siteHtml = typeof __SITE_HTML__ === "string" ? __SITE_HTML__ : "<!doctype html><title>Wordloop</title>";
