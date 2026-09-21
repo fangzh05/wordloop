@@ -68,7 +68,7 @@ function registerWidgetResources(server: McpServer, loadWidgetHtml: WidgetHtmlLo
       _meta: {
         ui: {
           prefersBorder: true,
-          csp: { connectDomains: [], resourceDomains: ["https://media.merriam-webster.com"] },
+          csp: { connectDomains: [], resourceDomains: ["https://media.merriam-webster.com", "https://dictionaryapi.com"] },
         },
       },
     }, async () => ({
