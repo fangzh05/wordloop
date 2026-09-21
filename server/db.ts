@@ -41,6 +41,11 @@ export function getAuthenticatedUserId(): string {
   return parsed.data;
 }
 
+export function getMerriamWebsterApiKey(): string | undefined {
+  const parsed = z.string().trim().min(1).safeParse(activeEnv().MERRIAM_WEBSTER_API_KEY);
+  return parsed.success ? parsed.data : undefined;
+}
+
 export function getShanbayCookie(): string {
   const env = activeEnv();
   const fullCookie = z.string().trim().min(1).safeParse(env.SHANBAY_COOKIE);
