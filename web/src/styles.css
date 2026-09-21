@@ -259,6 +259,9 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .play-button:active:not(:disabled) { transform: scale(0.96); opacity: 0.72; }
 .play-button .play-icon { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--accent); color: white; }
 .play-button .play-icon svg { width: 0.9rem; height: 0.9rem; }
+.dictionary-attribution { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.7rem; color: var(--muted); font-size: 0.72rem; line-height: 1.3; }
+.dictionary-attribution.compact { justify-content: center; }
+.dictionary-attribution img { width: 50px; height: 50px; flex: 0 0 50px; border-radius: 50%; }
 
 .dictation-controls { display: flex; align-items: center; gap: 0.55rem; }
 .dictation-controls .round-play { min-width: 8.2rem; border-radius: 999px; padding-inline: 1.15rem; }
