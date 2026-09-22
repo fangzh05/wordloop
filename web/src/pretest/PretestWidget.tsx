@@ -62,6 +62,10 @@ type PretestSessionEvent = "pretest_question" | "pretest_result" | "listen_repea
 export const PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS = 600;
 export const PRETEST_RECALL_ADVANCE_DELAY_MS = 800;
 
+export function shouldApplyPronunciationAudioResult(currentSignature: string, requestSignature: string): boolean {
+  return currentSignature === requestSignature;
+}
+
 export function selectPronunciationWords(
   items: PretestItem[],
   results: Array<{ word: string; result: PretestResult }>,
@@ -361,12 +365,20 @@ export function PretestWidget(): React.JSX.Element {
     };
     setSamplingAvailable(available);
     setPayload(effectivePayload);
+    const requestSignature = signature;
     setDictionaryAudio({});
     setDictionaryReady(false);
     void loadDictionaryPronunciationAudio(effectivePayload.items.map((entry) => entry.word))
-      .then(setDictionaryAudio)
-      .catch(() => setDictionaryAudio({}))
-      .finally(() => setDictionaryReady(true));
+      .then((audio) => {
+        if (!shouldApplyPronunciationAudioResult(payloadSignatureRef.current, requestSignature)) return;
+        setDictionaryAudio(audio);
+        setDictionaryReady(true);
+      })
+      .catch(() => {
+        if (!shouldApplyPronunciationAudioResult(payloadSignatureRef.current, requestSignature)) return;
+        setDictionaryAudio({});
+        setDictionaryReady(true);
+      });
     const phaseState = stageForPhase(effectivePayload.phase);
     const restoredIndex = effectivePayload.current_index ?? 0;
     setIndex(Math.min(Math.max(restoredIndex, 0), effectivePayload.items.length));

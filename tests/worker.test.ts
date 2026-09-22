@@ -26,7 +26,7 @@ describe("Sites Worker", () => {
     }), {});
     const payload = await result.json() as { result: { tools: Array<{ name: string }> } };
     expect(result.status).toBe(200);
-    expect(payload.result.tools).toHaveLength(28);
+    expect(payload.result.tools).toHaveLength(29);
     expect(payload.result.tools.some((tool) => tool.name === "get_learning_context")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "get_next_learning_word")).toBe(true);
     expect(payload.result.tools.some((tool) => tool.name === "render_pretest_widget")).toBe(true);
