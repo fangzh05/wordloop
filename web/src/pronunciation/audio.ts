@@ -10,6 +10,19 @@ const pronunciationAudioResultSchema = z.object({
   })),
 });
 
+export function pronunciationButtonLabel(
+  dictionaryAudioAvailable: boolean,
+  speechAvailable: boolean,
+  dictionaryReady: boolean,
+  isPlaying: boolean,
+): string {
+  if (!dictionaryReady) return "正在准备";
+  if (isPlaying && (dictionaryAudioAvailable || speechAvailable)) return "正在播放";
+  if (dictionaryAudioAvailable) return "词典发音";
+  if (speechAvailable) return "系统发音";
+  return "当前设备无法播放";
+}
+
 export function selectEnglishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   return voices.find((voice) => voice.lang.toLowerCase() === "en-us")
     ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en-"))

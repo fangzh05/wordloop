@@ -18,6 +18,7 @@ import {
 import {
   loadDictionaryPronunciationAudio,
   playPronunciation,
+  pronunciationButtonLabel,
   selectEnglishVoice,
 } from "../pronunciation/audio.js";
 import {
@@ -743,6 +744,8 @@ export function PretestWidget(): React.JSX.Element {
     }
 
     if (stage === "listen_repeat" && currentPronunciation) {
+      const dictionaryAudioAvailable = Boolean(dictionaryAudio[currentPronunciation.word]);
+      const speechPlaybackAvailable = speechAvailable && englishVoiceAvailable;
       return <section className="widget-card pretest-card pronunciation-stage" aria-labelledby="listen-repeat-title">
         <header className="widget-header compact-header">
           <div>
@@ -760,14 +763,10 @@ export function PretestWidget(): React.JSX.Element {
           className="play-button pronunciation-play"
           type="button"
           onClick={() => play(currentPronunciation.word)}
-          disabled={!dictionaryReady || (!dictionaryAudio[currentPronunciation.word] && !(speechAvailable && englishVoiceAvailable))}
+          disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)}
           aria-label="播放音频"
         >
-          <span className="play-icon"><PlayIcon /></span>{!dictionaryReady
-            ? "正在准备"
-            : dictionaryAudio[currentPronunciation.word] || (speechAvailable && englishVoiceAvailable)
-              ? (playing === currentPronunciation.word ? "正在播放" : "播放")
-              : "当前设备无法播放"}
+          <span className="play-icon"><PlayIcon /></span>{pronunciationButtonLabel(dictionaryAudioAvailable, speechPlaybackAvailable, dictionaryReady, playing === currentPronunciation.word)}
         </button>
         {dictionaryAudio[currentPronunciation.word] ? <div className="dictionary-attribution compact" aria-label="Pronunciation audio by Merriam-Webster">
           <img src="https://dictionaryapi.com/images/info/branding-guidelines/MWLogo_LightBG_120x120_2x.png" width="50" height="50" alt="Merriam-Webster" />
@@ -778,6 +777,8 @@ export function PretestWidget(): React.JSX.Element {
     }
 
     if (stage === "listen_recall" && currentPronunciation) {
+      const dictionaryAudioAvailable = Boolean(dictionaryAudio[currentPronunciation.word]);
+      const speechPlaybackAvailable = speechAvailable && englishVoiceAvailable;
       return <section className="widget-card pretest-card pronunciation-stage" aria-labelledby="listen-recall-title">
         <header className="widget-header compact-header">
           <div>
@@ -794,14 +795,10 @@ export function PretestWidget(): React.JSX.Element {
           className="play-button pronunciation-play"
           type="button"
           onClick={() => play(currentPronunciation.word)}
-          disabled={!dictionaryReady || (!dictionaryAudio[currentPronunciation.word] && !(speechAvailable && englishVoiceAvailable))}
+          disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)}
           aria-label="播放音频"
         >
-          <span className="play-icon"><PlayIcon /></span>{!dictionaryReady
-            ? "正在准备"
-            : dictionaryAudio[currentPronunciation.word] || (speechAvailable && englishVoiceAvailable)
-              ? (playing === currentPronunciation.word ? "正在播放" : "播放")
-              : "当前设备无法播放"}
+          <span className="play-icon"><PlayIcon /></span>{pronunciationButtonLabel(dictionaryAudioAvailable, speechPlaybackAvailable, dictionaryReady, playing === currentPronunciation.word)}
         </button>
         {dictionaryAudio[currentPronunciation.word] ? <div className="dictionary-attribution compact" aria-label="Pronunciation audio by Merriam-Webster">
           <img src="https://dictionaryapi.com/images/info/branding-guidelines/MWLogo_LightBG_120x120_2x.png" width="50" height="50" alt="Merriam-Webster" />

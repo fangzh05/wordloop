@@ -6,6 +6,7 @@ import { FocusButton } from "../components/FocusButton.js";
 import {
   loadDictionaryPronunciationAudio,
   playPronunciation,
+  pronunciationButtonLabel,
   selectEnglishVoice,
 } from "./audio.js";
 
@@ -83,7 +84,9 @@ export function PronunciationCards(): React.JSX.Element {
     <header className="widget-header compact-header"><div><span className="eyebrow">先听再读</span><h1 id="pronunciation-title">发音</h1><p>美式英语 · 点击播放</p></div><FocusButton /></header>
     <div className="pronunciation-list">
       {words.map((item) => {
-        const playable = Boolean(dictionaryAudio[item.word]) || (speechAvailable && englishVoiceAvailable);
+        const dictionaryAudioAvailable = Boolean(dictionaryAudio[item.word]);
+        const speechPlaybackAvailable = speechAvailable && englishVoiceAvailable;
+        const playable = dictionaryAudioAvailable || speechPlaybackAvailable;
         return <div className="pronunciation-row" key={item.word}>
           <div className="pronunciation-copy">
             <div className="pronunciation-heading"><strong>{item.word}</strong>{item.part_of_speech ? <span className="part-of-speech">{item.part_of_speech}</span> : null}</div>
@@ -91,7 +94,7 @@ export function PronunciationCards(): React.JSX.Element {
             {item.meaning_zh ? <span className="meaning-zh">{item.meaning_zh}</span> : null}
           </div>
           <button className="play-button" type="button" onClick={() => play(item.word)} disabled={!dictionaryReady || !playable} aria-label={`播放 ${item.word}`}>
-            <span className="play-icon"><PlayIcon /></span>{!dictionaryReady ? "正在准备" : playable ? (playing === item.word ? "正在播放" : "播放") : "当前设备无法播放"}
+            <span className="play-icon"><PlayIcon /></span>{pronunciationButtonLabel(dictionaryAudioAvailable, speechPlaybackAvailable, dictionaryReady, playing === item.word)}
           </button>
         </div>;
       })}
