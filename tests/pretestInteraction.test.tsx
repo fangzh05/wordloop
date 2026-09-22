@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { PretestQuestion } from "../web/src/pretest/PretestWidget.js";
+import { PretestQuestion, shouldApplyPronunciationAudioResult } from "../web/src/pretest/PretestWidget.js";
 
 const base = {
   ipa: "/rɪˈkɜːr/",
@@ -67,5 +67,35 @@ describe("PretestQuestion", () => {
     const handoff = source.indexOf("await continueLearning();", completion);
     expect(completion).toBeGreaterThanOrEqual(0);
     expect(handoff).toBeGreaterThan(completion);
+  });
+
+  it("ignores a stale pronunciation result after a newer payload resolves", async () => {
+    let currentSignature = "payload-A";
+    let dictionaryAudio: Record<string, string> = {};
+    let dictionaryReady = false;
+    const writes: string[] = [];
+    const applyResult = async (requestSignature: string, audio: Record<string, string>): Promise<void> => {
+      await Promise.resolve();
+      if (!shouldApplyPronunciationAudioResult(currentSignature, requestSignature)) return;
+      writes.push(requestSignature);
+      dictionaryAudio = audio;
+      dictionaryReady = true;
+    };
+    let resolveA!: (audio: Record<string, string>) => void;
+    let resolveB!: (audio: Record<string, string>) => void;
+    const requestA = new Promise<Record<string, string>>((resolve) => { resolveA = resolve; })
+      .then((audio) => applyResult("payload-A", audio));
+    currentSignature = "payload-B";
+    const requestB = new Promise<Record<string, string>>((resolve) => { resolveB = resolve; })
+      .then((audio) => applyResult("payload-B", audio));
+
+    resolveB({ vibrate: "https://example.test/b.mp3" });
+    await requestB;
+    resolveA({ vibrate: "https://example.test/a.mp3" });
+    await requestA;
+
+    expect(dictionaryAudio).toEqual({ vibrate: "https://example.test/b.mp3" });
+    expect(dictionaryReady).toBe(true);
+    expect(writes).toEqual(["payload-B"]);
   });
 });
