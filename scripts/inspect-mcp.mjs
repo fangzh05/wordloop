@@ -56,6 +56,26 @@ try {
   const resourceList = await runInspector([target, "--transport", "http", "--method", "resources/list", "--format", "json"]);
   const resources = parseInspectorJson(resourceList.stdout, "resources/list");
   const resourceUris = Array.isArray(resources.resources) ? resources.resources.map((resource) => resource.uri) : [];
+  const pronunciationUri = "ui://wordloop/pronunciation.html";
+  const pronunciationResource = resources.resources?.find((resource) => resource.uri === pronunciationUri);
+  const expectedPronunciationUi = {
+    prefersBorder: true,
+    csp: {
+      connectDomains: [],
+      resourceDomains: [
+        "https://media.merriam-webster.com",
+        "https://dictionaryapi.com",
+      ],
+    },
+  };
+  if (JSON.stringify(pronunciationResource?._meta?.ui) !== JSON.stringify(expectedPronunciationUi)) {
+    throw new Error("resources/list pronunciation metadata is missing the expected CSP.");
+  }
+  const pronunciationRead = await runInspector([target, "--transport", "http", "--method", "resources/read", "--uri", pronunciationUri, "--format", "json"]);
+  const pronunciationResult = parseInspectorJson(pronunciationRead.stdout, `resources/read ${pronunciationUri}`);
+  if (JSON.stringify(pronunciationResult.contents?.[0]?._meta?.ui) !== JSON.stringify(expectedPronunciationUi)) {
+    throw new Error("resources/read pronunciation metadata is missing the expected CSP.");
+  }
   for (const uri of ["ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
     if (!resourceUris.includes(uri)) throw new Error(`resources/list is missing ${uri}.`);
   }
@@ -81,7 +101,7 @@ try {
   process.stdout.write(appInfo.stdout);
   process.stdout.write("\n");
   process.stdout.write(`${JSON.stringify({ method: "resources/list", resources: resourceUris })}\n`);
-  process.stdout.write(`${JSON.stringify({ method: "resources/read", resources: resourceReads })}\n`);
+  process.stdout.write(`${JSON.stringify({ method: "resources/read", resources: resourceReads, pronunciationCsp: expectedPronunciationUi })}\n`);
 } finally {
   server.kill("SIGTERM");
 }

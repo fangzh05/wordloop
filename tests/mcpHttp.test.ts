@@ -121,6 +121,24 @@ describe("Streamable HTTP server", () => {
       "ui://wordloop/lesson-v2.html",
       "ui://wordloop/lesson.html",
     ]));
+    const pronunciationUri = "ui://wordloop/pronunciation.html";
+    const pronunciationResource = resources.resources.find((resource) => resource.uri === pronunciationUri);
+    const expectedPronunciationUi = {
+      prefersBorder: true,
+      csp: {
+        connectDomains: [],
+        resourceDomains: [
+          "https://media.merriam-webster.com",
+          "https://dictionaryapi.com",
+        ],
+      },
+    };
+    expect((pronunciationResource?._meta as { ui?: unknown } | undefined)?.ui).toEqual(expectedPronunciationUi);
+    const pronunciationRead = await client.readResource({ uri: pronunciationUri });
+    const pronunciationContent = pronunciationRead.contents[0];
+    const contentUi = (pronunciationContent?._meta as { ui?: unknown } | undefined)?.ui;
+    expect(contentUi).toEqual(expectedPronunciationUi);
+    expect(contentUi).toEqual((pronunciationResource?._meta as { ui?: unknown } | undefined)?.ui);
     const nextLearningTool = response.tools.find((tool) => tool.name === "get_next_learning_word");
     expect(nextLearningTool?.description).toContain('action="next_word"');
     expect(nextLearningTool?.description).toContain('action="round_complete"');

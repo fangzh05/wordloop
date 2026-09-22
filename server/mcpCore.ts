@@ -60,23 +60,29 @@ After any successful learning, Review, pretest, dictation, or progress Widget re
 For “进度”, use render_learning_dashboard; for “句子：xxx”, analyze the sentence and use save_sentence. “抽查”“小测”“听写” start their corresponding backend flow. Do not expose credentials or server secrets.
 `;
 
+const WIDGET_UI_META = {
+  prefersBorder: true,
+  csp: {
+    connectDomains: [] as string[],
+    resourceDomains: [
+      "https://media.merriam-webster.com",
+      "https://dictionaryapi.com",
+    ],
+  },
+};
+
 function registerWidgetResources(server: McpServer, loadWidgetHtml: WidgetHtmlLoader): void {
   const registerWidgetResource = (name: string, kind: WidgetKind, uri: string): void => {
     registerAppResource(server, name, uri, {
       description: `Wordloop ${kind} interactive view`,
       mimeType: RESOURCE_MIME_TYPE,
-      _meta: {
-        ui: {
-          prefersBorder: true,
-          csp: { connectDomains: [], resourceDomains: ["https://media.merriam-webster.com", "https://dictionaryapi.com"] },
-        },
-      },
+      _meta: { ui: WIDGET_UI_META },
     }, async () => ({
       contents: [{
         uri,
         mimeType: RESOURCE_MIME_TYPE,
         text: await loadWidgetHtml(kind),
-        _meta: { ui: { prefersBorder: true } },
+        _meta: { ui: WIDGET_UI_META },
       }],
     }));
   };

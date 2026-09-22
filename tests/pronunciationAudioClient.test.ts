@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { playPronunciation } from "../web/src/pronunciation/audio.js";
+import { playPronunciation, pronunciationButtonLabel } from "../web/src/pronunciation/audio.js";
 
 type SpeechMocks = {
   speak: ReturnType<typeof vi.fn>;
@@ -128,5 +128,25 @@ describe("pronunciation playback fallback", () => {
     await Promise.resolve();
 
     expect(speech.speak).toHaveBeenCalledOnce();
+  });
+});
+
+describe("pronunciation source labels", () => {
+  it("labels dictionary audio", () => {
+    expect(pronunciationButtonLabel(true, true, true, false)).toBe("词典发音");
+  });
+
+  it("labels Web Speech fallback", () => {
+    expect(pronunciationButtonLabel(false, true, true, false)).toBe("系统发音");
+  });
+
+  it("labels lookup pending and unavailable states", () => {
+    expect(pronunciationButtonLabel(false, true, false, false)).toBe("正在准备");
+    expect(pronunciationButtonLabel(false, false, true, false)).toBe("当前设备无法播放");
+  });
+
+  it("uses the same playing label for either source", () => {
+    expect(pronunciationButtonLabel(true, false, true, true)).toBe("正在播放");
+    expect(pronunciationButtonLabel(false, true, true, true)).toBe("正在播放");
   });
 });
