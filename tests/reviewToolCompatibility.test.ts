@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { registerRenderTools } from "../server/tools/renderWidgets.js";
 import type { ReviewVocabularyItem } from "../server/types.js";
+import { lessonPayloadSchema } from "../web/src/lesson/LessonWidget.js";
 
 const sessionMocks = vi.hoisted(() => ({
   getActiveStudySession: vi.fn(),
@@ -99,6 +100,48 @@ describe("Review render tool schema compatibility", () => {
     }));
     sessionMocks.persistStudyState.mockReset().mockImplementation(async (state: unknown) => ({ state }));
     wordMocks.getTodayWords.mockReset().mockResolvedValue([]);
+  });
+
+  it("resumes a version 3 Lesson feedback card without changing its cursor, exercise, or queue", async () => {
+    const lessonWords = ["recur", "plausible", "viable", "thorn", "query", "subtle", "coherent", "constrain", "interpret", "rectify"];
+    const exercise = {
+      activity_type: "translation_cn_to_en",
+      instruction: "用 thorn 翻译短句。",
+      prompt: "这个问题仍然是改革中的一根刺。",
+      multiline: false,
+    };
+    const payload = {
+      widget: "lesson", phase: "lesson_feedback", mode: "feedback", word: "thorn",
+      progress: "4 / 10", current_index: 3, widget_version: 3,
+      exercise,
+      feedback: { is_correct: false, user_answer: "The issue is thorn.", reveal_answer: false, message: "介词用法需修正。" },
+      navigation: { action: "next_word", next_word: "query", next_index: 4, total_count: 10 },
+    };
+    const session = {
+      id: "old-lesson", ended_at: null,
+      state: {
+        version: 1, date: "2026-09-16", widget: "lesson", phase: "lesson_feedback",
+        current_word: "thorn", current_index: 3, retry_count: 0,
+        flow: { relearn_words: [], lesson_words: lessonWords }, payload,
+      },
+    };
+    sessionMocks.getActiveStudySession.mockResolvedValue(session);
+    await withReviewClient(async (client) => {
+      const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
+      expect(lessonPayloadSchema.safeParse(resumed).success).toBe(true);
+      expect(resumed).toMatchObject(payload);
+      expect(resumed.exercise).toEqual(exercise);
+      const saved = sessionMocks.persistStudyState.mock.calls.at(-1)?.[0] as { payload: Record<string, unknown>; current_word: string; current_index: number; flow: { lesson_words: string[] } } | undefined;
+      if (saved) {
+        expect(saved).toMatchObject({ current_word: "thorn", current_index: 3, flow: { lesson_words: lessonWords } });
+        expect(saved.payload).toMatchObject(payload);
+        expect(saved.payload.exercise).toEqual(exercise);
+      }
+      expect(sessionMocks.normalizeLegacyLessonSession).not.toHaveBeenCalled();
+      expect(session.state.current_word).toBe("thorn");
+      expect(session.state.current_index).toBe(3);
+      expect(session.state.flow.lesson_words).toEqual(lessonWords);
+    });
   });
 
   it("accepts legacy items but never returns the fake word", async () => {

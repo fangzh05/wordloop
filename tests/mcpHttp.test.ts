@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createHttpApp } from "../server/index.js";
+import { LEGACY_WIDGET_URIS, WIDGET_URIS } from "../server/tools/renderWidgets.js";
+import { LESSON_WIDGET_VERSION } from "../shared/toolContracts.js";
 
 let server: Server;
 let baseUrl: string;
@@ -105,7 +107,13 @@ describe("Streamable HTTP server", () => {
     expect(finishTool?.description).toContain("immediately call get_study_bootstrap");
     expect(finishTool?.description).toContain("not the session-end free recall trigger");
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
-    expect(JSON.stringify(lessonTool?._meta ?? {})).toContain("ui://wordloop/lesson-v6.html");
+    expect(WIDGET_URIS.lesson).toBe("ui://wordloop/lesson-v7.html");
+    expect(WIDGET_URIS.dictation).toBe("ui://wordloop/dictation-v2.html");
+    expect(LEGACY_WIDGET_URIS.lessonV6).toBe("ui://wordloop/lesson-v6.html");
+    expect(LEGACY_WIDGET_URIS.dictationV1).toBe("ui://wordloop/dictation.html");
+    expect(LESSON_WIDGET_VERSION).toBe(3);
+    expect(JSON.stringify(lessonTool?._meta ?? {})).toContain(WIDGET_URIS.lesson);
+    expect(JSON.stringify(response.tools.find((tool) => tool.name === "render_dictation_widget")?._meta ?? {})).toContain(WIDGET_URIS.dictation);
     expect(lessonTool?.description).toContain("mode=exercise、wrapup=true");
     expect(lessonTool?.description).toContain("mode=feedback、wrapup=true");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
@@ -114,12 +122,15 @@ describe("Streamable HTTP server", () => {
     const resources = await client.listResources();
     const resourceUris = resources.resources.map((resource) => resource.uri);
     expect(resourceUris).toEqual(expect.arrayContaining([
-      "ui://wordloop/lesson-v6.html",
-      "ui://wordloop/lesson-v5.html",
-      "ui://wordloop/lesson-v4.html",
-      "ui://wordloop/lesson-v3.html",
-      "ui://wordloop/lesson-v2.html",
-      "ui://wordloop/lesson.html",
+      WIDGET_URIS.lesson,
+      LEGACY_WIDGET_URIS.lessonV6,
+      LEGACY_WIDGET_URIS.lessonV5,
+      LEGACY_WIDGET_URIS.lessonV4,
+      LEGACY_WIDGET_URIS.lessonV3,
+      LEGACY_WIDGET_URIS.lessonV2,
+      LEGACY_WIDGET_URIS.lesson,
+      WIDGET_URIS.dictation,
+      LEGACY_WIDGET_URIS.dictationV1,
     ]));
     const pronunciationUri = "ui://wordloop/pronunciation.html";
     const pronunciationResource = resources.resources.find((resource) => resource.uri === pronunciationUri);
@@ -139,6 +150,24 @@ describe("Streamable HTTP server", () => {
     const contentUi = (pronunciationContent?._meta as { ui?: unknown } | undefined)?.ui;
     expect(contentUi).toEqual(expectedPronunciationUi);
     expect(contentUi).toEqual((pronunciationResource?._meta as { ui?: unknown } | undefined)?.ui);
+    for (const [kind, uris] of Object.entries({
+      lesson: [WIDGET_URIS.lesson, LEGACY_WIDGET_URIS.lessonV6, LEGACY_WIDGET_URIS.lessonV5, LEGACY_WIDGET_URIS.lessonV4, LEGACY_WIDGET_URIS.lessonV3, LEGACY_WIDGET_URIS.lessonV2, LEGACY_WIDGET_URIS.lesson],
+      dictation: [WIDGET_URIS.dictation, LEGACY_WIDGET_URIS.dictationV1],
+    })) {
+      let latestHtml: string | undefined;
+      for (const uri of uris) {
+        const listing = resources.resources.find((resource) => resource.uri === uri);
+        expect((listing?._meta as { ui?: unknown } | undefined)?.ui).toEqual(expectedPronunciationUi);
+        const read = await client.readResource({ uri });
+        const content = read.contents[0];
+        if (!content || !("text" in content)) throw new Error(`Expected HTML content for ${uri}`);
+        expect((content?._meta as { ui?: unknown } | undefined)?.ui).toEqual(expectedPronunciationUi);
+        expect(content?.uri).toBe(uri);
+        expect(content?.text).toContain(`content="${kind}"`);
+        if (latestHtml === undefined) latestHtml = content?.text;
+        else expect(content?.text).toBe(latestHtml);
+      }
+    }
     const nextLearningTool = response.tools.find((tool) => tool.name === "get_next_learning_word");
     expect(nextLearningTool?.description).toContain('action="next_word"');
     expect(nextLearningTool?.description).toContain('action="round_complete"');

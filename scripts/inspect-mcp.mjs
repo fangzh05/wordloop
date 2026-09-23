@@ -76,26 +76,30 @@ try {
   if (JSON.stringify(pronunciationResult.contents?.[0]?._meta?.ui) !== JSON.stringify(expectedPronunciationUi)) {
     throw new Error("resources/read pronunciation metadata is missing the expected CSP.");
   }
-  for (const uri of ["ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
-    if (!resourceUris.includes(uri)) throw new Error(`resources/list is missing ${uri}.`);
-  }
+  const widgetUris = {
+    lesson: ["ui://wordloop/lesson-v7.html", "ui://wordloop/lesson-v6.html", "ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"],
+    dictation: ["ui://wordloop/dictation-v2.html", "ui://wordloop/dictation.html"],
+  };
   const resourceReads = {};
-  let latestHtml;
-  for (const uri of ["ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"]) {
-    const read = await runInspector([target, "--transport", "http", "--method", "resources/read", "--uri", uri, "--format", "json"]);
-    const result = parseInspectorJson(read.stdout, `resources/read ${uri}`);
-    const text = result.contents?.[0]?.text;
-    if (typeof text !== "string" || !text.includes('data-widget-version="3"') || !text.includes('content="lesson"')) {
-      throw new Error(`resources/read ${uri} did not return the current LessonWidget HTML.`);
+  for (const [kind, uris] of Object.entries(widgetUris)) {
+    let latestHtml;
+    for (const uri of uris) {
+      const listing = resources.resources?.find((resource) => resource.uri === uri);
+      if (!listing) throw new Error(`resources/list is missing ${uri}.`);
+      if (JSON.stringify(listing._meta?.ui) !== JSON.stringify(expectedPronunciationUi)) throw new Error(`resources/list ${uri} has incorrect CSP.`);
+      const read = await runInspector([target, "--transport", "http", "--method", "resources/read", "--uri", uri, "--format", "json"]);
+      const result = parseInspectorJson(read.stdout, `resources/read ${uri}`);
+      const content = result.contents?.[0];
+      const html = content?.text;
+      if (JSON.stringify(content?._meta?.ui) !== JSON.stringify(expectedPronunciationUi)) throw new Error(`resources/read ${uri} has incorrect CSP.`);
+      if (typeof html !== "string" || !html.includes(`content="${kind}"`) || (kind === "lesson" && !html.includes('data-widget-version="3"'))) {
+        throw new Error(`resources/read ${uri} did not return the current ${kind} HTML.`);
+      }
+      if (latestHtml !== undefined && html !== latestHtml) throw new Error(`${uri} did not serve the current ${kind} bundle.`);
+      latestHtml = html;
+      resourceReads[uri] = { ok: true, htmlLength: html.length };
     }
-    resourceReads[uri] = { ok: true, widgetVersion: 3, htmlLength: text.length };
-    if (uri === "ui://wordloop/lesson-v5.html") latestHtml = text;
-    else if (uri === "ui://wordloop/lesson-v4.html") resourceReads.v4MatchesV5 = text === latestHtml;
-    else if (uri === "ui://wordloop/lesson-v3.html") resourceReads.v3MatchesV5 = text === latestHtml;
-    else if (uri === "ui://wordloop/lesson-v2.html") resourceReads.v2MatchesV5 = text === latestHtml;
-    else resourceReads.legacyMatchesV5 = text === latestHtml;
   }
-  if (!resourceReads.v4MatchesV5 || !resourceReads.v3MatchesV5 || !resourceReads.v2MatchesV5 || !resourceReads.legacyMatchesV5) throw new Error("Lesson resource aliases do not match the current HTML.");
   process.stdout.write(strict.stdout);
   process.stdout.write("\n");
   process.stdout.write(appInfo.stdout);

@@ -165,7 +165,30 @@ function feedbackPayload(word: string, index: number, lessonWords: string[]) {
 }
 
 describe("complete WordLoop study flow", () => {
+  it("resumes yesterday's active Lesson feedback instead of starting today's queue", async () => {
+    vi.clearAllMocks();
+    const active = row(makeStudyState({
+      date: "2026-09-16",
+      widget: "lesson", phase: "lesson_feedback", current_word: "thorn", current_index: 3,
+      retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["recur", "plausible", "viable", "thorn", "query"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode: "feedback", word: "thorn",
+        exercise: { activity_type: "translation_cn_to_en", instruction: "翻译", prompt: "问题是一根刺。", multiline: false },
+        feedback: { is_correct: false, user_answer: "thorn", reveal_answer: false },
+        navigation: { action: "next_word", next_word: "query", next_index: 4, total_count: 5 },
+      },
+    }));
+    bootstrapMocks.getActiveStudySession.mockResolvedValue(active);
+    expect(await getStudyBootstrap()).toEqual({ action: "resume", widget: "lesson", phase: "lesson_feedback" });
+    expect(active.state).toMatchObject({ date: "2026-09-16", current_word: "thorn", current_index: 3 });
+    expect(bootstrapMocks.normalizeLegacyLessonSession).not.toHaveBeenCalled();
+    expect(bootstrapMocks.ensureTodayQueue).not.toHaveBeenCalled();
+    expect(bootstrapMocks.getTodayWords).not.toHaveBeenCalled();
+    expect(bootstrapMocks.freezeLessonQueueForSession).not.toHaveBeenCalled();
+  });
   it("keeps one Review -> Pretest/listening -> frozen Lesson -> Round Complete chain", async () => {
+    vi.clearAllMocks();
     let active: StudySessionRow | null = null;
     const pretestWords = [
       vocabulary("c", "new"),

@@ -35,25 +35,28 @@ import {
 } from "../../shared/toolContracts.js";
 import { safeTool } from "./helpers.js";
 
+// Rotate the primary URI when a widget's client bundle, payload contract, or
+// host-facing transport changes materially; keep the old URI as an alias for
+// the current compatible bundle. Prompt, server, copy, or small CSS changes alone do not require rotation.
 export const WIDGET_URIS = {
   import: "ui://wordloop/import.html",
   pretest: "ui://wordloop/pretest.html",
   review: "ui://wordloop/review.html",
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
-  dictation: "ui://wordloop/dictation.html",
-  // Move the primary URI whenever the host may have cached an older embedded
-  // HTML bundle for the previous URI.
-  lesson: "ui://wordloop/lesson-v6.html",
+  dictation: "ui://wordloop/dictation-v2.html",
+  lesson: "ui://wordloop/lesson-v7.html",
 } as const;
 
 /** Resource aliases kept for conversations that still reference old Lesson URIs. */
 export const LEGACY_WIDGET_URIS = {
+  lessonV6: "ui://wordloop/lesson-v6.html",
   lessonV5: "ui://wordloop/lesson-v5.html",
   lessonV4: "ui://wordloop/lesson-v4.html",
   lessonV3: "ui://wordloop/lesson-v3.html",
   lessonV2: "ui://wordloop/lesson-v2.html",
   lesson: "ui://wordloop/lesson.html",
+  dictationV1: "ui://wordloop/dictation.html",
 } as const;
 
 const pronunciationWord = z.object({
