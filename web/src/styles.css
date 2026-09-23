@@ -265,6 +265,7 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 
 .dictation-controls { display: flex; align-items: center; gap: 0.55rem; }
 .dictation-controls .round-play { min-width: 8.2rem; border-radius: 999px; padding-inline: 1.15rem; }
+.word-dictation-form .button { width: 100%; margin-top: 0.75rem; }
 .divider { height: 1px; margin: 1.1rem 0 0.8rem; background: var(--separator); }
 .speed-control { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; margin: 0; padding: 0.22rem; border: 0; border-radius: 12px; background: var(--control); }
 .speed-control legend { grid-column: 1 / -1; margin: 0 0 0.48rem; padding: 0; color: var(--muted); font-size: 0.8125rem; }
