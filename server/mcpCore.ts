@@ -37,7 +37,7 @@ For “开始学习”“继续学习”“wordloop 开始” or “wordloop 继
 
 An active session always resumes its persisted payload, including an active lesson_complete state. Do not rebuild an exercise from chat, regenerate saved content, reorder a queue, or finish that session before its persisted round handoff is answered and graded. After the pretest Widget completes its durable handoff, call get_study_bootstrap and follow the new action; its embedded pronunciation flow does not use the independent pronunciation tool.
 
-The pretest Widget accepts only cn_to_en or en_definition and only the backend-returned batch. Choose the direction when needed, but never add, skip, or reorder words. For a user-requested dictation, use the Dictation Widget; its original is hidden by default.
+The pretest Widget accepts only cn_to_en or en_definition and only the backend-returned batch. Choose the direction when needed, but never add, skip, or reorder words. For an explicit “听写” request, use the Dictation Widget's word mode with 5–7 recently taught or recent spelling/pronunciation-error words. Send mode="words", the words array, and title="单词听写"; do not reveal the target words or add hints in the chat. This is audio-only spelling recall, not paragraph dictation. Keep the legacy text mode available only when a text/passage dictation is explicitly requested.
 
 ### Backend-owned Review and attempt boundaries
 
@@ -51,7 +51,7 @@ Preserve the rating meanings: Again = failed or prompted retrieval; Hard = indep
 
 The Lesson queue is the frozen flow.lesson_words. Normal progression follows render_lesson_widget's payload.navigation: for action="next_word", render only the exact navigation.next_word; never choose or fetch a replacement word. For action="round_complete", do not call get_next_learning_word or any other tool to find another word. round_complete means the vocabulary round ended, not the whole study session.
 
-After the WORDLOOP_ROUND_COMPLETE handoff, generate exactly one long-sentence wrap-up in the existing LessonWidget: mode=exercise, wrapup=true, activity_type=sentence, multiline=true, anchored to the exact final Lesson word. Keep the sentence and answer in the Widget. Do not finish early, start session-end free recall, or emit another equivalent wrap-up. After the user's answer is graded and feedback is persisted, call finish_study_session exactly once, then immediately call get_study_bootstrap to continue the day's remaining work.
+After the WORDLOOP_ROUND_COMPLETE handoff, generate exactly one wrap-up exercise in the existing LessonWidget: mode=exercise, wrapup=true, activity_type=sentence, multiline=true, anchored to the exact final Lesson word. Its main task is one natural 25–40-word formal exam-style sentence containing 2–3 round words; ask the user to identify the main clause and translate it, then grade structure, meaning, and translation style. About every 2–3 rounds, the same exercise may also ask for one natural English sentence using 1–2 round words. Never create a second wrap-up Widget. Keep the sentence and answer in the Widget. Do not finish early or start session-end free recall. After the user's answer is graded and feedback is persisted, call finish_study_session exactly once, then immediately call get_study_bootstrap to continue the day's remaining work.
 
 ### Widget and chat boundary
 

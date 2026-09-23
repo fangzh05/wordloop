@@ -172,12 +172,19 @@ const dictationPayload = z.object({
   text: z.string().trim().min(1).max(4000),
   title: z.string().trim().min(1).max(100).default("听写"),
 }).strict();
-const dictationInput = z.union([dictationPayload, z.object({ resume: z.literal(true) }).strict()]);
-const dictationToolInputSchema = z.object({
-  resume: z.literal(true).optional(),
-  text: z.string().trim().min(1).max(4000).optional(),
-  title: z.string().trim().min(1).max(100).optional(),
+const dictationWordsPayload = z.object({
+  mode: z.literal("words"),
+  words: z.array(z.string().trim().min(1).max(100)).min(5).max(7),
+  title: z.string().trim().min(1).max(100).default("单词听写"),
+  current_index: z.number().int().min(0).max(6).optional(),
 }).strict();
+const dictationResumeInput = z.object({ resume: z.literal(true) }).strict();
+const dictationInput = z.union([dictationWordsPayload, dictationPayload, dictationResumeInput]);
+const dictationToolInputSchema = z.union([
+  dictationWordsPayload,
+  z.object({ text: z.string().trim().min(1).max(4000), title: z.string().trim().min(1).max(100).optional() }).strict(),
+  dictationResumeInput,
+]);
 const legacyReviewItem = z.object({
   word: z.string().trim().min(1).max(100),
   meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
@@ -654,7 +661,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_dictation_widget", {
     title: "打开听写",
-    description: "显示由用户点击播放的听写播放器，原文默认隐藏。",
+    description: "打开单词听写时传 mode=words 和 1–7 个 words；听写只播放音频并在提交后显示拼写反馈。旧 text payload 继续支持播放与显示/隐藏原文。",
     inputSchema: dictationToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.dictation } },
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -662,7 +669,11 @@ export function registerRenderTools(server: McpServer): void {
     const parsedInput = dictationInput.parse(input);
     if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "dictation");
     const active = await getActiveStudySession();
-    const payload = { widget: "dictation", ...parsedInput };
+    const payload = {
+      widget: "dictation",
+      ...parsedInput,
+      ...("mode" in parsedInput && parsedInput.mode === "words" ? { current_index: parsedInput.current_index ?? 0 } : {}),
+    };
     return saveWidgetState({
       date: active?.state?.date ?? await getStudyDate(),
       knownActive: active,
