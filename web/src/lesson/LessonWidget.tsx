@@ -3,6 +3,7 @@ import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
 import { callServerTool, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
+import { loadDictionaryPronunciationAudio, playPronunciation, pronunciationButtonLabel, selectEnglishVoice } from "../pronunciation/audio.js";
 import { z } from "zod";
 import {
   LESSON_WIDGET_VERSION,
@@ -269,6 +270,9 @@ export function LessonWidget(): React.JSX.Element {
   const [nextStatus, setNextStatus] = useState<NextLessonStatus>("idle");
   const [error, setError] = useState("");
   const [playing, setPlaying] = useState(false);
+  const [dictionaryAudio, setDictionaryAudio] = useState<Record<string, string>>({});
+  const [dictionaryReady, setDictionaryReady] = useState(false);
+  const [englishVoiceAvailable, setEnglishVoiceAvailable] = useState(false);
   const [widgetLoadError, setWidgetLoadError] = useState("");
   const signatureRef = useRef("");
   const lastGoodPayloadRef = useRef<Payload | null>(null);
@@ -277,6 +281,17 @@ export function LessonWidget(): React.JSX.Element {
   const speechAvailable = typeof window !== "undefined"
     && "speechSynthesis" in window
     && "SpeechSynthesisUtterance" in window;
+
+  useEffect(() => {
+    if (!speechAvailable) return;
+    const synthesis = window.speechSynthesis;
+    const updateVoiceAvailability = (): void => {
+      setEnglishVoiceAvailable(selectEnglishVoice(synthesis.getVoices()) !== null);
+    };
+    updateVoiceAvailability();
+    synthesis.addEventListener("voiceschanged", updateVoiceAvailability);
+    return () => synthesis.removeEventListener("voiceschanged", updateVoiceAvailability);
+  }, [speechAvailable]);
 
   useEffect(() => {
     const unsubscribe = subscribeToApp((event) => {
@@ -317,16 +332,36 @@ export function LessonWidget(): React.JSX.Element {
   const multiline = exercise?.multiline ?? false;
   const currentWord = payload?.word ?? "";
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentWord) {
+      setDictionaryAudio({});
+      setDictionaryReady(true);
+      return () => { cancelled = true; };
+    }
+
+    setDictionaryAudio({});
+    setDictionaryReady(false);
+    void loadDictionaryPronunciationAudio([currentWord])
+      .then((audio) => {
+        if (cancelled) return;
+        setDictionaryAudio(audio);
+        setDictionaryReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDictionaryAudio({});
+        setDictionaryReady(true);
+      });
+    return () => { cancelled = true; };
+  }, [currentWord]);
+
+  const dictionaryAudioAvailable = Boolean(dictionaryAudio[currentWord]);
+  const speechPlaybackAvailable = speechAvailable && englishVoiceAvailable;
+
   function play(): void {
-    if (!speechAvailable || !currentWord) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(currentWord);
-    utterance.lang = "en-US";
-    utterance.rate = 0.9;
-    utterance.onstart = () => setPlaying(true);
-    utterance.onend = () => setPlaying(false);
-    utterance.onerror = () => setPlaying(false);
-    window.speechSynthesis.speak(utterance);
+    if (!currentWord) return;
+    playPronunciation(currentWord, dictionaryAudio[currentWord], () => setPlaying(true), () => setPlaying(false));
   }
 
   async function startExercise(): Promise<void> {
@@ -436,8 +471,8 @@ export function LessonWidget(): React.JSX.Element {
         <strong>{instruction}</strong>
       </div>
       <div className="lesson-prompt">{exercisePrompt}</div>
-      {activityType === "listening" ? <button className="play-button lesson-audio" type="button" onClick={play} disabled={!speechAvailable} aria-label="播放听力">
-        <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing ? "正在播放" : "播放") : "当前设备无法播放"}
+      {activityType === "listening" ? <button className="play-button lesson-audio" type="button" onClick={play} disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)} aria-label="播放听力">
+        <span className="play-icon"><PlayIcon /></span>{pronunciationButtonLabel(dictionaryAudioAvailable, speechPlaybackAvailable, dictionaryReady, playing)}
       </button> : null}
       <label className="answer-label" htmlFor="lesson-answer">你的答案</label>
       {multiline ? <textarea
@@ -528,9 +563,13 @@ export function LessonWidget(): React.JSX.Element {
     {payload.mode === "explain" && payload.derivations.length ? <section className="lesson-section"><h2>词族</h2><ul>{payload.derivations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{payload.example_en}</p></section> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>补充</h2><p>{payload.note}</p></section> : null}
-    <button className="play-button lesson-audio" type="button" onClick={play} disabled={!speechAvailable} aria-label={"播放 " + payload.word}>
-      <span className="play-icon"><PlayIcon /></span>{speechAvailable ? (playing ? "正在播放" : "播放") : "当前设备无法播放"}
+    <button className="play-button lesson-audio" type="button" onClick={play} disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)} aria-label={"播放 " + payload.word}>
+      <span className="play-icon"><PlayIcon /></span>{pronunciationButtonLabel(dictionaryAudioAvailable, speechPlaybackAvailable, dictionaryReady, playing)}
     </button>
+    {dictionaryAudioAvailable ? <div className="dictionary-attribution" aria-label="Pronunciation audio by Merriam-Webster">
+      <img src="https://dictionaryapi.com/images/info/branding-guidelines/MWLogo_LightBG_120x120_2x.png" width="50" height="50" alt="Merriam-Webster" />
+      <span>发音来自 Merriam-Webster's Learner's Dictionary</span>
+    </div> : null}
     <Button onClick={() => void startExercise()}>开始练习 <ArrowIcon className="button-icon trailing" /></Button>
     {error ? <p className="error-text" role="alert">{error}</p> : null}
   </section>;
