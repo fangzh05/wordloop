@@ -42,6 +42,9 @@ describe("Streamable HTTP server", () => {
       "finish_study_session",
       "resume",
       "wrapup",
+      "For every Lesson answer submitted from the LessonWidget, ordinary chat feedback is invalid.",
+      'render_lesson_widget mode="feedback"',
+      "the Lesson turn is incomplete until the feedback Widget has rendered.",
     ]) {
       expect(instructions).toContain(token);
     }
@@ -107,8 +110,9 @@ describe("Streamable HTTP server", () => {
     expect(finishTool?.description).toContain("immediately call get_study_bootstrap");
     expect(finishTool?.description).toContain("not the session-end free recall trigger");
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
-    expect(WIDGET_URIS.lesson).toBe("ui://wordloop/lesson-v7.html");
+    expect(WIDGET_URIS.lesson).toBe("ui://wordloop/lesson-v8.html");
     expect(WIDGET_URIS.dictation).toBe("ui://wordloop/dictation-v2.html");
+    expect(LEGACY_WIDGET_URIS.lessonV7).toBe("ui://wordloop/lesson-v7.html");
     expect(LEGACY_WIDGET_URIS.lessonV6).toBe("ui://wordloop/lesson-v6.html");
     expect(LEGACY_WIDGET_URIS.dictationV1).toBe("ui://wordloop/dictation.html");
     expect(LESSON_WIDGET_VERSION).toBe(3);
@@ -116,6 +120,9 @@ describe("Streamable HTTP server", () => {
     expect(JSON.stringify(response.tools.find((tool) => tool.name === "render_dictation_widget")?._meta ?? {})).toContain(WIDGET_URIS.dictation);
     expect(lessonTool?.description).toContain("mode=exercise、wrapup=true");
     expect(lessonTool?.description).toContain("mode=feedback、wrapup=true");
+    expect(lessonTool?.description).toContain("Lesson answer grading must terminate in render_lesson_widget mode=feedback");
+    expect(lessonTool?.description).toContain("chat-only grading is invalid");
+    expect(lessonTool?.description).toContain("Reuse the current word and exercise; backend supplies navigation.");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
     const lessonInput = lessonTool?.inputSchema as { properties?: Record<string, unknown> } | undefined;
     expect(lessonInput?.properties).not.toHaveProperty("navigation");
@@ -123,6 +130,7 @@ describe("Streamable HTTP server", () => {
     const resourceUris = resources.resources.map((resource) => resource.uri);
     expect(resourceUris).toEqual(expect.arrayContaining([
       WIDGET_URIS.lesson,
+      LEGACY_WIDGET_URIS.lessonV7,
       LEGACY_WIDGET_URIS.lessonV6,
       LEGACY_WIDGET_URIS.lessonV5,
       LEGACY_WIDGET_URIS.lessonV4,
@@ -151,7 +159,7 @@ describe("Streamable HTTP server", () => {
     expect(contentUi).toEqual(expectedPronunciationUi);
     expect(contentUi).toEqual((pronunciationResource?._meta as { ui?: unknown } | undefined)?.ui);
     for (const [kind, uris] of Object.entries({
-      lesson: [WIDGET_URIS.lesson, LEGACY_WIDGET_URIS.lessonV6, LEGACY_WIDGET_URIS.lessonV5, LEGACY_WIDGET_URIS.lessonV4, LEGACY_WIDGET_URIS.lessonV3, LEGACY_WIDGET_URIS.lessonV2, LEGACY_WIDGET_URIS.lesson],
+      lesson: [WIDGET_URIS.lesson, LEGACY_WIDGET_URIS.lessonV7, LEGACY_WIDGET_URIS.lessonV6, LEGACY_WIDGET_URIS.lessonV5, LEGACY_WIDGET_URIS.lessonV4, LEGACY_WIDGET_URIS.lessonV3, LEGACY_WIDGET_URIS.lessonV2, LEGACY_WIDGET_URIS.lesson],
       dictation: [WIDGET_URIS.dictation, LEGACY_WIDGET_URIS.dictationV1],
     })) {
       let latestHtml: string | undefined;

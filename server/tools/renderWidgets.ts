@@ -45,11 +45,12 @@ export const WIDGET_URIS = {
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
   dictation: "ui://wordloop/dictation-v2.html",
-  lesson: "ui://wordloop/lesson-v7.html",
+  lesson: "ui://wordloop/lesson-v8.html",
 } as const;
 
 /** Resource aliases kept for conversations that still reference old Lesson URIs. */
 export const LEGACY_WIDGET_URIS = {
+  lessonV7: "ui://wordloop/lesson-v7.html",
   lessonV6: "ui://wordloop/lesson-v6.html",
   lessonV5: "ui://wordloop/lesson-v5.html",
   lessonV4: "ui://wordloop/lesson-v4.html",
@@ -625,7 +626,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_lesson_widget", {
     title: "打开单词学习",
-    description: "显示一个单词的讲解、练习或批改卡片。正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。收到 WORDLOOP_ROUND_COMPLETE 时必须在此工具中用 mode=exercise、wrapup=true 显示唯一长难句收尾题，用户作答后再用 mode=feedback、wrapup=true 显示批改；不要把长句只写在聊天区，也不要提前 finish_study_session。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考句；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
+    description: "显示一个单词的讲解、练习或批改卡片。Lesson answer grading must terminate in render_lesson_widget mode=feedback; chat-only grading is invalid. Reuse the current word and exercise; backend supplies navigation. 正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。收到 WORDLOOP_ROUND_COMPLETE 时必须在此工具中用 mode=exercise、wrapup=true 显示唯一长难句收尾题，用户作答后再用 mode=feedback、wrapup=true 显示批改；不要把长句只写在聊天区，也不要提前 finish_study_session。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考句；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
     inputSchema: lessonToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.lesson } },
     annotations: { readOnlyHint: true, openWorldHint: false },

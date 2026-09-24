@@ -7,6 +7,7 @@ import {
   buildRoundCompleteMessage,
   canStartNextLesson,
   feedbackGuidanceLabel,
+  LessonFeedbackNextStep,
   LESSON_WIDGET_LOAD_ERROR,
   LESSON_WIDGET_REFRESH_ERROR,
   LESSON_WIDGET_VERSION,
@@ -221,6 +222,24 @@ describe("guided lesson widget", () => {
     expect(message).toContain("省略 reference_answer");
   });
 
+  it("makes the current submission authoritative and requires terminal Widget feedback", () => {
+    const message = buildLessonSubmissionMessage({
+      word: "air-conditioning",
+      activityType: "word_recall",
+      prompt: "What does air-conditioning mean?",
+      answer: "air-conditioned",
+    });
+    expect(message).toContain("用户答案：air-conditioned");
+    expect(message).toContain("current submitted answer is authoritative");
+    expect(message).toContain("Grade only this submitted answer");
+    expect(message).toContain("do not substitute or reuse an answer from an earlier chat turn");
+    expect(message).toContain("record_attempt exactly once");
+    expect(message).toContain('render_lesson_widget exactly once with mode="feedback"');
+    expect(message).toContain("Do not output the grading as ordinary chat text");
+    expect(message).toContain("The feedback is not complete until render_lesson_widget succeeds");
+    expect(message).toContain("do not generate another exercise, switch questions, or change words");
+  });
+
   it("sends long-sentence wrap-up answers back through the same Lesson Widget", () => {
     const message = buildLessonWrapupSubmissionMessage({
       word: "shrink",
@@ -231,7 +250,33 @@ describe("guided lesson widget", () => {
     expect(message).toContain("word 必须使用上面的精确锚点");
     expect(message).toContain("mode=feedback、wrapup=true");
     expect(message).toContain("record_attempt");
+    expect(message).toContain("current submitted answer is authoritative");
+    expect(message).toContain("record_attempt exactly once");
+    expect(message).toContain('render_lesson_widget exactly once with mode="feedback", wrapup=true');
+    expect(message).toContain("Do not output the grading as ordinary chat text");
+    expect(message).toContain("After the feedback Widget renders successfully, remain silent in chat");
     expect(message).toContain("finish_study_session exactly once");
+  });
+
+  it("shows the backend next word, round wrap-up, or retry as the feedback next step", () => {
+    const nextWord = renderToStaticMarkup(<LessonFeedbackNextStep
+      canContinue
+      navigation={{ action: "next_word", next_word: "query", next_index: 4, total_count: 10 }}
+    />);
+    expect(nextWord).toContain("下一词：query");
+
+    const roundComplete = renderToStaticMarkup(<LessonFeedbackNextStep
+      canContinue
+      navigation={{ action: "round_complete", next_word: null, next_index: null, total_count: 10 }}
+    />);
+    expect(roundComplete).toContain("下一步：本轮长难句收尾");
+    expect(roundComplete).not.toContain("下一词：");
+
+    const retry = renderToStaticMarkup(<LessonFeedbackNextStep
+      canContinue={false}
+      navigation={{ action: "round_complete", next_word: null, next_index: null, total_count: 10 }}
+    />);
+    expect(retry).toContain("下一步：重做当前题");
   });
 
   it("labels first-error guidance separately from a revealed explanation", () => {

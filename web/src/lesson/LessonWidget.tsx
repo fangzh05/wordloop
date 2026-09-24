@@ -198,7 +198,7 @@ export function buildLessonSubmissionMessage(input: {
     prompt: input.prompt,
     answer: input.answer,
   });
-  return `提交 WordLoop 正式学习答案。\n\n目标词：${submission.word}\n练习类型：${submission.activity_type}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n判定规则：若练习类型属于确定性题型（pretest_cn_to_en、listen_recall、spelling、word_recall），用确定性判分得到 is_correct 与 error_layer（不要凭语感判断；错误层只允许 none/spelling/meaning）；其余题型按 Teaching Prompt 做语义批改。然后调用 record_attempt 记录本次作答（record_attempt 只负责持久化，不会替你判分）。最后调用 render_lesson_widget mode=feedback，批改用词与解释由你负责。\n\n错误反馈必须帮助用户自纠：第一次答错时，message 要指出用户答案中的至少一个具体错误片段或位置，不能只写“有几处错误”或只报错误层；explanation 要说明为什么错以及下一步改哪里/怎么改，但不能给出完整改后句。第一次答错时设 reveal_answer=false 并省略 reference_answer。只有连续第二次仍错时，才可以提供 reference_answer 和完整 explanation，并设 reveal_answer=true。`;
+  return `提交 WordLoop 正式学习答案。\n\n目标词：${submission.word}\n练习类型：${submission.activity_type}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n判定规则：若练习类型属于确定性题型（pretest_cn_to_en、listen_recall、spelling、word_recall），用确定性判分得到 is_correct 与 error_layer（不要凭语感判断；错误层只允许 none/spelling/meaning）；其余题型按 Teaching Prompt 做语义批改。然后调用 record_attempt 记录本次作答（record_attempt 只负责持久化，不会替你判分）。最后调用 render_lesson_widget mode=feedback，批改用词与解释由你负责。\n\n错误反馈必须帮助用户自纠：第一次答错时，message 要指出用户答案中的至少一个具体错误片段或位置，不能只写“有几处错误”或只报错误层；explanation 要说明为什么错以及下一步改哪里/怎么改，但不能给出完整改后句。第一次答错时设 reveal_answer=false 并省略 reference_answer。只有连续第二次仍错时，才可以提供 reference_answer 和完整 explanation，并设 reveal_answer=true。\n\nThe current submitted answer is authoritative: the 用户答案 field in THIS submission is the only answer to grade. Grade only this submitted answer; do not substitute or reuse an answer from an earlier chat turn.\n\nAfter grading, your response to this submission must complete BOTH tool actions:\n1. call record_attempt exactly once\n2. call render_lesson_widget exactly once with mode="feedback". Reuse this submission's word, current exercise (activity_type and prompt), and user_answer; do not generate another exercise, switch questions, or change words.\n\nDo not output the grading as ordinary chat text. The feedback is not complete until render_lesson_widget succeeds. After the feedback Widget renders successfully, remain silent in chat.`;
 }
 
 export function buildLessonWrapupSubmissionMessage(input: {
@@ -212,7 +212,7 @@ export function buildLessonWrapupSubmissionMessage(input: {
     prompt: input.prompt,
     answer: input.answer,
   });
-  return `提交 WordLoop 长难句收尾答案。\n\n最后一个 Lesson 词（仅作 backend 收尾锚点）：${submission.word}\n练习类型：sentence\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n这是本轮唯一一次长难句收尾，不要生成第二句，也不要把答案改成聊天区教学。请先按结构、语义、翻译腔三层批改，再调用 record_attempt 记录本次普通收尾作答（word 必须使用上面的精确锚点，activity_type=sentence；record_attempt 不推进 FSRS）。然后调用 render_lesson_widget mode=feedback、wrapup=true，继续使用同一个 word、原 exercise 和这次 feedback。第一次答错时 message 必须指出用户答案中的具体错误片段或位置，explanation 必须说明为什么错以及下一步改哪里/怎么改，但不得给完整改后句；设置 reveal_answer=false 并省略 reference_answer。只有连续第二次仍错时才可以提供 reference_answer 和完整 explanation，并设置 reveal_answer=true。收尾 feedback 持久化后，先不要自行开始会话末自由回忆；等 Widget 的完成操作再调用 finish_study_session exactly once，然后立即调用 get_study_bootstrap。`;
+  return `提交 WordLoop 长难句收尾答案。\n\n最后一个 Lesson 词（仅作 backend 收尾锚点）：${submission.word}\n练习类型：sentence\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n这是本轮唯一一次长难句收尾，不要生成第二句，也不要把答案改成聊天区教学。请先按结构、语义、翻译腔三层批改，再调用 record_attempt 记录本次普通收尾作答（word 必须使用上面的精确锚点，activity_type=sentence；record_attempt 不推进 FSRS）。然后调用 render_lesson_widget mode=feedback、wrapup=true，继续使用同一个 word、原 exercise 和这次 feedback。第一次答错时 message 必须指出用户答案中的具体错误片段或位置，explanation 必须说明为什么错以及下一步改哪里/怎么改，但不得给完整改后句；设置 reveal_answer=false 并省略 reference_answer。只有连续第二次仍错时才可以提供 reference_answer 和完整 explanation，并设置 reveal_answer=true。收尾 feedback 持久化后，先不要自行开始会话末自由回忆；等 Widget 的完成操作再调用 finish_study_session exactly once，然后立即调用 get_study_bootstrap。\n\nThe current submitted answer is authoritative: the 用户答案 field in THIS submission is the only answer to grade. Grade only this submitted answer; do not substitute or reuse an answer from an earlier chat turn.\n\nAfter grading, your response to this submission must complete BOTH tool actions:\n1. call record_attempt exactly once\n2. call render_lesson_widget exactly once with mode="feedback", wrapup=true. Reuse this submission's word, current sentence exercise, and user_answer; do not generate another sentence, switch questions, or change words.\n\nDo not output the grading as ordinary chat text. The feedback is not complete until render_lesson_widget succeeds. After the feedback Widget renders successfully, remain silent in chat.`;
 }
 
 export function buildLessonSessionAdvance(
@@ -260,6 +260,16 @@ export function buildRoundCompleteMessage(finalWord?: string): string {
 
 export function canStartNextLesson(status: NextLessonStatus): boolean {
   return status === "idle" || status === "error";
+}
+
+export function LessonFeedbackNextStep({ canContinue, navigation }: {
+  canContinue: boolean;
+  navigation: Payload["navigation"];
+}): React.JSX.Element | null {
+  if (!canContinue) return <p>下一步：重做当前题</p>;
+  if (navigation?.action === "next_word") return <p>下一词：{navigation.next_word}</p>;
+  if (navigation?.action === "round_complete") return <p>下一步：本轮长难句收尾</p>;
+  return null;
 }
 
 export function LessonWidget(): React.JSX.Element {
@@ -516,9 +526,10 @@ export function LessonWidget(): React.JSX.Element {
     const correct = feedbackIsCorrect(feedback);
     const reveal = feedbackRevealsAnswer(feedback);
     const wrapup = payload.wrapup === true;
-    const roundComplete = payload.navigation?.action === "round_complete";
+    const navigation = payload.navigation;
+    const roundComplete = navigation?.action === "round_complete";
     const completed = payload.phase === "lesson_complete";
-    const canContinue = wrapup ? correct || reveal : completed || roundComplete || correct || reveal;
+    const canContinue = wrapup ? correct || reveal : completed || correct || reveal;
     const nextDisabled = nextStatus === "sending" || nextStatus === "sent";
     return <section className="widget-card lesson-card" aria-labelledby="lesson-feedback-title">
       <header className="widget-header compact-header">
@@ -536,12 +547,13 @@ export function LessonWidget(): React.JSX.Element {
         {feedback?.explanation ? <p><strong>{feedbackGuidanceLabel(reveal)}：</strong>{feedback.explanation}</p> : null}
       </div> : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
+      {!wrapup ? <LessonFeedbackNextStep canContinue={canContinue} navigation={navigation} /> : null}
       {canContinue
         ? <Button onClick={() => void nextLesson()} disabled={nextDisabled}>
-          {nextStatus === "sending" ? "正在进入下一步…" : nextStatus === "sent" ? "已进入下一步" : wrapup ? "完成收尾并继续学习" : roundComplete || completed ? "继续本轮收尾" : "下一词"}
+          {nextStatus === "sending" ? "正在进入下一步…" : nextStatus === "sent" ? "已进入下一步" : wrapup ? "完成收尾并继续学习" : roundComplete || completed ? "进入长难句收尾" : "下一词"}
           {nextStatus === "idle" || nextStatus === "error" ? <ArrowIcon className="button-icon trailing" /> : null}
         </Button>
-        : <Button className="secondary" onClick={() => void retryExercise()} disabled={submitStatus === "sending"}>再试一次</Button>}
+        : <Button className="secondary" onClick={() => void retryExercise()} disabled={submitStatus === "sending"}>重做当前题</Button>}
     </section>;
   }
 
