@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
+  advanceStudySession,
   advanceStudyState,
   finishStudySession,
   getActiveStudySession,
@@ -15,12 +16,20 @@ import {
   lessonInputSchema,
   pretestInputSchema,
 } from "../server/tools/renderWidgets.js";
-import type { StudySessionRow } from "../server/types.js";
+import type { StudySessionDb } from "../server/services/studySessions.js";
+import type { StudySessionRow, StudyState } from "../server/types.js";
 
 const exercise = {
   activity_type: "sentence",
   instruction: "Use the word in a new scene.",
   prompt: "The researchers observed a recurring pattern.",
+  multiline: false,
+};
+
+const airConditioningExercise = {
+  activity_type: "cloze",
+  instruction: "用 air-conditioning 词族中的正确形式填空。",
+  prompt: "Because the laboratory contains temperature-sensitive equipment, it must remain fully ____ throughout the summer.",
   multiline: false,
 };
 
@@ -65,13 +74,80 @@ function sessionState(overrides: Partial<Parameters<typeof makeStudyState>[0]> =
   });
 }
 
+function mockStudySessionDb(state: StudyState) {
+  let row: StudySessionRow = {
+    id: "session",
+    user_id: "user",
+    started_at: "2026-09-15T00:00:00.000Z",
+    ended_at: null,
+    new_words_count: 0,
+    review_words_count: 0,
+    state,
+    updated_at: "2026-09-15T00:00:00.000Z",
+  };
+  const updates: Array<Record<string, unknown>> = [];
+  const readBuilder: Record<string, any> = {};
+  const updateBuilder: Record<string, any> = {};
+  readBuilder.select = vi.fn(() => readBuilder);
+  readBuilder.eq = vi.fn(() => readBuilder);
+  readBuilder.is = vi.fn(() => readBuilder);
+  readBuilder.order = vi.fn(() => readBuilder);
+  readBuilder.limit = vi.fn(() => readBuilder);
+  readBuilder.maybeSingle = vi.fn(async () => ({ data: row, error: null }));
+  readBuilder.update = vi.fn((values: Record<string, unknown>) => {
+    updates.push(values);
+    row = { ...row, state: values.state as StudyState, updated_at: String(values.updated_at) };
+    return updateBuilder;
+  });
+  updateBuilder.eq = vi.fn(() => updateBuilder);
+  updateBuilder.is = vi.fn(() => updateBuilder);
+  updateBuilder.select = vi.fn(() => updateBuilder);
+  updateBuilder.single = vi.fn(async () => ({ data: row, error: null }));
+  return {
+    db: { from: vi.fn(() => readBuilder) } as unknown as StudySessionDb,
+    updates,
+  };
+}
+
 describe("durable study session state", () => {
   it("projects explain into the exact exercise without a new GPT turn", () => {
     const next = advanceStudyState(sessionState(), "lesson_start_exercise");
     expect(next.phase).toBe("lesson_exercise");
     expect(next.current_word).toBe("plantation");
     expect(next.retry_count).toBe(0);
-    expect(next.payload).toEqual(explainPayload);
+    expect(next.payload).toMatchObject({
+      widget: "lesson",
+      mode: "exercise",
+      word: "plantation",
+      ...exercise,
+    });
+    expect(next.payload.exercise).toBeUndefined();
+  });
+
+  it("persists phase and exercise payload together for lesson_start_exercise", async () => {
+    const { db, updates } = mockStudySessionDb(sessionState());
+    const result = await advanceStudySession("lesson_start_exercise", undefined, undefined, db, "user");
+    expect(updates).toHaveLength(1);
+    expect((updates[0]?.state as StudyState)).toMatchObject({
+      phase: "lesson_exercise",
+      payload: { mode: "exercise", ...exercise },
+    });
+    expect(result.state).toMatchObject({
+      phase: "lesson_exercise",
+      payload: { mode: "exercise", ...exercise },
+    });
+  });
+
+  it("accepts a repeated lesson_start_exercise after a lost response without changing state", () => {
+    const first = advanceStudyState(sessionState(), "lesson_start_exercise");
+    const retried = advanceStudyState(first, "lesson_start_exercise");
+    expect(retried).toBe(first);
+    expect(retried).toMatchObject({
+      phase: "lesson_exercise",
+      current_word: "plantation",
+      current_index: 0,
+      payload: { mode: "exercise", word: "plantation", ...exercise },
+    });
   });
 
   it("keeps the original exercise and retry count during a retry transition", () => {
@@ -96,7 +172,218 @@ describe("durable study session state", () => {
     const next = advanceStudyState(feedback, "lesson_retry");
     expect(next.phase).toBe("lesson_exercise");
     expect(next.retry_count).toBe(1);
-    expect(next.payload).toEqual(feedback.payload);
+    expect(next.payload).toMatchObject({
+      widget: "lesson",
+      mode: "exercise",
+      word: "plantation",
+      progress: "1 / 3",
+      ...exercise,
+    });
+    expect(next.payload.feedback).toBeUndefined();
+  });
+
+  it("persists phase and exercise payload together for lesson_retry", async () => {
+    const feedback = sessionState({
+      phase: "lesson_feedback",
+      retry_count: 1,
+      payload: {
+        widget: "lesson",
+        mode: "feedback",
+        word: "plantation",
+        progress: "1 / 3",
+        exercise,
+        feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false },
+      },
+    });
+    const { db, updates } = mockStudySessionDb(feedback);
+    const result = await advanceStudySession("lesson_retry", undefined, undefined, db, "user");
+    expect(updates).toHaveLength(1);
+    expect((updates[0]?.state as StudyState)).toMatchObject({
+      phase: "lesson_exercise",
+      payload: { mode: "exercise", ...exercise },
+    });
+    expect(result.state).toMatchObject({
+      phase: "lesson_exercise",
+      payload: { mode: "exercise", ...exercise },
+    });
+  });
+
+  it("does not write again for exact lesson lost-response retries", async () => {
+    const started = advanceStudyState(sessionState(), "lesson_start_exercise");
+    const { db, updates } = mockStudySessionDb(started);
+    const startRetry = await advanceStudySession("lesson_start_exercise", undefined, undefined, db, "user");
+    expect(startRetry.state).toMatchObject({ phase: "lesson_exercise", payload: { mode: "exercise", ...exercise } });
+    expect(updates).toHaveLength(0);
+
+    const feedback = sessionState({
+      phase: "lesson_feedback",
+      current_word: "plantation",
+      current_index: 0,
+      retry_count: 1,
+      payload: {
+        widget: "lesson",
+        mode: "feedback",
+        word: "plantation",
+        progress: "1 / 3",
+        exercise,
+        feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false },
+      },
+    });
+    const retryState = advanceStudyState(feedback, "lesson_retry");
+    const retryDb = mockStudySessionDb(retryState);
+    const retryResult = await advanceStudySession("lesson_retry", undefined, undefined, retryDb.db, "user");
+    expect(retryResult.state).toMatchObject({ phase: "lesson_exercise", payload: { mode: "exercise", ...exercise } });
+    expect(retryDb.updates).toHaveLength(0);
+  });
+
+  it("accepts a repeated lesson_retry after a lost response without changing state", () => {
+    const feedback = sessionState({
+      phase: "lesson_feedback",
+      current_index: 2,
+      retry_count: 1,
+      flow: { relearn_words: [], lesson_words: ["plantation", "thorn", "query"] },
+      payload: {
+        widget: "lesson",
+        mode: "feedback",
+        word: "query",
+        progress: "3 / 3",
+        exercise,
+        feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false },
+        navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 3 },
+      },
+      current_word: "query",
+    });
+    const first = advanceStudyState(feedback, "lesson_retry");
+    const retried = advanceStudyState(first, "lesson_retry");
+    expect(retried).toBe(first);
+    expect(retried).toMatchObject({
+      phase: "lesson_exercise",
+      current_word: "query",
+      current_index: 2,
+      retry_count: 1,
+      flow: { lesson_words: ["plantation", "thorn", "query"] },
+      payload: {
+        mode: "exercise",
+        word: "query",
+        progress: "3 / 3",
+        navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 3 },
+        ...exercise,
+      },
+    });
+  });
+
+  it("keeps Lesson event phase checks strict outside exact lost-response retries", () => {
+    const feedback = sessionState({ phase: "lesson_feedback" });
+    const complete = sessionState({ phase: "lesson_complete" });
+    const review = sessionState({ widget: "review", phase: "review" });
+    expect(() => advanceStudyState(feedback, "lesson_start_exercise")).toThrow("Cannot apply lesson_start_exercise");
+    expect(() => advanceStudyState(complete, "lesson_retry")).toThrow("Cannot apply lesson_retry");
+    expect(() => advanceStudyState(sessionState(), "lesson_retry")).toThrow("Cannot apply lesson_retry");
+    expect(() => advanceStudyState(review, "lesson_start_exercise")).toThrow();
+  });
+
+  it.each(["explain", "feedback"] as const)(
+    "normalizes legacy lesson_exercise plus mode=%s without changing its cursor or exercise",
+    (mode) => {
+      const nested = mode === "explain" ? airConditioningExercise : { ...airConditioningExercise };
+      const legacy = sessionState({
+        phase: "lesson_exercise",
+        current_word: "air-conditioning",
+        current_index: 9,
+        flow: {
+          relearn_words: [],
+          lesson_words: ["vicinity", "lower", "prospect", "thorn", "query", "marital", "pirate", "pit", "quota", "air-conditioning"],
+        },
+        payload: {
+          widget: "lesson",
+          mode,
+          word: "air-conditioning",
+          title: "Lesson title",
+          progress: "10 / 10",
+          widget_version: 7,
+          navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 10 },
+          exercise: nested,
+          ...(mode === "feedback" ? { feedback: { is_correct: false, user_answer: "", reveal_answer: false } } : {}),
+        },
+      });
+
+      const normalized = normalizeStudyStateForRead(legacy);
+
+      expect(normalized).toMatchObject({
+        phase: "lesson_exercise",
+        current_word: "air-conditioning",
+        current_index: 9,
+        flow: { lesson_words: legacy.flow.lesson_words },
+        payload: {
+          widget: "lesson",
+          mode: "exercise",
+          word: "air-conditioning",
+          title: "Lesson title",
+          progress: "10 / 10",
+          widget_version: 7,
+          navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 10 },
+          ...airConditioningExercise,
+        },
+      });
+      expect(normalized.payload.exercise).toBeUndefined();
+      expect(normalized.current_index).toBe(legacy.current_index);
+      expect(normalized.current_word).toBe(legacy.current_word);
+      expect(normalized.flow.lesson_words).toBe(legacy.flow.lesson_words);
+      expect({
+        activity_type: normalized.payload.activity_type,
+        instruction: normalized.payload.instruction,
+        prompt: normalized.payload.prompt,
+        multiline: normalized.payload.multiline,
+      }).toEqual(airConditioningExercise);
+    },
+  );
+
+  it("recognizes a canonical direct exercise payload on repeated transition", () => {
+    const direct = sessionState({
+      phase: "lesson_exercise",
+      payload: { widget: "lesson", mode: "exercise", word: "plantation", progress: "1 / 1", ...exercise },
+    });
+    expect(advanceStudyState(direct, "lesson_start_exercise")).toBe(direct);
+    expect(advanceStudyState(direct, "lesson_retry")).toBe(direct);
+  });
+
+  it("restores the production-shaped air-conditioning payload without replacing its exercise or navigation", () => {
+    const lessonWords = ["vicinity", "lower", "prospect", "thorn", "query", "marital", "pirate", "pit", "quota", "air-conditioning"];
+    const legacy = sessionState({
+      phase: "lesson_exercise",
+      current_word: "air-conditioning",
+      current_index: 9,
+      flow: { relearn_words: [], lesson_words: lessonWords },
+      payload: {
+        widget: "lesson",
+        mode: "explain",
+        word: "air-conditioning",
+        title: "当前词",
+        progress: "10 / 10",
+        widget_version: 7,
+        navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 10 },
+        exercise: airConditioningExercise,
+      },
+    });
+
+    const normalized = normalizeStudyStateForRead(legacy);
+
+    expect(normalized.phase).toBe("lesson_exercise");
+    expect(normalized.payload.mode).toBe("exercise");
+    expect(normalized.current_index).toBe(9);
+    expect(normalized.current_word).toBe("air-conditioning");
+    expect(normalized.flow.lesson_words).toEqual(lessonWords);
+    expect(normalized.payload.navigation).toEqual({
+      action: "round_complete", next_word: null, next_index: null, total_count: 10,
+    });
+    expect(normalized.payload).toMatchObject(airConditioningExercise);
+    expect({
+      activity_type: normalized.payload.activity_type,
+      instruction: normalized.payload.instruction,
+      prompt: normalized.payload.prompt,
+      multiline: normalized.payload.multiline,
+    }).toEqual(airConditioningExercise);
+    expect(advanceStudyState(normalized, "lesson_start_exercise")).toBe(normalized);
   });
 
   it("commits lesson_complete only from the final frozen Lesson cursor", () => {

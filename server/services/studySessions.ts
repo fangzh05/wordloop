@@ -312,28 +312,66 @@ export function isLegacyCompletedPretestState(state: StudyState): boolean {
 }
 
 export function normalizeStudyStateForRead(state: StudyState): StudyState {
-  if (!isLegacyCompletedPretestState(state)) return state;
-  return {
-    ...state,
-    phase: "pretest_complete",
-    current_word: null,
-  };
+  if (isLegacyCompletedPretestState(state)) {
+    return {
+      ...state,
+      phase: "pretest_complete",
+      current_word: null,
+    };
+  }
+  if (state.widget !== "lesson" || state.phase !== "lesson_exercise" || state.payload.mode === "exercise") {
+    return state;
+  }
+  try {
+    return { ...state, payload: exercisePayload(state) };
+  } catch {
+    // Keep an unreadable historical payload intact so normal read paths can
+    // report their existing Lesson payload error instead of failing session lookup.
+    return state;
+  }
 }
 
 function exercisePayload(state: StudyState): Record<string, unknown> {
-  const word = payloadWord(state.payload);
-  const progress = z.string().trim().min(1).max(40).safeParse(state.payload.progress);
-  const title = z.string().trim().max(120).safeParse(state.payload.title);
-  const exercise = lessonExerciseSchema.safeParse(state.payload.exercise);
-  if (!exercise.success) throw new Error("Study session lesson payload has no complete exercise.");
+  const source = state.payload;
+  const parsedWord = z.string().trim().min(1).max(100).safeParse(source.word);
+  if (!parsedWord.success) throw new Error("Study session payload has no current word.");
+  const directExercise = lessonExerciseSchema.safeParse(source);
+  const nestedExercise = lessonExerciseSchema.safeParse(source.exercise);
+  const exerciseSource = source.mode === "exercise" && directExercise.success
+    ? source
+    : nestedExercise.success
+      ? source.exercise as Record<string, unknown>
+      : directExercise.success
+        ? source
+        : null;
+  if (!exerciseSource) throw new Error("Study session lesson payload has no complete exercise.");
+  const { exercise: _nestedExercise, feedback: _feedback, mode: _mode, ...preserved } = source;
+  const progress = z.string().trim().min(1).max(40).safeParse(source.progress);
+  const title = z.string().trim().max(120).safeParse(source.title);
   return {
+    ...preserved,
     widget: "lesson",
     mode: "exercise",
-    word,
-    ...(title.success ? { title: title.data } : {}),
-    progress: progress.success ? progress.data : "当前练习",
-    ...exercise.data,
+    word: source.word,
+    ...(title.success ? { title: source.title } : {}),
+    progress: progress.success ? source.progress : "当前练习",
+    activity_type: exerciseSource.activity_type,
+    instruction: exerciseSource.instruction,
+    prompt: exerciseSource.prompt,
+    multiline: exerciseSource.multiline,
   };
+}
+
+function isCanonicalLessonExerciseState(state: StudyState): boolean {
+  if (state.widget !== "lesson" || state.phase !== "lesson_exercise" || state.payload.mode !== "exercise") {
+    return false;
+  }
+  const word = z.string().trim().min(1).max(100).safeParse(state.payload.word);
+  if (!word.success || word.data !== state.current_word || !lessonExerciseSchema.safeParse(state.payload).success) {
+    return false;
+  }
+  return state.flow.lesson_words === undefined
+    || state.flow.lesson_words[state.current_index] === state.current_word;
 }
 
 function reviewItems(state: StudyState): z.infer<typeof reviewSessionPayloadSchema>["items"] {
@@ -478,15 +516,24 @@ export function advanceStudyState(
   }
 
   if (state.widget === "lesson") {
+    state = normalizeStudyStateForRead(state);
     if (event === "lesson_start_exercise") {
+      if (state.phase === "lesson_exercise") {
+        if (requestedIndex !== undefined && requestedIndex !== state.current_index) throw stateError(event, state.phase);
+        if (isCanonicalLessonExerciseState(state)) return state;
+      }
       if (state.phase !== "lesson_explain") throw stateError(event, state.phase);
       const nextPayload = exercisePayload(state);
-      return { ...state, phase: "lesson_exercise", current_word: payloadWord(nextPayload) };
+      return { ...state, phase: "lesson_exercise", payload: nextPayload };
     }
     if (event === "lesson_retry") {
+      if (state.phase === "lesson_exercise") {
+        if (requestedIndex !== undefined && requestedIndex !== state.current_index) throw stateError(event, state.phase);
+        if (isCanonicalLessonExerciseState(state)) return state;
+      }
       if (state.phase !== "lesson_feedback") throw stateError(event, state.phase);
       const nextPayload = exercisePayload(state);
-      return { ...state, phase: "lesson_exercise", current_word: payloadWord(nextPayload) };
+      return { ...state, phase: "lesson_exercise", payload: nextPayload };
     }
     if (event === "lesson_complete") {
       if (state.phase === "lesson_complete") return state;
@@ -520,6 +567,12 @@ export async function advanceStudySession(
   const active = await getActiveStudySession(db, userId);
   if (!active?.state) throw new Error("No resumable active study session.");
   const nextState = advanceStudyState(active.state, event, requestedIndex, reviewAnswer);
+  if (nextState === active.state
+    && active.state.widget === "lesson"
+    && active.state.phase === "lesson_exercise"
+    && (event === "lesson_start_exercise" || event === "lesson_retry")) {
+    return active;
+  }
   return updateSessionState(active, nextState, db, userId);
 }
 
