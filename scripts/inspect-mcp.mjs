@@ -77,7 +77,7 @@ try {
     throw new Error("resources/read pronunciation metadata is missing the expected CSP.");
   }
   const widgetUris = {
-    lesson: ["ui://wordloop/lesson-v7.html", "ui://wordloop/lesson-v6.html", "ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"],
+    lesson: ["ui://wordloop/lesson-v8.html", "ui://wordloop/lesson-v7.html", "ui://wordloop/lesson-v6.html", "ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"],
     dictation: ["ui://wordloop/dictation-v2.html", "ui://wordloop/dictation.html"],
   };
   const resourceReads = {};

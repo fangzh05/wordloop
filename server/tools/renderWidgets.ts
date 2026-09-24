@@ -45,11 +45,12 @@ export const WIDGET_URIS = {
   dashboard: "ui://wordloop/dashboard.html",
   pronunciation: "ui://wordloop/pronunciation.html",
   dictation: "ui://wordloop/dictation-v2.html",
-  lesson: "ui://wordloop/lesson-v7.html",
+  lesson: "ui://wordloop/lesson-v8.html",
 } as const;
 
 /** Resource aliases kept for conversations that still reference old Lesson URIs. */
 export const LEGACY_WIDGET_URIS = {
+  lessonV7: "ui://wordloop/lesson-v7.html",
   lessonV6: "ui://wordloop/lesson-v6.html",
   lessonV5: "ui://wordloop/lesson-v5.html",
   lessonV4: "ui://wordloop/lesson-v4.html",
@@ -150,27 +151,35 @@ const feedbackPayload = z.object({
 }).strict();
 const lessonPayload = z.discriminatedUnion("mode", [explainPayload, exercisePayload, feedbackPayload]);
 const lessonInput = z.union([lessonPayload, z.object({ resume: z.literal(true) }).strict()]);
+const feedbackToolPayload = z.object({
+  mode: z.literal("feedback"),
+  wrapup: z.literal(true).optional(),
+  word: z.string().trim().min(1).max(100),
+  feedback: lessonFeedback,
+}).strict();
+const lessonToolInputBranches = [
+  z.object({ resume: z.literal(true) }).strict(),
+  explainPayload,
+  exercisePayload,
+  feedbackToolPayload,
+] as const;
+const lessonToolInputVariants = z.union(lessonToolInputBranches);
+// The MCP SDK only emits JSON Schema for top-level objects; keep runtime union
+// validation while exposing its strict branches through the object's anyOf.
 const lessonToolInputSchema = z.object({
   resume: z.literal(true).optional(),
   mode: z.enum(["explain", "exercise", "feedback"]).optional(),
-  wrapup: z.literal(true).optional(),
-  title: z.string().trim().max(120).optional(),
-  word: z.string().trim().min(1).max(100).optional(),
-  ipa: z.string().trim().min(1).max(120).optional(),
-  part_of_speech: z.string().trim().min(1).max(40).optional(),
-  meaning_zh: z.string().trim().min(1).max(240).optional(),
-  collocations: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
-  derivations: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
-  example_en: z.string().trim().min(1).max(1000).optional(),
-  note: z.string().trim().min(1).max(1000).optional(),
-  progress: z.string().trim().min(1).max(40).optional(),
-  activity_type: z.string().trim().min(1).max(80).optional(),
-  instruction: z.string().trim().min(1).max(300).optional(),
-  prompt: z.string().trim().min(1).max(4000).optional(),
-  multiline: z.boolean().optional(),
-  exercise: lessonExercise.optional(),
-  feedback: lessonFeedback.optional(),
-}).strict();
+}).passthrough().superRefine((input, context) => {
+  if (!lessonToolInputVariants.safeParse(input).success) {
+    context.addIssue({ code: "custom", message: "Invalid Lesson tool input." });
+  }
+}).meta({
+  additionalProperties: true,
+  anyOf: lessonToolInputBranches.map((branch) => {
+    const { $schema: _schemaVersion, ...jsonSchema } = z.toJSONSchema(branch);
+    return jsonSchema;
+  }),
+});
 const dictationPayload = z.object({
   text: z.string().trim().min(1).max(4000),
   title: z.string().trim().min(1).max(100).default("听写"),
@@ -625,14 +634,49 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_lesson_widget", {
     title: "打开单词学习",
-    description: "显示一个单词的讲解、练习或批改卡片。正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。收到 WORDLOOP_ROUND_COMPLETE 时必须在此工具中用 mode=exercise、wrapup=true 显示唯一长难句收尾题，用户作答后再用 mode=feedback、wrapup=true 显示批改；不要把长句只写在聊天区，也不要提前 finish_study_session。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考句；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
+    description: "显示一个单词的讲解、练习或批改卡片。Lesson answer grading must terminate in render_lesson_widget mode=feedback; chat-only grading is invalid. Reuse the current word and exercise; backend supplies navigation. 正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。收到 WORDLOOP_ROUND_COMPLETE 时必须在此工具中用 mode=exercise、wrapup=true 显示唯一长难句收尾题，用户作答后再用 mode=feedback、wrapup=true 显示批改；不要把长句只写在聊天区，也不要提前 finish_study_session。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考句；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
     inputSchema: lessonToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.lesson } },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, (input) => safeTool(async () => {
-    const parsedInput = lessonInput.parse(input);
-    if ("resume" in parsedInput) return resumableLessonPayload(await getActiveStudySession());
-    const active = await getActiveStudySession();
+    const toolInput = lessonToolInputVariants.parse(input);
+    if ("resume" in toolInput) return resumableLessonPayload(await getActiveStudySession());
+    let active = await getActiveStudySession();
+    let parsedInput: Exclude<LessonInput, { resume: true }>;
+    if (toolInput.mode === "feedback") {
+      const normalizedState = active?.state ? normalizeStudyStateForRead(active.state) : null;
+      if (active && normalizedState) active = { ...active, state: normalizedState };
+      const storedPayload = normalizedState?.widget === "lesson" ? normalizedState.payload : null;
+      const storedExercise = storedPayload?.mode === "feedback"
+        ? projectPersistedFields(storedPayload.exercise, lessonExerciseKeys)
+        : storedPayload?.mode === "exercise"
+          ? projectPersistedFields(storedPayload, lessonExerciseKeys)
+          : null;
+      const exercise = storedExercise ? lessonExercise.safeParse(storedExercise) : null;
+      const progress = typeof storedPayload?.progress === "string" && storedPayload.progress.trim()
+        ? storedPayload.progress
+        : "当前练习";
+      if (toolInput.wrapup === true && !exercise?.success) {
+        await validateLessonWord({
+          mode: "feedback",
+          wrapup: true,
+          word: toolInput.word,
+          progress,
+          exercise: { activity_type: "", instruction: "", prompt: "", multiline: false },
+          feedback: toolInput.feedback,
+        }, active);
+      }
+      parsedInput = feedbackPayload.parse({
+        mode: "feedback",
+        ...(toolInput.wrapup === true ? { wrapup: true } : {}),
+        word: toolInput.word,
+        progress,
+        exercise: exercise?.success ? exercise.data : undefined,
+        feedback: toolInput.feedback,
+      });
+    } else {
+      parsedInput = lessonPayload.parse(toolInput);
+    }
     const validated = await validateLessonWord(parsedInput, active);
     const currentIndex = lessonRenderIndex(validated.active, parsedInput);
     const lessonWords = validated.flow?.lesson_words;

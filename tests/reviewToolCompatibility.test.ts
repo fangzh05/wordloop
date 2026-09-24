@@ -103,6 +103,24 @@ describe("Review render tool schema compatibility", () => {
     wordMocks.getTodayWords.mockReset().mockResolvedValue([]);
   });
 
+  it("requires word and feedback for the minimal Lesson feedback tool input", async () => {
+    await withReviewClient(async (client) => {
+      const missingFeedback = await client.callTool({
+        name: "render_lesson_widget",
+        arguments: { mode: "feedback", word: "air-conditioning" },
+      });
+      const missingWord = await client.callTool({
+        name: "render_lesson_widget",
+        arguments: {
+          mode: "feedback",
+          feedback: { is_correct: true, user_answer: "air-conditioned", reveal_answer: false },
+        },
+      });
+      expect(missingFeedback.isError).toBe(true);
+      expect(missingWord.isError).toBe(true);
+    });
+  });
+
   it("resumes a version 3 Lesson feedback card without changing its cursor, exercise, or queue", async () => {
     const lessonWords = ["recur", "plausible", "viable", "thorn", "query", "subtle", "coherent", "constrain", "interpret", "rectify"];
     const exercise = {
@@ -198,6 +216,45 @@ describe("Review render tool schema compatibility", () => {
       expect(resumed.activity_type).toBe("cloze");
       expect(resumed.prompt).toBe(exercise.prompt);
       expect(sessionMocks.persistStudyState).not.toHaveBeenCalled();
+
+      const feedback = payloadOf(await client.callTool({
+        name: "render_lesson_widget",
+        arguments: {
+          mode: "feedback",
+          word: "air-conditioning",
+          feedback: {
+            is_correct: true,
+            user_answer: "air-conditioned",
+            error_layer: "none",
+            message: "正确。",
+            reveal_answer: false,
+          },
+        },
+      }));
+      expect(feedback).toMatchObject({
+        widget: "lesson",
+        mode: "feedback",
+        phase: "lesson_feedback",
+        word: "air-conditioning",
+        current_index: 9,
+        progress: "10 / 10",
+        exercise: { ...exercise },
+        feedback: { is_correct: true, user_answer: "air-conditioned", error_layer: "none" },
+        navigation,
+      });
+      const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as {
+        phase: string;
+        current_word: string;
+        current_index: number;
+        payload: Record<string, any>;
+      } | undefined;
+      expect(persisted).toMatchObject({
+        phase: "lesson_feedback",
+        current_word: "air-conditioning",
+        current_index: 9,
+        payload: { mode: "feedback", word: "air-conditioning", exercise, navigation },
+      });
+      expect(sessionMocks.persistStudyState).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -500,16 +557,15 @@ describe("Review render tool schema compatibility", () => {
 
   it("persists backend-owned round-complete navigation on final feedback and restores it", async () => {
     const lessonWords = ["expression", "marine", "thermometer", "rectify", "reed", "via", "interpret", "planet", "shrink"];
+    const exercise = {
+      activity_type: "sentence",
+      instruction: "Use the word in a new scene.",
+      prompt: "Describe a shrinking sample.",
+      multiline: false,
+    };
     const feedbackInput = {
       mode: "feedback" as const,
       word: "shrink",
-      progress: "9 / 9",
-      exercise: {
-        activity_type: "sentence",
-        instruction: "Use the word in a new scene.",
-        prompt: "Describe a shrinking sample.",
-        multiline: false,
-      },
       feedback: {
         is_correct: true,
         user_answer: "The sample shrank.",
@@ -525,7 +581,7 @@ describe("Review render tool schema compatibility", () => {
       current_index: 8,
       retry_count: 0,
       flow: { relearn_words: [], lesson_words: lessonWords },
-      payload: { widget: "lesson", mode: "exercise", word: "shrink" },
+      payload: { widget: "lesson", mode: "exercise", word: "shrink", progress: "9 / 9", ...exercise },
     };
     sessionMocks.getActiveStudySession.mockResolvedValue({
       id: "lesson-session",
@@ -554,10 +610,12 @@ describe("Review render tool schema compatibility", () => {
         ...exerciseState,
         phase: "lesson_feedback" as const,
         payload: {
-          ...feedbackInput,
           widget: "lesson",
+          mode: "feedback",
+          word: "shrink",
+          progress: "9 / 9",
           navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
-          exercise: { ...feedbackInput.exercise, legacy_context: "old" },
+          exercise: { ...exercise, legacy_context: "old" },
           feedback: { ...feedbackInput.feedback, legacy_context: "old" },
         },
       };
@@ -571,6 +629,9 @@ describe("Review render tool schema compatibility", () => {
         updated_at: "2026-09-16T00:00:00.000Z",
         state: feedbackState,
       });
+      const rehydrated = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: feedbackInput }));
+      expect(rehydrated).toMatchObject({ mode: "feedback", word: "shrink", progress: "9 / 9" });
+      expect(rehydrated.exercise).toEqual(exercise);
       const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
       expect(resumed).toMatchObject({
         widget: "lesson",
@@ -578,7 +639,7 @@ describe("Review render tool schema compatibility", () => {
         phase: "lesson_feedback",
         navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
       });
-      expect(resumed.exercise).toEqual(feedbackInput.exercise);
+      expect(resumed.exercise).toEqual(exercise);
       expect(resumed.feedback).toEqual(feedbackInput.feedback);
 
       sessionMocks.getActiveStudySession.mockResolvedValue({
@@ -648,17 +709,16 @@ describe("Review render tool schema compatibility", () => {
         navigation: { action: "round_complete" },
       });
 
+      const wrapupExercise = {
+        activity_type: "sentence",
+        instruction: "先标出主干，再翻译。",
+        prompt: exerciseInput.prompt,
+        multiline: true,
+      };
       const feedbackInput = {
         mode: "feedback" as const,
         wrapup: true as const,
         word: "shrink",
-        progress: "长难句收尾",
-        exercise: {
-          activity_type: "sentence",
-          instruction: "先标出主干，再翻译。",
-          prompt: exerciseInput.prompt,
-          multiline: true,
-        },
         feedback: {
           is_correct: true,
           user_answer: "主干是 researchers continued monitoring；尽管样本开始缩小，研究人员仍继续监测。",
@@ -667,20 +727,18 @@ describe("Review render tool schema compatibility", () => {
       };
       sessionMocks.getActiveStudySession.mockResolvedValue({
         ...activeBase,
-        state: { ...exerciseState, payload: { ...exerciseInput, widget: "lesson" } },
+        state: { ...exerciseState, payload: { ...exerciseInput, ...wrapupExercise, widget: "lesson" } },
       });
       const feedback = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: feedbackInput }));
       expect(feedback).toMatchObject({ mode: "feedback", wrapup: true, phase: "lesson_complete" });
+      expect(feedback.exercise).toEqual(wrapupExercise);
+      expect(feedback.progress).toBe("长难句收尾");
 
       sessionMocks.getActiveStudySession.mockResolvedValue({
         ...activeBase,
         state: {
           ...exerciseState,
-          payload: {
-            ...feedbackInput,
-            widget: "lesson",
-            navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 2 },
-          },
+          payload: feedback,
         },
       });
       const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));

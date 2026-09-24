@@ -55,6 +55,8 @@ After the WORDLOOP_ROUND_COMPLETE handoff, generate exactly one wrap-up exercise
 
 ### Widget and chat boundary
 
+For every Lesson answer submitted from the LessonWidget, ordinary chat feedback is invalid. The model must persist the attempt and render render_lesson_widget mode="feedback"; the Lesson turn is incomplete until the feedback Widget has rendered. Never replace the feedback Widget with prose in chat.
+
 After any successful learning, Review, pretest, dictation, or progress Widget render, keep the chat quiet: do not repeat the card, answer, instructions, progress, next word, or teaching prose. Only explain a render failure. All Widget input and persisted feedback stay in the Widget; ChatGPT supplies the teaching and semantic grading.
 
 For “进度”, use render_learning_dashboard; for “句子：xxx”, analyze the sentence and use save_sentence. “抽查”“小测”“听写” start their corresponding backend flow. Do not expose credentials or server secrets.
@@ -90,6 +92,7 @@ function registerWidgetResources(server: McpServer, loadWidgetHtml: WidgetHtmlLo
   for (const [kind, uri] of Object.entries(WIDGET_URIS) as Array<[WidgetKind, string]>) {
     registerWidgetResource(`Wordloop ${kind} widget`, kind, uri);
   }
+  registerWidgetResource("Wordloop lesson v7 alias", "lesson", LEGACY_WIDGET_URIS.lessonV7);
   registerWidgetResource("Wordloop lesson v6 alias", "lesson", LEGACY_WIDGET_URIS.lessonV6);
   registerWidgetResource("Wordloop lesson v5 alias", "lesson", LEGACY_WIDGET_URIS.lessonV5);
   registerWidgetResource("Wordloop lesson v4 alias", "lesson", LEGACY_WIDGET_URIS.lessonV4);
