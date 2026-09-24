@@ -80,6 +80,7 @@ function payloadOf(result: Awaited<ReturnType<Client["callTool"]>>): Record<stri
 describe("Review render tool schema compatibility", () => {
   beforeEach(() => {
     mockedGetDueReviewSelection.mockReset();
+    sessionMocks.normalizeStudyStateForRead.mockReset().mockImplementation((state: unknown) => state);
     sessionMocks.getActiveStudySession.mockReset().mockResolvedValue(null);
     sessionMocks.freezeLessonQueueForSession.mockReset().mockImplementation(async (active: any) => ({
       ...active,
@@ -141,6 +142,62 @@ describe("Review render tool schema compatibility", () => {
       expect(session.state.current_word).toBe("thorn");
       expect(session.state.current_index).toBe(3);
       expect(session.state.flow.lesson_words).toEqual(lessonWords);
+    });
+  });
+
+  it("renders the production-shaped legacy exercise as the same current Lesson exercise", async () => {
+    const studySessions = await vi.importActual<typeof import("../server/services/studySessions.js")>("../server/services/studySessions.js");
+    sessionMocks.normalizeStudyStateForRead.mockImplementation((state) =>
+      studySessions.normalizeStudyStateForRead(state as Parameters<typeof studySessions.normalizeStudyStateForRead>[0]));
+    const lessonWords = ["vicinity", "lower", "prospect", "thorn", "query", "marital", "pirate", "pit", "quota", "air-conditioning"];
+    const exercise = {
+      activity_type: "cloze",
+      instruction: "用 air-conditioning 词族中的正确形式填空。",
+      prompt: "Because the laboratory contains temperature-sensitive equipment, it must remain fully ____ throughout the summer.",
+      multiline: false,
+    };
+    const navigation = { action: "round_complete", next_word: null, next_index: null, total_count: 10 };
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      id: "legacy-air-conditioning-session",
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "lesson",
+        phase: "lesson_exercise",
+        current_word: "air-conditioning",
+        current_index: 9,
+        retry_count: 0,
+        flow: { relearn_words: [], lesson_words: lessonWords },
+        payload: {
+          widget: "lesson",
+          mode: "explain",
+          word: "air-conditioning",
+          title: "当前词",
+          progress: "10 / 10",
+          widget_version: 3,
+          navigation,
+          exercise,
+        },
+      },
+    });
+
+    await withReviewClient(async (client) => {
+      const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
+      expect(resumed).toMatchObject({
+        widget: "lesson",
+        mode: "exercise",
+        phase: "lesson_exercise",
+        word: "air-conditioning",
+        current_index: 9,
+        title: "当前词",
+        progress: "10 / 10",
+        ...exercise,
+        navigation,
+      });
+      expect(resumed.mode).not.toBe("explain");
+      expect(resumed.activity_type).toBe("cloze");
+      expect(resumed.prompt).toBe(exercise.prompt);
+      expect(sessionMocks.persistStudyState).not.toHaveBeenCalled();
     });
   });
 

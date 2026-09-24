@@ -75,6 +75,15 @@ function word(index: number, status: VocabularyItem["status"] = "new"): Vocabula
 describe("study bootstrap daily queue invariant", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.normalizeStudyStateForRead.mockReset().mockImplementation((state: any) => {
+      const items = state?.payload?.items;
+      return state?.widget === "pretest"
+        && state?.phase === "listen_recall"
+        && Array.isArray(items)
+        && state.current_index === items.length
+        ? { ...state, phase: "pretest_complete", current_word: null }
+        : state;
+    });
     mocks.getActiveStudySession.mockResolvedValue(null);
     mocks.finishStudySession.mockResolvedValue(null);
     mocks.freezeLessonQueueForSession.mockImplementation(async (active: any, todayWords: VocabularyItem[]) => ({
@@ -241,6 +250,47 @@ describe("study bootstrap daily queue invariant", () => {
     mocks.getTodayWords.mockResolvedValue([word(1, "known")]);
     await expect(getStudyBootstrap()).resolves.toMatchObject({ action: "lesson", word: { word: "failed-word" } });
     expect(mocks.normalizeStudyStateForRead).toHaveBeenCalled();
+  });
+
+  it("resumes a legacy Lesson exercise phase after payload compatibility normalization", async () => {
+    const studySessions = await vi.importActual<typeof import("../server/services/studySessions.js")>("../server/services/studySessions.js");
+    mocks.normalizeStudyStateForRead.mockImplementation(studySessions.normalizeStudyStateForRead);
+    const state = {
+      version: 1 as const,
+      date: queue.date,
+      widget: "lesson" as const,
+      phase: "lesson_exercise" as const,
+      current_word: "air-conditioning",
+      current_index: 9,
+      retry_count: 0,
+      flow: {
+        relearn_words: [],
+        lesson_words: ["vicinity", "lower", "prospect", "thorn", "query", "marital", "pirate", "pit", "quota", "air-conditioning"],
+      },
+      payload: {
+        widget: "lesson",
+        mode: "explain",
+        word: "air-conditioning",
+        exercise: {
+          activity_type: "cloze",
+          instruction: "用 air-conditioning 词族中的正确形式填空。",
+          prompt: "Because the laboratory contains temperature-sensitive equipment, it must remain fully ____ throughout the summer.",
+          multiline: false,
+        },
+      },
+    };
+    mocks.getActiveStudySession.mockResolvedValue({ state });
+
+    await expect(getStudyBootstrap()).resolves.toEqual({
+      action: "resume",
+      widget: "lesson",
+      phase: "lesson_exercise",
+    });
+    expect(studySessions.normalizeStudyStateForRead(state)).toMatchObject({
+      current_word: "air-conditioning",
+      current_index: 9,
+      payload: { mode: "exercise", word: "air-conditioning", activity_type: "cloze" },
+    });
   });
 
   it("keeps a completed Lesson open for the long-sentence wrap-up", async () => {
