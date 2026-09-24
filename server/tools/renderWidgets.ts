@@ -151,27 +151,35 @@ const feedbackPayload = z.object({
 }).strict();
 const lessonPayload = z.discriminatedUnion("mode", [explainPayload, exercisePayload, feedbackPayload]);
 const lessonInput = z.union([lessonPayload, z.object({ resume: z.literal(true) }).strict()]);
+const feedbackToolPayload = z.object({
+  mode: z.literal("feedback"),
+  wrapup: z.literal(true).optional(),
+  word: z.string().trim().min(1).max(100),
+  feedback: lessonFeedback,
+}).strict();
+const lessonToolInputBranches = [
+  z.object({ resume: z.literal(true) }).strict(),
+  explainPayload,
+  exercisePayload,
+  feedbackToolPayload,
+] as const;
+const lessonToolInputVariants = z.union(lessonToolInputBranches);
+// The MCP SDK only emits JSON Schema for top-level objects; keep runtime union
+// validation while exposing its strict branches through the object's anyOf.
 const lessonToolInputSchema = z.object({
   resume: z.literal(true).optional(),
   mode: z.enum(["explain", "exercise", "feedback"]).optional(),
-  wrapup: z.literal(true).optional(),
-  title: z.string().trim().max(120).optional(),
-  word: z.string().trim().min(1).max(100).optional(),
-  ipa: z.string().trim().min(1).max(120).optional(),
-  part_of_speech: z.string().trim().min(1).max(40).optional(),
-  meaning_zh: z.string().trim().min(1).max(240).optional(),
-  collocations: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
-  derivations: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
-  example_en: z.string().trim().min(1).max(1000).optional(),
-  note: z.string().trim().min(1).max(1000).optional(),
-  progress: z.string().trim().min(1).max(40).optional(),
-  activity_type: z.string().trim().min(1).max(80).optional(),
-  instruction: z.string().trim().min(1).max(300).optional(),
-  prompt: z.string().trim().min(1).max(4000).optional(),
-  multiline: z.boolean().optional(),
-  exercise: lessonExercise.optional(),
-  feedback: lessonFeedback.optional(),
-}).strict();
+}).passthrough().superRefine((input, context) => {
+  if (!lessonToolInputVariants.safeParse(input).success) {
+    context.addIssue({ code: "custom", message: "Invalid Lesson tool input." });
+  }
+}).meta({
+  additionalProperties: true,
+  anyOf: lessonToolInputBranches.map((branch) => {
+    const { $schema: _schemaVersion, ...jsonSchema } = z.toJSONSchema(branch);
+    return jsonSchema;
+  }),
+});
 const dictationPayload = z.object({
   text: z.string().trim().min(1).max(4000),
   title: z.string().trim().min(1).max(100).default("听写"),
@@ -631,9 +639,44 @@ export function registerRenderTools(server: McpServer): void {
     _meta: { ui: { resourceUri: WIDGET_URIS.lesson } },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, (input) => safeTool(async () => {
-    const parsedInput = lessonInput.parse(input);
-    if ("resume" in parsedInput) return resumableLessonPayload(await getActiveStudySession());
-    const active = await getActiveStudySession();
+    const toolInput = lessonToolInputVariants.parse(input);
+    if ("resume" in toolInput) return resumableLessonPayload(await getActiveStudySession());
+    let active = await getActiveStudySession();
+    let parsedInput: Exclude<LessonInput, { resume: true }>;
+    if (toolInput.mode === "feedback") {
+      const normalizedState = active?.state ? normalizeStudyStateForRead(active.state) : null;
+      if (active && normalizedState) active = { ...active, state: normalizedState };
+      const storedPayload = normalizedState?.widget === "lesson" ? normalizedState.payload : null;
+      const storedExercise = storedPayload?.mode === "feedback"
+        ? projectPersistedFields(storedPayload.exercise, lessonExerciseKeys)
+        : storedPayload?.mode === "exercise"
+          ? projectPersistedFields(storedPayload, lessonExerciseKeys)
+          : null;
+      const exercise = storedExercise ? lessonExercise.safeParse(storedExercise) : null;
+      const progress = typeof storedPayload?.progress === "string" && storedPayload.progress.trim()
+        ? storedPayload.progress
+        : "当前练习";
+      if (toolInput.wrapup === true && !exercise?.success) {
+        await validateLessonWord({
+          mode: "feedback",
+          wrapup: true,
+          word: toolInput.word,
+          progress,
+          exercise: { activity_type: "", instruction: "", prompt: "", multiline: false },
+          feedback: toolInput.feedback,
+        }, active);
+      }
+      parsedInput = feedbackPayload.parse({
+        mode: "feedback",
+        ...(toolInput.wrapup === true ? { wrapup: true } : {}),
+        word: toolInput.word,
+        progress,
+        exercise: exercise?.success ? exercise.data : undefined,
+        feedback: toolInput.feedback,
+      });
+    } else {
+      parsedInput = lessonPayload.parse(toolInput);
+    }
     const validated = await validateLessonWord(parsedInput, active);
     const currentIndex = lessonRenderIndex(validated.active, parsedInput);
     const lessonWords = validated.flow?.lesson_words;

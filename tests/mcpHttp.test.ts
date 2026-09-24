@@ -124,8 +124,15 @@ describe("Streamable HTTP server", () => {
     expect(lessonTool?.description).toContain("chat-only grading is invalid");
     expect(lessonTool?.description).toContain("Reuse the current word and exercise; backend supplies navigation.");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
-    const lessonInput = lessonTool?.inputSchema as { properties?: Record<string, unknown> } | undefined;
-    expect(lessonInput?.properties).not.toHaveProperty("navigation");
+    const lessonInput = lessonTool?.inputSchema as {
+      anyOf?: Array<{ properties?: Record<string, unknown>; required?: string[] }>;
+      properties?: Record<string, unknown>;
+    } | undefined;
+    expect(Object.keys(lessonInput?.properties ?? {}).sort()).toEqual(["mode", "resume"]);
+    const feedbackBranch = lessonInput?.anyOf?.find((branch) => branch.required?.includes("feedback"));
+    expect(feedbackBranch?.required).toEqual(expect.arrayContaining(["mode", "word", "feedback"]));
+    expect(feedbackBranch?.properties).not.toHaveProperty("progress");
+    expect(feedbackBranch?.properties).not.toHaveProperty("exercise");
     const resources = await client.listResources();
     const resourceUris = resources.resources.map((resource) => resource.uri);
     expect(resourceUris).toEqual(expect.arrayContaining([
