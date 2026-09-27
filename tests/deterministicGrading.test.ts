@@ -65,6 +65,14 @@ describe("deterministic grading module", () => {
     });
   });
 
+  it("flags a same-initial word that is not a near miss as a meaning error", () => {
+    expect(gradeTargetWord("nervous", "nerve")).toMatchObject({
+      is_correct: false,
+      rating: "again",
+      error_layer: "meaning",
+    });
+  });
+
   it("does not invent an error layer for an unusable answer", () => {
     expect(gradeTargetWord("", "recur").error_layer).toBe("none");
     expect(gradeTargetWord("??", "recur").error_layer).toBe("none");
