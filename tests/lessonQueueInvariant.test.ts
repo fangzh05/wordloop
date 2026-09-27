@@ -69,27 +69,11 @@ describe("durable Lesson queue invariant", () => {
     )).toEqual(["expression", "planet", "shrink", "marine", "thermometer"]);
   });
 
-  it("excludes electrical and embark after a formal Lesson today while status stays unknown", () => {
-    const completedToday = new Set(["electrical", "embark"]);
-    expect(buildLessonWords([], [
-      item("electrical", "unknown"),
-      item("embark", "uncertain"),
-      item("shallow", "unknown"),
-    ], completedToday)).toEqual(["shallow"]);
-  });
-
-  it("keeps a word eligible when today's only activity was Pretest", () => {
-    expect(buildLessonWords([], [item("electrical", "unknown")], new Set())).toEqual(["electrical"]);
-  });
-
-  it("keeps a normally completed word excluded after a correct Review", () => {
-    const completedToday = new Set(["embark"]);
-    expect(buildLessonWords([], [item("embark", "unknown")], completedToday)).toEqual([]);
-  });
-
-  it("allows one explicit failed-Review relearn despite its completed normal Lesson", () => {
-    const completedToday = new Set(["embark"]);
-    expect(buildLessonWords(["EMBARK", "embark"], [item("embark", "unknown")], completedToday)).toEqual(["embark"]);
+  it("keeps today's eligible unknown and uncertain words behind relearn words", () => {
+    expect(buildLessonWords(
+      ["grieve"],
+      [item("electrical", "unknown"), item("embark", "uncertain"), item("known", "known")],
+    )).toEqual(["grieve", "electrical", "embark"]);
   });
 
   it("recovers pending relearn words that were before a legacy current cursor", () => {

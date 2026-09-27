@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   getDatabase: vi.fn(),
   getTodayWords: vi.fn(),
   getUserTimeZone: vi.fn(),
-  getTodayCompletedLessonWords: vi.fn(async () => new Set<string>()),
 }));
 
 vi.mock("../server/db.js", () => ({
@@ -17,10 +16,6 @@ vi.mock("../server/services/words.js", () => ({
   getTodayWords: mocks.getTodayWords,
   getUserTimeZone: mocks.getUserTimeZone,
 }));
-vi.mock("../server/services/attempts.js", () => ({
-  getTodayCompletedLessonWords: mocks.getTodayCompletedLessonWords,
-}));
-
 import { normalizeLegacyLessonSession } from "../server/services/studySessions.js";
 
 function item(word: string, status: VocabularyItem["status"] = "review"): VocabularyItem {
