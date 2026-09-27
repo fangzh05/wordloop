@@ -205,6 +205,14 @@ describe("Standalone Web API shared-state boundaries", () => {
     }));
     expect(wrong.status).toBe(401);
 
+    const unauthenticatedAction = await handleWebApiRequest(new Request("https://wordloop.test/api/web/action", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "refresh_progress", expected_revision: null }),
+    }));
+    expect(unauthenticatedAction.status).toBe(401);
+    expect(unauthenticatedAction.headers.get("cache-control")).toBe("no-store");
+
     const invalid = await handleWebApiRequest(post({ action: "lesson_submit", answer: "fixture", word: "other", current_index: 8, rating: "good" }));
     expect(invalid.status).toBe(400);
     expect(invalid.headers.get("cache-control")).toBe("no-store");
