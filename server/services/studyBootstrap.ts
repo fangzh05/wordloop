@@ -1,5 +1,5 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { StudyPhase, VocabularyItem } from "../types.js";
+import type { StudyPhase, StudySessionRow, VocabularyItem } from "../types.js";
 import { ensureTodayQueue } from "./dailyQueue.js";
 import {
   findFirstLearningWord,
@@ -10,9 +10,10 @@ import {
   getActiveStudySession,
   normalizeLegacyLessonSession,
   normalizeStudyStateForRead,
+  StaleStudyStateError,
 } from "./studySessions.js";
 import { getTodayWords, getVocabularyItemsByWords } from "./words.js";
-import { lessonWordsFromFlow } from "./lessonQueue.js";
+import { buildLessonWords, lessonWordsFromFlow } from "./lessonQueue.js";
 import { perf } from "./perf.js";
 import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 
@@ -20,7 +21,7 @@ export type StudyBootstrapResult =
   | { action: "resume"; widget: "pretest" | "lesson" | "dictation" | "review"; phase: StudyPhase }
   | { action: "review"; count: number }
   | { action: "pretest"; words: VocabularyItem[] }
-  | { action: "lesson"; word: VocabularyItem }
+  | { action: "lesson"; word: VocabularyItem; lesson_words?: string[] }
   | { action: "done" };
 
 async function firstLessonWord(
@@ -41,34 +42,57 @@ async function freezeAndReadFirstLessonWord(
 ): Promise<{ active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>; word: VocabularyItem | null }> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
-  const frozen = await freezeLessonQueueForSession(active, todayWords, db, userId);
+  const frozen = await freezeLessonQueueForSession(active, todayWords, db, userId, active.updated_at);
   return {
     active: frozen,
     word: await firstLessonWord(lessonWordsFromFlow(frozen.state?.flow ?? { relearn_words: [] }), db, userId),
   };
 }
 
-async function continueCompletedReview(active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>): Promise<StudyBootstrapResult> {
+async function lessonAction(
+  lessonWords: string[],
+  db: ReturnType<typeof getDatabase>,
+  userId: string,
+  deferLessonQueueFreeze: boolean,
+): Promise<StudyBootstrapResult> {
+  const word = await firstLessonWord(lessonWords, db, userId);
+  if (!word) return { action: "done" };
+  return deferLessonQueueFreeze
+    ? { action: "lesson", word, lesson_words: lessonWords }
+    : { action: "lesson", word };
+}
+
+async function continueCompletedReview(
+  active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>,
+  deferLessonQueueFreeze: boolean,
+): Promise<StudyBootstrapResult> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const date = active.state?.date;
   if (!date) return { action: "done" };
-
-  const existingLessonWords = lessonWordsFromFlow(active.state?.flow ?? { relearn_words: [] });
-  if (existingLessonWords !== undefined) {
-    const lessonWord = await firstLessonWord(existingLessonWords, db, userId);
-    return lessonWord ? { action: "lesson", word: lessonWord } : { action: "done" };
-  }
 
   const todayWords = await getTodayWords(date, db, userId);
   const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
   if (newWords.length > 0) return { action: "pretest", words: newWords.slice(0, 6) };
 
+  const existingLessonWords = lessonWordsFromFlow(active.state?.flow ?? { relearn_words: [] });
+  if (existingLessonWords !== undefined) {
+    return lessonAction(existingLessonWords, db, userId, deferLessonQueueFreeze);
+  }
+
+  if (deferLessonQueueFreeze) {
+    const lessonWords = buildLessonWords(active.state?.flow?.relearn_words ?? [], todayWords);
+    return lessonAction(lessonWords, db, userId, true);
+  }
+
   const frozen = await freezeAndReadFirstLessonWord(active, todayWords);
   return frozen.word ? { action: "lesson", word: frozen.word } : { action: "done" };
 }
 
-export async function continueCompletedPretest(active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>): Promise<StudyBootstrapResult> {
+export async function continueCompletedPretest(
+  active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>,
+  deferLessonQueueFreeze = false,
+): Promise<StudyBootstrapResult> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const date = active.state?.date;
@@ -76,11 +100,17 @@ export async function continueCompletedPretest(active: NonNullable<Awaited<Retur
 
   const existingLessonWords = lessonWordsFromFlow(active.state?.flow ?? { relearn_words: [] });
   if (existingLessonWords !== undefined) {
-    const lessonWord = await firstLessonWord(existingLessonWords, db, userId);
-    return lessonWord ? { action: "lesson", word: lessonWord } : { action: "done" };
+    return lessonAction(existingLessonWords, db, userId, deferLessonQueueFreeze);
   }
 
   const todayWords = await getTodayWords(date, db, userId);
+  if (deferLessonQueueFreeze) {
+    const lessonWords = buildLessonWords(active.state?.flow?.relearn_words ?? [], todayWords);
+    const planned = await lessonAction(lessonWords, db, userId, true);
+    if (planned.action === "lesson") return planned;
+    const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
+    return newWords.length > 0 ? { action: "pretest", words: newWords.slice(0, 6) } : planned;
+  }
   const frozen = await freezeAndReadFirstLessonWord(active, todayWords);
   if (frozen.word) return { action: "lesson", word: frozen.word };
 
@@ -93,6 +123,7 @@ export async function continueCompletedPretest(active: NonNullable<Awaited<Retur
 async function bootstrapFreshFlow(
   db: ReturnType<typeof getDatabase>,
   userId: string,
+  deferLessonQueueFreeze: boolean,
 ): Promise<StudyBootstrapResult> {
   const queue = await ensureTodayQueue(db, userId);
 
@@ -107,16 +138,26 @@ async function bootstrapFreshFlow(
     return { action: "pretest", words: newWords.slice(0, 6) };
   }
 
+  const lessonWords = buildLessonWords([], todayWords);
   const lessonWord = findFirstLearningWord(todayWords);
-  return lessonWord ? { action: "lesson", word: lessonWord } : { action: "done" };
+  return lessonWord
+    ? deferLessonQueueFreeze ? { action: "lesson", word: lessonWord, lesson_words: lessonWords } : { action: "lesson", word: lessonWord }
+    : { action: "done" };
 }
 
-export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
+export async function getStudyBootstrap(options?: {
+  activeSession: StudySessionRow | null;
+  expectedRevision: string | null;
+  deferLessonQueueFreeze?: boolean;
+}): Promise<StudyBootstrapResult> {
   return perf("get_study_bootstrap", async () => {
     const db = getDatabase();
     const userId = getAuthenticatedUserId();
 
-    const active = await getActiveStudySession(db, userId);
+    const active = options ? options.activeSession : await getActiveStudySession(db, userId);
+    if (options && (active?.updated_at ?? null) !== options.expectedRevision) {
+      throw new StaleStudyStateError();
+    }
     let normalizedActive = active?.state
       ? { ...active, state: normalizeStudyStateForRead(active.state) }
       : active;
@@ -134,14 +175,14 @@ export async function getStudyBootstrap(): Promise<StudyBootstrapResult> {
         return { action: "resume", widget: "lesson", phase: "lesson_complete" };
       }
       if (normalizedActive.state.widget === "review" && normalizedActive.state.phase === "review_complete") {
-        return continueCompletedReview(normalizedActive);
+        return continueCompletedReview(normalizedActive, options?.deferLessonQueueFreeze ?? false);
       }
       if (normalizedActive.state.widget === "pretest" && normalizedActive.state.phase === "pretest_complete") {
-        return continueCompletedPretest(normalizedActive);
+        return continueCompletedPretest(normalizedActive, options?.deferLessonQueueFreeze ?? false);
       }
       return { action: "resume", widget: normalizedActive.state.widget, phase: normalizedActive.state.phase };
     }
 
-    return bootstrapFreshFlow(db, userId);
+    return bootstrapFreshFlow(db, userId, options?.deferLessonQueueFreeze ?? false);
   });
 }

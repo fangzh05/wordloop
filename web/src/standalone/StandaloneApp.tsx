@@ -69,8 +69,25 @@ export function todayTasksComplete(value: unknown): boolean {
   return reviewDone && newWordsDone;
 }
 
-export function dashboardContinueBehavior(screen: WebApiResponse["screen"]): "study" | "continue" {
-  return screen === "done" ? "continue" : "study";
+export function dashboardContinueBehavior(view: WebApiResponse): "study" | "continue" {
+  const phase = record(view.state).phase;
+  return view.screen === "done" || ["review_complete", "pretest_complete", "lesson_complete"].includes(String(phase))
+    ? "continue"
+    : "study";
+}
+
+export function dashboardNextStep(view: WebApiResponse): string {
+  const phase = record(view.state).phase;
+  if (view.screen === "review" && phase === "review_complete") {
+    const today = record(record(view.progress).today);
+    return numberValue(today.total) > numberValue(today.completed) ? "预测试" : "正式学习";
+  }
+  if (view.screen === "pretest" && phase === "pretest_complete") return "正式学习";
+  if (view.screen === "pretest") return "预测试";
+  if (view.screen === "review") return "复习";
+  if (view.screen === "lesson") return "正式学习";
+  const today = record(record(view.progress).today);
+  return numberValue(today.total) > numberValue(today.completed) ? "继续学习" : "今日任务已完成";
 }
 
 export function activeStudySummary(view: WebApiResponse | null): string | null {
@@ -170,6 +187,7 @@ export function StandaloneDashboard({ view, busy, onContinue }: {
   const allTime = record(progress.all_time);
   const fsrs = record(progress.fsrs);
   const activeSummary = activeStudySummary(view);
+  const nextStep = dashboardNextStep(view);
 
   return <>
     <section className="widget-card standalone-card standalone-progress-card" aria-label="今日学习进度">
@@ -192,6 +210,9 @@ export function StandaloneDashboard({ view, busy, onContinue }: {
         <span className="eyebrow">当前学习</span>
         <p>{activeSummary}</p>
       </div>}
+      <div className="standalone-active-study">
+        <p><span>当前下一步：</span><strong>{nextStep}</strong></p>
+      </div>
       <div className="standalone-actions">
         <Button className="primary" type="button" disabled={busy} onClick={onContinue}>继续学习</Button>
       </div>
@@ -254,6 +275,17 @@ export default function StandaloneApp(): React.JSX.Element {
     setAuthError(wrongToken ? "访问密钥错误" : "");
   }, []);
 
+  const loadDashboardProgress = useCallback(async () => {
+    try {
+      const progressView = await postAction({ action: "refresh_progress", expected_revision: view?.session_revision ?? null });
+      if (progressView.progress) {
+        setView((current) => current?.progress ? current : progressView);
+      }
+    } catch {
+      // Keep the safe generation error and retry action visible if progress is unavailable.
+    }
+  }, [view?.session_revision]);
+
   const loadBootstrap = useCallback(async (preserveError = false, overrideToken?: string, retryStale = true) => {
     const activeToken = overrideToken ?? token;
     if (!activeToken) {
@@ -288,13 +320,20 @@ export default function StandaloneApp(): React.JSX.Element {
         return;
       } else {
         setPageStatus("ready");
-        setErrorMessage(messageFor(error));
-        setRetryFields(null);
+        if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
+          setPage("dashboard");
+          setErrorMessage("学习内容生成暂时失败");
+          setRetryFields(null);
+          if (!view?.progress) await loadDashboardProgress();
+        } else {
+          setErrorMessage(messageFor(error));
+          setRetryFields(null);
+        }
       }
     } finally {
       setBusy(null);
     }
-  }, [enterAuth, token]);
+  }, [enterAuth, loadDashboardProgress, token, view?.progress]);
 
   useEffect(() => {
     if (token) void loadBootstrap();
@@ -363,7 +402,16 @@ export default function StandaloneApp(): React.JSX.Element {
       setErrorMessage("");
     } catch (error) {
       if (error instanceof UnauthorizedError) setAuthError("访问密钥错误");
-      else setAuthError(messageFor(error));
+      else if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
+        saveToken(candidate);
+        setToken(candidate);
+        setPage("dashboard");
+        setPageStatus("ready");
+        setTokenInput("");
+        setErrorMessage("学习内容生成暂时失败");
+        setRetryFields(null);
+        await loadDashboardProgress();
+      } else setAuthError(messageFor(error));
     } finally {
       setBusy(null);
     }
@@ -405,9 +453,16 @@ export default function StandaloneApp(): React.JSX.Element {
         setRetryFields(null);
         await loadBootstrap();
       } else {
-        setErrorMessage(messageFor(error));
         if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
-          await loadBootstrap(true);
+          if (fields.action === "continue" || fields.action === "lesson_next") {
+            setPage("dashboard");
+            setErrorMessage("学习内容生成暂时失败");
+            if (!view?.progress) await loadDashboardProgress();
+          } else {
+            setErrorMessage("学习批改暂时失败");
+          }
+        } else {
+          setErrorMessage(messageFor(error));
         }
       }
     } finally {
@@ -422,7 +477,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
   const continueFromDashboard = () => {
     if (!view) return;
-    if (dashboardContinueBehavior(view.screen) === "study") {
+    if (dashboardContinueBehavior(view) === "study") {
       setPage("study");
       return;
     }

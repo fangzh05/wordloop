@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeStudySummary,
   dashboardContinueBehavior,
+  dashboardNextStep,
   lessonDraftAnswerForWord,
   StandaloneDashboard,
   StandaloneReviewHeader,
@@ -56,7 +57,7 @@ describe("Standalone Dashboard and Study navigation", () => {
     expect(markup).toContain("未来 7 天");
     expect(markup).toContain("38");
     expect(activeStudySummary(view)).toBe("复习 · 第 19 / 25 题");
-    expect(dashboardContinueBehavior(view.screen)).toBe("study");
+    expect(dashboardContinueBehavior(view)).toBe("study");
     expect(view.session_revision).toBe("review-revision-18");
   });
 
@@ -72,7 +73,7 @@ describe("Standalone Dashboard and Study navigation", () => {
     expect(markup).toContain("← 返回");
     expect(markup).toContain("19 / 25");
     expect(visibleStandalonePage("study", view.screen)).toBe("study");
-    expect(dashboardContinueBehavior(view.screen)).toBe("study");
+    expect(dashboardContinueBehavior(view)).toBe("study");
     expect(view.state.current_index).toBe(18);
     expect(view.session_revision).toBe("review-revision-18");
   });
@@ -115,9 +116,34 @@ describe("Standalone Dashboard and Study navigation", () => {
 
     expect(visibleStandalonePage("study", doneView.screen)).toBe("dashboard");
     expect(activeStudySummary(doneView)).toBeNull();
-    expect(dashboardContinueBehavior(doneView.screen)).toBe("continue");
+    expect(dashboardContinueBehavior(doneView)).toBe("continue");
     expect(markup).toContain("继续学习");
     expect(markup).not.toContain("今日学习完成");
     expect(markup).not.toContain("刷新进度");
+  });
+
+  it("shows Pretest as the next step after completed Review and routes Continue through bootstrap", () => {
+    const completedReview: WebApiResponse = {
+      ...reviewView(),
+      state: {
+        widget: "review",
+        phase: "review_complete",
+        current_index: 25,
+        payload: { items: Array.from({ length: 25 }, (_, index) => ({ word: `review-${index + 1}` })) },
+      },
+      progress: {
+        ...progress,
+        today: { ...progress.today, completed: 0 },
+        review_today: { completed: 25, total: 25, remaining: 0 },
+      },
+    };
+    const markup = renderToStaticMarkup(<StandaloneDashboard view={completedReview} busy={false} onContinue={() => undefined} />);
+
+    expect(markup).toContain("25 / 25");
+    expect(markup).toContain("0 / 50");
+    expect(markup).toContain("当前下一步：");
+    expect(markup).toContain("预测试");
+    expect(dashboardNextStep(completedReview)).toBe("预测试");
+    expect(dashboardContinueBehavior(completedReview)).toBe("continue");
   });
 });
