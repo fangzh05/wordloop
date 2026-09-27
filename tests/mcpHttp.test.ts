@@ -110,8 +110,9 @@ describe("Streamable HTTP server", () => {
     expect(finishTool?.description).toContain("immediately call get_study_bootstrap");
     expect(finishTool?.description).toContain("not the session-end free recall trigger");
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
-    expect(WIDGET_URIS.lesson).toBe("ui://wordloop/lesson-v8.html");
+    expect(WIDGET_URIS.lesson).toBe("ui://wordloop/lesson-v9.html");
     expect(WIDGET_URIS.dictation).toBe("ui://wordloop/dictation-v2.html");
+    expect(LEGACY_WIDGET_URIS.lessonV8).toBe("ui://wordloop/lesson-v8.html");
     expect(LEGACY_WIDGET_URIS.lessonV7).toBe("ui://wordloop/lesson-v7.html");
     expect(LEGACY_WIDGET_URIS.lessonV6).toBe("ui://wordloop/lesson-v6.html");
     expect(LEGACY_WIDGET_URIS.dictationV1).toBe("ui://wordloop/dictation.html");
@@ -137,6 +138,7 @@ describe("Streamable HTTP server", () => {
     const resourceUris = resources.resources.map((resource) => resource.uri);
     expect(resourceUris).toEqual(expect.arrayContaining([
       WIDGET_URIS.lesson,
+      LEGACY_WIDGET_URIS.lessonV8,
       LEGACY_WIDGET_URIS.lessonV7,
       LEGACY_WIDGET_URIS.lessonV6,
       LEGACY_WIDGET_URIS.lessonV5,
@@ -166,7 +168,7 @@ describe("Streamable HTTP server", () => {
     expect(contentUi).toEqual(expectedPronunciationUi);
     expect(contentUi).toEqual((pronunciationResource?._meta as { ui?: unknown } | undefined)?.ui);
     for (const [kind, uris] of Object.entries({
-      lesson: [WIDGET_URIS.lesson, LEGACY_WIDGET_URIS.lessonV7, LEGACY_WIDGET_URIS.lessonV6, LEGACY_WIDGET_URIS.lessonV5, LEGACY_WIDGET_URIS.lessonV4, LEGACY_WIDGET_URIS.lessonV3, LEGACY_WIDGET_URIS.lessonV2, LEGACY_WIDGET_URIS.lesson],
+      lesson: [WIDGET_URIS.lesson, LEGACY_WIDGET_URIS.lessonV8, LEGACY_WIDGET_URIS.lessonV7, LEGACY_WIDGET_URIS.lessonV6, LEGACY_WIDGET_URIS.lessonV5, LEGACY_WIDGET_URIS.lessonV4, LEGACY_WIDGET_URIS.lessonV3, LEGACY_WIDGET_URIS.lessonV2, LEGACY_WIDGET_URIS.lesson],
       dictation: [WIDGET_URIS.dictation, LEGACY_WIDGET_URIS.dictationV1],
     })) {
       let latestHtml: string | undefined;
