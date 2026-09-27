@@ -1,4 +1,5 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
+import { getTodayCompletedLessonWords } from "./attempts.js";
 import type { StudyPhase, StudySessionRow, VocabularyItem } from "../types.js";
 import { ensureTodayQueue } from "./dailyQueue.js";
 import {
@@ -80,7 +81,8 @@ async function continueCompletedReview(
   }
 
   if (deferLessonQueueFreeze) {
-    const lessonWords = buildLessonWords(active.state?.flow?.relearn_words ?? [], todayWords);
+    const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
+    const lessonWords = buildLessonWords(active.state?.flow?.relearn_words ?? [], todayWords, completedTodayLessonWords);
     return lessonAction(lessonWords, db, userId, true);
   }
 
@@ -104,7 +106,8 @@ export async function continueCompletedPretest(
 
   const todayWords = await getTodayWords(date, db, userId);
   if (deferLessonQueueFreeze) {
-    const lessonWords = buildLessonWords(active.state?.flow?.relearn_words ?? [], todayWords);
+    const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
+    const lessonWords = buildLessonWords(active.state?.flow?.relearn_words ?? [], todayWords, completedTodayLessonWords);
     const planned = await lessonAction(lessonWords, db, userId, true);
     if (planned.action === "lesson") return planned;
     const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
@@ -137,7 +140,8 @@ async function bootstrapFreshFlow(
     return { action: "pretest", words: newWords.slice(0, 6) };
   }
 
-  const lessonWords = buildLessonWords([], todayWords);
+  const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
+  const lessonWords = buildLessonWords([], todayWords, completedTodayLessonWords);
   return lessonAction(lessonWords, db, userId, deferLessonQueueFreeze);
 }
 
