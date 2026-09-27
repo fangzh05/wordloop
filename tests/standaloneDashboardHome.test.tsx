@@ -61,6 +61,53 @@ describe("Standalone Dashboard and Study navigation", () => {
     expect(view.session_revision).toBe("review-revision-18");
   });
 
+  it("shows the real daily queue and lifetime counters while a relearn leads the Lesson queue", () => {
+    const lessonView: WebApiResponse = {
+      ...reviewView(),
+      screen: "lesson",
+      state: {
+        widget: "lesson",
+        phase: "lesson_exercise",
+        current_word: "electrical",
+        current_index: 3,
+        flow: {
+          relearn_words: ["grieve"],
+          lesson_words: ["grieve", "embark", "shallow", "electrical", "chief", "delegate", "textile", "recall"],
+        },
+        payload: { mode: "exercise", word: "electrical" },
+      },
+      progress: {
+        ...progress,
+        today: { ...progress.today, total: 50, completed: 12 },
+        all_time: { ...progress.all_time, total_words: 6593, mastered: 46, error_book: 45 },
+        fsrs: { ...progress.fsrs, due_now: 6 },
+      },
+    };
+    const markup = renderToStaticMarkup(<StandaloneDashboard view={lessonView} busy={false} onContinue={() => undefined} />);
+
+    expect(markup).toContain("12 / 50");
+    expect(markup).toContain("当前到期");
+    expect(markup).toContain(">6<");
+    expect(markup).toContain(">46<");
+    expect(markup).toContain(">45<");
+    expect(markup).toContain("Lesson · electrical");
+    expect(markup).not.toContain("暂无新词");
+  });
+
+  it("shows progress as unavailable instead of rendering zero counts and still offers Continue", () => {
+    const view: WebApiResponse = { ...reviewView(), progress: undefined };
+    const markup = renderToStaticMarkup(<StandaloneDashboard view={view} busy={false} onContinue={() => undefined} />);
+
+    expect(markup).toContain("进度暂时无法读取");
+    expect(markup).toContain("继续学习");
+    expect(markup).not.toContain("0 / 0");
+    expect(markup).not.toContain("无到期复习");
+    expect(markup).not.toContain("暂无新词");
+    expect(markup).not.toContain("错词");
+    expect(markup).not.toContain("已掌握");
+    expect(markup).not.toContain("当前到期");
+  });
+
   it("returns from Review with a local navigation target and keeps the same cursor", () => {
     const view = reviewView();
     const markup = renderToStaticMarkup(<StandaloneReviewHeader

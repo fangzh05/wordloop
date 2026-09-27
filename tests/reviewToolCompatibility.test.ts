@@ -22,7 +22,6 @@ vi.mock("../server/db.js", () => ({
 }));
 
 vi.mock("../server/services/studySessions.js", () => sessionMocks);
-
 vi.mock("../server/services/review.js", () => ({
   getDueReviewSelection: vi.fn(),
   findFirstLearningWord: vi.fn(),

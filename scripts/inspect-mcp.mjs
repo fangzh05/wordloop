@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 
-const port = "3101";
+const port = process.env.WORDLOOP_INSPECTOR_PORT ?? "3101";
 const server = spawn(process.execPath, ["node-dist/server/index.js"], {
   cwd: process.cwd(),
   env: { ...process.env, PORT: port, HOST: "127.0.0.1" },

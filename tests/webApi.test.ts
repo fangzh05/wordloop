@@ -90,7 +90,10 @@ vi.mock("../server/tools/renderWidgets.js", async () => {
   return { ...actual, buildReviewWidgetPayload: mocks.buildReviewWidgetPayload };
 });
 vi.mock("../server/tools/getPronunciationAudio.js", () => ({ getPronunciationAudio: mocks.getPronunciationAudio }));
-vi.mock("../server/services/attempts.js", () => ({ recordAttempt: mocks.recordAttempt }));
+vi.mock("../server/services/attempts.js", () => ({
+  LESSON_ACTIVITY_TYPES: ["cloze", "exact_cloze", "recall", "sentence"],
+  recordAttempt: mocks.recordAttempt,
+}));
 vi.mock("../server/services/fsrsReviews.js", () => ({ recordReviewSubmission: mocks.recordReviewSubmission }));
 vi.mock("../server/services/deepseek.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/deepseek.js")>("../server/services/deepseek.js");

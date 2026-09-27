@@ -30,7 +30,8 @@ export function buildLessonWords(
   return dedupeLessonWords([
     ...relearnWords,
     ...todayWords
-      .filter((word) => lessonStatuses.has(word.status) && !word.mastered)
+      .filter((word) => lessonStatuses.has(word.status)
+        && !word.mastered)
       .map((word) => word.word),
   ]);
 }

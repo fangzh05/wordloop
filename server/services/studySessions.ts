@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
+import { LESSON_ACTIVITY_TYPES } from "./attempts.js";
 import {
   REVIEW_SESSION_MAX,
   reviewAnswerSchema,
@@ -8,7 +9,7 @@ import {
   type ReviewAnswerInput,
 } from "../../shared/toolContracts.js";
 import type { StudyFlow, StudyPhase, StudySessionEvent, StudySessionRow, StudyState, StudyWidget, VocabularyItem } from "../types.js";
-import { assertDatabaseResult, dateInTimeZone } from "./shared.js";
+import { assertDatabaseResult, dateInTimeZone, localDateRange } from "./shared.js";
 import { getTodayWords, getUserTimeZone } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
 import {
@@ -164,6 +165,85 @@ export async function getStudyDate(
   userId = getAuthenticatedUserId(),
 ): Promise<string> {
   return dateInTimeZone(await getUserTimeZone(db, userId));
+}
+
+function completedRelearnInState(value: unknown, normalizedWord: string): boolean {
+  const parsed = studyStateSchema.safeParse(value);
+  if (!parsed.success) return false;
+  const state = parsed.data;
+  const queue = state.flow.lesson_words;
+  if (state.widget !== "lesson" || !queue?.length || state.current_index >= queue.length) return false;
+  if (!["lesson_explain", "lesson_exercise", "lesson_feedback", "lesson_complete"].includes(state.phase)) return false;
+  if (!state.flow.relearn_words.some((word) => normalizeWord(word) === normalizedWord)) return false;
+  if (state.phase === "lesson_complete"
+    && normalizeWord(queue[queue.length - 1] ?? "") !== normalizeWord(state.current_word ?? "")) return false;
+  const completeCount = state.phase === "lesson_complete" ? queue.length : state.current_index;
+  return queue.slice(0, completeCount).some((word) => normalizeWord(word) === normalizedWord);
+}
+
+type RelearnSessionRow = { id: string; ended_at: string | null; state: unknown };
+type RelearnAttemptRow = {
+  session_id: string | null;
+  activity_type: string;
+  is_correct: boolean;
+  created_at: string;
+};
+
+/**
+ * Detect a completed same-day Lesson relearn from active session state or the
+ * durable Review and Lesson attempts in a finished session. Invalid historical
+ * snapshots are not resumable and do not interrupt Review/FSRS processing.
+ */
+export async function hasCompletedLessonRelearnToday(
+  word: string,
+  now = new Date(),
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<boolean> {
+  const normalizedWord = normalizeWord(word);
+  if (!normalizedWord) return false;
+  try {
+    const timeZone = await getUserTimeZone(db, userId);
+    const today = dateInTimeZone(timeZone, now);
+    const { start, end } = localDateRange(today, timeZone);
+    const sessionResult = await db.from("study_sessions")
+      .select("id,ended_at,state")
+      .eq("user_id", userId)
+      .gte("updated_at", start)
+      .lt("updated_at", end);
+    assertDatabaseResult(sessionResult.error);
+    const sessions = (sessionResult.data ?? []) as RelearnSessionRow[];
+    if (sessions.some((session) => completedRelearnInState(session.state, normalizedWord))) return true;
+
+    const sessionIds = sessions.map((session) => session.id);
+    if (sessionIds.length === 0) return false;
+    const attemptResult = await db.from("attempts")
+      .select("session_id,activity_type,is_correct,created_at,word:words!inner(normalized_word)")
+      .eq("user_id", userId)
+      .eq("word.normalized_word", normalizedWord)
+      .gte("created_at", start)
+      .lt("created_at", end)
+      .in("session_id", sessionIds)
+      .in("activity_type", ["review", ...LESSON_ACTIVITY_TYPES]);
+    assertDatabaseResult(attemptResult.error);
+    const attempts = (attemptResult.data ?? []) as RelearnAttemptRow[];
+    const lessonActivityTypeSet = new Set<string>(LESSON_ACTIVITY_TYPES);
+    return sessionIds.some((sessionId) => {
+      const sessionAttempts = attempts.filter((attempt) => attempt.session_id === sessionId);
+      return sessionAttempts.some((reviewAttempt) => {
+        if (reviewAttempt.activity_type !== "review" || reviewAttempt.is_correct !== false) return false;
+        const reviewTime = Date.parse(reviewAttempt.created_at);
+        return Number.isFinite(reviewTime) && sessionAttempts.some((lessonAttempt) => {
+          if (!lessonActivityTypeSet.has(lessonAttempt.activity_type)) return false;
+          const lessonTime = Date.parse(lessonAttempt.created_at);
+          return Number.isFinite(lessonTime) && lessonTime >= reviewTime;
+        });
+      });
+    });
+  } catch {
+    console.error("WordLoop same-day relearn check failed");
+    return false;
+  }
 }
 
 export async function getActiveStudySession(
@@ -527,8 +607,8 @@ export function reviewCursorPosition(state: StudyState | null, word: string): Re
   return "current";
 }
 
-function appendRelearnWord(flow: StudyFlow, word: string, isCorrect: boolean): StudyFlow {
-  if (isCorrect) return flow;
+function appendRelearnWord(flow: StudyFlow, word: string, isCorrect: boolean, suppressRelearn: boolean): StudyFlow {
+  if (isCorrect || suppressRelearn) return flow;
   const normalized = normalizeWord(word);
   if (flow.relearn_words.some((entry) => normalizeWord(entry) === normalized)) return flow;
   return {
@@ -537,7 +617,7 @@ function appendRelearnWord(flow: StudyFlow, word: string, isCorrect: boolean): S
   };
 }
 
-function advanceReviewState(state: StudyState, answer: ReviewAnswerInput): StudyState {
+function advanceReviewState(state: StudyState, answer: ReviewAnswerInput, suppressRelearn = false): StudyState {
   const items = reviewItems(state);
   const currentIndex = answer.current_index;
   const expectedWord = reviewWordAt(items, currentIndex);
@@ -564,7 +644,7 @@ function advanceReviewState(state: StudyState, answer: ReviewAnswerInput): Study
     phase: nextIndex >= items.length ? "review_complete" : "review",
     current_word: nextIndex >= items.length ? null : reviewWordAt(items, nextIndex),
     current_index: nextIndex,
-    flow: appendRelearnWord(state.flow, expectedWord, answer.is_correct),
+    flow: appendRelearnWord(state.flow, expectedWord, answer.is_correct, suppressRelearn),
   };
 }
 
@@ -586,13 +666,14 @@ export function advanceStudyState(
   event: StudySessionEvent,
   requestedIndex?: number,
   reviewAnswer?: ReviewAnswerInput,
+  suppressRelearn = false,
 ): StudyState {
   if (state.widget === "review") {
     if (event !== "review_answer" || !reviewAnswer) throw stateError(event, state.phase);
     if (requestedIndex !== undefined && requestedIndex !== reviewAnswer.current_index) {
       throw new Error("REVIEW_CURSOR_MISMATCH");
     }
-    return advanceReviewState(state, reviewAnswer);
+    return advanceReviewState(state, reviewAnswer, suppressRelearn);
   }
   const currentIndex = requestedIndex ?? state.current_index;
   if (!Number.isInteger(currentIndex) || currentIndex < 0) throw new Error("Study session index must be a non-negative integer.");
@@ -716,6 +797,7 @@ export async function advanceReviewAnswerFromServer(
   isCorrect: boolean,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  options: { suppressRelearn?: boolean } = {},
 ): Promise<{ session: StudySessionRow; position: Exclude<ReviewCursorPosition, "mismatch"> }> {
   const active = await getActiveStudySession(db, userId);
   if (!active?.state) throw new Error("No resumable active study session.");
@@ -732,7 +814,7 @@ export async function advanceReviewAnswerFromServer(
     is_correct: isCorrect,
     current_index: active.state.current_index,
   });
-  const nextState = advanceStudyState(active.state, "review_answer", active.state.current_index, answer);
+  const nextState = advanceStudyState(active.state, "review_answer", active.state.current_index, answer, options.suppressRelearn);
   const session = await updateSessionState(active, nextState, db, userId);
   return { session, position: "current" };
 }

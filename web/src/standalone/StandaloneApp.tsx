@@ -37,6 +37,22 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function hasDashboardProgress(value: unknown): boolean {
+  const progress = record(value);
+  const sections = ["today", "review_today", "all_time", "fsrs"].map((key) => record(progress[key]));
+  if (!["today", "review_today", "all_time", "fsrs"].every((key) => {
+    const section = progress[key];
+    return typeof section === "object" && section !== null && !Array.isArray(section);
+  })) return false;
+  const values = [
+    sections[0]?.total, sections[0]?.completed,
+    sections[1]?.completed, sections[1]?.total, sections[1]?.remaining,
+    sections[2]?.error_book, sections[2]?.mastered,
+    sections[3]?.due_now, sections[3]?.tomorrow, sections[3]?.due_next_7_days,
+  ];
+  return values.every((entry) => typeof entry === "number" && Number.isFinite(entry));
+}
+
 function list(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value) ? value.map(record) : [];
 }
@@ -102,6 +118,7 @@ export function dashboardContinueBehavior(view: WebApiResponse): "study" | "cont
 export function dashboardNextStep(view: WebApiResponse): string {
   const phase = record(view.state).phase;
   if (view.screen === "review" && phase === "review_complete") {
+    if (!hasDashboardProgress(view.progress)) return "继续学习";
     const today = record(record(view.progress).today);
     return numberValue(today.total) > numberValue(today.completed) ? "预测试" : "正式学习";
   }
@@ -109,6 +126,7 @@ export function dashboardNextStep(view: WebApiResponse): string {
   if (view.screen === "pretest") return "预测试";
   if (view.screen === "review") return "复习";
   if (view.screen === "lesson") return "正式学习";
+  if (!hasDashboardProgress(view.progress)) return "继续学习";
   const today = record(record(view.progress).today);
   return numberValue(today.total) > numberValue(today.completed) ? "继续学习" : "今日任务已完成";
 }
@@ -261,6 +279,7 @@ export function StandaloneDashboard({ view, busy, onContinue }: {
   busy: boolean;
   onContinue: () => void;
 }): React.JSX.Element {
+  const hasProgress = hasDashboardProgress(view.progress);
   const progress = record(view.progress);
   const review = record(progress.review_today);
   const today = record(progress.today);
@@ -271,21 +290,23 @@ export function StandaloneDashboard({ view, busy, onContinue }: {
 
   return <>
     <section className="widget-card standalone-card standalone-progress-card" aria-label="今日学习进度">
-      <StandaloneProgressBlock
-        title="今日复习"
-        completed={numberValue(review.completed)}
-        total={numberValue(review.total)}
-        emptyText="无到期复习"
-        detail={`已完成 · 剩余 ${numberValue(review.remaining)}`}
-      />
-      <StandaloneProgressBlock
-        title="今日新词"
-        completed={numberValue(today.completed)}
-        total={numberValue(today.total)}
-        emptyText="暂无新词"
-        detail="已完成"
-      />
-      {todayTasksComplete(view.progress) && <p className="standalone-status" role="status">今日任务完成</p>}
+      {hasProgress ? <>
+        <StandaloneProgressBlock
+          title="今日复习"
+          completed={numberValue(review.completed)}
+          total={numberValue(review.total)}
+          emptyText="无到期复习"
+          detail={`已完成 · 剩余 ${numberValue(review.remaining)}`}
+        />
+        <StandaloneProgressBlock
+          title="今日新词"
+          completed={numberValue(today.completed)}
+          total={numberValue(today.total)}
+          emptyText="暂无新词"
+          detail="已完成"
+        />
+        {todayTasksComplete(view.progress) && <p className="standalone-status" role="status">今日任务完成</p>}
+      </> : <p className="standalone-status" role="status">进度暂时无法读取</p>}
       {activeSummary && <div className="standalone-active-study">
         <span className="eyebrow">当前学习</span>
         <p>{activeSummary}</p>
@@ -298,7 +319,7 @@ export function StandaloneDashboard({ view, busy, onContinue }: {
       </div>
     </section>
 
-    <section className="widget-card standalone-card" aria-label="学习状态">
+    {hasProgress && <section className="widget-card standalone-card" aria-label="学习状态">
       <span className="eyebrow">学习状态</span>
       <dl className="metrics">
         <div><dt>错词</dt><dd>{numberValue(allTime.error_book)}</dd></div>
@@ -310,7 +331,7 @@ export function StandaloneDashboard({ view, busy, onContinue }: {
         <div><dt>明日到期</dt><dd>{numberValue(fsrs.tomorrow)}</dd></div>
         <div><dt>未来 7 天</dt><dd>{numberValue(fsrs.due_next_7_days)}</dd></div>
       </dl>
-    </section>
+    </section>}
   </>;
 }
 

@@ -101,6 +101,24 @@ describe("progress calculation", () => {
     expect(today.today).toMatchObject({ completed: 6, total: 50 });
   });
 
+  it("ignores ended sessions with empty state and safely counts a valid active Lesson", () => {
+    const activeLesson = makeStudyState({
+      date: "2026-09-27", widget: "lesson", phase: "lesson_explain", current_word: "new-1", current_index: 1,
+      retry_count: 0, flow: { relearn_words: ["Grieve"], lesson_words: ["grieve", "new-1"] },
+      payload: { widget: "lesson", mode: "explain", word: "new-1" },
+    });
+
+    expect(calculateReviewTodayProgress(
+      { state: activeLesson },
+      [
+        { review_words_count: 17, state: {} },
+        { review_words_count: 0, state: activeLesson },
+        { review_words_count: 0, state: { flow: { relearn_words: null } } },
+      ],
+      12,
+    )).toEqual({ completed: 13, total: 18, remaining: 5 });
+  });
+
   it("keeps today's new-word queue independent from completed Review work", () => {
     const sixCompleted = Array.from({ length: 50 }, (_, index) => item(`new-${index}`, index < 6 ? "known" : "new"));
     const daily = calculateProgress(sixCompleted, sixCompleted);

@@ -206,6 +206,7 @@ async function progressIfAvailable(): Promise<unknown | undefined> {
   try {
     return await getProgress();
   } catch {
+    console.error("WordLoop progress failed", { source: "bootstrap" });
     return undefined;
   }
 }

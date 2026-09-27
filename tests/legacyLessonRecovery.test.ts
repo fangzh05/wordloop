@@ -16,7 +16,6 @@ vi.mock("../server/services/words.js", () => ({
   getTodayWords: mocks.getTodayWords,
   getUserTimeZone: mocks.getUserTimeZone,
 }));
-
 import { normalizeLegacyLessonSession } from "../server/services/studySessions.js";
 
 function item(word: string, status: VocabularyItem["status"] = "review"): VocabularyItem {

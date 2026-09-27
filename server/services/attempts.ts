@@ -6,6 +6,20 @@ import { normalizeWord } from "./wordNormalization.js";
 
 export type RecordAttemptInput = SharedRecordAttemptInput;
 
+export const LESSON_ACTIVITY_TYPES = [
+  "exact_cloze",
+  "cloze",
+  "translation_cn_to_en",
+  "translation_en_to_cn",
+  "collocation",
+  "derivation",
+  "recall",
+  "sentence",
+  "spelling",
+  "word_recall",
+  "semantic_expression",
+] as const;
+
 export async function recordAttempt(input: RecordAttemptInput): Promise<Record<string, unknown>> {
   // Fail-closed gate: no attempt reaches durable state unless its verdict obeys
   // the grading invariants. Ordinary practice never advances FSRS, so it must

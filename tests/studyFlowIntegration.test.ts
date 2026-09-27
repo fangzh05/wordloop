@@ -35,6 +35,9 @@ vi.mock("../server/db.js", () => ({
   getAuthenticatedUserId: bootstrapMocks.getAuthenticatedUserId,
   getDatabase: bootstrapMocks.getDatabase,
 }));
+vi.mock("../server/services/attempts.js", () => ({
+  LESSON_ACTIVITY_TYPES: ["cloze", "exact_cloze", "recall", "sentence"],
+}));
 vi.mock("../server/services/studySessions.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/studySessions.js")>("../server/services/studySessions.js");
   return {

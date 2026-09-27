@@ -69,6 +69,13 @@ describe("durable Lesson queue invariant", () => {
     )).toEqual(["expression", "planet", "shrink", "marine", "thermometer"]);
   });
 
+  it("keeps today's eligible unknown and uncertain words behind relearn words", () => {
+    expect(buildLessonWords(
+      ["grieve"],
+      [item("electrical", "unknown"), item("embark", "uncertain"), item("known", "known")],
+    )).toEqual(["grieve", "electrical", "embark"]);
+  });
+
   it("recovers pending relearn words that were before a legacy current cursor", () => {
     const recovered = recoverLegacyLessonWords({
       relearnWords: ["expression", "planet", "shrink"],

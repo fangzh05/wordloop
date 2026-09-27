@@ -2,7 +2,6 @@ import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { StudyPhase, StudySessionRow, VocabularyItem } from "../types.js";
 import { ensureTodayQueue } from "./dailyQueue.js";
 import {
-  findFirstLearningWord,
   getDueReviewSelection,
 } from "./review.js";
 import {
@@ -139,10 +138,7 @@ async function bootstrapFreshFlow(
   }
 
   const lessonWords = buildLessonWords([], todayWords);
-  const lessonWord = findFirstLearningWord(todayWords);
-  return lessonWord
-    ? deferLessonQueueFreeze ? { action: "lesson", word: lessonWord, lesson_words: lessonWords } : { action: "lesson", word: lessonWord }
-    : { action: "done" };
+  return lessonAction(lessonWords, db, userId, deferLessonQueueFreeze);
 }
 
 export async function getStudyBootstrap(options?: {
