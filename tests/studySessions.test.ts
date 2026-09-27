@@ -555,7 +555,7 @@ describe("durable study session state", () => {
     updateBuilder.eq = vi.fn(() => updateBuilder);
     updateBuilder.is = vi.fn(() => updateBuilder);
     updateBuilder.select = vi.fn(() => ({
-      single: vi.fn(async () => ({ data: finishedRow, error: null })),
+      maybeSingle: vi.fn(async () => ({ data: finishedRow, error: null })),
     }));
     const db = {
       from: vi.fn((table: string) => {

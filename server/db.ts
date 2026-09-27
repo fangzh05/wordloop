@@ -46,6 +46,16 @@ export function getMerriamWebsterApiKey(): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
+export function getDeepSeekApiKey(): string | undefined {
+  const parsed = z.string().trim().min(1).safeParse(activeEnv().DEEPSEEK_API_KEY);
+  return parsed.success ? parsed.data : undefined;
+}
+
+export function getWordloopWebToken(): string | undefined {
+  const parsed = z.string().trim().min(1).safeParse(activeEnv().WORDLOOP_WEB_TOKEN);
+  return parsed.success ? parsed.data : undefined;
+}
+
 export function getShanbayCookie(): string {
   const env = activeEnv();
   const fullCookie = z.string().trim().min(1).safeParse(env.SHANBAY_COOKIE);

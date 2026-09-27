@@ -14,6 +14,7 @@ const widgetEntries = {
   pronunciation: path.join(root, "web", "src", "entries", "pronunciation.tsx"),
   dictation: path.join(root, "web", "src", "entries", "dictation.tsx"),
   import: path.join(root, "web", "src", "entries", "import.tsx"),
+  standalone: path.join(root, "web", "src", "standalone", "main.tsx"),
 } as const;
 
 await rm(path.join(outDirectory, "widget.js"), { force: true });

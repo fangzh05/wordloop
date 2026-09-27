@@ -1,0 +1,8 @@
+{
+  "name": "WordLoop",
+  "short_name": "WordLoop",
+  "display": "standalone",
+  "start_url": "/",
+  "theme_color": "#f5f5f7",
+  "background_color": "#f5f5f7"
+}

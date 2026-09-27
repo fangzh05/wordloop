@@ -1,0 +1,420 @@
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "../components/Button.js";
+import {
+  ApiError,
+  StaleStudyStateError,
+  UnauthorizedError,
+  clearToken,
+  getBootstrap,
+  postAction,
+  saveToken,
+  type WebAction,
+  type WebApiResponse,
+} from "./apiClient.js";
+
+type PageStatus = "loading" | "auth" | "ready";
+type RetryFields = Record<string, unknown> | null;
+
+function initialToken(): string | null {
+  try {
+    return localStorage.getItem("wordloop_web_token");
+  } catch {
+    return null;
+  }
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function list(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.map(record) : [];
+}
+
+function messageFor(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === "DEEPSEEK_TIMEOUT") return "请求超时，请重试";
+    if (error.code === "DEEPSEEK_NOT_CONFIGURED") return "AI 服务尚未配置，请稍后再试。";
+    if (error.code.startsWith("DEEPSEEK_")) return "生成或批改暂时失败，请重试。";
+    return error.message;
+  }
+  return "连接失败，请检查网络后重试。";
+}
+
+function wordsFrom(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((word): word is string => typeof word === "string") : [];
+}
+
+function progressLabel(value: unknown): string {
+  const progress = record(value);
+  const today = record(progress.today);
+  const completed = typeof today.completed === "number" ? today.completed : 0;
+  const total = typeof today.total === "number" ? today.total : 0;
+  return `${completed} / ${total}`;
+}
+
+export default function StandaloneApp(): React.JSX.Element {
+  const [token, setToken] = useState<string | null>(initialToken);
+  const [tokenInput, setTokenInput] = useState("");
+  const [view, setView] = useState<WebApiResponse | null>(null);
+  const [pageStatus, setPageStatus] = useState<PageStatus>(token ? "loading" : "auth");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [answer, setAnswer] = useState("");
+  const [notice, setNotice] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [retryFields, setRetryFields] = useState<RetryFields>(null);
+
+  const enterAuth = useCallback((wrongToken = false) => {
+    clearToken();
+    setToken(null);
+    setView(null);
+    setBusy(null);
+    setRetryFields(null);
+    setPageStatus("auth");
+    setAuthError(wrongToken ? "访问密钥错误" : "");
+  }, []);
+
+  const loadBootstrap = useCallback(async (preserveError = false, overrideToken?: string, retryStale = true) => {
+    const activeToken = overrideToken ?? token;
+    if (!activeToken) {
+      setPageStatus("auth");
+      return;
+    }
+    setBusy("bootstrap");
+    setPageStatus((current) => current === "auth" ? "auth" : "loading");
+    if (!preserveError) setErrorMessage("");
+    try {
+      const next = await getBootstrap(overrideToken);
+      setView(next);
+      setPageStatus("ready");
+      setNotice("");
+      if (!preserveError) {
+        setRetryFields(null);
+        setErrorMessage("");
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        enterAuth(true);
+      } else if (error instanceof StaleStudyStateError) {
+        setView(null);
+        setPageStatus("loading");
+        setBusy(null);
+        if (retryStale) void loadBootstrap(preserveError, overrideToken, false);
+        else {
+          setPageStatus("ready");
+          setErrorMessage("学习状态正在其他客户端更新，请重试。");
+        }
+        return;
+      } else {
+        setPageStatus("ready");
+        setErrorMessage(messageFor(error));
+        setRetryFields(null);
+      }
+    } finally {
+      setBusy(null);
+    }
+  }, [enterAuth, token]);
+
+  useEffect(() => {
+    if (token) void loadBootstrap();
+  }, []);
+
+  useEffect(() => {
+    const state = view?.state;
+    if (!state) return;
+    const payload = record(state.payload);
+    const wrapupDraft = state.widget === "lesson" && state.phase === "lesson_complete"
+      && payload.mode === "exercise" && payload.wrapup === true;
+    if (state.widget === "lesson" && (state.phase === "lesson_exercise" || wrapupDraft) && typeof state.current_word === "string") {
+      try {
+        const stored = sessionStorage.getItem("wordloop_draft");
+        if (stored) {
+          const draft = JSON.parse(stored) as { word?: unknown; answer?: unknown };
+          if (draft.word === state.current_word && typeof draft.answer === "string") {
+            setAnswer(draft.answer);
+            return;
+          }
+        }
+        sessionStorage.removeItem("wordloop_draft");
+      } catch {
+        // A malformed local draft is discarded; the server state remains authoritative.
+      }
+    } else {
+      try { sessionStorage.removeItem("wordloop_draft"); } catch { /* storage is optional */ }
+    }
+    if (payload.mode !== "exercise") setAnswer("");
+  }, [view?.session_revision, view?.state.current_word, view?.state.phase]);
+
+  const saveAnswer = (value: string) => {
+    setAnswer(value);
+    const state = view?.state;
+    const payload = record(state?.payload);
+    const wrapupDraft = state?.widget === "lesson" && state.phase === "lesson_complete"
+      && payload.mode === "exercise" && payload.wrapup === true;
+    if (state?.widget !== "lesson" || (state.phase !== "lesson_exercise" && !wrapupDraft) || typeof state.current_word !== "string") return;
+    try { sessionStorage.setItem("wordloop_draft", JSON.stringify({ word: state.current_word, answer: value })); } catch { /* storage is optional */ }
+  };
+
+  const submitToken = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const candidate = tokenInput.trim();
+    if (!candidate) return;
+    setBusy("auth");
+    setAuthError("");
+    try {
+      const next = await getBootstrap(candidate);
+      saveToken(candidate);
+      setToken(candidate);
+      setView(next);
+      setPageStatus("ready");
+      setTokenInput("");
+      setErrorMessage("");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) setAuthError("访问密钥错误");
+      else setAuthError(messageFor(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const dispatch = async (fields: Record<string, unknown>) => {
+    const revision = view?.session_revision ?? null;
+    const action = { ...fields, expected_revision: revision } as WebAction;
+    setBusy(String(fields.action ?? "action"));
+    setErrorMessage("");
+    setNotice("");
+    setRetryFields(fields);
+    try {
+      const next = await postAction(action);
+      if (fields.action === "refresh_progress") {
+        setView((previous) => previous ? { ...previous, progress: next.progress } : next);
+      } else {
+        setView(next);
+        setRetryFields(null);
+        try { sessionStorage.removeItem("wordloop_draft"); } catch { /* storage is optional */ }
+        setAnswer("");
+        if (next.result?.message) setNotice(next.result.message);
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        enterAuth(true);
+      } else if (error instanceof StaleStudyStateError) {
+        setView(null);
+        setNotice("");
+        setRetryFields(null);
+        await loadBootstrap();
+      } else {
+        setErrorMessage(messageFor(error));
+        if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
+          await loadBootstrap(true);
+        }
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const retry = () => {
+    if (retryFields) void dispatch(retryFields);
+    else void loadBootstrap();
+  };
+
+  const state = view?.state ?? {};
+  const payload = record(state.payload);
+  const progress = view?.progress;
+  const currentIndex = typeof state.current_index === "number" ? state.current_index : 0;
+  const busyLabel = busy === "lesson_next"
+    ? payload.navigation && record(payload.navigation).action === "round_complete" ? "正在生成收尾题…" : "正在生成下一词…"
+    : busy === "lesson_submit" || busy === "wrapup_submit" ? "正在批改…"
+      : busy === "bootstrap" ? "正在加载今日学习…"
+        : busy === "pretest_submit" || busy === "review_submit" ? "正在保存…"
+          : null;
+
+  if (pageStatus === "auth" || !token) {
+    return <main className="standalone-shell">
+      <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
+      <section className="widget-card standalone-card" aria-labelledby="auth-title">
+        <header className="widget-header">
+          <span className="eyebrow">WordLoop</span>
+          <h1 id="auth-title">访问密钥</h1>
+          <p>输入个人访问密钥以继续今日学习。</p>
+        </header>
+        <form onSubmit={(event) => void submitToken(event)}>
+          <label className="answer-label" htmlFor="web-token">访问密钥</label>
+          <input id="web-token" className="answer-input standalone-input" type="password" autoComplete="current-password" value={tokenInput} onChange={(event) => setTokenInput(event.target.value)} />
+          {authError && <p className="standalone-status error" role="alert">{authError}</p>}
+          <div className="standalone-actions"><Button type="submit" disabled={busy === "auth" || !tokenInput.trim()}>{busy === "auth" ? "正在验证…" : "进入"}</Button></div>
+        </form>
+      </section>
+    </main>;
+  }
+
+  return <main className="standalone-shell">
+    <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
+    <section className="widget-card standalone-card standalone-progress-card" aria-label="今日进度">
+      <div className="standalone-progress-heading"><strong>今日进度</strong><span>已完成 {progressLabel(progress)}</span></div>
+      <div className="standalone-progress-number">{progressLabel(progress)}</div>
+      <div className="standalone-progress-track" aria-hidden="true"><span style={{ width: `${progress && record(progress.today).total ? Math.min(100, Math.round((Number(record(progress.today).completed) / Number(record(progress.today).total)) * 100)) : 0}%` }} /></div>
+      <div className="standalone-actions">
+        <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button>
+      </div>
+    </section>
+
+    {errorMessage && <section className="widget-card standalone-card" role="alert">
+      <p className="standalone-status error">{errorMessage}</p>
+      <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={retry}>重试</Button></div>
+    </section>}
+
+    {pageStatus === "loading" && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>{busyLabel ?? "正在加载今日学习…"}</p></div></section>}
+
+    {pageStatus === "ready" && !view && !errorMessage && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>正在加载今日学习…</p></div></section>}
+
+    {view?.screen === "review" && (() => {
+      const items = list(payload.items);
+      const item = items[currentIndex] ?? {};
+      const complete = state.phase === "review_complete";
+      const direction = item.direction === "en_definition" ? "en_definition" : "cn_to_en";
+      return <section className="widget-card standalone-card" aria-labelledby="study-title">
+        <header className="widget-header compact-header"><div><span className="eyebrow">WordLoop</span><h1 id="study-title">复习</h1></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
+        {complete ? <div className="standalone-content"><p>本轮复习完成。</p><div className="standalone-actions"><Button type="button" onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
+          <div className="question-block">
+            <span className="question-label">{direction === "cn_to_en" ? "中文核心义" : "请用简单英文解释"}</span>
+            {direction === "cn_to_en"
+              ? <p className="question-prompt">{String(item.meaning_zh ?? "")}</p>
+              : <p className="question-word">{String(item.word ?? "")}{item.part_of_speech ? <small> {String(item.part_of_speech)}</small> : null}</p>}
+          </div>
+          <label className="answer-label" htmlFor="study-answer">{direction === "cn_to_en" ? "写出英文单词" : "英文释义"}</label>
+          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void dispatch({ action: "review_submit", answer }); } }} />
+          {notice && <p className="standalone-status" role="status">{notice}</p>}
+          <div className="standalone-actions standalone-two-actions">
+            <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "review_submit", answer: "", mark_unknown: true })}>不会</Button>
+            <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "review_submit", answer })}>提交</Button>
+          </div>
+        </div>}
+        {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
+      </section>;
+    })()}
+
+    {view?.screen === "pretest" && (() => {
+      const items = list(payload.items);
+      const item = items[currentIndex] ?? {};
+      const complete = state.phase === "pretest_complete";
+      const summary = view.pretest_summary ?? { known: 0, uncertain: 0, unknown: 0 };
+      const audioStage = ["pretest_result", "listen_repeat", "listen_recall"].includes(String(state.phase));
+      return <section className="widget-card standalone-card" aria-labelledby="study-title">
+        <header className="widget-header compact-header"><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
+        {complete ? <div className="standalone-content">
+          <p>预测试完成</p>
+          <div className="standalone-result-grid">
+            <div><strong>{summary.known}</strong><span>已掌握</span></div>
+            <div><strong>{summary.uncertain}</strong><span>不确定</span></div>
+            <div><strong>{summary.unknown}</strong><span>不会</span></div>
+          </div>
+          <div className="standalone-actions"><Button type="button" onClick={() => void dispatch({ action: "continue" })}>开始正式学习</Button></div>
+        </div> : audioStage ? <div className="standalone-content"><p>当前预测试正在 ChatGPT 听音阶段，请在 ChatGPT 完成此阶段。</p></div> : <div className="standalone-content">
+          <div className="question-block">
+            <span className="question-label">中文核心义</span>
+            <p className="question-prompt">{String(item.meaning_zh ?? "")}</p>
+            {typeof item.part_of_speech === "string" && <p className="answer-hint">{item.part_of_speech}</p>}
+          </div>
+          <label className="answer-label" htmlFor="study-answer">写出英文单词</label>
+          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void dispatch({ action: "pretest_submit", answer }); } }} />
+          {notice && <p className="standalone-status" role="status">{notice}</p>}
+          <div className="standalone-actions standalone-two-actions">
+            <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "pretest_submit", answer: "", mark_unknown: true })}>不会</Button>
+            <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "pretest_submit", answer })}>提交</Button>
+          </div>
+        </div>}
+        {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
+      </section>;
+    })()}
+
+    {view?.screen === "lesson" && (() => {
+      const flow = record(state.flow);
+      const queue = wordsFrom(flow.lesson_words);
+      const feedback = record(payload.feedback);
+      const exercise = payload.mode === "exercise" ? payload : record(payload.exercise);
+      const navigation = record(payload.navigation);
+      const title = String(state.current_word ?? payload.word ?? "Lesson");
+      const isWrapup = payload.wrapup === true;
+      const feedbackMode = payload.mode === "feedback";
+      const exerciseMode = payload.mode === "exercise";
+      const phase = String(state.phase ?? "");
+      return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
+        <header className="widget-header compact-header"><div><span className="eyebrow">{isWrapup ? "本轮收尾" : `正式学习 · ${Math.min(currentIndex + 1, queue.length)} / ${queue.length || "—"}`}</span><div className="lesson-word-heading"><strong id="study-title">{title}</strong></div></div></header>
+
+        {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content">
+          <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
+          <section className="lesson-section"><h2>词性与核心义</h2><p>{String(payload.part_of_speech ?? "")} · {String(payload.meaning_zh ?? "")}</p></section>
+          <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).map((value) => <li key={value}>{value}</li>)}</ul></section>
+          <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
+          <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{String(payload.example_en ?? "")}</p></section>
+          <section className="lesson-section"><h2>易混提醒</h2><p>{String(payload.note ?? "")}</p></section>
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
+        </div>}
+
+        {phase === "lesson_exercise" && exerciseMode && <div className="standalone-content">
+          <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
+          <div className="lesson-prompt">{String(exercise.prompt ?? "")}</div>
+          {exercise.multiline === true
+            ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} />
+            : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void dispatch({ action: "lesson_submit", answer }); } }} />}
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_submit", answer })}>提交</Button></div>
+        </div>}
+
+        {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
+          <div className="standalone-feedback"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
+          {notice && <p className="standalone-status" role="status">{notice}</p>}
+          <div className="standalone-actions">
+            {feedback.is_correct !== true && feedback.reveal_answer !== true
+              ? <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_retry" })}>重做当前题</Button>
+              : navigation.action === "next_word"
+                ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>下一词</Button>
+                : <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>本轮长难句收尾</Button>}
+          </div>
+        </div>}
+
+        {phase === "lesson_complete" && exerciseMode && isWrapup && <div className="standalone-content">
+          <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
+          <div className="lesson-prompt">{String(exercise.prompt ?? "")}</div>
+          <textarea className="standalone-input" aria-label="长难句翻译与结构分析" value={answer} onChange={(event) => saveAnswer(event.target.value)} />
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "wrapup_submit", answer })}>提交收尾题</Button></div>
+        </div>}
+
+        {phase === "lesson_complete" && feedbackMode && isWrapup && <div className="standalone-content">
+          <div className="standalone-feedback"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
+          <div className="standalone-actions">
+            {feedback.is_correct === true || feedback.reveal_answer === true
+              ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "wrapup_finish" })}>完成本轮</Button>
+              : <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "wrapup_retry" })}>重做收尾题</Button>}
+          </div>
+        </div>}
+
+        {phase === "lesson_complete" && feedbackMode && !isWrapup && <div className="standalone-content">
+          <p>正在准备本轮长难句收尾题。</p>
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>生成收尾题</Button></div>
+        </div>}
+
+        {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
+      </section>;
+    })()}
+
+    {view?.screen === "done" && <section className="widget-card standalone-card" aria-labelledby="study-title">
+      <header className="widget-header"><span className="eyebrow">WordLoop</span><h1 id="study-title">{view.state.widget === "dictation" ? "请在 ChatGPT 继续" : "今日学习完成"}</h1><p>{view.message ?? "今天的学习内容已经完成。"}</p></header>
+      <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button><Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "refresh_progress" })}>刷新进度</Button></div>
+    </section>}
+
+    {pageStatus === "loading" && view && <p className="standalone-status" role="status">{busyLabel ?? "正在同步学习状态…"}</p>}
+  </main>;
+}
+
+function speak(word: string): void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(word);
+  utterance.lang = "en-US";
+  window.speechSynthesis.speak(utterance);
+}

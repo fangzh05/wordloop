@@ -318,3 +318,37 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .lesson-feedback p { margin: 0.25rem 0; }
 .lesson-feedback p:first-child { margin-top: 0; }
 .lesson-audio { margin-top: 0.85rem; }
+
+.standalone-shell { display: flex; flex-direction: column; gap: 0.8rem; width: 100%; max-width: 680px; min-height: 100svh; margin: 0 auto; padding: max(0.6rem, env(safe-area-inset-top)) max(0.65rem, env(safe-area-inset-right)) max(0.8rem, env(safe-area-inset-bottom)) max(0.65rem, env(safe-area-inset-left)); }
+.standalone-brand { display: flex; align-items: center; gap: 0.55rem; padding: 0.25rem 0.25rem 0.1rem; font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
+.standalone-mark { display: inline-grid; width: 2rem; height: 2rem; place-items: center; border-radius: 10px; background: var(--accent); color: white; font-weight: 750; }
+.standalone-card { width: 100%; max-width: none; padding: 1.1rem; }
+.standalone-progress-card { padding: 0.9rem 1rem; }
+.standalone-progress-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; }
+.standalone-progress-heading strong { font-size: 0.9rem; }
+.standalone-progress-heading span { color: var(--muted); font-size: 0.78rem; }
+.standalone-progress-number { margin-top: 0.25rem; font-size: 1.35rem; font-weight: 680; font-variant-numeric: tabular-nums; }
+.standalone-progress-track { height: 6px; margin-top: 0.55rem; overflow: hidden; border-radius: 999px; background: var(--control); }
+.standalone-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.standalone-content { display: grid; gap: 0.85rem; }
+.standalone-count { color: var(--muted); font-size: 0.83rem; font-variant-numeric: tabular-nums; }
+.standalone-actions { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.9rem; }
+.standalone-actions.standalone-two-actions { grid-template-columns: 5.5rem 1fr; }
+.standalone-actions .button { width: 100%; margin: 0; }
+.standalone-actions .button.secondary { color: var(--text); }
+.standalone-input { margin-top: 0.35rem; }
+.standalone-status { min-height: 1.25rem; margin: 0.35rem 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+.standalone-status.error { color: var(--error); }
+.standalone-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-top: 0.8rem; }
+.standalone-result-grid > div { padding: 0.7rem 0.4rem; border-radius: 12px; background: var(--control); text-align: center; }
+.standalone-result-grid strong { display: block; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.standalone-result-grid span { display: block; margin-top: 0.15rem; color: var(--muted); font-size: 0.72rem; }
+.standalone-feedback { margin-top: 0.75rem; padding: 0.8rem; border-radius: 13px; background: var(--control); font-size: 0.88rem; line-height: 1.5; }
+.standalone-feedback p { margin: 0.25rem 0; }
+.standalone-feedback p:first-child { margin-top: 0; }
+.standalone-link { color: var(--accent); font-size: 0.8rem; text-decoration: none; }
+.standalone-link:hover { text-decoration: underline; }
+@media (min-width: 560px) {
+  .standalone-shell { padding-top: 1rem; }
+  .standalone-card { padding: 1.35rem; }
+}

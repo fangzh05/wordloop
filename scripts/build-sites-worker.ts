@@ -5,10 +5,11 @@ import { build } from "esbuild";
 const root = process.cwd();
 const outputRoot = path.join(root, "dist");
 const widgetKinds = ["import", "pretest", "review", "dashboard", "pronunciation", "dictation", "lesson"] as const;
-const [siteHtml, siteCss, siteJs, widgetJs, widgetCss, ...migrationSql] = await Promise.all([
+const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, ...migrationSql] = await Promise.all([
   readFile(path.join(root, "build", "index.html"), "utf8"),
-  readFile(path.join(root, "build", "styles.css"), "utf8"),
-  readFile(path.join(root, "build", "app.js"), "utf8"),
+  readFile(path.join(root, "web", "dist", "widget.css"), "utf8"),
+  readFile(path.join(root, "web", "dist", "standalone.js"), "utf8"),
+  readFile(path.join(root, "build", "manifest.webmanifest"), "utf8"),
   Promise.all(widgetKinds.map((kind) => readFile(path.join(root, "web", "dist", `${kind}.js`), "utf8"))),
   readFile(path.join(root, "web", "dist", "widget.css"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609130001_initial_wordloop.sql"), "utf8"),
@@ -39,6 +40,7 @@ await build({
     __SITE_HTML__: JSON.stringify(siteHtml),
     __SITE_CSS__: JSON.stringify(siteCss),
     __SITE_JS__: JSON.stringify(siteJs),
+    __SITE_MANIFEST__: JSON.stringify(siteManifest),
     __WIDGET_JS__: JSON.stringify(Object.fromEntries(widgetKinds.map((kind, index) => [kind, widgetJs[index] ?? ""]))),
     __WIDGET_CSS__: JSON.stringify(widgetCss),
     __MIGRATION_SQL__: JSON.stringify(migrationSql.join("\n\n")),
