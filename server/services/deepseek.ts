@@ -1,0 +1,239 @@
+import { z } from "zod";
+import { getDeepSeekApiKey } from "../db.js";
+import {
+  ENGLISH_DEFINITION_GRADING_PROMPT,
+  LESSON_GENERATION_PROMPT,
+  SEMANTIC_GRADING_PROMPT,
+  WRAPUP_GENERATION_PROMPT,
+  WRAPUP_GRADING_PROMPT,
+} from "./deepseekPrompts.js";
+
+const deepseekBase = "https://api.deepseek.com/chat/completions";
+const timeoutMs = 12_000;
+const activityTypes = [
+  "cloze", "translation_cn_to_en", "translation_en_to_cn", "collocation", "derivation", "recall", "sentence",
+] as const;
+const exerciseSchema = z.object({
+  activity_type: z.enum(activityTypes),
+  instruction: z.string().trim().min(1).max(300),
+  prompt: z.string().trim().min(1).max(4000),
+  multiline: z.boolean(),
+}).superRefine((value, context) => {
+  if (value.activity_type === "cloze" && !value.prompt.includes("___")) {
+    context.addIssue({ code: "custom", message: "A cloze prompt must include a blank.", path: ["prompt"] });
+  }
+  if (value.activity_type === "translation_cn_to_en" && !/\p{Script=Han}/u.test(value.prompt)) {
+    context.addIssue({ code: "custom", message: "A Chinese-to-English prompt must contain Chinese.", path: ["prompt"] });
+  }
+  if (value.activity_type === "translation_en_to_cn" && !/[A-Za-z]/.test(value.prompt)) {
+    context.addIssue({ code: "custom", message: "An English-to-Chinese prompt must contain English.", path: ["prompt"] });
+  }
+});
+
+function englishWords(value: string): string[] {
+  return value.toLocaleLowerCase().match(/[a-z]+(?:['’][a-z]+)?/g) ?? [];
+}
+
+function hasDistinctContexts(example: string, exercise: string): boolean {
+  const normalize = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9\p{Script=Han}]+/gu, " ").trim();
+  if (normalize(example) === normalize(exercise)) return false;
+  const exampleWords = new Set(englishWords(example).filter((word) => word.length > 2));
+  const exerciseWords = new Set(englishWords(exercise).filter((word) => word.length > 2));
+  if (exampleWords.size < 5 || exerciseWords.size < 5) return true;
+  const overlap = [...exampleWords].filter((word) => exerciseWords.has(word)).length;
+  return overlap / new Set([...exampleWords, ...exerciseWords]).size < 0.8;
+}
+
+function validateExampleLength(value: string, context: z.RefinementCtx): void {
+  const count = englishWords(value).length;
+  if (count < 15 || count > 25) {
+    context.addIssue({ code: "custom", message: "The example must contain 15–25 English words.", path: ["example_en"] });
+  }
+}
+
+export const lessonGenerationSchema = z.object({
+  ipa: z.string().trim().min(1).max(120),
+  part_of_speech: z.string().trim().min(1).max(40),
+  meaning_zh: z.string().trim().min(1).max(240),
+  collocations: z.array(z.string().trim().min(1).max(200)).max(8),
+  derivations: z.array(z.string().trim().min(1).max(200)).max(8),
+  example_en: z.string().trim().min(1).max(1000),
+  note: z.string().trim().min(1).max(1000),
+  exercise: exerciseSchema,
+}).superRefine((value, context) => {
+  validateExampleLength(value.example_en, context);
+  if (!hasDistinctContexts(value.example_en, value.exercise.prompt)) {
+    context.addIssue({ code: "custom", message: "The exercise must use a different context from the example.", path: ["exercise", "prompt"] });
+  }
+});
+
+const errorLayerSchema = z.enum(["none", "meaning", "collocation", "grammar", "spelling", "pronunciation"]);
+
+export const semanticGradeSchema = z.object({
+  is_correct: z.boolean(),
+  error_layer: errorLayerSchema,
+  message: z.string().trim().min(1).max(1000),
+  explanation: z.string().trim().min(1).max(4000),
+  reference_answer: z.string().trim().min(1).max(4000).optional(),
+});
+
+export const englishDefinitionGradeSchema = z.object({
+  is_correct: z.boolean(),
+  feedback: z.string().trim().min(1).max(1000),
+});
+
+export const wrapupExerciseSchema = z.object({
+  activity_type: z.literal("sentence"),
+  instruction: z.string().trim().min(1).max(300),
+  prompt: z.string().trim().min(1).max(4000),
+  multiline: z.literal(true),
+}).superRefine((value, context) => {
+  const count = englishWords(value.prompt).length;
+  if (count < 25 || count > 40) {
+    context.addIssue({ code: "custom", message: "The wrap-up sentence must contain 25–40 English words.", path: ["prompt"] });
+  }
+});
+
+export const wrapupGradeSchema = z.object({
+  is_correct: z.boolean(),
+  error_layer: errorLayerSchema,
+  message: z.string().trim().min(1).max(1000),
+  explanation: z.string().trim().min(1).max(4000),
+  reference_answer: z.string().trim().min(1).max(4000).optional(),
+});
+
+export type LessonGeneration = z.output<typeof lessonGenerationSchema>;
+export type SemanticGrade = z.output<typeof semanticGradeSchema>;
+export type EnglishDefinitionGrade = z.output<typeof englishDefinitionGradeSchema>;
+export type WrapupExercise = z.output<typeof wrapupExerciseSchema>;
+export type WrapupGrade = z.output<typeof wrapupGradeSchema>;
+
+export class DeepSeekError extends Error {
+  constructor(readonly code: string, readonly status: number, message: string) {
+    super(message);
+    this.name = "DeepSeekError";
+  }
+}
+
+function retryableJsonError(): DeepSeekError {
+  return new DeepSeekError("DEEPSEEK_INVALID_JSON", 502, "DeepSeek returned invalid JSON.");
+}
+
+async function deepSeekJson<T>(schema: z.ZodType<T>, prompt: string, input: unknown): Promise<T> {
+  const apiKey = getDeepSeekApiKey();
+  if (!apiKey) throw new DeepSeekError("DEEPSEEK_NOT_CONFIGURED", 503, "DeepSeek is not configured.");
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(deepseekBase, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: "deepseek-flash",
+          thinking: { type: "disabled" },
+          messages: [
+            { role: "system", content: prompt },
+            { role: "user", content: JSON.stringify(input) },
+          ],
+          response_format: { type: "json_object" },
+          max_tokens: 600,
+        }),
+      });
+      if (!response.ok) {
+        throw new DeepSeekError("DEEPSEEK_HTTP_ERROR", 502, `DeepSeek request failed with HTTP ${response.status}.`);
+      }
+
+      let content: unknown;
+      try {
+        const payload: unknown = await response.json();
+        if (typeof payload === "object" && payload !== null && "choices" in payload) {
+          const choices = (payload as { choices?: unknown }).choices;
+          if (Array.isArray(choices) && choices[0] && typeof choices[0] === "object" && "message" in choices[0]) {
+            const message = (choices[0] as { message?: unknown }).message;
+            if (typeof message === "object" && message !== null && "content" in message) {
+              content = (message as { content?: unknown }).content;
+            }
+          }
+        }
+      } catch {
+        content = undefined;
+      }
+
+      if (typeof content !== "string" || content.trim().length === 0) {
+        if (attempt === 0) continue;
+        throw retryableJsonError();
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        if (attempt === 0) continue;
+        throw retryableJsonError();
+      }
+      const validated = schema.safeParse(parsed);
+      if (!validated.success) {
+        throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "DeepSeek output did not match the required schema.");
+      }
+      return validated.data;
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "DeepSeek request timed out.");
+      }
+      if (error instanceof DeepSeekError) throw error;
+      throw new DeepSeekError("DEEPSEEK_HTTP_ERROR", 502, "DeepSeek request failed.");
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw retryableJsonError();
+}
+
+export function generateLesson(input: {
+  word: string;
+  meaning_zh: string;
+  part_of_speech: string;
+  ipa?: string;
+}): Promise<LessonGeneration> {
+  return deepSeekJson(lessonGenerationSchema, LESSON_GENERATION_PROMPT, input);
+}
+
+export function gradeSemanticAnswer(input: {
+  word: string;
+  activity_type: string;
+  instruction: string;
+  prompt: string;
+  answer: string;
+  retry_count: number;
+}): Promise<SemanticGrade> {
+  return deepSeekJson(semanticGradeSchema, SEMANTIC_GRADING_PROMPT, input);
+}
+
+export function gradeEnglishDefinition(input: {
+  word: string;
+  part_of_speech?: string;
+  meaning_zh: string;
+  answer: string;
+}): Promise<EnglishDefinitionGrade> {
+  return deepSeekJson(englishDefinitionGradeSchema, ENGLISH_DEFINITION_GRADING_PROMPT, input);
+}
+
+export function generateWrapup(input: { words: string[] }): Promise<WrapupExercise> {
+  return deepSeekJson(wrapupExerciseSchema, WRAPUP_GENERATION_PROMPT, input);
+}
+
+export function gradeWrapupAnswer(input: {
+  words: string[];
+  instruction: string;
+  prompt: string;
+  answer: string;
+  retry_count: number;
+}): Promise<WrapupGrade> {
+  return deepSeekJson(wrapupGradeSchema, WRAPUP_GRADING_PROMPT, input);
+}

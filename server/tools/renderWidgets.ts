@@ -15,6 +15,7 @@ import {
   normalizeLegacyLessonSession,
   normalizeStudyStateForRead,
   persistStudyState,
+  persistStudyStateIfRevision,
 } from "../services/studySessions.js";
 import { getTodayWords } from "../services/words.js";
 import {
@@ -282,7 +283,7 @@ function resumablePayload(session: StudySessionRow | null, widget: StudyState["w
   return widgetPayloadWithState(state.payload, state);
 }
 
-async function resumableLessonPayload(session: StudySessionRow | null): Promise<Record<string, unknown>> {
+export async function resumableLessonPayload(session: StudySessionRow | null): Promise<Record<string, unknown>> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   let resolved = session?.state ? normalizeStudyStateForRead(session.state) : null;
@@ -536,11 +537,14 @@ export function buildReviewWidgetItems(
   return items;
 }
 
-export async function buildReviewWidgetPayload(currentIndex = 0): Promise<ReviewWidgetPayload> {
+export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevision?: string | null): Promise<ReviewWidgetPayload> {
   void currentIndex;
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const active = await getActiveStudySession(db, userId);
+  if (expectedRevision !== undefined && (active?.updated_at ?? null) !== expectedRevision) {
+    throw new Error("STALE_STUDY_STATE");
+  }
   if (active?.state?.widget === "review") {
     const resumed = reviewWidgetPayloadSchema.safeParse(widgetPayloadWithState(active.state.payload, active.state));
     if (!resumed.success) throw new Error("Saved review session payload is invalid.");
@@ -567,7 +571,9 @@ export async function buildReviewWidgetPayload(currentIndex = 0): Promise<Review
     flow: { relearn_words: [] },
     payload,
   });
-  const persisted = await persistStudyState(state, db, userId, active);
+  const persisted = expectedRevision === undefined
+    ? await persistStudyState(state, db, userId, active)
+    : await persistStudyStateIfRevision(state, expectedRevision, db, userId, active?.id);
   return reviewWidgetPayloadSchema.parse(widgetPayloadWithState(persisted.state?.payload ?? payload, persisted.state ?? state));
 }
 

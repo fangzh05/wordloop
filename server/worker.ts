@@ -2,10 +2,12 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { configureRuntimeEnv } from "./db.js";
 import { createWordloopMcpServer, type WidgetKind } from "./mcpCore.js";
 import { LESSON_WIDGET_VERSION } from "../shared/toolContracts.js";
+import { handleWebApiRequest } from "./webApi.js";
 
 declare const __SITE_HTML__: string;
 declare const __SITE_CSS__: string;
 declare const __SITE_JS__: string;
+declare const __SITE_MANIFEST__: string;
 declare const __WIDGET_JS__: Record<WidgetKind, string>;
 declare const __WIDGET_CSS__: string;
 declare const __MIGRATION_SQL__: string;
@@ -15,11 +17,14 @@ type WorkerEnv = {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   DEV_USER_ID?: string;
   MERRIAM_WEBSTER_API_KEY?: string;
+  DEEPSEEK_API_KEY?: string;
+  WORDLOOP_WEB_TOKEN?: string;
 };
 
 const siteHtml = typeof __SITE_HTML__ === "string" ? __SITE_HTML__ : "<!doctype html><title>Wordloop</title>";
 const siteCss = typeof __SITE_CSS__ === "string" ? __SITE_CSS__ : "";
 const siteJs = typeof __SITE_JS__ === "string" ? __SITE_JS__ : "";
+const siteManifest = typeof __SITE_MANIFEST__ === "string" ? __SITE_MANIFEST__ : "{}";
 const widgetJs: Partial<Record<WidgetKind, string>> = typeof __WIDGET_JS__ === "object" && __WIDGET_JS__ !== null ? __WIDGET_JS__ : {};
 const widgetCss = typeof __WIDGET_CSS__ === "string" ? __WIDGET_CSS__ : "";
 const migrationSql = typeof __MIGRATION_SQL__ === "string" ? __MIGRATION_SQL__ : "-- Wordloop migration is embedded when the Site is built.\n";
@@ -56,17 +61,19 @@ export const worker = {
     if (request.method === "GET" && url.pathname === "/") return response(siteHtml, "text/html; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/styles.css") return response(siteCss, "text/css; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/app.js") return response(siteJs, "text/javascript; charset=utf-8");
+    if (request.method === "GET" && url.pathname === "/manifest.webmanifest") return response(siteManifest, "application/manifest+json; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/setup.sql") return response(migrationSql, "text/plain; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/health") {
       return response(JSON.stringify({ name: "wordloop", status: "ok", mcp: "/api/mcp", version: "0.1.0" }), "application/json; charset=utf-8");
     }
+    if (url.pathname.startsWith("/api/")) configureRuntimeEnv(env as Record<string, unknown>);
+    if (url.pathname.startsWith("/api/web/")) return handleWebApiRequest(request);
     // GPT Sites reserves /mcp before requests reach the Worker. Keep the standard
     // Streamable HTTP protocol on a non-reserved public path instead.
     if (url.pathname !== "/api/mcp") return response("Not found", "text/plain; charset=utf-8", 404);
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
     try {
-      configureRuntimeEnv(env as Record<string, unknown>);
       const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
       const server = createWordloopMcpServer(widgetHtml);
       await server.connect(transport);

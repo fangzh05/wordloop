@@ -54,6 +54,13 @@ export const studyStateSchema = z.object({
 
 const OLD_SESSION_SCHEMA_MESSAGE = "WordLoop 数据库版本过旧，请先部署 migration 202609150004。";
 
+export class StaleStudyStateError extends Error {
+  constructor() {
+    super("STALE_STUDY_STATE");
+    this.name = "StaleStudyStateError";
+  }
+}
+
 type DatabaseError = { code?: string; message: string };
 
 export function isStudySessionSchemaMismatch(error: unknown): boolean {
@@ -195,21 +202,82 @@ export async function persistStudyState(
   return parseSession(data);
 }
 
+function nextRevision(previous: string): string {
+  const previousMs = Date.parse(previous);
+  const now = Date.now();
+  return new Date(Math.max(now, Number.isFinite(previousMs) ? previousMs + 1 : now)).toISOString();
+}
+
+export async function assertActiveStudySessionRevision(
+  expectedRevision: string | null,
+  expectedSessionId?: string,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<StudySessionRow | null> {
+  const active = await getActiveStudySession(db, userId);
+  if ((active?.updated_at ?? null) !== expectedRevision
+    || (expectedSessionId !== undefined && active?.id !== expectedSessionId)) {
+    throw new StaleStudyStateError();
+  }
+  return active;
+}
+
+/** Persist a Web-owned state transition only while its rendered revision is current. */
+export async function persistStudyStateIfRevision(
+  state: StudyState,
+  expectedRevision: string | null,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+  expectedSessionId?: string,
+): Promise<StudySessionRow> {
+  const nextState = assertState(state);
+  const active = await assertActiveStudySessionRevision(expectedRevision, expectedSessionId, db, userId);
+  if (!active) {
+    const { data, error } = await db
+      .from("study_sessions")
+      .insert({ user_id: userId, state: nextState })
+      .select(sessionColumns)
+      .maybeSingle();
+    if (isUniqueViolation(error)) throw new StaleStudyStateError();
+    assertStudySessionDatabaseResult(error);
+    if (!data) throw new StaleStudyStateError();
+    return parseSession(data);
+  }
+
+  if (expectedRevision === null) throw new StaleStudyStateError();
+  const { data, error } = await db
+    .from("study_sessions")
+    .update({ state: nextState, updated_at: nextRevision(expectedRevision) })
+    .eq("id", active.id)
+    .eq("user_id", userId)
+    .is("ended_at", null)
+    .eq("updated_at", expectedRevision)
+    .select(sessionColumns)
+    .maybeSingle();
+  assertStudySessionDatabaseResult(error);
+  if (!data) throw new StaleStudyStateError();
+  return parseSession(data);
+}
+
 /** Freeze the first Lesson queue for an existing study flow. */
 export async function freezeLessonQueueForSession(
   session: StudySessionRow,
   todayWords: VocabularyItem[],
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  expectedRevision?: string | null,
 ): Promise<StudySessionRow> {
   const state = session.state;
   if (!state || state.flow.lesson_words !== undefined) return session;
   const lessonWords = buildLessonWords(state.flow.relearn_words, todayWords);
   if (lessonWords.length === 0) return session;
-  return persistStudyState({
+  const nextState = {
     ...state,
     flow: { ...state.flow, lesson_words: lessonWords },
-  }, db, userId, session);
+  };
+  return expectedRevision === undefined
+    ? persistStudyState(nextState, db, userId, session)
+    : persistStudyStateIfRevision(nextState, expectedRevision, db, userId, session.id);
 }
 
 interface SessionAttemptRow {
@@ -248,6 +316,7 @@ export async function normalizeLegacyLessonSession(
   session: StudySessionRow,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  expectedRevision?: string | null,
 ): Promise<StudySessionRow> {
   const state = session.state;
   if (!state || state.widget !== "lesson" || state.flow.lesson_words !== undefined) return session;
@@ -269,11 +338,14 @@ export async function normalizeLegacyLessonSession(
     : Math.min(state.current_index, lessonWords.length - 1);
   if (state.current_word && currentIndex < 0) throw new Error("LESSON_CURSOR_MISMATCH");
 
-  return persistStudyState({
+  const nextState = {
     ...state,
     current_index: Math.max(0, currentIndex),
     flow: { ...state.flow, lesson_words: lessonWords },
-  }, db, userId, session);
+  };
+  return expectedRevision === undefined
+    ? persistStudyState(nextState, db, userId, session)
+    : persistStudyStateIfRevision(nextState, expectedRevision, db, userId, session.id);
 }
 
 function stateError(event: StudySessionEvent, phase: StudyPhase): Error {
@@ -576,6 +648,21 @@ export async function advanceStudySession(
   return updateSessionState(active, nextState, db, userId);
 }
 
+export async function advanceStudySessionIfRevision(
+  event: StudySessionEvent,
+  requestedIndex: number,
+  expectedRevision: string,
+  expectedSessionId: string,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<StudySessionRow> {
+  const active = await assertActiveStudySessionRevision(expectedRevision, expectedSessionId, db, userId);
+  if (!active?.state) throw new Error("NO_ACTIVE_SESSION");
+  const nextState = advanceStudyState(active.state, event, requestedIndex);
+  if (nextState === active.state) return active;
+  return persistStudyStateIfRevision(nextState, expectedRevision, db, userId, expectedSessionId);
+}
+
 /**
  * Advance the current Review answer using the cursor stored in the active
  * session. A retry after a lost response is idempotent: an already-passed
@@ -677,19 +764,27 @@ export function isCompletedLessonWrapup(state: StudyState | null): boolean {
 export async function finishStudySession(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  expected?: { revision: string; sessionId: string },
 ): Promise<StudySessionRow> {
   const active = await getActiveStudySession(db, userId);
   if (!active) throw new Error("No active study session to finish.");
+  if (expected && (active.id !== expected.sessionId || active.updated_at !== expected.revision)) {
+    throw new StaleStudyStateError();
+  }
   if (!isCompletedLessonWrapup(active.state)) throw new Error("LESSON_WRAPUP_NOT_COMPLETE");
   const now = new Date().toISOString();
-  const { data, error } = await db
+  let update = db
     .from("study_sessions")
     .update({ ended_at: now, state: {}, updated_at: now })
     .eq("id", active.id)
     .eq("user_id", userId)
-    .is("ended_at", null)
-    .select(sessionColumns)
-    .single();
+    .is("ended_at", null);
+  if (expected) update = update.eq("updated_at", expected.revision);
+  const { data, error } = await update.select(sessionColumns).maybeSingle();
   assertStudySessionDatabaseResult(error);
+  if (!data) {
+    if (expected) throw new StaleStudyStateError();
+    throw new Error("No active study session to finish.");
+  }
   return parseSession(data);
 }
