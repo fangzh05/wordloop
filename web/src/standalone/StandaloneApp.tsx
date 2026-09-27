@@ -69,6 +69,20 @@ export function todayTasksComplete(value: unknown): boolean {
   return reviewDone && newWordsDone;
 }
 
+export function standaloneLessonProgressLabel(
+  relearnWords: readonly string[],
+  queue: readonly string[],
+  index: number,
+  wrapup = false,
+): string {
+  if (wrapup) return "本轮收尾";
+  const relearn = new Set(relearnWords.map((word) => word.trim().toLocaleLowerCase()));
+  const relearnTotal = queue.filter((word) => relearn.has(word.trim().toLocaleLowerCase())).length;
+  return index < relearnTotal
+    ? `复习补学 · ${Math.min(index + 1, relearnTotal)} / ${relearnTotal}`
+    : `新词学习 · ${Math.min(index - relearnTotal + 1, Math.max(1, queue.length - relearnTotal))} / ${Math.max(0, queue.length - relearnTotal)}`;
+}
+
 export function dashboardContinueBehavior(view: WebApiResponse): "study" | "continue" {
   const phase = record(view.state).phase;
   return view.screen === "done" || ["review_complete", "pretest_complete", "lesson_complete"].includes(String(phase))
@@ -593,15 +607,16 @@ export default function StandaloneApp(): React.JSX.Element {
       const feedbackMode = payload.mode === "feedback";
       const exerciseMode = payload.mode === "exercise";
       const phase = String(state.phase ?? "");
+      const progressLabel = standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, isWrapup);
       return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
-        <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={() => setPage("dashboard")} /><div><span className="eyebrow">{isWrapup ? "本轮收尾" : `正式学习 · ${Math.min(currentIndex + 1, queue.length)} / ${queue.length || "—"}`}</span><div className="lesson-word-heading"><strong id="study-title">{title}</strong></div></div></div></header>
+        <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={() => setPage("dashboard")} /><div><span className="eyebrow">{progressLabel}</span><div className="lesson-word-heading"><strong id="study-title">{title}</strong></div></div></div></header>
 
         {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content">
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>词性与核心义</h2><p>{String(payload.part_of_speech ?? "")} · {String(payload.meaning_zh ?? "")}</p></section>
           <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).map((value) => <li key={value}>{value}</li>)}</ul></section>
           <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
-          <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{String(payload.example_en ?? "")}</p></section>
+          <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <p className="lesson-example-translation">{payload.example_zh}</p>}</section>
           <section className="lesson-section"><h2>易混提醒</h2><p>{String(payload.note ?? "")}</p></section>
           <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
         </div>}

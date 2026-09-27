@@ -314,6 +314,7 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .lesson-section p { margin: 0.42rem 0 0; font-size: 0.94rem; line-height: 1.55; }
 .lesson-section ul { display: grid; gap: 0.28rem; margin: 0.45rem 0 0; padding-left: 1.1rem; color: var(--text); font-size: 0.9rem; line-height: 1.45; }
 .lesson-example { font-size: 1rem !important; }
+.lesson-example-translation { color: var(--muted); }
 .lesson-exercise-heading { margin-top: 0.5rem; color: var(--text); font-size: 1rem; line-height: 1.4; }
 .lesson-prompt { margin-top: 0.75rem; padding: 1rem; border-radius: 14px; background: var(--control); color: var(--text); font-size: 1.05rem; line-height: 1.65; white-space: pre-wrap; }
 .lesson-answer { margin-top: 0.7rem; padding: 0.85rem; border-radius: 14px; background: var(--control); }

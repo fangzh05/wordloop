@@ -95,6 +95,7 @@ const explainPayloadSchema = z.object({
   collocations: z.array(z.string().trim().min(1).max(200)).max(8),
   derivations: z.array(z.string().trim().min(1).max(200)).max(8),
   example_en: z.string().trim().min(1).max(1000),
+  example_zh: z.string().trim().min(1).max(1000).optional(),
   note: z.string().trim().min(1).max(1000),
   exercise: exerciseSchema,
 }).passthrough();
@@ -216,6 +217,12 @@ function feedbackRevealsAnswer(feedback: FeedbackPayload | undefined): boolean {
  */
 export function feedbackGuidanceLabel(reveal: boolean): string {
   return reveal ? "解释" : "错因与改法";
+}
+
+export function lessonEyebrowLabel(progress?: string): string {
+  if (progress?.startsWith("复习补学")) return "复习词";
+  if (progress?.startsWith("新词学习")) return "新词";
+  return "学习进度";
 }
 
 function modeForPhase(phase: Payload["phase"]): Mode | null {
@@ -655,7 +662,7 @@ export function LessonWidget(): React.JSX.Element {
   return <section className="widget-card lesson-card" aria-labelledby="lesson-explain-title">
     <header className="widget-header compact-header">
       <div>
-        <span className="eyebrow">新词</span>
+        <span className="eyebrow">{lessonEyebrowLabel(payload.progress)}</span>
         <h1 id="lesson-explain-title">{payload.progress ?? "单词学习"}</h1>
       </div>
       <FocusButton />
@@ -668,7 +675,7 @@ export function LessonWidget(): React.JSX.Element {
     {payload.mode === "explain" ? <section className="lesson-section"><h2>核心义</h2><p>{payload.meaning_zh}</p></section> : null}
     {payload.mode === "explain" && payload.collocations.length ? <section className="lesson-section"><h2>高频搭配</h2><ul>{payload.collocations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
     {payload.mode === "explain" && payload.derivations.length ? <section className="lesson-section"><h2>词族</h2><ul>{payload.derivations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
-    {payload.mode === "explain" ? <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{payload.example_en}</p></section> : null}
+    {payload.mode === "explain" ? <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{payload.example_en}</p>{payload.example_zh ? <p className="lesson-example-translation">{payload.example_zh}</p> : null}</section> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>补充</h2><p>{payload.note}</p></section> : null}
     <button className="play-button lesson-audio" type="button" onClick={play} disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)} aria-label={"播放 " + payload.word}>
       <span className="play-icon"><PlayIcon /></span>{pronunciationButtonLabel(dictionaryAudioAvailable, speechPlaybackAvailable, dictionaryReady, playing)}

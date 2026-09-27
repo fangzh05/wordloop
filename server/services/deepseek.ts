@@ -12,9 +12,13 @@ const deepseekBase = "https://api.deepseek.com/chat/completions";
 const activityTypes = [
   "cloze", "translation_cn_to_en", "translation_en_to_cn", "collocation", "derivation", "recall", "sentence",
 ] as const;
+function hasChineseText(value: string): boolean {
+  return /\p{Script=Han}/u.test(value);
+}
+
 const exerciseSchema = z.object({
   activity_type: z.enum(activityTypes),
-  instruction: z.string().trim().min(1).max(300),
+  instruction: z.string().trim().min(1).max(300).refine(hasChineseText, "Use Simplified Chinese for exercise instructions."),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
 }).superRefine((value, context) => {
@@ -52,12 +56,13 @@ function validateExampleLength(value: string, context: z.RefinementCtx): void {
 
 export const lessonGenerationSchema = z.object({
   ipa: z.string().trim().min(1).max(120),
-  part_of_speech: z.string().trim().min(1).max(40),
-  meaning_zh: z.string().trim().min(1).max(240),
-  collocations: z.array(z.string().trim().min(1).max(200)).max(8),
-  derivations: z.array(z.string().trim().min(1).max(200)).max(8),
+  part_of_speech: z.string().trim().min(1).max(40).refine(hasChineseText, "Add the Chinese part-of-speech label."),
+  meaning_zh: z.string().trim().min(1).max(240).refine(hasChineseText, "Use Chinese for the core meaning."),
+  collocations: z.array(z.string().trim().min(1).max(200).refine(hasChineseText, "Add a Chinese gloss to each collocation.")).max(8),
+  derivations: z.array(z.string().trim().min(1).max(200).refine(hasChineseText, "Add a Chinese gloss to each derivation.")).max(8),
   example_en: z.string().trim().min(1).max(1000),
-  note: z.string().trim().min(1).max(1000),
+  example_zh: z.string().trim().min(1).max(1000).refine(hasChineseText, "Add a Chinese translation for the example."),
+  note: z.string().trim().min(1).max(1000).refine(hasChineseText, "Use Chinese for the explanation note."),
   exercise: exerciseSchema,
 }).superRefine((value, context) => {
   validateExampleLength(value.example_en, context);
@@ -71,19 +76,19 @@ const errorLayerSchema = z.enum(["none", "meaning", "collocation", "grammar", "s
 export const semanticGradeSchema = z.object({
   is_correct: z.boolean(),
   error_layer: errorLayerSchema,
-  message: z.string().trim().min(1).max(1000),
-  explanation: z.string().trim().min(1).max(4000),
+  message: z.string().trim().min(1).max(1000).refine(hasChineseText, "Use Chinese for grading feedback."),
+  explanation: z.string().trim().min(1).max(4000).refine(hasChineseText, "Use Chinese for the grading explanation."),
   reference_answer: z.string().trim().min(1).max(4000).optional(),
 });
 
 export const englishDefinitionGradeSchema = z.object({
   is_correct: z.boolean(),
-  feedback: z.string().trim().min(1).max(1000),
+  feedback: z.string().trim().min(1).max(1000).refine(hasChineseText, "Use Chinese for grading feedback."),
 });
 
 export const wrapupExerciseSchema = z.object({
   activity_type: z.literal("sentence"),
-  instruction: z.string().trim().min(1).max(300),
+  instruction: z.string().trim().min(1).max(300).refine(hasChineseText, "Use Simplified Chinese for exercise instructions."),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.literal(true),
 }).superRefine((value, context) => {
@@ -96,8 +101,8 @@ export const wrapupExerciseSchema = z.object({
 export const wrapupGradeSchema = z.object({
   is_correct: z.boolean(),
   error_layer: errorLayerSchema,
-  message: z.string().trim().min(1).max(1000),
-  explanation: z.string().trim().min(1).max(4000),
+  message: z.string().trim().min(1).max(1000).refine(hasChineseText, "Use Chinese for grading feedback."),
+  explanation: z.string().trim().min(1).max(4000).refine(hasChineseText, "Use Chinese for the grading explanation."),
   reference_answer: z.string().trim().min(1).max(4000).optional(),
 });
 

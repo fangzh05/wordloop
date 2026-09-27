@@ -4,6 +4,7 @@ import { assertDatabaseResult, dateInTimeZone } from "./shared.js";
 import { perf } from "./perf.js";
 import { getActiveStudySession } from "./studySessions.js";
 import { getUserTimeZone } from "./words.js";
+import { normalizeWord } from "./wordNormalization.js";
 
 type ReviewSessionProgressRow = Pick<StudySessionRow, "review_words_count" | "state">;
 
@@ -11,7 +12,22 @@ function reviewSnapshotTotal(state: StudyState | null | undefined): number {
   return state?.widget === "review" && Array.isArray(state.payload.items) ? state.payload.items.length : 0;
 }
 
-/** Review work has its own denominator and never changes the daily new-word queue. */
+function relearnWords(state: StudyState | null | undefined): string[] {
+  if (!state) return [];
+  return [...new Set((state.flow.relearn_words ?? []).map(normalizeWord).filter(Boolean))];
+}
+
+function completedRelearnWords(state: StudyState | null | undefined): string[] {
+  if (state?.widget !== "lesson" || !Array.isArray(state.flow.lesson_words)) return [];
+  const relearn = new Set(relearnWords(state));
+  const completeCount = state.phase === "lesson_complete"
+    ? state.flow.lesson_words.length
+    : Math.max(0, Math.min(state.current_index, state.flow.lesson_words.length));
+  const completedPrefix = new Set(state.flow.lesson_words.slice(0, completeCount).map(normalizeWord));
+  return [...relearn].filter((word) => completedPrefix.has(word));
+}
+
+/** Review work, including assigned same-day re-learning, never changes the daily new-word queue. */
 export function calculateReviewTodayProgress(
   active: Pick<StudySessionRow, "state"> | null,
   sessions: readonly ReviewSessionProgressRow[],
@@ -19,10 +35,12 @@ export function calculateReviewTodayProgress(
 ): ProgressResult["review_today"] {
   const activeState = active?.state;
   if (activeState?.widget === "review") {
-    const total = reviewSnapshotTotal(activeState);
-    const completed = activeState.phase === "review_complete"
-      ? total
-      : Math.min(total, Math.max(0, activeState.current_index));
+    const reviewTotal = reviewSnapshotTotal(activeState);
+    const total = reviewTotal + relearnWords(activeState).length;
+    const reviewCompleted = activeState.phase === "review_complete"
+      ? reviewTotal
+      : Math.min(reviewTotal, Math.max(0, activeState.current_index));
+    const completed = reviewCompleted + completedRelearnWords(activeState).length;
     return { completed, total, remaining: Math.max(0, total - completed) };
   }
 
@@ -33,10 +51,12 @@ export function calculateReviewTodayProgress(
     return sum + Math.max(count, reviewSnapshotTotal(session.state));
   }, 0);
   const attempts = Number.isFinite(completedAttempts) ? Math.max(0, completedAttempts) : 0;
+  const relearnTotal = new Set(sessions.flatMap((session) => relearnWords(session.state))).size;
+  const relearnCompleted = new Set(sessions.flatMap((session) => completedRelearnWords(session.state))).size;
   // Older completed sessions may not have the snapshot count populated. In
   // that case persisted Review attempts give a safe lower-bound denominator.
-  const total = savedTotal > 0 ? savedTotal : attempts;
-  const completed = Math.min(total, attempts);
+  const total = (savedTotal > 0 ? savedTotal : attempts) + relearnTotal;
+  const completed = Math.min(total, attempts + relearnCompleted);
   return { completed, total, remaining: Math.max(0, total - completed) };
 }
 
