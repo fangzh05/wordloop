@@ -6,10 +6,19 @@ import {
   StandaloneReviewFeedback,
   StandaloneReviewHeader,
   StandaloneReviewQuestion,
+  standaloneLessonProgressLabel,
   todayTasksComplete,
 } from "../web/src/standalone/StandaloneApp.js";
 
 describe("shared Review and daily progress presentation", () => {
+  it("shows Review re-learning in its own Lesson progress segment", () => {
+    const relearn = ["pirate", "feeble", "intensive", "nerve"];
+    const queue = [...relearn, "new-1", "new-2"];
+    expect(standaloneLessonProgressLabel(relearn, queue, 2)).toBe("复习补学 · 3 / 4");
+    expect(standaloneLessonProgressLabel(relearn, queue, 4)).toBe("新词学习 · 1 / 2");
+    expect(standaloneLessonProgressLabel(relearn, queue, 4, true)).toBe("本轮收尾");
+  });
+
   it("shows part of speech and Chinese meaning on cn_to_en Review cards", () => {
     const markup = renderToStaticMarkup(<StandaloneReviewQuestion
       direction="cn_to_en"

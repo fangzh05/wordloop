@@ -21,11 +21,12 @@ import {
 const example = "Although the committee postponed its decision, the evidence continued to influence public debate about educational reform.";
 const validLesson = {
   ipa: "/ˈfɪks.tʃər/",
-  part_of_speech: "n.",
+  part_of_speech: "n.（名词）",
   meaning_zh: "固定的事物；设施",
-  collocations: ["a permanent fixture"],
-  derivations: ["fix v.", "fixed adj."],
+  collocations: ["a permanent fixture（固定设施）"],
+  derivations: ["fix（动词：固定）", "fixed（形容词：固定的）"],
   example_en: example,
+  example_zh: "尽管委员会推迟了决定，证据仍持续影响有关教育改革的公共讨论。",
   note: "fixture 也可指固定设施。",
   exercise: {
     activity_type: "translation_cn_to_en",
@@ -152,6 +153,8 @@ describe("DeepSeek stateless JSON client", () => {
     expect(ENGLISH_DEFINITION_GRADING_PROMPT).toContain("\"feedback\"");
     expect(WRAPUP_GRADING_PROMPT).toContain("\"reference_answer\"");
     expect(LESSON_GENERATION_PROMPT).toContain("\"exercise\"");
+    expect(LESSON_GENERATION_PROMPT).toContain("\"example_zh\"");
+    expect(LESSON_GENERATION_PROMPT).toContain("简体中文");
     expect(WRAPUP_GENERATION_PROMPT).toContain("\"multiline\": true");
   });
 
@@ -167,6 +170,16 @@ describe("DeepSeek stateless JSON client", () => {
         },
       })))
       .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
+    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." })).resolves.toMatchObject(validLesson);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries lesson output when explanation fields are English-only", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validLesson, collocations: ["a permanent fixture"] })))
+      .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
+
     await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." })).resolves.toMatchObject(validLesson);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -195,7 +208,7 @@ describe("DeepSeek stateless JSON client", () => {
   it("does not log the user answer or raw provider content for grading errors", async () => {
     const privateAnswer = "PRIVATE_USER_ANSWER";
     const privateProviderText = "PRIVATE_PROVIDER_TEXT";
-    const invalid = { ...validGrade, message: "", explanation: privateProviderText };
+    const invalid = { ...validGrade, message: "", explanation: `批改说明：${privateProviderText}` };
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.mocked(fetch)
       .mockResolvedValueOnce(response(JSON.stringify(invalid)))

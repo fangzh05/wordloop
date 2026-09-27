@@ -117,6 +117,7 @@ const lessonFeedback = z.object({
 }).strict();
 const lessonCommon = {
   title: z.string().trim().max(120).optional(),
+  progress: z.string().trim().max(40).optional(),
 };
 const explainPayload = z.object({
   ...lessonCommon,
@@ -128,6 +129,7 @@ const explainPayload = z.object({
   collocations: z.array(z.string().trim().min(1).max(200)).max(8),
   derivations: z.array(z.string().trim().min(1).max(200)).max(8),
   example_en: z.string().trim().min(1).max(1000),
+  example_zh: z.string().trim().min(1).max(1000).optional(),
   note: z.string().trim().min(1).max(1000),
   exercise: lessonExercise,
 }).strict();

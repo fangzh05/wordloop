@@ -9,6 +9,7 @@ import {
   buildRoundCompleteMessage,
   canStartNextLesson,
   feedbackGuidanceLabel,
+  lessonEyebrowLabel,
   LESSON_MOUNT_RECOVERY_DELAY_MS,
   LESSON_VISIBILITY_RECOVERY_DELAY_MS,
   LessonFeedbackNextStep,
@@ -29,6 +30,11 @@ afterEach(() => {
 });
 
 describe("guided lesson widget", () => {
+  it("labels Review re-learning separately from new-word Lessons", () => {
+    expect(lessonEyebrowLabel("复习补学 3 / 4")).toBe("复习词");
+    expect(lessonEyebrowLabel("新词学习 1 / 6")).toBe("新词");
+  });
+
   it("has the three fixed modes and keeps exercise submission in the card", () => {
     const source = readFileSync(new URL("../web/src/lesson/LessonWidget.tsx", import.meta.url), "utf8");
     expect(source).toContain('z.discriminatedUnion("mode"');

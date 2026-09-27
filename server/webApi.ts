@@ -341,12 +341,14 @@ async function generateAndPersistLesson(input: {
       widget_version: 3,
       mode: "explain",
       word: item.word,
+      progress: lessonProgressLabel(input.flow.relearn_words, queue, input.index),
       ipa: generated.ipa,
       part_of_speech: generated.part_of_speech,
       meaning_zh: generated.meaning_zh,
       collocations: generated.collocations,
       derivations: generated.derivations,
       example_en: generated.example_en,
+      example_zh: generated.example_zh,
       note: generated.note,
       exercise: generated.exercise,
       navigation,
@@ -652,7 +654,7 @@ function lessonFeedbackState(
       mode: "feedback",
       ...(wrapup ? { wrapup: true } : {}),
       word: state.current_word!,
-      progress: wrapup ? "本轮长难句收尾" : `${state.current_index + 1} / ${queue.length}`,
+      progress: wrapup ? "本轮长难句收尾" : lessonProgressLabel(state.flow.relearn_words, queue, state.current_index),
       exercise: exercisePayload,
       feedback: {
         is_correct: grade.is_correct,
@@ -666,6 +668,14 @@ function lessonFeedbackState(
       navigation,
     },
   };
+}
+
+function lessonProgressLabel(relearnWords: readonly string[], queue: readonly string[], index: number): string {
+  const relearn = new Set(relearnWords.map(normalizeWord));
+  const reviewCount = queue.filter((word) => relearn.has(normalizeWord(word))).length;
+  if (index < reviewCount) return `复习补学 ${index + 1} / ${reviewCount}`;
+  const newCount = queue.length - reviewCount;
+  return `新词学习 ${Math.min(index - reviewCount + 1, newCount)} / ${newCount}`;
 }
 
 async function submitLesson(action: Extract<WebAction, { action: "lesson_submit" }>, active: StudySessionRow | null): Promise<Record<string, unknown>> {
