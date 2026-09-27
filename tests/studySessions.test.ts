@@ -9,6 +9,7 @@ import {
   makeStudyState,
   isLegacyCompletedPretestState,
   normalizeStudyStateForRead,
+  persistStudyState,
   studySessionSummary,
 } from "../server/services/studySessions.js";
 import {
@@ -96,7 +97,12 @@ function mockStudySessionDb(state: StudyState) {
   readBuilder.maybeSingle = vi.fn(async () => ({ data: row, error: null }));
   readBuilder.update = vi.fn((values: Record<string, unknown>) => {
     updates.push(values);
-    row = { ...row, state: values.state as StudyState, updated_at: String(values.updated_at) };
+    row = {
+      ...row,
+      state: values.state as StudyState,
+      updated_at: String(values.updated_at),
+      ...(typeof values.review_words_count === "number" ? { review_words_count: values.review_words_count } : {}),
+    };
     return updateBuilder;
   });
   updateBuilder.eq = vi.fn(() => updateBuilder);
@@ -110,6 +116,50 @@ function mockStudySessionDb(state: StudyState) {
 }
 
 describe("durable study session state", () => {
+  it("persists the completed Review count in the shared session row", async () => {
+    const reviewItems = Array.from({ length: 25 }, (_, index) => ({
+      word: `review-${index}`, meaning_zh: "词义", direction: "cn_to_en" as const,
+      error_layers: [], is_due: true, review_kind: "fsrs_due" as const,
+      next_review_at: "2026-09-15T00:00:00.000Z",
+    }));
+    const review = makeStudyState({
+      date: "2026-09-15", widget: "review", phase: "review", current_word: "review-18",
+      current_index: 18, retry_count: 0, flow: { relearn_words: [] },
+      payload: { widget: "review", items: reviewItems },
+    });
+    const { db, updates } = mockStudySessionDb(review);
+
+    const saved = await persistStudyState(review, db, "user");
+
+    expect(updates[0]).toMatchObject({ review_words_count: 18 });
+    expect(saved.review_words_count).toBe(18);
+  });
+
+  it("retains the completed Review count when the same session advances to Pretest", async () => {
+    const reviewItems = Array.from({ length: 25 }, (_, index) => ({
+      word: `review-${index}`, meaning_zh: "词义", direction: "cn_to_en" as const,
+      error_layers: [], is_due: true, review_kind: "fsrs_due" as const,
+      next_review_at: "2026-09-15T00:00:00.000Z",
+    }));
+    const review = makeStudyState({
+      date: "2026-09-15", widget: "review", phase: "review_complete", current_word: null,
+      current_index: 25, retry_count: 0, flow: { relearn_words: [] },
+      payload: { widget: "review", items: reviewItems },
+    });
+    const pretest = makeStudyState({
+      date: "2026-09-15", widget: "pretest", phase: "pretest", current_word: "new-word",
+      current_index: 0, retry_count: 0, flow: { relearn_words: [] },
+      payload: { widget: "pretest", items: [{ word: "new-word" }] },
+    });
+    const { db, updates } = mockStudySessionDb(review);
+
+    const saved = await persistStudyState(pretest, db, "user");
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({ review_words_count: 25, state: { widget: "pretest" } });
+    expect(saved.review_words_count).toBe(25);
+  });
+
   it("projects explain into the exact exercise without a new GPT turn", () => {
     const next = advanceStudyState(sessionState(), "lesson_start_exercise");
     expect(next.phase).toBe("lesson_exercise");

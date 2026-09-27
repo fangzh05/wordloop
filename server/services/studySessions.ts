@@ -115,6 +115,24 @@ function assertState(state: StudyState): StudyState {
   return parsed.data;
 }
 
+function reviewSnapshotCount(state: StudyState | null | undefined): number {
+  return state?.widget === "review" && Array.isArray(state.payload.items) ? state.payload.items.length : 0;
+}
+
+function completedReviewCount(state: StudyState | null | undefined): number {
+  if (state?.widget !== "review") return 0;
+  return state.phase === "review_complete"
+    ? reviewSnapshotCount(state)
+    : Math.min(reviewSnapshotCount(state), Math.max(0, state.current_index));
+}
+
+function reviewWordsCountForUpdate(session: StudySessionRow, nextState: StudyState): number {
+  if (nextState.widget === "review") return completedReviewCount(nextState);
+  return session.review_words_count > 0
+    ? session.review_words_count
+    : completedReviewCount(session.state);
+}
+
 async function updateSessionState(
   session: StudySessionRow,
   state: StudyState,
@@ -123,9 +141,14 @@ async function updateSessionState(
 ): Promise<StudySessionRow> {
   const nextState = assertState(state);
   const updatedAt = new Date().toISOString();
+  const reviewWordsCount = reviewWordsCountForUpdate(session, nextState);
   const { data, error } = await db
     .from("study_sessions")
-    .update({ state: nextState, updated_at: updatedAt })
+    .update({
+      state: nextState,
+      updated_at: updatedAt,
+      ...(reviewWordsCount > 0 ? { review_words_count: reviewWordsCount } : {}),
+    })
     .eq("id", session.id)
     .eq("user_id", userId)
     .is("ended_at", null)
@@ -166,7 +189,12 @@ export async function getOrCreateActiveStudySession(
   const active = await getActiveStudySession(db, userId);
   if (active) return active;
   const insertValues: Record<string, unknown> = { user_id: userId };
-  if (initialState) insertValues.state = assertState(initialState);
+  if (initialState) {
+    const state = assertState(initialState);
+    insertValues.state = state;
+    const reviewWordsCount = completedReviewCount(state);
+    if (reviewWordsCount > 0) insertValues.review_words_count = reviewWordsCount;
+  }
   const { data, error } = await db
     .from("study_sessions")
     .insert(insertValues)
@@ -191,7 +219,11 @@ export async function persistStudyState(
   if (active) return updateSessionState(active, nextState, db, userId);
   const { data, error } = await db
     .from("study_sessions")
-    .insert({ user_id: userId, state: nextState })
+    .insert({
+      user_id: userId,
+      state: nextState,
+      ...(completedReviewCount(nextState) > 0 ? { review_words_count: completedReviewCount(nextState) } : {}),
+    })
     .select(sessionColumns)
     .single();
   if (isUniqueViolation(error)) {
@@ -235,7 +267,11 @@ export async function persistStudyStateIfRevision(
   if (!active) {
     const { data, error } = await db
       .from("study_sessions")
-      .insert({ user_id: userId, state: nextState })
+      .insert({
+        user_id: userId,
+        state: nextState,
+        ...(completedReviewCount(nextState) > 0 ? { review_words_count: completedReviewCount(nextState) } : {}),
+      })
       .select(sessionColumns)
       .maybeSingle();
     if (isUniqueViolation(error)) throw new StaleStudyStateError();
@@ -245,9 +281,14 @@ export async function persistStudyStateIfRevision(
   }
 
   if (expectedRevision === null) throw new StaleStudyStateError();
+  const reviewWordsCount = reviewWordsCountForUpdate(active, nextState);
   const { data, error } = await db
     .from("study_sessions")
-    .update({ state: nextState, updated_at: nextRevision(expectedRevision) })
+    .update({
+      state: nextState,
+      updated_at: nextRevision(expectedRevision),
+      ...(reviewWordsCount > 0 ? { review_words_count: reviewWordsCount } : {}),
+    })
     .eq("id", active.id)
     .eq("user_id", userId)
     .is("ended_at", null)

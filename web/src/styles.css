@@ -201,6 +201,11 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .progress-number span { margin-left: 0.24rem; color: var(--muted); font-size: 1.15rem; }
 .progress-track { height: 9px; overflow: hidden; border-radius: 999px; background: var(--control); }
 .progress-track span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--success); transition: width 360ms cubic-bezier(.22,.8,.35,1); }
+.dashboard-progress-list { display: grid; gap: 0.75rem; }
+.dashboard-progress-block { padding: 0.75rem 0.85rem; border: 1px solid var(--separator); border-radius: 14px; }
+.dashboard-progress-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; font-size: 0.875rem; }
+.dashboard-progress-heading span { color: var(--muted); font-size: 0.78rem; text-align: right; }
+.dashboard-progress-block .progress-track { margin-top: 0.65rem; }
 .metrics { margin: 0.95rem 0 1rem; padding: 0.25rem 0; background: var(--control); border-radius: 14px; }
 .metrics div { display: flex; justify-content: space-between; margin: 0 0.85rem; padding: 0.62rem 0; border-bottom: 1px solid var(--separator); font-size: 0.875rem; }
 .metrics div:last-child { border-bottom: 0; }
@@ -320,16 +325,46 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .lesson-audio { margin-top: 0.85rem; }
 
 .standalone-shell { display: flex; flex-direction: column; gap: 0.8rem; width: 100%; max-width: 680px; min-height: 100svh; margin: 0 auto; padding: max(0.6rem, env(safe-area-inset-top)) max(0.65rem, env(safe-area-inset-right)) max(0.8rem, env(safe-area-inset-bottom)) max(0.65rem, env(safe-area-inset-left)); }
+@media (prefers-color-scheme: dark) {
+  .standalone-shell {
+    --material: rgba(35, 35, 38, 0.8);
+    --material-solid: #252528;
+    --material-raised: rgba(48, 48, 52, 0.92);
+    --text: #f5f5f7;
+    --muted: #a1a1a6;
+    --separator: rgba(235, 235, 245, 0.14);
+    --separator-strong: rgba(235, 235, 245, 0.28);
+    --control: rgba(118, 118, 128, 0.24);
+    --control-hover: rgba(118, 118, 128, 0.34);
+    --accent: #0a84ff;
+    --accent-pressed: #409cff;
+    --accent-text: #ffffff;
+    --success: #30d158;
+    --error: #ff6961;
+    --focus: rgba(10, 132, 255, 0.42);
+    --shadow: 0 14px 42px rgba(0, 0, 0, 0.28), 0 1px 1px rgba(255, 255, 255, 0.04) inset;
+    background: #171719;
+    color: var(--text);
+  }
+  .standalone-shell .widget-card { border-color: rgba(255, 255, 255, 0.1); }
+}
 .standalone-brand { display: flex; align-items: center; gap: 0.55rem; padding: 0.25rem 0.25rem 0.1rem; font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
 .standalone-mark { display: inline-grid; width: 2rem; height: 2rem; place-items: center; border-radius: 10px; background: var(--accent); color: white; font-weight: 750; }
 .standalone-card { width: 100%; max-width: none; padding: 1.1rem; }
 .standalone-progress-card { padding: 0.9rem 1rem; }
+.standalone-progress-block + .standalone-progress-block { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid var(--separator); }
 .standalone-progress-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; }
 .standalone-progress-heading strong { font-size: 0.9rem; }
 .standalone-progress-heading span { color: var(--muted); font-size: 0.78rem; }
 .standalone-progress-number { margin-top: 0.25rem; font-size: 1.35rem; font-weight: 680; font-variant-numeric: tabular-nums; }
 .standalone-progress-track { height: 6px; margin-top: 0.55rem; overflow: hidden; border-radius: 999px; background: var(--control); }
 .standalone-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.standalone-progress-detail { display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.75rem; }
+.standalone-active-study { margin-top: 0.85rem; padding: 0.75rem 0.8rem; border-radius: 12px; background: var(--control); }
+.standalone-active-study p { margin: 0.28rem 0 0; font-size: 0.9rem; font-weight: 620; }
+.standalone-study-heading { display: flex; min-width: 0; align-items: center; gap: 0.6rem; }
+.standalone-back { display: inline-flex; min-height: 44px; flex: 0 0 auto; align-items: center; padding: 0.3rem 0.7rem; border: 1px solid var(--separator); border-radius: 999px; background: var(--control); color: var(--text); font: inherit; font-size: 0.8rem; font-weight: 620; cursor: pointer; }
+.standalone-back:hover { background: var(--control-hover); }
 .standalone-content { display: grid; gap: 0.85rem; }
 .standalone-count { color: var(--muted); font-size: 0.83rem; font-variant-numeric: tabular-nums; }
 .standalone-actions { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.9rem; }

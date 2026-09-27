@@ -33,6 +33,7 @@ describe("learning dashboard daily queue guard", () => {
     mocks.ensureTodayQueue.mockResolvedValue({ date: "2026-09-16", prepared: 50, added: 50 });
     mocks.getProgress.mockResolvedValue({
       today: { total: 50, known: 0, uncertain: 0, unknown: 0, completed: 0 },
+      review_today: { completed: 0, total: 0, remaining: 0 },
       all_time: { total_words: 50, mastered: 0, learning: 50, error_book: 0 },
       fsrs: { due_now: 0, due_today: 0, tomorrow: 0, due_next_7_days: 0, average_stability: 0 },
       settings: { daily_new_word_limit: 50 },

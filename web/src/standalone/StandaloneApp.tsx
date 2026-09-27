@@ -13,7 +13,15 @@ import {
 } from "./apiClient.js";
 
 type PageStatus = "loading" | "auth" | "ready";
+type StandalonePage = "dashboard" | "study";
 type RetryFields = Record<string, unknown> | null;
+
+export function visibleStandalonePage(
+  page: StandalonePage,
+  screen: WebApiResponse["screen"] | null,
+): StandalonePage {
+  return screen === "done" ? "dashboard" : page;
+}
 
 function initialToken(): string | null {
   try {
@@ -35,6 +43,7 @@ function list(value: unknown): Array<Record<string, unknown>> {
 
 function messageFor(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.code === "INTERNAL_SERVER_ERROR") return "请求未完成，请重试。";
     if (error.code === "DEEPSEEK_TIMEOUT") return "请求超时，请重试";
     if (error.code === "DEEPSEEK_NOT_CONFIGURED") return "AI 服务尚未配置，请稍后再试。";
     if (error.code.startsWith("DEEPSEEK_")) return "生成或批改暂时失败，请重试。";
@@ -47,15 +56,181 @@ function wordsFrom(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((word): word is string => typeof word === "string") : [];
 }
 
-function progressLabel(value: unknown): string {
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+export function todayTasksComplete(value: unknown): boolean {
   const progress = record(value);
+  const review = record(progress.review_today);
   const today = record(progress.today);
-  const completed = typeof today.completed === "number" ? today.completed : 0;
-  const total = typeof today.total === "number" ? today.total : 0;
-  return `${completed} / ${total}`;
+  const reviewDone = numberValue(review.total) === 0 || numberValue(review.completed) >= numberValue(review.total);
+  const newWordsDone = numberValue(today.total) > 0 && numberValue(today.completed) >= numberValue(today.total);
+  return reviewDone && newWordsDone;
+}
+
+export function dashboardContinueBehavior(screen: WebApiResponse["screen"]): "study" | "continue" {
+  return screen === "done" ? "continue" : "study";
+}
+
+export function activeStudySummary(view: WebApiResponse | null): string | null {
+  if (!view || view.screen === "done") return null;
+  const state = record(view.state);
+  const payload = record(state.payload);
+  const currentIndex = numberValue(state.current_index);
+  if (view.screen === "lesson") {
+    const word = String(state.current_word ?? payload.word ?? "").trim();
+    return word ? `Lesson · ${word}` : "Lesson";
+  }
+
+  const items = list(payload.items);
+  const total = items.length;
+  if (total === 0) return view.screen === "review" ? "复习进行中" : "预测试进行中";
+  const phaseComplete = view.screen === "review"
+    ? state.phase === "review_complete"
+    : state.phase === "pretest_complete";
+  const current = phaseComplete ? total : Math.min(Math.max(currentIndex + 1, 1), total);
+  const name = view.screen === "review" ? "复习" : "预测试";
+  return phaseComplete
+    ? `${name} · 已完成 ${current} / ${total} 题`
+    : `${name} · 第 ${current} / ${total} 题`;
+}
+
+export function lessonDraftAnswerForWord(stored: string | null, currentWord: string): string | null {
+  if (!stored) return null;
+  try {
+    const draft = JSON.parse(stored) as { word?: unknown; answer?: unknown };
+    return draft.word === currentWord && typeof draft.answer === "string" ? draft.answer : null;
+  } catch {
+    return null;
+  }
+}
+
+export function reviewNoticeForCard(notice: string, noticeIndex: number | null, currentIndex: number): string {
+  return noticeIndex === currentIndex ? notice : "";
+}
+
+export function StandaloneReviewQuestion({ item, direction }: {
+  item: Record<string, unknown>;
+  direction: "cn_to_en" | "en_definition";
+}): React.JSX.Element {
+  const partOfSpeech = typeof item.part_of_speech === "string" && item.part_of_speech.trim()
+    ? item.part_of_speech
+    : null;
+  return <div className="question-block">
+    <span className="question-label">{direction === "cn_to_en" ? "中 → 英" : "请用简单英文解释"}</span>
+    {direction === "cn_to_en" ? <>
+      {partOfSpeech && <span className="part-of-speech">{partOfSpeech}</span>}
+      <p className="question-prompt">{String(item.meaning_zh ?? "")}</p>
+    </> : <>
+      <p className="question-word">{String(item.word ?? "")}</p>
+      {partOfSpeech && <span className="part-of-speech">{partOfSpeech}</span>}
+    </>}
+  </div>;
+}
+
+export function StandaloneReviewFeedback({ notice, noticeIndex, currentIndex }: {
+  notice: string;
+  noticeIndex: number | null;
+  currentIndex: number;
+}): React.JSX.Element | null {
+  const visibleNotice = reviewNoticeForCard(notice, noticeIndex, currentIndex);
+  return visibleNotice ? <p className="standalone-status" role="status">{visibleNotice}</p> : null;
+}
+
+export function StandaloneProgressBlock({ title, completed, total, emptyText, detail }: {
+  title: string;
+  completed: number;
+  total: number;
+  emptyText: string;
+  detail: string;
+}): React.JSX.Element {
+  const hasTasks = total > 0;
+  const percent = hasTasks ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  return <div className="standalone-progress-block" aria-label={title}>
+    <div className="standalone-progress-heading"><strong>{title}</strong></div>
+    <div className="standalone-progress-number">{hasTasks ? `${completed} / ${total}` : emptyText}</div>
+    {hasTasks && <>
+      <div className="standalone-progress-track" role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(completed, total)}>
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      <span className="standalone-progress-detail">{detail}</span>
+    </>}
+  </div>;
+}
+
+export function StandaloneDashboard({ view, busy, onContinue }: {
+  view: WebApiResponse;
+  busy: boolean;
+  onContinue: () => void;
+}): React.JSX.Element {
+  const progress = record(view.progress);
+  const review = record(progress.review_today);
+  const today = record(progress.today);
+  const allTime = record(progress.all_time);
+  const fsrs = record(progress.fsrs);
+  const activeSummary = activeStudySummary(view);
+
+  return <>
+    <section className="widget-card standalone-card standalone-progress-card" aria-label="今日学习进度">
+      <StandaloneProgressBlock
+        title="今日复习"
+        completed={numberValue(review.completed)}
+        total={numberValue(review.total)}
+        emptyText="无到期复习"
+        detail={`已完成 · 剩余 ${numberValue(review.remaining)}`}
+      />
+      <StandaloneProgressBlock
+        title="今日新词"
+        completed={numberValue(today.completed)}
+        total={numberValue(today.total)}
+        emptyText="暂无新词"
+        detail="已完成"
+      />
+      {todayTasksComplete(view.progress) && <p className="standalone-status" role="status">今日任务完成</p>}
+      {activeSummary && <div className="standalone-active-study">
+        <span className="eyebrow">当前学习</span>
+        <p>{activeSummary}</p>
+      </div>}
+      <div className="standalone-actions">
+        <Button className="primary" type="button" disabled={busy} onClick={onContinue}>继续学习</Button>
+      </div>
+    </section>
+
+    <section className="widget-card standalone-card" aria-label="学习状态">
+      <span className="eyebrow">学习状态</span>
+      <dl className="metrics">
+        <div><dt>错词</dt><dd>{numberValue(allTime.error_book)}</dd></div>
+        <div><dt>已掌握</dt><dd>{numberValue(allTime.mastered)}</dd></div>
+      </dl>
+      <span className="eyebrow">复习安排</span>
+      <dl className="metrics">
+        <div><dt>当前到期</dt><dd>{numberValue(fsrs.due_now)}</dd></div>
+        <div><dt>明日到期</dt><dd>{numberValue(fsrs.tomorrow)}</dd></div>
+        <div><dt>未来 7 天</dt><dd>{numberValue(fsrs.due_next_7_days)}</dd></div>
+      </dl>
+    </section>
+  </>;
+}
+
+function StandaloneStudyBackButton({ onBack }: { onBack: () => void }): React.JSX.Element {
+  return <button className="standalone-back" type="button" onClick={onBack}>← 返回</button>;
+}
+
+export function StandaloneReviewHeader({ currentIndex, total, complete, onBack }: {
+  currentIndex: number;
+  total: number;
+  complete: boolean;
+  onBack: () => void;
+}): React.JSX.Element {
+  return <header className="widget-header compact-header">
+    <div className="standalone-study-heading"><StandaloneStudyBackButton onBack={onBack} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">复习</h1></div></div>
+    <span className="standalone-count">{complete ? total : `${Math.min(currentIndex + 1, total)} / ${total}`}</span>
+  </header>;
 }
 
 export default function StandaloneApp(): React.JSX.Element {
+  const [page, setPage] = useState<StandalonePage>("dashboard");
   const [token, setToken] = useState<string | null>(initialToken);
   const [tokenInput, setTokenInput] = useState("");
   const [view, setView] = useState<WebApiResponse | null>(null);
@@ -63,6 +238,7 @@ export default function StandaloneApp(): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
   const [notice, setNotice] = useState("");
+  const [noticeIndex, setNoticeIndex] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [authError, setAuthError] = useState("");
   const [retryFields, setRetryFields] = useState<RetryFields>(null);
@@ -73,6 +249,7 @@ export default function StandaloneApp(): React.JSX.Element {
     setView(null);
     setBusy(null);
     setRetryFields(null);
+    setPage("dashboard");
     setPageStatus("auth");
     setAuthError(wrongToken ? "访问密钥错误" : "");
   }, []);
@@ -91,6 +268,7 @@ export default function StandaloneApp(): React.JSX.Element {
       setView(next);
       setPageStatus("ready");
       setNotice("");
+      setNoticeIndex(null);
       if (!preserveError) {
         setRetryFields(null);
         setErrorMessage("");
@@ -123,6 +301,18 @@ export default function StandaloneApp(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
+    if (view?.screen === "done") setPage("dashboard");
+  }, [view?.screen]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible" && token) void loadBootstrap();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
+  }, [loadBootstrap, token]);
+
+  useEffect(() => {
     const state = view?.state;
     if (!state) return;
     const payload = record(state.payload);
@@ -131,12 +321,10 @@ export default function StandaloneApp(): React.JSX.Element {
     if (state.widget === "lesson" && (state.phase === "lesson_exercise" || wrapupDraft) && typeof state.current_word === "string") {
       try {
         const stored = sessionStorage.getItem("wordloop_draft");
-        if (stored) {
-          const draft = JSON.parse(stored) as { word?: unknown; answer?: unknown };
-          if (draft.word === state.current_word && typeof draft.answer === "string") {
-            setAnswer(draft.answer);
-            return;
-          }
+        const draftAnswer = lessonDraftAnswerForWord(stored, state.current_word);
+        if (draftAnswer !== null) {
+          setAnswer(draftAnswer);
+          return;
         }
         sessionStorage.removeItem("wordloop_draft");
       } catch {
@@ -169,6 +357,7 @@ export default function StandaloneApp(): React.JSX.Element {
       saveToken(candidate);
       setToken(candidate);
       setView(next);
+      setPage("dashboard");
       setPageStatus("ready");
       setTokenInput("");
       setErrorMessage("");
@@ -183,9 +372,11 @@ export default function StandaloneApp(): React.JSX.Element {
   const dispatch = async (fields: Record<string, unknown>) => {
     const revision = view?.session_revision ?? null;
     const action = { ...fields, expected_revision: revision } as WebAction;
+    const submittedIndex = typeof view?.state.current_index === "number" ? view.state.current_index : null;
     setBusy(String(fields.action ?? "action"));
     setErrorMessage("");
     setNotice("");
+    setNoticeIndex(null);
     setRetryFields(fields);
     try {
       const next = await postAction(action);
@@ -193,10 +384,17 @@ export default function StandaloneApp(): React.JSX.Element {
         setView((previous) => previous ? { ...previous, progress: next.progress } : next);
       } else {
         setView(next);
+        if (fields.action === "continue") setPage(next.screen === "done" ? "dashboard" : "study");
         setRetryFields(null);
         try { sessionStorage.removeItem("wordloop_draft"); } catch { /* storage is optional */ }
         setAnswer("");
-        if (next.result?.message) setNotice(next.result.message);
+        if (fields.action === "review_submit") {
+          const nextIndex = typeof next.state.current_index === "number" ? next.state.current_index : null;
+          if (submittedIndex !== null && nextIndex === submittedIndex && next.result?.message) {
+            setNotice(next.result.message);
+            setNoticeIndex(submittedIndex);
+          }
+        } else if (next.result?.message) setNotice(next.result.message);
       }
     } catch (error) {
       if (error instanceof UnauthorizedError) {
@@ -222,9 +420,18 @@ export default function StandaloneApp(): React.JSX.Element {
     else void loadBootstrap();
   };
 
+  const continueFromDashboard = () => {
+    if (!view) return;
+    if (dashboardContinueBehavior(view.screen) === "study") {
+      setPage("study");
+      return;
+    }
+    void dispatch({ action: "continue" });
+  };
+
   const state = view?.state ?? {};
   const payload = record(state.payload);
-  const progress = view?.progress;
+  const visiblePage = visibleStandalonePage(page, view?.screen ?? null);
   const currentIndex = typeof state.current_index === "number" ? state.current_index : 0;
   const busyLabel = busy === "lesson_next"
     ? payload.navigation && record(payload.navigation).action === "round_complete" ? "正在生成收尾题…" : "正在生成下一词…"
@@ -254,14 +461,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
   return <main className="standalone-shell">
     <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
-    <section className="widget-card standalone-card standalone-progress-card" aria-label="今日进度">
-      <div className="standalone-progress-heading"><strong>今日进度</strong><span>已完成 {progressLabel(progress)}</span></div>
-      <div className="standalone-progress-number">{progressLabel(progress)}</div>
-      <div className="standalone-progress-track" aria-hidden="true"><span style={{ width: `${progress && record(progress.today).total ? Math.min(100, Math.round((Number(record(progress.today).completed) / Number(record(progress.today).total)) * 100)) : 0}%` }} /></div>
-      <div className="standalone-actions">
-        <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button>
-      </div>
-    </section>
+    {visiblePage === "dashboard" && view && <StandaloneDashboard view={view} busy={busy !== null} onContinue={continueFromDashboard} />}
 
     {errorMessage && <section className="widget-card standalone-card" role="alert">
       <p className="standalone-status error">{errorMessage}</p>
@@ -272,23 +472,18 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {pageStatus === "ready" && !view && !errorMessage && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>正在加载今日学习…</p></div></section>}
 
-    {view?.screen === "review" && (() => {
+    {visiblePage === "study" && view?.screen === "review" && (() => {
       const items = list(payload.items);
       const item = items[currentIndex] ?? {};
       const complete = state.phase === "review_complete";
       const direction = item.direction === "en_definition" ? "en_definition" : "cn_to_en";
       return <section className="widget-card standalone-card" aria-labelledby="study-title">
-        <header className="widget-header compact-header"><div><span className="eyebrow">WordLoop</span><h1 id="study-title">复习</h1></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
+        <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={() => setPage("dashboard")} />
         {complete ? <div className="standalone-content"><p>本轮复习完成。</p><div className="standalone-actions"><Button type="button" onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
-          <div className="question-block">
-            <span className="question-label">{direction === "cn_to_en" ? "中文核心义" : "请用简单英文解释"}</span>
-            {direction === "cn_to_en"
-              ? <p className="question-prompt">{String(item.meaning_zh ?? "")}</p>
-              : <p className="question-word">{String(item.word ?? "")}{item.part_of_speech ? <small> {String(item.part_of_speech)}</small> : null}</p>}
-          </div>
+          <StandaloneReviewQuestion item={item} direction={direction} />
           <label className="answer-label" htmlFor="study-answer">{direction === "cn_to_en" ? "写出英文单词" : "英文释义"}</label>
           <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void dispatch({ action: "review_submit", answer }); } }} />
-          {notice && <p className="standalone-status" role="status">{notice}</p>}
+          <StandaloneReviewFeedback notice={notice} noticeIndex={noticeIndex} currentIndex={currentIndex} />
           <div className="standalone-actions standalone-two-actions">
             <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "review_submit", answer: "", mark_unknown: true })}>不会</Button>
             <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "review_submit", answer })}>提交</Button>
@@ -298,14 +493,14 @@ export default function StandaloneApp(): React.JSX.Element {
       </section>;
     })()}
 
-    {view?.screen === "pretest" && (() => {
+    {visiblePage === "study" && view?.screen === "pretest" && (() => {
       const items = list(payload.items);
       const item = items[currentIndex] ?? {};
       const complete = state.phase === "pretest_complete";
       const summary = view.pretest_summary ?? { known: 0, uncertain: 0, unknown: 0 };
       const audioStage = ["pretest_result", "listen_repeat", "listen_recall"].includes(String(state.phase));
       return <section className="widget-card standalone-card" aria-labelledby="study-title">
-        <header className="widget-header compact-header"><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
+        <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={() => setPage("dashboard")} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
         {complete ? <div className="standalone-content">
           <p>预测试完成</p>
           <div className="standalone-result-grid">
@@ -332,7 +527,7 @@ export default function StandaloneApp(): React.JSX.Element {
       </section>;
     })()}
 
-    {view?.screen === "lesson" && (() => {
+    {visiblePage === "study" && view?.screen === "lesson" && (() => {
       const flow = record(state.flow);
       const queue = wordsFrom(flow.lesson_words);
       const feedback = record(payload.feedback);
@@ -344,7 +539,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const exerciseMode = payload.mode === "exercise";
       const phase = String(state.phase ?? "");
       return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
-        <header className="widget-header compact-header"><div><span className="eyebrow">{isWrapup ? "本轮收尾" : `正式学习 · ${Math.min(currentIndex + 1, queue.length)} / ${queue.length || "—"}`}</span><div className="lesson-word-heading"><strong id="study-title">{title}</strong></div></div></header>
+        <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={() => setPage("dashboard")} /><div><span className="eyebrow">{isWrapup ? "本轮收尾" : `正式学习 · ${Math.min(currentIndex + 1, queue.length)} / ${queue.length || "—"}`}</span><div className="lesson-word-heading"><strong id="study-title">{title}</strong></div></div></div></header>
 
         {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content">
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
@@ -401,11 +596,6 @@ export default function StandaloneApp(): React.JSX.Element {
         {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
       </section>;
     })()}
-
-    {view?.screen === "done" && <section className="widget-card standalone-card" aria-labelledby="study-title">
-      <header className="widget-header"><span className="eyebrow">WordLoop</span><h1 id="study-title">{view.state.widget === "dictation" ? "请在 ChatGPT 继续" : "今日学习完成"}</h1><p>{view.message ?? "今天的学习内容已经完成。"}</p></header>
-      <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button><Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "refresh_progress" })}>刷新进度</Button></div>
-    </section>}
 
     {pageStatus === "loading" && view && <p className="standalone-status" role="status">{busyLabel ?? "正在同步学习状态…"}</p>}
   </main>;
