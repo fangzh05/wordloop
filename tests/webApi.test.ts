@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getPronunciationAudio: vi.fn(),
   buildReviewWidgetPayload: vi.fn(),
   recordAttempt: vi.fn(),
+  getTodayCompletedLessonWords: vi.fn(async () => new Set<string>()),
   recordReviewSubmission: vi.fn(),
   finishStudySession: vi.fn(),
   generateLesson: vi.fn(),
@@ -91,8 +92,8 @@ vi.mock("../server/tools/renderWidgets.js", async () => {
 });
 vi.mock("../server/tools/getPronunciationAudio.js", () => ({ getPronunciationAudio: mocks.getPronunciationAudio }));
 vi.mock("../server/services/attempts.js", () => ({
-  LESSON_ACTIVITY_TYPES: ["cloze", "exact_cloze", "recall", "sentence"],
   recordAttempt: mocks.recordAttempt,
+  getTodayCompletedLessonWords: mocks.getTodayCompletedLessonWords,
 }));
 vi.mock("../server/services/fsrsReviews.js", () => ({ recordReviewSubmission: mocks.recordReviewSubmission }));
 vi.mock("../server/services/deepseek.js", async () => {

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import { LESSON_ACTIVITY_TYPES } from "./attempts.js";
+import { getTodayCompletedLessonWords, LESSON_ACTIVITY_TYPES } from "./attempts.js";
 import {
   REVIEW_SESSION_MAX,
   reviewAnswerSchema,
@@ -391,7 +391,8 @@ export async function freezeLessonQueueForSession(
 ): Promise<StudySessionRow> {
   const state = session.state;
   if (!state || state.flow.lesson_words !== undefined) return session;
-  const lessonWords = buildLessonWords(state.flow.relearn_words, todayWords);
+  const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
+  const lessonWords = buildLessonWords(state.flow.relearn_words, todayWords, completedTodayLessonWords);
   if (lessonWords.length === 0) return session;
   const nextState = {
     ...state,
@@ -443,15 +444,17 @@ export async function normalizeLegacyLessonSession(
   const state = session.state;
   if (!state || state.widget !== "lesson" || state.flow.lesson_words !== undefined) return session;
 
-  const [todayWords, attemptWords] = await Promise.all([
+  const [todayWords, attemptWords, completedTodayLessonWords] = await Promise.all([
     getTodayWords(state.date, db, userId),
     getLegacyLessonAttemptWords(session, db, userId),
+    getTodayCompletedLessonWords(db, userId),
   ]);
   const lessonWords = recoverLegacyLessonWords({
     relearnWords: state.flow.relearn_words,
     todayWords,
     attemptWords,
     currentWord: state.current_word,
+    completedTodayLessonWords,
   });
   if (lessonWords.length === 0) throw new Error("LESSON_QUEUE_EMPTY");
 
