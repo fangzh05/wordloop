@@ -26,7 +26,7 @@ import {
 import { getTodayWords, getVocabularyItemsByWords, recordPretestResult } from "./services/words.js";
 import { buildReviewWidgetPayload } from "./tools/renderWidgets.js";
 import { getPronunciationAudio } from "./tools/getPronunciationAudio.js";
-import { getTodayCompletedLessonWords, recordAttempt } from "./services/attempts.js";
+import { recordAttempt } from "./services/attempts.js";
 import { recordReviewSubmission } from "./services/fsrsReviews.js";
 import {
   assertGradeInvariants,
