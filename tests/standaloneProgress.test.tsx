@@ -106,6 +106,11 @@ describe("shared Review and daily progress presentation", () => {
     const queue = [...relearn, "new-1", "new-2"];
     expect(standaloneLessonProgressLabel(relearn, queue, 2)).toBe("复习补学 · 3 / 4");
     expect(standaloneLessonProgressLabel(relearn, queue, 4)).toBe("新词学习 · 1 / 2");
+    expect(standaloneLessonProgressLabel(
+      ["grieve"],
+      ["grieve", "embark", "shallow", "electrical", "chief", "delegate", "textile", "recall"],
+      3,
+    )).toBe("新词学习 · 3 / 7");
     expect(standaloneLessonProgressLabel(relearn, queue, 4, true)).toBe("本轮收尾");
   });
 

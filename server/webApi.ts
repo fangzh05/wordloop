@@ -26,7 +26,7 @@ import {
 import { getTodayWords, getVocabularyItemsByWords, recordPretestResult } from "./services/words.js";
 import { buildReviewWidgetPayload } from "./tools/renderWidgets.js";
 import { getPronunciationAudio } from "./tools/getPronunciationAudio.js";
-import { getTodayCompletedLessonWords, recordAttempt } from "./services/attempts.js";
+import { recordAttempt } from "./services/attempts.js";
 import { recordReviewSubmission } from "./services/fsrsReviews.js";
 import {
   assertGradeInvariants,
@@ -386,11 +386,8 @@ async function createLessonFromBootstrap(
     }
     let lessonWords = state.flow.lesson_words ?? bootstrap.lesson_words;
     if (!lessonWords) {
-      const [todayWords, completedTodayLessonWords] = await Promise.all([
-        getTodayWords(state.date, db, userId),
-        getTodayCompletedLessonWords(db, userId),
-      ]);
-      lessonWords = buildLessonWords(state.flow.relearn_words, todayWords, completedTodayLessonWords);
+      const todayWords = await getTodayWords(state.date, db, userId);
+      lessonWords = buildLessonWords(state.flow.relearn_words, todayWords);
     }
     const currentFlow = { ...state.flow, lesson_words: lessonWords };
     const firstWord = lessonWordAt(lessonWords ?? [], 0);
@@ -408,11 +405,8 @@ async function createLessonFromBootstrap(
   }
 
   const date = await getStudyDate(db, userId);
-  const [todayWords, completedTodayLessonWords] = await Promise.all([
-    getTodayWords(date, db, userId),
-    getTodayCompletedLessonWords(db, userId),
-  ]);
-  const lessonWords = bootstrap.lesson_words ?? buildLessonWords([], todayWords, completedTodayLessonWords);
+  const todayWords = await getTodayWords(date, db, userId);
+  const lessonWords = buildLessonWords([], todayWords);
   const firstWord = lessonWordAt(lessonWords, 0);
   if (!firstWord || normalizeWord(firstWord) !== normalizeWord(requestedWord)) {
     throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson word does not match the daily queue.");
