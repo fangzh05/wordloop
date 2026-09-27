@@ -395,7 +395,7 @@ async function createLessonFromBootstrap(
     const currentFlow = { ...state.flow, lesson_words: lessonWords };
     const firstWord = lessonWordAt(lessonWords ?? [], 0);
     if (!lessonWords || !firstWord || normalizeWord(firstWord) !== normalizeWord(requestedWord)) {
-      throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson word does not match the frozen queue.");
+      throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson word does not match the selected queue.");
     }
     return generateAndPersistLesson({
       word: firstWord,
@@ -412,7 +412,7 @@ async function createLessonFromBootstrap(
     getTodayWords(date, db, userId),
     getTodayCompletedLessonWords(db, userId),
   ]);
-  const lessonWords = buildLessonWords([], todayWords, completedTodayLessonWords);
+  const lessonWords = bootstrap.lesson_words ?? buildLessonWords([], todayWords, completedTodayLessonWords);
   const firstWord = lessonWordAt(lessonWords, 0);
   if (!firstWord || normalizeWord(firstWord) !== normalizeWord(requestedWord)) {
     throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson word does not match the daily queue.");
@@ -489,7 +489,14 @@ async function submitReview(action: Extract<WebAction, { action: "review_submit"
   } else {
     grade = gradeTargetWord(action.answer, item.word);
   }
-  assertGradeInvariants(grade, {
+  const normalizedGrade = {
+    ...grade,
+    error_layer: grade.is_correct
+      ? grade.error_layer
+      : grade.error_layer === "none" ? "meaning" : grade.error_layer,
+    rating: grade.is_correct ? grade.rating : "again",
+  };
+  assertGradeInvariants(normalizedGrade, {
     activity_type: "review",
     advancesFsrs: true,
     reviewSubmission: true,
@@ -499,9 +506,9 @@ async function submitReview(action: Extract<WebAction, { action: "review_submit"
   const input = recordReviewSubmissionSchema.parse({
     word: item.word,
     user_answer: action.answer,
-    is_correct: grade.is_correct,
-    error_layer: grade.error_layer,
-    rating: grade.rating,
+    is_correct: normalizedGrade.is_correct,
+    error_layer: normalizedGrade.error_layer,
+    rating: normalizedGrade.rating,
     direction: item.direction,
     session_id: active.id,
   });
@@ -509,7 +516,7 @@ async function submitReview(action: Extract<WebAction, { action: "review_submit"
   const updated = await getActiveStudySession();
   if (!updated) return doneResponse(null);
   return successForSession(updated, {
-    result: { is_correct: grade.is_correct, error_layer: grade.error_layer, message: grade.feedback },
+    result: { is_correct: normalizedGrade.is_correct, error_layer: normalizedGrade.error_layer, message: normalizedGrade.feedback },
   });
 }
 

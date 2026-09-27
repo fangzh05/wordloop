@@ -683,6 +683,61 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.recordReviewSubmission.mock.calls[0]?.[0]).toMatchObject({ word: "fixture", rating: "again", error_layer: "meaning" });
   });
 
+  it("normalizes a nerve/nervous failure before recording the Review result", async () => {
+    const state = makeStudyState({
+      date, widget: "review", phase: "review", current_word: "nerve", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "review", items: [
+        { word: "nerve", meaning_zh: "神经；勇气", part_of_speech: "n.", direction: "cn_to_en", error_layers: [], is_due: true, review_kind: "fsrs_due", next_review_at: "2026-09-26T00:00:00.000Z" },
+        { word: "tact", meaning_zh: "机智；得体", part_of_speech: "n.", direction: "cn_to_en", error_layers: [], is_due: true, review_kind: "fsrs_due", next_review_at: "2026-09-26T00:00:00.000Z" },
+      ] },
+    });
+    mocks.active = row(state);
+    mocks.recordReviewSubmission.mockImplementation(async () => {
+      mocks.active = {
+        ...mocks.active,
+        state: { ...mocks.active.state, current_word: "tact", current_index: 1 },
+        updated_at: `rev-${++mocks.revisionNumber}`,
+      };
+    });
+
+    const response = await handleWebApiRequest(post({ action: "review_submit", answer: "nervous" }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      screen: "review",
+      state: { current_word: "tact", current_index: 1 },
+      result: { is_correct: false, error_layer: "meaning" },
+    });
+    expect(mocks.recordReviewSubmission).toHaveBeenCalledTimes(1);
+    expect(mocks.recordReviewSubmission.mock.calls[0]?.[0]).toMatchObject({
+      word: "nerve", user_answer: "nervous", is_correct: false, rating: "again", error_layer: "meaning",
+    });
+  });
+
+  it("logs unexpected server errors while returning only a safe Chinese fallback", async () => {
+    const state = makeStudyState({
+      date, widget: "review", phase: "review", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "review", items: [{ word: "fixture", meaning_zh: "设施", direction: "cn_to_en", error_layers: [], is_due: true, review_kind: "fsrs_due", next_review_at: "2026-09-26T00:00:00.000Z" }] },
+    });
+    const serverError = new Error("private validation diagnostic");
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.active = row(state);
+    mocks.recordReviewSubmission.mockRejectedValueOnce(serverError);
+
+    const response = await handleWebApiRequest(post({ action: "review_submit", answer: "fixture" }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(500);
+    expect(payload).toEqual({ error: { code: "INTERNAL_SERVER_ERROR", message: "请求未完成，请重试。" } });
+    expect(JSON.stringify(payload)).not.toContain("private validation diagnostic");
+    expect(log).toHaveBeenCalledWith("WordLoop Web API request failed", { code: "INTERNAL_SERVER_ERROR", error_type: "Error" });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("private validation diagnostic");
+    log.mockRestore();
+  });
+
   it("preserves deterministic Review near-miss Hard and failure Again ratings", async () => {
     const reviewState = makeStudyState({
       date, widget: "review", phase: "review", current_word: "fixture", current_index: 0, retry_count: 0,
