@@ -26,14 +26,12 @@ export function dedupeLessonWords(words: readonly string[]): string[] {
 export function buildLessonWords(
   relearnWords: readonly string[],
   todayWords: readonly VocabularyItem[],
-  completedTodayLessonWords: ReadonlySet<string> = new Set(),
 ): string[] {
   return dedupeLessonWords([
     ...relearnWords,
     ...todayWords
       .filter((word) => lessonStatuses.has(word.status)
-        && !word.mastered
-        && !completedTodayLessonWords.has(normalizeWord(word.word)))
+        && !word.mastered)
       .map((word) => word.word),
   ]);
 }
@@ -49,7 +47,6 @@ export function recoverLegacyLessonWords(input: {
   todayWords: readonly VocabularyItem[];
   attemptWords: readonly string[];
   currentWord?: string | null;
-  completedTodayLessonWords?: ReadonlySet<string>;
 }): string[] {
   const current = input.currentWord ? normalizeWord(input.currentWord) : "";
   const trajectory = dedupeLessonWords([
@@ -57,7 +54,7 @@ export function recoverLegacyLessonWords(input: {
     ...(current ? [current] : []),
   ]);
   const seen = new Set(trajectory.map(normalizeWord));
-  const pending = buildLessonWords(input.relearnWords, input.todayWords, input.completedTodayLessonWords)
+  const pending = buildLessonWords(input.relearnWords, input.todayWords)
     .filter((word) => !seen.has(normalizeWord(word)));
   return dedupeLessonWords([...trajectory, ...pending]);
 }

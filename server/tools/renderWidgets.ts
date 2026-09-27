@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import { getTodayCompletedLessonWords } from "../services/attempts.js";
 import { ensureTodayQueue } from "../services/dailyQueue.js";
 import { getProgress } from "../services/progress.js";
 import {
@@ -524,8 +523,7 @@ async function validateLessonWord(
   }
   const date = await getStudyDate();
   const todayWords = await getTodayWords(date);
-  const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
-  const lessonWords = buildLessonWords([], todayWords, completedTodayLessonWords);
+  const lessonWords = buildLessonWords([], todayWords);
   assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
   return { date, active: null, flow: { relearn_words: [], lesson_words: lessonWords } };
 }
