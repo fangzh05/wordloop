@@ -63,10 +63,10 @@ const webActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("review_submit"), answer: z.string().max(4000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
   z.object({ action: z.literal("pretest_submit"), answer: z.string().max(2000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_start_exercise"), ...mutationBase }).strict(),
-  z.object({ action: z.literal("lesson_submit"), answer: z.string().max(4000), ...mutationBase }).strict(),
+  z.object({ action: z.literal("lesson_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_retry"), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_next"), ...mutationBase }).strict(),
-  z.object({ action: z.literal("wrapup_submit"), answer: z.string().max(4000), ...mutationBase }).strict(),
+  z.object({ action: z.literal("wrapup_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
   z.object({ action: z.literal("wrapup_retry"), ...mutationBase }).strict(),
   z.object({ action: z.literal("wrapup_finish"), ...mutationBase }).strict(),
   z.object({ action: z.literal("refresh_progress"), ...mutationBase }).strict(),
@@ -182,10 +182,21 @@ function resultForState(
   extra: Record<string, unknown> = {},
 ): Record<string, unknown> {
   const screen: Screen = state.widget === "dictation" ? "done" : state.widget;
+  let responseState = state;
+  if (state.widget === "lesson") {
+    const payload = { ...state.payload };
+    delete payload.accepted_answers;
+    if (typeof payload.exercise === "object" && payload.exercise !== null && !Array.isArray(payload.exercise)) {
+      const exercise = { ...payload.exercise as Record<string, unknown> };
+      delete exercise.accepted_answers;
+      payload.exercise = exercise;
+    }
+    responseState = { ...state, payload };
+  }
   return {
     screen,
     session_revision: session.updated_at,
-    state,
+    state: responseState,
     ...(state.widget === "dictation" ? { message: "当前学习流程正在 ChatGPT 听写阶段，请在 ChatGPT 完成此阶段。" } : {}),
     ...extra,
   };
@@ -351,6 +362,7 @@ async function generateAndPersistLesson(input: {
       example_zh: generated.example_zh,
       note: generated.note,
       exercise: generated.exercise,
+      ...(generated.exercise.accepted_answers ? { accepted_answers: generated.exercise.accepted_answers } : {}),
       navigation,
     },
   });
@@ -371,12 +383,12 @@ async function createLessonFromBootstrap(
     if (state.widget !== "pretest" && state.widget !== "review") {
       throw new WebApiError(409, "INVALID_STUDY_STATE", "The active study session cannot start a Lesson.");
     }
-    const todayWords = state.flow.lesson_words === undefined ? await getTodayWords(state.date, db, userId) : [];
-    const frozen = state.flow.lesson_words === undefined
-      ? await freezeLessonQueueForSession(active, todayWords, db, userId, revision)
-      : active;
-    const currentFlow = frozen.state?.flow;
-    const lessonWords = currentFlow?.lesson_words;
+    let lessonWords = state.flow.lesson_words ?? bootstrap.lesson_words;
+    if (!lessonWords) {
+      const todayWords = await getTodayWords(state.date, db, userId);
+      lessonWords = buildLessonWords(state.flow.relearn_words, todayWords);
+    }
+    const currentFlow = { ...state.flow, lesson_words: lessonWords };
     const firstWord = lessonWordAt(lessonWords ?? [], 0);
     if (!lessonWords || !firstWord || normalizeWord(firstWord) !== normalizeWord(requestedWord)) {
       throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson word does not match the frozen queue.");
@@ -384,10 +396,10 @@ async function createLessonFromBootstrap(
     return generateAndPersistLesson({
       word: firstWord,
       date: state.date,
-      flow: currentFlow!,
+      flow: currentFlow,
       index: 0,
-      expectedRevision: frozen.updated_at,
-      sessionId: frozen.id,
+      expectedRevision: revision,
+      sessionId: active.id,
     });
   }
 
@@ -533,7 +545,7 @@ const lessonExerciseSchema = z.object({
 
 const recordableLessonTypes = new Set([
   "pretest_cn_to_en", "pretest_en_definition", "translation_cn_to_en", "translation_en_to_cn", "cloze",
-  "derivation", "listening", "collocation", "sentence", "review", "recall",
+  "derivation", "listening", "collocation", "sentence", "semantic_expression", "review", "recall",
   "listen_recall", "spelling", "word_recall", "exact_cloze",
 ]);
 
@@ -547,7 +559,11 @@ function lessonExercise(state: StudyState): z.infer<typeof lessonExerciseSchema>
 }
 
 function savedAcceptedAnswers(state: StudyState): string[] {
-  const accepted = z.array(z.string().trim().min(1).max(200)).max(20).safeParse(state.payload.accepted_answers);
+  const nestedExercise = typeof state.payload.exercise === "object" && state.payload.exercise !== null
+    ? state.payload.exercise as Record<string, unknown>
+    : {};
+  const accepted = z.array(z.string().trim().min(1).max(200)).max(20)
+    .safeParse(state.payload.accepted_answers ?? nestedExercise.accepted_answers);
   return accepted.success ? accepted.data : [];
 }
 
@@ -592,6 +608,11 @@ async function gradeLesson(state: StudyState, exercise: z.infer<typeof lessonExe
 }> {
   const deterministic = deterministicLessonGrade(state, exercise, answer);
   if (deterministic) return deterministic;
+  if (![
+    "translation_cn_to_en", "translation_en_to_cn", "collocation", "sentence", "semantic_expression", "pretest_en_definition",
+  ].includes(exercise.activity_type)) {
+    throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved Lesson exercise does not have a supported grading route.");
+  }
   if (!state.current_word) throw new WebApiError(409, "INVALID_STUDY_STATE", "The Lesson word is unavailable.");
   const semantic: SemanticGrade = await requestSemanticGrade({
     word: state.current_word,
@@ -637,6 +658,7 @@ function lessonFeedbackState(
   };
   const navigation = buildLessonNavigation(queue, state.current_index, state.current_word!);
   const referenceAnswer = grade.reference_answer;
+  const acceptedAnswers = savedAcceptedAnswers(state);
   return {
     ...state,
     phase: wrapup ? "lesson_complete" : "lesson_feedback",
@@ -647,6 +669,7 @@ function lessonFeedbackState(
       mode: "feedback",
       ...(wrapup ? { wrapup: true } : {}),
       word: state.current_word!,
+      ...(acceptedAnswers.length > 0 ? { accepted_answers: acceptedAnswers } : {}),
       progress: wrapup ? "本轮长难句收尾" : lessonProgressLabel(state.flow.relearn_words, queue, state.current_index),
       exercise: exercisePayload,
       feedback: {

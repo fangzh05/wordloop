@@ -95,9 +95,13 @@ const lessonExercise = z.object({
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
+  accepted_answers: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
 }).strict().superRefine((value, context) => {
-  if (value.activity_type === "cloze" && !value.prompt.includes("___")) {
+  if ((value.activity_type === "cloze" || value.activity_type === "exact_cloze") && !value.prompt.includes("___")) {
     context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["prompt"] });
+  }
+  if (value.activity_type === "exact_cloze" && !value.accepted_answers?.length) {
+    context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["accepted_answers"] });
   }
   if (value.activity_type === "translation_cn_to_en" && !/\p{Script=Han}/u.test(value.prompt)) {
     context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["prompt"] });
@@ -143,7 +147,15 @@ const exercisePayload = z.object({
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
-}).strict();
+  accepted_answers: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+}).strict().superRefine((value, context) => {
+  if ((value.activity_type === "cloze" || value.activity_type === "exact_cloze") && !value.prompt.includes("___")) {
+    context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["prompt"] });
+  }
+  if (value.activity_type === "exact_cloze" && !value.accepted_answers?.length) {
+    context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["accepted_answers"] });
+  }
+});
 const feedbackPayload = z.object({
   ...lessonCommon,
   mode: z.literal("feedback"),
@@ -228,7 +240,7 @@ const lessonPhaseByMode = {
 } as const;
 type LessonInput = z.infer<typeof lessonInput>;
 
-const lessonExerciseKeys = ["activity_type", "instruction", "prompt", "multiline"] as const;
+const lessonExerciseKeys = ["activity_type", "instruction", "prompt", "multiline", "accepted_answers"] as const;
 const lessonFeedbackKeys = [
   "is_correct",
   "user_answer",
@@ -267,6 +279,17 @@ function normalizePersistedLessonPayload(payload: Record<string, unknown>): Reco
     return { ...payload, exercise, feedback };
   }
   throw new Error("Study session lesson payload has an unsupported mode.");
+}
+
+function lessonWidgetResponsePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const response = { ...payload };
+  delete response.accepted_answers;
+  if (typeof response.exercise === "object" && response.exercise !== null && !Array.isArray(response.exercise)) {
+    const exercise = { ...response.exercise as Record<string, unknown> };
+    delete exercise.accepted_answers;
+    response.exercise = exercise;
+  }
+  return response;
 }
 
 function widgetPayloadWithState(payload: Record<string, unknown>, state: StudyState): Record<string, unknown> {
@@ -311,17 +334,18 @@ export async function resumableLessonPayload(session: StudySessionRow | null): P
   // strict, so project only their canonical fields on resume while retaining
   // unknown top-level fields for forward compatibility.
   const normalizedPayload = normalizePersistedLessonPayload(resolved.payload);
-  const payload = lessonWidgetPayload({ ...normalizedPayload, navigation });
+  const persistedPayload = { ...normalizedPayload, navigation };
+  const responsePayload = lessonWidgetPayload(lessonWidgetResponsePayload({ ...normalizedPayload, navigation }));
   const payloadChanged = JSON.stringify(resolved.payload) !== JSON.stringify(normalizedPayload);
   const navigationChanged = JSON.stringify(resolved.payload.navigation) !== JSON.stringify(navigation);
   const versionChanged = resolved.payload.widget_version !== LESSON_WIDGET_VERSION;
   if ((payloadChanged || navigationChanged || versionChanged) && resolvedSession) {
-    resolvedSession = await persistStudyState({ ...resolved, payload }, db, userId, resolvedSession);
-    resolved = resolvedSession.state ? normalizeStudyStateForRead(resolvedSession.state) : { ...resolved, payload };
+    resolvedSession = await persistStudyState({ ...resolved, payload: persistedPayload }, db, userId, resolvedSession);
+    resolved = resolvedSession.state ? normalizeStudyStateForRead(resolvedSession.state) : { ...resolved, payload: persistedPayload };
   } else {
-    resolved = { ...resolved, payload };
+    resolved = { ...resolved, payload: persistedPayload };
   }
-  return widgetPayloadWithState(resolved.payload, resolved);
+  return widgetPayloadWithState(responsePayload, resolved);
 }
 
 async function saveWidgetState(input: {

@@ -21,8 +21,9 @@ export const fsrsRatingSchema = z.enum(FSRS_RATINGS);
 
 export const ACTIVITY_TYPES = [
   "pretest_cn_to_en", "pretest_en_definition", "translation_cn_to_en",
-  "translation_en_to_cn", "cloze", "derivation", "listening",
-  "collocation", "sentence", "review", "recall",
+  "translation_en_to_cn", "cloze", "exact_cloze", "derivation", "listening",
+  "listen_recall", "spelling", "word_recall", "collocation", "sentence",
+  "semantic_expression", "review", "recall",
 ] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 export const activityTypeSchema = z.enum(ACTIVITY_TYPES);

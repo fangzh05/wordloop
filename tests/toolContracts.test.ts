@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   advanceStudySessionSchema,
+  activityTypeSchema,
   emptyToolArgsSchema,
   lessonNavigationSchema,
   lessonSubmissionSchema,
@@ -24,6 +26,28 @@ function reviewItem(direction: (typeof directions)[number], review_kind: (typeof
 }
 
 describe("Widget to tool contracts", () => {
+  it("accepts persisted fixed-cloze and semantic-expression activity types", () => {
+    expect(activityTypeSchema.parse("exact_cloze")).toBe("exact_cloze");
+    expect(activityTypeSchema.parse("semantic_expression")).toBe("semantic_expression");
+    expect(activityTypeSchema.parse("spelling")).toBe("spelling");
+    expect(activityTypeSchema.parse("word_recall")).toBe("word_recall");
+    expect(recordAttemptSchema.parse({
+      word: "electricians",
+      activity_type: "exact_cloze",
+      user_answer: "electricians",
+      is_correct: true,
+      error_layer: "none",
+    }).activity_type).toBe("exact_cloze");
+  });
+
+  it("allows both new activity types in the database attempt constraint migration", () => {
+    const migration = readFileSync(new URL("../supabase/migrations/20260927143358_exact_cloze_activity_type.sql", import.meta.url), "utf8");
+    expect(migration).toContain("'exact_cloze'");
+    expect(migration).toContain("'semantic_expression'");
+    expect(migration).toContain("'spelling'");
+    expect(migration).toContain("'word_recall'");
+  });
+
   it("encodes correct + hard + spelling as the only successful review near-miss form", () => {
     const nearMiss = {
       word: "recur",

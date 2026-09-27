@@ -84,16 +84,18 @@ describe("grading router", () => {
     expect(gradingRoute("spelling")).toBe("deterministic");
     expect(gradingRoute("word_recall")).toBe("deterministic");
     expect(gradingRoute("exact_cloze")).toBe("deterministic_cloze");
+    expect(gradingRoute("cloze")).toBe("deterministic_cloze");
+    expect(gradingRoute("derivation")).toBe("deterministic_cloze");
+    expect(gradingRoute("recall")).toBe("deterministic_cloze");
     expect(gradingRoute("translation_cn_to_en")).toBe("semantic");
     expect(gradingRoute("sentence")).toBe("semantic");
     expect(gradingRoute("pretest_en_definition")).toBe("semantic");
-    expect(gradingRoute("cloze")).toBe("semantic");
   });
 
   it("treats only non-semantic routes as deterministically graded", () => {
     expect(isDeterministicallyGraded("spelling")).toBe(true);
     expect(isDeterministicallyGraded("exact_cloze")).toBe(true);
-    expect(isDeterministicallyGraded("cloze")).toBe(false);
+    expect(isDeterministicallyGraded("cloze")).toBe(true);
     expect(isDeterministicallyGraded("sentence")).toBe(false);
   });
 

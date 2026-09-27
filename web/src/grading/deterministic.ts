@@ -68,19 +68,22 @@ export type DeterministicActivityType = (typeof DETERMINISTIC_ACTIVITY_TYPES)[nu
 /** Questions with a single fixed string answer drawn from persisted state. */
 export const DETERMINISTIC_CLOZE_ACTIVITY_TYPES = [
   "exact_cloze",
+  // Older saved Lessons used these names for fixed-answer prompts. They stay
+  // deterministic when their accepted_answers snapshot is available.
+  "cloze",
+  "derivation",
+  "recall",
 ] as const;
 
 /** Questions whose quality is a judgement call, left to the semantic grader. */
 export const SEMANTIC_ACTIVITY_TYPES = [
   "translation_cn_to_en",
   "translation_en_to_cn",
-  "cloze",
-  "derivation",
   "listening",
   "collocation",
   "sentence",
-  "recall",
   "pretest_en_definition",
+  "semantic_expression",
 ] as const;
 
 export type GradingRoute = "deterministic" | "deterministic_cloze" | "semantic";

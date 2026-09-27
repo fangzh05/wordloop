@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button.js";
 import {
   ApiError,
@@ -41,12 +41,21 @@ function list(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value) ? value.map(record) : [];
 }
 
-function messageFor(error: unknown): string {
+export function deepSeekMessage(code: string, task: "grading" | "generation"): string {
+  const target = task === "grading" ? "批改" : "学习内容生成";
+  if (code === "DEEPSEEK_TIMEOUT") return task === "grading" ? "批改超时，请重试" : "内容生成超时，请重试";
+  if (code === "DEEPSEEK_HTTP_ERROR") return task === "grading" ? "批改服务暂时不可用，请重试" : "内容生成服务暂时不可用，请重试";
+  if (code === "DEEPSEEK_INVALID_OUTPUT" || code === "DEEPSEEK_INVALID_JSON") {
+    return task === "grading" ? "批改结果格式异常，请重试" : "生成内容格式异常，请重试";
+  }
+  if (code === "DEEPSEEK_NOT_CONFIGURED") return "AI 服务尚未配置，请稍后再试。";
+  return `${target}暂时无法完成，请重试。`;
+}
+
+function messageFor(error: unknown, deepSeekTask: "grading" | "generation" = "grading"): string {
   if (error instanceof ApiError) {
     if (error.code === "INTERNAL_SERVER_ERROR") return "请求未完成，请重试。";
-    if (error.code === "DEEPSEEK_TIMEOUT") return "请求超时，请重试";
-    if (error.code === "DEEPSEEK_NOT_CONFIGURED") return "AI 服务尚未配置，请稍后再试。";
-    if (error.code.startsWith("DEEPSEEK_")) return "生成或批改暂时失败，请重试。";
+    if (error.code.startsWith("DEEPSEEK_")) return deepSeekMessage(error.code, deepSeekTask);
     return error.message;
   }
   return "连接失败，请检查网络后重试。";
@@ -135,6 +144,63 @@ export function lessonDraftAnswerForWord(stored: string | null, currentWord: str
   } catch {
     return null;
   }
+}
+
+export function lessonDraftAnswerForState(stored: string | null, currentWord: string, phase: string, prompt: string): string | null {
+  if (!stored) return null;
+  try {
+    const draft = JSON.parse(stored) as { word?: unknown; phase?: unknown; prompt?: unknown; answer?: unknown };
+    return draft.word === currentWord && draft.phase === phase && draft.prompt === prompt && typeof draft.answer === "string"
+      ? draft.answer
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+type MutableRef<T> = { current: T };
+
+export async function runForegroundRequest<T>(
+  requestInFlightRef: MutableRef<boolean>,
+  request: () => Promise<T>,
+  afterRelease?: () => void,
+): Promise<{ started: boolean; result?: T }> {
+  if (requestInFlightRef.current) return { started: false };
+  requestInFlightRef.current = true;
+  try {
+    return { started: true, result: await request() };
+  } finally {
+    requestInFlightRef.current = false;
+    afterRelease?.();
+  }
+}
+
+export function deferVisibilityBootstrap(
+  requestInFlightRef: MutableRef<boolean>,
+  refreshPendingRef: MutableRef<boolean>,
+): boolean {
+  if (!requestInFlightRef.current) return false;
+  refreshPendingRef.current = true;
+  return true;
+}
+
+function lessonDraftContext(state: Record<string, unknown> | undefined): { word: string; phase: string; prompt: string } | null {
+  if (!state || state.widget !== "lesson") return null;
+  const payload = record(state.payload);
+  const wrapupDraft = state.phase === "lesson_complete" && payload.mode === "exercise" && payload.wrapup === true;
+  if (state.phase !== "lesson_exercise" && !wrapupDraft) return null;
+  const word = typeof state.current_word === "string" ? state.current_word : "";
+  const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
+  if (!word || !prompt) return null;
+  return { word, phase: String(state.phase), prompt };
+}
+
+export function lessonDraftTransitioned(
+  left: ReturnType<typeof lessonDraftContext>,
+  right: ReturnType<typeof lessonDraftContext>,
+): boolean {
+  return left !== null && !(right !== null
+    && left.word === right.word && left.phase === right.phase && left.prompt === right.prompt);
 }
 
 export function reviewNoticeForCard(notice: string, noticeIndex: number | null, currentIndex: number): string {
@@ -277,9 +343,34 @@ export default function StandaloneApp(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState("");
   const [authError, setAuthError] = useState("");
   const [retryFields, setRetryFields] = useState<RetryFields>(null);
+  const requestInFlightRef = useRef(false);
+  const refreshPendingRef = useRef(false);
+  const refreshProgressPendingRef = useRef(false);
+  const tokenRef = useRef(token);
+  const sessionRevisionRef = useRef<string | null>(view?.session_revision ?? null);
+  const loadBootstrapRef = useRef<() => Promise<void>>(async () => undefined);
+  const loadDashboardProgressRef = useRef<() => Promise<void>>(async () => undefined);
+  tokenRef.current = token;
+
+  const flushPendingRefresh = useCallback(() => {
+    const needsBootstrap = refreshPendingRef.current;
+    const needsProgress = refreshProgressPendingRef.current;
+    if (!needsBootstrap && !needsProgress) return;
+    refreshPendingRef.current = false;
+    refreshProgressPendingRef.current = false;
+    queueMicrotask(() => {
+      if (!tokenRef.current) return;
+      if (needsBootstrap) {
+        if (needsProgress) refreshProgressPendingRef.current = true;
+        void loadBootstrapRef.current();
+      } else if (needsProgress) void loadDashboardProgressRef.current();
+    });
+  }, []);
 
   const enterAuth = useCallback((wrongToken = false) => {
     clearToken();
+    tokenRef.current = null;
+    sessionRevisionRef.current = null;
     setToken(null);
     setView(null);
     setBusy(null);
@@ -290,64 +381,77 @@ export default function StandaloneApp(): React.JSX.Element {
   }, []);
 
   const loadDashboardProgress = useCallback(async () => {
-    try {
-      const progressView = await postAction({ action: "refresh_progress", expected_revision: view?.session_revision ?? null });
-      if (progressView.progress) {
-        setView((current) => current?.progress ? current : progressView);
+    const run = await runForegroundRequest(requestInFlightRef, async () => {
+      setBusy("refresh_progress");
+      try {
+        const progressView = await postAction({ action: "refresh_progress", expected_revision: sessionRevisionRef.current });
+        sessionRevisionRef.current = progressView.session_revision ?? sessionRevisionRef.current;
+        if (progressView.progress) {
+          setView((current) => current?.progress ? current : progressView);
+        }
+      } catch {
+        // Keep the safe generation error and retry action visible if progress is unavailable.
+      } finally {
+        setBusy(null);
       }
-    } catch {
-      // Keep the safe generation error and retry action visible if progress is unavailable.
-    }
-  }, [view?.session_revision]);
+    }, flushPendingRefresh);
+    if (!run.started) refreshProgressPendingRef.current = true;
+  }, [flushPendingRefresh]);
 
   const loadBootstrap = useCallback(async (preserveError = false, overrideToken?: string, retryStale = true) => {
-    const activeToken = overrideToken ?? token;
-    if (!activeToken) {
-      setPageStatus("auth");
-      return;
-    }
-    setBusy("bootstrap");
-    setPageStatus((current) => current === "auth" ? "auth" : "loading");
-    if (!preserveError) setErrorMessage("");
-    try {
-      const next = await getBootstrap(overrideToken);
-      setView(next);
-      setPageStatus("ready");
-      setNotice("");
-      setNoticeIndex(null);
-      if (!preserveError) {
-        setRetryFields(null);
-        setErrorMessage("");
-      }
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        enterAuth(true);
-      } else if (error instanceof StaleStudyStateError) {
-        setView(null);
-        setPageStatus("loading");
-        setBusy(null);
-        if (retryStale) void loadBootstrap(preserveError, overrideToken, false);
-        else {
-          setPageStatus("ready");
-          setErrorMessage("学习状态正在其他客户端更新，请重试。");
-        }
+    const run = await runForegroundRequest(requestInFlightRef, async () => {
+      const activeToken = overrideToken ?? tokenRef.current;
+      if (!activeToken) {
+        setPageStatus("auth");
         return;
-      } else {
-        setPageStatus("ready");
-        if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
-          setPage("dashboard");
-          setErrorMessage("学习内容生成暂时失败");
-          setRetryFields(null);
-          if (!view?.progress) await loadDashboardProgress();
-        } else {
-          setErrorMessage(messageFor(error));
-          setRetryFields(null);
-        }
       }
-    } finally {
-      setBusy(null);
-    }
-  }, [enterAuth, loadDashboardProgress, token, view?.progress]);
+      setBusy("bootstrap");
+      setPageStatus((current) => current === "auth" ? "auth" : "loading");
+      if (!preserveError) setErrorMessage("");
+      try {
+        const next = await getBootstrap(overrideToken ?? activeToken);
+        sessionRevisionRef.current = next.session_revision ?? null;
+        setView(next);
+        setPageStatus("ready");
+        setNotice("");
+        setNoticeIndex(null);
+        if (!preserveError) {
+          setRetryFields(null);
+          setErrorMessage("");
+        }
+      } catch (error) {
+        if (error instanceof UnauthorizedError) {
+          enterAuth(true);
+        } else if (error instanceof StaleStudyStateError) {
+          sessionRevisionRef.current = null;
+          setView(null);
+          setPageStatus("loading");
+          if (retryStale) setTimeout(() => void loadBootstrap(preserveError, overrideToken, false), 0);
+          else {
+            setPageStatus("ready");
+            setErrorMessage("学习状态正在其他客户端更新，请重试。");
+          }
+        } else {
+          setPageStatus("ready");
+          if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
+            setPage("dashboard");
+            setErrorMessage(deepSeekMessage(error.code, "generation"));
+            setRetryFields(null);
+            if (!view?.progress) await loadDashboardProgress();
+          } else {
+            setErrorMessage(messageFor(error, "generation"));
+            setRetryFields(null);
+          }
+        }
+      } finally {
+        setBusy(null);
+      }
+    }, flushPendingRefresh);
+    if (!run.started) refreshPendingRef.current = true;
+  }, [enterAuth, flushPendingRefresh, loadDashboardProgress, view?.progress]);
+
+  loadBootstrapRef.current = () => loadBootstrap(false, tokenRef.current ?? undefined);
+  loadDashboardProgressRef.current = loadDashboardProgress;
 
   useEffect(() => {
     if (token) void loadBootstrap();
@@ -359,7 +463,8 @@ export default function StandaloneApp(): React.JSX.Element {
 
   useEffect(() => {
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible" && token) void loadBootstrap();
+      if (document.visibilityState !== "visible" || !token) return;
+      if (!deferVisibilityBootstrap(requestInFlightRef, refreshPendingRef)) void loadBootstrap();
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
@@ -369,12 +474,11 @@ export default function StandaloneApp(): React.JSX.Element {
     const state = view?.state;
     if (!state) return;
     const payload = record(state.payload);
-    const wrapupDraft = state.widget === "lesson" && state.phase === "lesson_complete"
-      && payload.mode === "exercise" && payload.wrapup === true;
-    if (state.widget === "lesson" && (state.phase === "lesson_exercise" || wrapupDraft) && typeof state.current_word === "string") {
+    const draftContext = lessonDraftContext(state);
+    if (draftContext) {
       try {
         const stored = sessionStorage.getItem("wordloop_draft");
-        const draftAnswer = lessonDraftAnswerForWord(stored, state.current_word);
+        const draftAnswer = lessonDraftAnswerForState(stored, draftContext.word, draftContext.phase, draftContext.prompt);
         if (draftAnswer !== null) {
           setAnswer(draftAnswer);
           return;
@@ -387,101 +491,121 @@ export default function StandaloneApp(): React.JSX.Element {
       try { sessionStorage.removeItem("wordloop_draft"); } catch { /* storage is optional */ }
     }
     if (payload.mode !== "exercise") setAnswer("");
-  }, [view?.session_revision, view?.state.current_word, view?.state.phase]);
+  }, [view?.session_revision, view?.state.current_word, view?.state.phase, view?.state.payload]);
 
   const saveAnswer = (value: string) => {
     setAnswer(value);
     const state = view?.state;
-    const payload = record(state?.payload);
-    const wrapupDraft = state?.widget === "lesson" && state.phase === "lesson_complete"
-      && payload.mode === "exercise" && payload.wrapup === true;
-    if (state?.widget !== "lesson" || (state.phase !== "lesson_exercise" && !wrapupDraft) || typeof state.current_word !== "string") return;
-    try { sessionStorage.setItem("wordloop_draft", JSON.stringify({ word: state.current_word, answer: value })); } catch { /* storage is optional */ }
+    const draftContext = lessonDraftContext(state);
+    if (!draftContext) return;
+    try { sessionStorage.setItem("wordloop_draft", JSON.stringify({ ...draftContext, answer: value })); } catch { /* storage is optional */ }
   };
 
   const submitToken = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const candidate = tokenInput.trim();
     if (!candidate) return;
-    setBusy("auth");
-    setAuthError("");
-    try {
-      const next = await getBootstrap(candidate);
-      saveToken(candidate);
-      setToken(candidate);
-      setView(next);
-      setPage("dashboard");
-      setPageStatus("ready");
-      setTokenInput("");
-      setErrorMessage("");
-    } catch (error) {
-      if (error instanceof UnauthorizedError) setAuthError("访问密钥错误");
-      else if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
+    if (requestInFlightRef.current) return;
+    await runForegroundRequest(requestInFlightRef, async () => {
+      setBusy("auth");
+      setAuthError("");
+      try {
+        const next = await getBootstrap(candidate);
         saveToken(candidate);
+        tokenRef.current = candidate;
+        sessionRevisionRef.current = next.session_revision ?? null;
         setToken(candidate);
+        setView(next);
         setPage("dashboard");
         setPageStatus("ready");
         setTokenInput("");
-        setErrorMessage("学习内容生成暂时失败");
-        setRetryFields(null);
-        await loadDashboardProgress();
-      } else setAuthError(messageFor(error));
-    } finally {
-      setBusy(null);
-    }
+        setErrorMessage("");
+      } catch (error) {
+        if (error instanceof UnauthorizedError) setAuthError("访问密钥错误");
+        else if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
+          saveToken(candidate);
+          tokenRef.current = candidate;
+          setToken(candidate);
+          setPage("dashboard");
+          setPageStatus("ready");
+          setTokenInput("");
+          setErrorMessage(deepSeekMessage(error.code, "generation"));
+          setRetryFields(null);
+          await loadDashboardProgress();
+        } else setAuthError(messageFor(error, "generation"));
+      } finally {
+        setBusy(null);
+      }
+    }, flushPendingRefresh);
   };
 
   const dispatch = async (fields: Record<string, unknown>) => {
+    const actionName = String(fields.action ?? "");
+    const answerActions = new Set(["review_submit", "pretest_submit", "lesson_submit", "wrapup_submit"]);
+    if (answerActions.has(actionName) && fields.mark_unknown !== true
+      && (typeof fields.answer !== "string" || !fields.answer.trim())) return;
+    if (requestInFlightRef.current) return;
     const revision = view?.session_revision ?? null;
     const action = { ...fields, expected_revision: revision } as WebAction;
     const submittedIndex = typeof view?.state.current_index === "number" ? view.state.current_index : null;
-    setBusy(String(fields.action ?? "action"));
-    setErrorMessage("");
-    setNotice("");
-    setNoticeIndex(null);
-    setRetryFields(fields);
-    try {
-      const next = await postAction(action);
-      if (fields.action === "refresh_progress") {
-        setView((previous) => previous ? { ...previous, progress: next.progress } : next);
-      } else {
-        setView(next);
-        if (fields.action === "continue") setPage(next.screen === "done" ? "dashboard" : "study");
-        setRetryFields(null);
-        try { sessionStorage.removeItem("wordloop_draft"); } catch { /* storage is optional */ }
-        setAnswer("");
-        if (fields.action === "review_submit") {
-          const nextIndex = typeof next.state.current_index === "number" ? next.state.current_index : null;
-          if (submittedIndex !== null && nextIndex === submittedIndex && next.result?.message) {
-            setNotice(next.result.message);
-            setNoticeIndex(submittedIndex);
-          }
-        } else if (next.result?.message) setNotice(next.result.message);
-      }
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        enterAuth(true);
-      } else if (error instanceof StaleStudyStateError) {
-        setView(null);
-        setNotice("");
-        setRetryFields(null);
-        await loadBootstrap();
-      } else {
-        if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
-          if (fields.action === "continue" || fields.action === "lesson_next") {
-            setPage("dashboard");
-            setErrorMessage("学习内容生成暂时失败");
-            if (!view?.progress) await loadDashboardProgress();
-          } else {
-            setErrorMessage("学习批改暂时失败");
-          }
+    const previousDraftContext = lessonDraftContext(view?.state);
+    await runForegroundRequest(requestInFlightRef, async () => {
+      setBusy(actionName || "action");
+      setErrorMessage("");
+      setNotice("");
+      setNoticeIndex(null);
+      setRetryFields(fields);
+      try {
+        const next = await postAction(action);
+        sessionRevisionRef.current = next.session_revision ?? sessionRevisionRef.current;
+        if (actionName === "refresh_progress") {
+          setView((previous) => previous ? { ...previous, progress: next.progress } : next);
         } else {
-          setErrorMessage(messageFor(error));
+          setView(next);
+          if (actionName === "continue") setPage(next.screen === "done" ? "dashboard" : "study");
+          setRetryFields(null);
+          const nextDraftContext = lessonDraftContext(next.state);
+          if (lessonDraftTransitioned(previousDraftContext, nextDraftContext)) {
+            try { sessionStorage.removeItem("wordloop_draft"); } catch { /* storage is optional */ }
+            setAnswer("");
+          } else if (actionName === "review_submit" || actionName === "pretest_submit") {
+            setAnswer("");
+          }
+          if (actionName === "review_submit") {
+            const nextIndex = typeof next.state.current_index === "number" ? next.state.current_index : null;
+            if (submittedIndex !== null && nextIndex === submittedIndex && next.result?.message) {
+              setNotice(next.result.message);
+              setNoticeIndex(submittedIndex);
+            }
+          } else if (next.result?.message) setNotice(next.result.message);
         }
+      } catch (error) {
+        if (error instanceof UnauthorizedError) {
+          enterAuth(true);
+        } else if (error instanceof StaleStudyStateError) {
+          sessionRevisionRef.current = null;
+          setView(null);
+          setNotice("");
+          setRetryFields(null);
+          await loadBootstrap();
+        } else {
+          if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
+            const generationAction = actionName === "continue" || actionName === "lesson_next";
+            if (generationAction) {
+              setPage("dashboard");
+              setErrorMessage(deepSeekMessage(error.code, "generation"));
+              if (!view?.progress) await loadDashboardProgress();
+            } else {
+              setErrorMessage(deepSeekMessage(error.code, "grading"));
+            }
+          } else {
+            setErrorMessage(messageFor(error, actionName === "continue" || actionName === "lesson_next" ? "generation" : "grading"));
+          }
+        }
+      } finally {
+        setBusy(null);
       }
-    } finally {
-      setBusy(null);
-    }
+    }, flushPendingRefresh);
   };
 
   const retry = () => {
@@ -551,11 +675,11 @@ export default function StandaloneApp(): React.JSX.Element {
         {complete ? <div className="standalone-content"><p>本轮复习完成。</p><div className="standalone-actions"><Button type="button" onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
           <StandaloneReviewQuestion item={item} direction={direction} />
           <label className="answer-label" htmlFor="study-answer">{direction === "cn_to_en" ? "写出英文单词" : "英文释义"}</label>
-          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void dispatch({ action: "review_submit", answer }); } }} />
+          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (!answer.trim()) return; void dispatch({ action: "review_submit", answer }); } }} />
           <StandaloneReviewFeedback notice={notice} noticeIndex={noticeIndex} currentIndex={currentIndex} />
           <div className="standalone-actions standalone-two-actions">
             <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "review_submit", answer: "", mark_unknown: true })}>不会</Button>
-            <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "review_submit", answer })}>提交</Button>
+            <Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "review_submit", answer })}>提交</Button>
           </div>
         </div>}
         {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
@@ -585,11 +709,11 @@ export default function StandaloneApp(): React.JSX.Element {
             {typeof item.part_of_speech === "string" && <p className="answer-hint">{item.part_of_speech}</p>}
           </div>
           <label className="answer-label" htmlFor="study-answer">写出英文单词</label>
-          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void dispatch({ action: "pretest_submit", answer }); } }} />
+          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (!answer.trim()) return; void dispatch({ action: "pretest_submit", answer }); } }} />
           {notice && <p className="standalone-status" role="status">{notice}</p>}
           <div className="standalone-actions standalone-two-actions">
             <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "pretest_submit", answer: "", mark_unknown: true })}>不会</Button>
-            <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "pretest_submit", answer })}>提交</Button>
+            <Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "pretest_submit", answer })}>提交</Button>
           </div>
         </div>}
         {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
@@ -626,8 +750,8 @@ export default function StandaloneApp(): React.JSX.Element {
           <div className="lesson-prompt">{String(exercise.prompt ?? "")}</div>
           {exercise.multiline === true
             ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} />
-            : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void dispatch({ action: "lesson_submit", answer }); } }} />}
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_submit", answer })}>提交</Button></div>
+            : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (!answer.trim()) return; void dispatch({ action: "lesson_submit", answer }); } }} />}
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "lesson_submit", answer })}>提交</Button></div>
         </div>}
 
         {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
@@ -646,7 +770,7 @@ export default function StandaloneApp(): React.JSX.Element {
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
           <div className="lesson-prompt">{String(exercise.prompt ?? "")}</div>
           <textarea className="standalone-input" aria-label="长难句翻译与结构分析" value={answer} onChange={(event) => saveAnswer(event.target.value)} />
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "wrapup_submit", answer })}>提交收尾题</Button></div>
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "wrapup_submit", answer })}>提交收尾题</Button></div>
         </div>}
 
         {phase === "lesson_complete" && feedbackMode && isWrapup && <div className="standalone-content">
