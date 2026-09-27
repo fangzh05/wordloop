@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DashboardProgressBlock } from "../web/src/dashboard/LearningDashboard.js";
 import {
@@ -6,11 +7,100 @@ import {
   StandaloneReviewFeedback,
   StandaloneReviewHeader,
   StandaloneReviewQuestion,
+  deepSeekMessage,
+  deferVisibilityBootstrap,
+  lessonDraftAnswerForState,
+  lessonDraftTransitioned,
+  runForegroundRequest,
   standaloneLessonProgressLabel,
   todayTasksComplete,
 } from "../web/src/standalone/StandaloneApp.js";
 
 describe("shared Review and daily progress presentation", () => {
+  it("defers visibility bootstrap until an active mutation releases the request lock", async () => {
+    const requestInFlightRef = { current: false };
+    const refreshPendingRef = { current: false };
+    let finishMutation!: () => void;
+    let bootstrapCalls = 0;
+    const mutation = runForegroundRequest(requestInFlightRef, () => new Promise<void>((resolve) => {
+      finishMutation = resolve;
+    }), () => {
+      if (refreshPendingRef.current) {
+        refreshPendingRef.current = false;
+        bootstrapCalls += 1;
+      }
+    });
+
+    expect(requestInFlightRef.current).toBe(true);
+    expect(deferVisibilityBootstrap(requestInFlightRef, refreshPendingRef)).toBe(true);
+    expect(bootstrapCalls).toBe(0);
+    finishMutation();
+    await mutation;
+    expect(bootstrapCalls).toBe(1);
+    expect(requestInFlightRef.current).toBe(false);
+  });
+
+  it("drops a rapid second action before it can send another POST", async () => {
+    const requestInFlightRef = { current: false };
+    let finishPost!: () => void;
+    let postCount = 0;
+    const firstClick = runForegroundRequest(requestInFlightRef, () => {
+      postCount += 1;
+      return new Promise<void>((resolve) => { finishPost = resolve; });
+    });
+    const secondClick = await runForegroundRequest(requestInFlightRef, async () => {
+      postCount += 1;
+    });
+
+    expect(secondClick.started).toBe(false);
+    expect(postCount).toBe(1);
+    finishPost();
+    await firstClick;
+    expect(postCount).toBe(1);
+  });
+
+  it("restores a Lesson draft only for the same word, phase, and prompt", () => {
+    const stored = JSON.stringify({
+      word: "electrician", phase: "lesson_exercise", prompt: "A team of ___ arrived.", answer: "electricians",
+    });
+    expect(lessonDraftAnswerForState(stored, "electrician", "lesson_exercise", "A team of ___ arrived."))
+      .toBe("electricians");
+    expect(lessonDraftAnswerForState(stored, "electrician", "lesson_exercise", "A different ___ arrived."))
+      .toBeNull();
+    expect(lessonDraftAnswerForState(stored, "electrician", "lesson_complete", "A team of ___ arrived."))
+      .toBeNull();
+    expect(lessonDraftAnswerForState(stored, "electricians", "lesson_exercise", "A team of ___ arrived."))
+      .toBeNull();
+    expect(lessonDraftTransitioned(
+      { word: "electrician", phase: "lesson_exercise", prompt: "A team of ___ arrived." },
+      { word: "electrician", phase: "lesson_exercise", prompt: "A team of ___ arrived." },
+    )).toBe(false);
+    expect(lessonDraftTransitioned(
+      { word: "electrician", phase: "lesson_exercise", prompt: "A team of ___ arrived." },
+      null,
+    )).toBe(true);
+  });
+
+  it("keeps the stored answer across a failed Lesson request", () => {
+    const source = readFileSync(new URL("../web/src/standalone/StandaloneApp.tsx", import.meta.url), "utf8");
+    const dispatch = source.slice(source.indexOf("const dispatch = async"), source.indexOf("const retry ="));
+    const catchBody = dispatch.slice(dispatch.indexOf("} catch (error)"), dispatch.lastIndexOf("} finally"));
+    expect(catchBody).not.toContain('sessionStorage.removeItem("wordloop_draft")');
+    expect(catchBody).not.toContain('setAnswer("")');
+    expect(lessonDraftAnswerForState(
+      JSON.stringify({ word: "electrician", phase: "lesson_exercise", prompt: "A team of ___ arrived.", answer: "electricians" }),
+      "electrician", "lesson_exercise", "A team of ___ arrived.",
+    )).toBe("electricians");
+  });
+
+  it("shows distinct DeepSeek errors for grading and generation", () => {
+    expect(deepSeekMessage("DEEPSEEK_TIMEOUT", "grading")).toBe("批改超时，请重试");
+    expect(deepSeekMessage("DEEPSEEK_HTTP_ERROR", "grading")).toBe("批改服务暂时不可用，请重试");
+    expect(deepSeekMessage("DEEPSEEK_INVALID_OUTPUT", "grading")).toBe("批改结果格式异常，请重试");
+    expect(deepSeekMessage("DEEPSEEK_TIMEOUT", "generation")).toBe("内容生成超时，请重试");
+    expect(deepSeekMessage("DEEPSEEK_INVALID_OUTPUT", "generation")).toBe("生成内容格式异常，请重试");
+  });
+
   it("shows Review re-learning in its own Lesson progress segment", () => {
     const relearn = ["pirate", "feeble", "intensive", "nerve"];
     const queue = [...relearn, "new-1", "new-2"];

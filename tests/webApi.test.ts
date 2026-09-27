@@ -241,6 +241,104 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.active.updated_at).toBe("rev-b");
   });
 
+  it("grades an exact_cloze answer from accepted_answers without calling DeepSeek", async () => {
+    const state = lessonState("exact_cloze");
+    state.payload.prompt = "The city hired a team of ___ to restore power.";
+    state.payload.accepted_answers = ["electricians"];
+    mocks.active = row(state);
+
+    const response = await handleWebApiRequest(post({ action: "lesson_submit", answer: "electricians" }));
+
+    expect(response.status).toBe(200);
+    const responsePayload = await body(response);
+    expect(responsePayload).toMatchObject({ result: { is_correct: true, error_layer: "none" } });
+    expect(mocks.gradeSemanticAnswer).not.toHaveBeenCalled();
+    expect(mocks.recordAttempt).toHaveBeenCalledOnce();
+    expect(mocks.recordAttempt).toHaveBeenCalledWith(expect.objectContaining({
+      user_answer: "electricians", is_correct: true, error_layer: "none", activity_type: "exact_cloze",
+    }));
+    expect(mocks.active.state.payload.feedback).toMatchObject({
+      is_correct: true,
+      error_layer: "none",
+      user_answer: "electricians",
+    });
+    expect(responsePayload.state.payload).not.toHaveProperty("accepted_answers");
+  });
+
+  it.each(["cloze", "derivation", "recall"])("keeps legacy fixed-answer %s exercises deterministic", async (activityType) => {
+    const state = lessonState(activityType);
+    state.payload.accepted_answers = ["electricians"];
+    mocks.active = row(state);
+
+    const response = await handleWebApiRequest(post({ action: "lesson_submit", answer: "electricians" }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.gradeSemanticAnswer).not.toHaveBeenCalled();
+    expect(mocks.recordAttempt).toHaveBeenCalledWith(expect.objectContaining({
+      activity_type: activityType, user_answer: "electricians", is_correct: true, error_layer: "none",
+    }));
+  });
+
+  it.each(["spelling", "word_recall"])("keeps %s exercises deterministic", async (activityType) => {
+    mocks.active = row(lessonState(activityType));
+
+    const response = await handleWebApiRequest(post({ action: "lesson_submit", answer: "fixture" }));
+
+    expect(response.status).toBe(200);
+    expect(await body(response)).toMatchObject({ result: { is_correct: true, error_layer: "none" } });
+    expect(mocks.gradeSemanticAnswer).not.toHaveBeenCalled();
+    expect(mocks.recordAttempt).toHaveBeenCalledWith(expect.objectContaining({
+      activity_type: activityType, user_answer: "fixture", is_correct: true, error_layer: "none",
+    }));
+  });
+
+  it("preserves fixed answers through a Lesson retry and records each submission once", async () => {
+    const state = lessonState("exact_cloze");
+    state.payload.prompt = "The city hired a team of ___ to restore power.";
+    state.payload.accepted_answers = ["electricians"];
+    mocks.active = row(state);
+
+    let response = await handleWebApiRequest(post({ action: "lesson_submit", answer: "electrician" }));
+    expect(response.status).toBe(200);
+    expect(mocks.recordAttempt).toHaveBeenCalledOnce();
+    expect(mocks.active.state.payload.accepted_answers).toEqual(["electricians"]);
+
+    response = await handleWebApiRequest(post({ action: "lesson_retry" }, mocks.active.updated_at));
+    expect(response.status).toBe(200);
+    expect(mocks.active.state.phase).toBe("lesson_exercise");
+    expect(mocks.active.state.payload.accepted_answers).toEqual(["electricians"]);
+
+    response = await handleWebApiRequest(post({ action: "lesson_submit", answer: "electricians" }, mocks.active.updated_at));
+    expect(response.status).toBe(200);
+    expect(await body(response)).toMatchObject({ result: { is_correct: true, error_layer: "none" } });
+    expect(mocks.gradeSemanticAnswer).not.toHaveBeenCalled();
+    expect(mocks.recordAttempt).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects blank Lesson and wrap-up submissions before any attempt write", async () => {
+    mocks.active = row(lessonState("sentence"));
+    const lessonResponse = await handleWebApiRequest(post({ action: "lesson_submit", answer: "  " }));
+    expect(lessonResponse.status).toBe(400);
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
+
+    const wrapupState = makeStudyState({
+      date, widget: "lesson", phase: "lesson_complete", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode: "exercise", wrapup: true, word: "fixture",
+        activity_type: "sentence", instruction: "Translate.",
+        prompt: "A sufficiently long wrap-up prompt about fixture and its useful applications in ordinary settings today.",
+        multiline: true,
+      },
+    });
+    mocks.active = row(wrapupState);
+    const wrapupResponse = await handleWebApiRequest(post({ action: "wrapup_submit", answer: "\t " }));
+    expect(wrapupResponse.status).toBe(400);
+    expect(mocks.gradeWrapupAnswer).not.toHaveBeenCalled();
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
+    expect(mocks.active.state).toEqual(wrapupState);
+  });
+
   it("discards Lesson generation output when another client changes the active revision", async () => {
     const state = makeStudyState({
       date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
@@ -339,6 +437,45 @@ describe("Standalone Web API shared-state boundaries", () => {
       exercise: { activity_type: "translation_cn_to_en", prompt: "学校改善了图书馆设施。" },
       navigation: { action: "next_word", next_word: "next-word", next_index: 1 },
     });
+  });
+
+  it("persists fixed answers in the server Lesson state but omits them from the Web response", async () => {
+    const start = makeStudyState({
+      date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(start);
+    mocks.bootstrap.mockResolvedValue({ action: "lesson", word: { word: "fixture" } });
+    mocks.generateLesson.mockResolvedValueOnce({
+      ipa: "/ˈfɪks.tʃər/", part_of_speech: "n.", meaning_zh: "设施",
+      collocations: ["a permanent fixture"], derivations: ["fix v."],
+      example_en: "Although the committee postponed its decision, the evidence continued to influence public debate about educational reform.",
+      example_zh: "尽管委员会推迟了决定，证据仍持续影响有关教育改革的公共讨论。", note: "可指固定设施。",
+      exercise: { activity_type: "exact_cloze", instruction: "填入正确词形。", prompt: "The city hired a team of ___ to restore power.", accepted_answers: ["electricians"], multiline: false },
+    });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(mocks.active.state.payload).toMatchObject({
+      accepted_answers: ["electricians"],
+      exercise: { activity_type: "exact_cloze", accepted_answers: ["electricians"] },
+    });
+    const sessions = await import("../server/services/studySessions.js");
+    expect(vi.mocked(sessions.persistStudyStateIfRevision)).toHaveBeenCalledOnce();
+    expect(payload.state.payload).not.toHaveProperty("accepted_answers");
+    expect(payload.state.payload.exercise).not.toHaveProperty("accepted_answers");
+
+    const persistResumableState = vi.spyOn(sessions, "persistStudyState").mockResolvedValueOnce(mocks.active);
+    const widgetPayload = await resumableLessonPayload(mocks.active);
+    expect(persistResumableState).toHaveBeenCalledOnce();
+    persistResumableState.mockRestore();
+    expect(widgetPayload.exercise).not.toHaveProperty("accepted_answers");
+    expect(mocks.active.state.payload.exercise.accepted_answers).toEqual(["electricians"]);
   });
 
   it("takes the next word and cursor only from persisted backend navigation and the frozen queue", async () => {

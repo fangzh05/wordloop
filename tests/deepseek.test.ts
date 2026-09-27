@@ -154,6 +154,8 @@ describe("DeepSeek stateless JSON client", () => {
     expect(WRAPUP_GRADING_PROMPT).toContain("\"reference_answer\"");
     expect(LESSON_GENERATION_PROMPT).toContain("\"exercise\"");
     expect(LESSON_GENERATION_PROMPT).toContain("\"example_zh\"");
+    expect(LESSON_GENERATION_PROMPT).toContain("\"accepted_answers\"");
+    expect(LESSON_GENERATION_PROMPT).toContain("exact_cloze");
     expect(LESSON_GENERATION_PROMPT).toContain("简体中文");
     expect(WRAPUP_GENERATION_PROMPT).toContain("\"multiline\": true");
   });
@@ -165,8 +167,8 @@ describe("DeepSeek stateless JSON client", () => {
         ...validLesson,
         exercise: {
           ...validLesson.exercise,
-          activity_type: "sentence",
-          prompt: example,
+          activity_type: "exact_cloze",
+          prompt: "A team of electricians arrived after the storm.",
         },
       })))
       .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
@@ -174,20 +176,38 @@ describe("DeepSeek stateless JSON client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("retries lesson output when explanation fields are English-only", async () => {
+  it("accepts cosmetic Lesson wording deviations without a fatal schema retry", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock
-      .mockResolvedValueOnce(response(JSON.stringify({ ...validLesson, collocations: ["a permanent fixture"] })))
-      .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
+    const cosmeticDeviation = {
+      ...validLesson,
+      part_of_speech: "noun",
+      collocations: ["a permanent fixture"],
+      derivations: ["fix", "fixed"],
+      example_en: "Although the committee postponed its decision, evidence continued to influence public debate about reform.",
+      note: "A fixture can be a fixed feature.",
+      exercise: { ...validLesson.exercise, instruction: "Translate the sentence." },
+    };
+    fetchMock.mockResolvedValueOnce(response(JSON.stringify(cosmeticDeviation)));
 
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." })).resolves.toMatchObject(validLesson);
+    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+      .resolves.toMatchObject(cosmeticDeviation);
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    const longerExample = {
+      ...validLesson,
+      example_en: "Although the committee postponed its decision, evidence influenced public debate about educational reform among students, teachers, parents, and local leaders across districts in the region today.",
+    };
+    fetchMock.mockResolvedValueOnce(response(JSON.stringify(longerExample)));
+    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+      .resolves.toMatchObject(longerExample);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("returns DEEPSEEK_INVALID_OUTPUT after retrying schema-invalid JSON once and logs safe issue paths", async () => {
     const invalid = {
       ...validLesson,
-      exercise: { ...validLesson.exercise, activity_type: "sentence", prompt: example },
+      example_en: "",
+      exercise: { activity_type: "exact_cloze", instruction: "Fill the blank.", prompt: "A team of ___ arrived.", multiline: false },
     };
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchMock = vi.mocked(fetch);
@@ -196,13 +216,48 @@ describe("DeepSeek stateless JSON client", () => {
       .mockResolvedValueOnce(response(JSON.stringify(invalid)));
 
     await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
-      .rejects.toMatchObject({ code: "DEEPSEEK_INVALID_OUTPUT", details: { httpStatus: 200, issuePaths: ["exercise.prompt"] } });
+      .rejects.toMatchObject({ code: "DEEPSEEK_INVALID_OUTPUT", details: { httpStatus: 200, issuePaths: ["example_en", "exercise.accepted_answers"] } });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    const repairRequest = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(repairRequest.messages[1].content).toContain("上一次 JSON 未通过校验");
+    expect(repairRequest.messages[1].content).toContain("- example_en:");
+    expect(repairRequest.messages[1].content).toContain("- exercise.accepted_answers:");
+    expect(repairRequest.messages[1].content).toContain("返回完整 JSON");
+    expect(repairRequest.messages[1].content).not.toContain("ZodError");
     expect(log).toHaveBeenCalledWith("WordLoop DeepSeek request failed", {
-      code: "DEEPSEEK_INVALID_OUTPUT", http_status: 200, task: "lesson_generation", issues: ["exercise.prompt"],
+      code: "DEEPSEEK_INVALID_OUTPUT", http_status: 200, task: "lesson_generation", issues: ["example_en", "exercise.accepted_answers"],
     });
     expect(JSON.stringify(log.mock.calls)).not.toContain("test-key");
     expect(JSON.stringify(log.mock.calls)).not.toContain("private-provider-raw");
+  });
+
+  it("uses repair feedback and accepts a valid second generation response", async () => {
+    const invalid = {
+      ...validLesson,
+      exercise: { activity_type: "exact_cloze", instruction: "Fill the blank.", prompt: "A team of ___ arrived.", multiline: false },
+    };
+    const repaired = {
+      ...validLesson,
+      exercise: {
+        activity_type: "exact_cloze",
+        instruction: "Fill the blank.",
+        prompt: "A team of ___ arrived.",
+        accepted_answers: ["electricians"],
+        multiline: false,
+      },
+    };
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify(invalid)))
+      .mockResolvedValueOnce(response(JSON.stringify(repaired)));
+
+    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+      .resolves.toMatchObject(repaired);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const repairRequest = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(repairRequest.messages[1].content).toContain("exercise.accepted_answers");
+    expect(repairRequest.messages[1].content).toContain("返回完整 JSON");
   });
 
   it("does not log the user answer or raw provider content for grading errors", async () => {
@@ -260,6 +315,30 @@ describe("DeepSeek stateless JSON client", () => {
     await expectTimeout(() => gradeWrapupAnswer({ words: ["fixture"], instruction: "Translate.", prompt: validWrapup.prompt, answer: "a private answer", retry_count: 0 }), 20_000);
     vi.mocked(fetch).mockClear();
     await expectTimeout(() => gradeEnglishDefinition({ word: "fixture", meaning_zh: "设施", answer: "a private answer" }), 15_000);
+  });
+
+  it.each([429, 500, 502, 503, 504])("retries transient HTTP %i once after a short delay", async (status) => {
+    vi.useFakeTimers();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response("{}", { status }))
+      .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
+    const pending = generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(499);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(pending).resolves.toMatchObject(validLesson);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([400, 401, 403])("does not retry non-transient HTTP %i", async (status) => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status }));
+    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+      .rejects.toMatchObject({ code: "DEEPSEEK_HTTP_ERROR" });
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("does not retry ordinary network failures", async () => {

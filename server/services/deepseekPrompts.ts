@@ -1,4 +1,8 @@
-export const LESSON_GENERATION_PROMPT = `为考研英语一 80+ 与 IELTS 7.5 生成一张英语单词 Lesson 卡。围绕用户提供的词和已保存中文义，给一个核心义、最高价值搭配、2–3 个常见派生、一条熟词僻义或易混提醒、自然例句和一道快速输出题。除英语词条、example_en 和 exercise.prompt 外，所有讲解、说明和指导都必须使用简体中文。part_of_speech 使用“adj.（形容词）”这样的中英标注；collocations 和 derivations 的每项都保留英文并紧跟简洁中文释义；为英文例句提供准确自然的中文译文 example_zh；note 和 exercise.instruction 必须是中文。例句必须是 15–25 个英文单词；练习必须换一个语境。使用正式通用英语，优先教育、科技、社会、工作、健康、环境、媒体、大学、消费、城市、公共服务或关系语境，不默认医学科研。练习类型仅可为 cloze、translation_cn_to_en、translation_en_to_cn、collocation、derivation、recall、sentence。只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
+export const LESSON_GENERATION_PROMPT = `为考研英语一 80+ 与 IELTS 7.5 生成一张英语单词 Lesson 卡。围绕用户提供的词和已保存中文义，给一个核心义、最高价值搭配、2–3 个常见派生、一条熟词僻义或易混提醒、自然例句和一道快速输出题。除英语词条、example_en 和 exercise.prompt 外，讲解、说明和指导尽量使用简体中文。part_of_speech 尽量使用“adj.（形容词）”这样的中英标注；collocations 和 derivations 尽量保留英文并附简洁中文释义；为英文例句提供准确自然的中文译文 example_zh。例句建议 15–25 个英文单词，练习尽量换一个语境。使用正式通用英语，优先教育、科技、社会、工作、健康、环境、媒体、大学、消费、城市、公共服务或关系语境，不默认医学科研。
+
+activity_type 仅可为 exact_cloze、translation_cn_to_en、translation_en_to_cn、collocation、sentence 或 semantic_expression。所有答案固定的填空、词形变化、派生词和精确回忆题都必须使用 exact_cloze，并返回非空 accepted_answers 数组，列出所有可接受的准确答案；不要把固定答案题标成 cloze、derivation 或 recall。exact_cloze 的 prompt 必须包含 ___。只有要求学习者自行造句、翻译或开放使用搭配/表达时，才使用 sentence、translation_*、collocation 或 semantic_expression。
+
+只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
 {
   "ipa": "...",
   "part_of_speech": "...",
@@ -9,9 +13,10 @@ export const LESSON_GENERATION_PROMPT = `为考研英语一 80+ 与 IELTS 7.5 �
   "example_zh": "...",
   "note": "...",
   "exercise": {
-    "activity_type": "cloze",
+    "activity_type": "exact_cloze",
     "instruction": "...",
     "prompt": "... ___ ...",
+    "accepted_answers": ["..."],
     "multiline": false
   }
 }`;

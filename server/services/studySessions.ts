@@ -24,6 +24,7 @@ const lessonExerciseSchema = z.object({
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
+  accepted_answers: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
 });
 const studyFlowSchema = z.object({
   relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX),
@@ -472,6 +473,7 @@ function exercisePayload(state: StudyState): Record<string, unknown> {
     instruction: exerciseSource.instruction,
     prompt: exerciseSource.prompt,
     multiline: exerciseSource.multiline,
+    ...(exerciseSource.accepted_answers ? { accepted_answers: exerciseSource.accepted_answers } : {}),
   };
 }
 

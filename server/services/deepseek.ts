@@ -10,20 +10,25 @@ import {
 
 const deepseekBase = "https://api.deepseek.com/chat/completions";
 const activityTypes = [
-  "cloze", "translation_cn_to_en", "translation_en_to_cn", "collocation", "derivation", "recall", "sentence",
+  "cloze", "exact_cloze", "translation_cn_to_en", "translation_en_to_cn", "collocation", "derivation", "recall", "sentence", "semantic_expression",
 ] as const;
+const fixedAnswerActivityTypes = new Set<string>(["cloze", "exact_cloze", "derivation", "recall"]);
 function hasChineseText(value: string): boolean {
   return /\p{Script=Han}/u.test(value);
 }
 
 const exerciseSchema = z.object({
   activity_type: z.enum(activityTypes),
-  instruction: z.string().trim().min(1).max(300).refine(hasChineseText, "Use Simplified Chinese for exercise instructions."),
+  instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
+  accepted_answers: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
 }).superRefine((value, context) => {
-  if (value.activity_type === "cloze" && !value.prompt.includes("___")) {
+  if ((value.activity_type === "cloze" || value.activity_type === "exact_cloze") && !value.prompt.includes("___")) {
     context.addIssue({ code: "custom", message: "A cloze prompt must include a blank.", path: ["prompt"] });
+  }
+  if (fixedAnswerActivityTypes.has(value.activity_type) && !value.accepted_answers?.length) {
+    context.addIssue({ code: "custom", message: "Fixed-answer exercises require accepted_answers.", path: ["accepted_answers"] });
   }
   if (value.activity_type === "translation_cn_to_en" && !/\p{Script=Han}/u.test(value.prompt)) {
     context.addIssue({ code: "custom", message: "A Chinese-to-English prompt must contain Chinese.", path: ["prompt"] });
@@ -37,38 +42,16 @@ function englishWords(value: string): string[] {
   return value.toLocaleLowerCase().match(/[a-z]+(?:['’][a-z]+)?/g) ?? [];
 }
 
-function hasDistinctContexts(example: string, exercise: string): boolean {
-  const normalize = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9\p{Script=Han}]+/gu, " ").trim();
-  if (normalize(example) === normalize(exercise)) return false;
-  const exampleWords = new Set(englishWords(example).filter((word) => word.length > 2));
-  const exerciseWords = new Set(englishWords(exercise).filter((word) => word.length > 2));
-  if (exampleWords.size < 5 || exerciseWords.size < 5) return true;
-  const overlap = [...exampleWords].filter((word) => exerciseWords.has(word)).length;
-  return overlap / new Set([...exampleWords, ...exerciseWords]).size < 0.8;
-}
-
-function validateExampleLength(value: string, context: z.RefinementCtx): void {
-  const count = englishWords(value).length;
-  if (count < 15 || count > 25) {
-    context.addIssue({ code: "custom", message: "The example must contain 15–25 English words.", path: ["example_en"] });
-  }
-}
-
 export const lessonGenerationSchema = z.object({
   ipa: z.string().trim().min(1).max(120),
-  part_of_speech: z.string().trim().min(1).max(40).refine(hasChineseText, "Add the Chinese part-of-speech label."),
+  part_of_speech: z.string().trim().min(1).max(40),
   meaning_zh: z.string().trim().min(1).max(240).refine(hasChineseText, "Use Chinese for the core meaning."),
-  collocations: z.array(z.string().trim().min(1).max(200).refine(hasChineseText, "Add a Chinese gloss to each collocation.")).max(8),
-  derivations: z.array(z.string().trim().min(1).max(200).refine(hasChineseText, "Add a Chinese gloss to each derivation.")).max(8),
+  collocations: z.array(z.string().trim().min(1).max(200)).max(8),
+  derivations: z.array(z.string().trim().min(1).max(200)).max(8),
   example_en: z.string().trim().min(1).max(1000),
   example_zh: z.string().trim().min(1).max(1000).refine(hasChineseText, "Add a Chinese translation for the example."),
-  note: z.string().trim().min(1).max(1000).refine(hasChineseText, "Use Chinese for the explanation note."),
+  note: z.string().trim().min(1).max(1000),
   exercise: exerciseSchema,
-}).superRefine((value, context) => {
-  validateExampleLength(value.example_en, context);
-  if (!hasDistinctContexts(value.example_en, value.exercise.prompt)) {
-    context.addIssue({ code: "custom", message: "The exercise must use a different context from the example.", path: ["exercise", "prompt"] });
-  }
 });
 
 const errorLayerSchema = z.enum(["none", "meaning", "collocation", "grammar", "spelling", "pronunciation"]);
@@ -88,7 +71,7 @@ export const englishDefinitionGradeSchema = z.object({
 
 export const wrapupExerciseSchema = z.object({
   activity_type: z.literal("sentence"),
-  instruction: z.string().trim().min(1).max(300).refine(hasChineseText, "Use Simplified Chinese for exercise instructions."),
+  instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.literal(true),
 }).superRefine((value, context) => {
@@ -143,6 +126,25 @@ function logDeepSeekError(error: DeepSeekError, task: DeepSeekJsonOptions["task"
   });
 }
 
+const retryableHttpStatuses = new Set([429, 500, 502, 503, 504]);
+
+function retryDelay(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 500));
+}
+
+function repairFeedback(issues: readonly { path: readonly PropertyKey[]; message: string }[]): string {
+  const fields = new Map<string, string>();
+  for (const issue of issues) {
+    const path = issue.path.map(String).join(".") || "$";
+    if (!fields.has(path)) fields.set(path, issue.message);
+  }
+  return [
+    "上一次 JSON 未通过校验。只修复以下字段：",
+    ...[...fields].map(([path, message]) => `- ${path}: ${message}`),
+    "返回完整 JSON。",
+  ].join("\n");
+}
+
 async function deepSeekJson<T>(
   schema: z.ZodType<T>,
   prompt: string,
@@ -156,6 +158,7 @@ async function deepSeekJson<T>(
     throw error;
   }
 
+  let repairMessage: string | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.timeoutMs);
@@ -173,7 +176,7 @@ async function deepSeekJson<T>(
           thinking: { type: "disabled" },
           messages: [
             { role: "system", content: prompt },
-            { role: "user", content: JSON.stringify(input) },
+            { role: "user", content: [JSON.stringify(input), repairMessage].filter(Boolean).join("\n\n") },
           ],
           response_format: { type: "json_object" },
           max_tokens: options.maxTokens,
@@ -181,6 +184,11 @@ async function deepSeekJson<T>(
       });
       httpStatus = response.status;
       if (!response.ok) {
+        if (attempt === 0 && retryableHttpStatuses.has(response.status)) {
+          try { await response.body?.cancel(); } catch { /* Retry even if the response body cannot be drained. */ }
+          await retryDelay();
+          continue;
+        }
         throw new DeepSeekError("DEEPSEEK_HTTP_ERROR", 502, `DeepSeek request failed with HTTP ${response.status}.`, { httpStatus });
       }
 
@@ -201,7 +209,10 @@ async function deepSeekJson<T>(
       }
 
       if (typeof content !== "string" || content.trim().length === 0) {
-        if (attempt === 0) continue;
+        if (attempt === 0) {
+          repairMessage = "上一次响应未返回有效 JSON。请修复并返回完整 JSON。";
+          continue;
+        }
         throw retryableJsonError(httpStatus);
       }
 
@@ -209,13 +220,19 @@ async function deepSeekJson<T>(
       try {
         parsed = JSON.parse(content);
       } catch {
-        if (attempt === 0) continue;
+        if (attempt === 0) {
+          repairMessage = "上一次响应不是有效 JSON。请修复 JSON 格式并返回完整 JSON。";
+          continue;
+        }
         throw retryableJsonError(httpStatus);
       }
       const validated = schema.safeParse(parsed);
       if (!validated.success) {
-        if (attempt === 0) continue;
         const issuePaths = [...new Set(validated.error.issues.map((issue) => issue.path.map(String).join(".") || "$"))];
+        if (attempt === 0) {
+          repairMessage = repairFeedback(validated.error.issues);
+          continue;
+        }
         throw new DeepSeekError(
           "DEEPSEEK_INVALID_OUTPUT",
           502,

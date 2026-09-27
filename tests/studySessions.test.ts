@@ -232,6 +232,36 @@ describe("durable study session state", () => {
     expect(next.payload.feedback).toBeUndefined();
   });
 
+  it("preserves fixed answers across the feedback-to-exercise retry transition", () => {
+    const acceptedAnswers = ["electricians"];
+    const feedback = sessionState({
+      phase: "lesson_feedback",
+      retry_count: 1,
+      payload: {
+        widget: "lesson",
+        mode: "feedback",
+        word: "plantation",
+        progress: "1 / 3",
+        accepted_answers: acceptedAnswers,
+        exercise: {
+          ...exercise,
+          activity_type: "exact_cloze",
+          prompt: "The city hired a team of ___ to restore power.",
+        },
+        feedback: { is_correct: false, user_answer: "electrician", reveal_answer: false },
+      },
+    });
+
+    const next = advanceStudyState(feedback, "lesson_retry");
+
+    expect(next.phase).toBe("lesson_exercise");
+    expect(next.payload.accepted_answers).toEqual(acceptedAnswers);
+    expect(next.payload).toMatchObject({
+      activity_type: "exact_cloze",
+      prompt: "The city hired a team of ___ to restore power.",
+    });
+  });
+
   it("persists phase and exercise payload together for lesson_retry", async () => {
     const feedback = sessionState({
       phase: "lesson_feedback",
@@ -675,7 +705,7 @@ describe("strict resumable widget schemas", () => {
       example_en: "The team reeled from the result.",
       note: "Use reel from for a strong reaction.",
     };
-    expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "cloze", instruction: "完成题目。", prompt: "The course requires ___ study.", multiline: false } }).success).toBe(true);
+    expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "cloze", instruction: "完成题目。", prompt: "The course requires ___ study.", accepted_answers: ["reel"], multiline: false } }).success).toBe(true);
     const invalidCloze = lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "cloze", instruction: "完成题目。", prompt: "先理解词义与搭配，再进入练习。", multiline: false } });
     expect(invalidCloze.success).toBe(false);
     if (!invalidCloze.success) {
