@@ -6,7 +6,6 @@ import {
   advanceStudySessionIfRevision,
   assertActiveStudySessionRevision,
   finishStudySession,
-  freezeLessonQueueForSession,
   getActiveStudySession,
   getPretestResults,
   getStudyDate,
@@ -136,8 +135,11 @@ function toApiError(error: unknown): WebApiError {
   if (message === "LESSON_WORD_NOT_FOUND" || message === "LESSON_WORD_MISMATCH") {
     return new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson queue no longer matches the active word.");
   }
-  console.error("WordLoop Web API request failed", message || "unknown error");
-  return new WebApiError(500, "INTERNAL_SERVER_ERROR", "WordLoop could not complete the request.");
+  console.error("WordLoop Web API request failed", {
+    code: "INTERNAL_SERVER_ERROR",
+    error_type: error instanceof Error ? error.name : "unknown",
+  });
+  return new WebApiError(500, "INTERNAL_SERVER_ERROR", "请求未完成，请重试。");
 }
 
 function failure(error: unknown): Response {
@@ -254,24 +256,19 @@ async function prepareBootstrap(expectedRevision?: string | null): Promise<{
     if (state.widget === "lesson" && state.flow.lesson_words === undefined) {
       active = await normalizeLegacyLessonSession(active, db, userId, revision);
       revision = active.updated_at;
-      state = ensureState(active);
-    }
-    if ((state.widget === "review" && state.phase === "review_complete"
-      || state.widget === "pretest" && state.phase === "pretest_complete")
-      && state.flow.lesson_words === undefined) {
-      const todayWords = await getTodayWords(state.date, db, userId);
-      active = await freezeLessonQueueForSession(active, todayWords, db, userId, revision);
-      revision = active.updated_at;
     }
   } else if (active) {
     throw new WebApiError(409, "INVALID_STUDY_STATE", "The active study state is unavailable.");
   }
 
-  const bootstrap = await getStudyBootstrap();
+  const bootstrap = await getStudyBootstrap({
+    activeSession: active,
+    expectedRevision: revision,
+    deferLessonQueueFreeze: true,
+  });
   const latest = await getActiveStudySession(db, userId);
-  if ((latest?.updated_at ?? null) !== revision || (latest?.id ?? null) !== (active?.id ?? null)) {
-    throw new StaleStudyStateError();
-  }
+  if ((latest?.id ?? null) !== (active?.id ?? null)
+    || (latest?.updated_at ?? null) !== revision) throw new StaleStudyStateError();
   return { bootstrap, active: latest, revision };
 }
 
@@ -283,6 +280,7 @@ async function persistPretest(
   const items = pretestItems(words);
   const firstWord = String(items[0]?.word ?? "");
   const prior = active?.state ? normalizeStudyStateForRead(active.state) : null;
+  const flow = prior?.flow ?? { relearn_words: [] };
   const state = makeStudyState({
     date: prior?.date ?? await getStudyDate(),
     widget: "pretest",
@@ -290,7 +288,7 @@ async function persistPretest(
     current_word: firstWord,
     current_index: 0,
     retry_count: 0,
-    flow: prior?.flow ?? { relearn_words: [] },
+    flow: { relearn_words: flow.relearn_words },
     payload: { widget: "pretest", title: "快速预测试", items },
   });
   return persistStudyStateIfRevision(state, expectedRevision, getDatabase(), getAuthenticatedUserId(), active?.id);

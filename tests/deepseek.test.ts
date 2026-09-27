@@ -3,7 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ getDeepSeekApiKey: vi.fn((): string | undefined => "test-key") }));
 vi.mock("../server/db.js", () => ({ getDeepSeekApiKey: mocks.getDeepSeekApiKey }));
 
-import { generateLesson } from "../server/services/deepseek.js";
+import {
+  generateLesson,
+  generateWrapup,
+  gradeEnglishDefinition,
+  gradeSemanticAnswer,
+  gradeWrapupAnswer,
+} from "../server/services/deepseek.js";
+import {
+  ENGLISH_DEFINITION_GRADING_PROMPT,
+  LESSON_GENERATION_PROMPT,
+  SEMANTIC_GRADING_PROMPT,
+  WRAPUP_GENERATION_PROMPT,
+  WRAPUP_GRADING_PROMPT,
+} from "../server/services/deepseekPrompts.js";
 
 const example = "Although the committee postponed its decision, the evidence continued to influence public debate about educational reform.";
 const validLesson = {
@@ -21,9 +34,50 @@ const validLesson = {
     multiline: false,
   },
 };
+const validWrapup = {
+  activity_type: "sentence",
+  instruction: "翻译句子并指出主句。",
+  prompt: "Although the policy appeared modest, its careful wording encouraged local leaders to invest in public libraries, which gradually widened access to education for families across neighboring districts over several years.",
+  multiline: true,
+};
+const validGrade = {
+  is_correct: true,
+  error_layer: "none",
+  message: "表达准确。",
+  explanation: "意思、搭配和语法都符合要求。",
+};
 
 function response(content: string, status = 200): Response {
   return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status });
+}
+
+function waitForAbort(): {
+  signal: () => AbortSignal | undefined;
+  resolve: (response: Response) => void;
+} {
+  let requestSignal: AbortSignal | undefined;
+  let resolveResponse: ((response: Response) => void) | undefined;
+  vi.mocked(fetch).mockImplementationOnce((_input, init) => new Promise<Response>((resolve, reject) => {
+    const signal = init?.signal as AbortSignal;
+    requestSignal = signal;
+    resolveResponse = resolve;
+    signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+  }));
+  return {
+    signal: () => requestSignal,
+    resolve: (value) => resolveResponse?.(value),
+  };
+}
+
+async function expectTimeout(invoke: () => Promise<unknown>, timeoutMs: number): Promise<void> {
+  const waitingRequest = waitForAbort();
+  const pending = invoke();
+  const rejected = expect(pending).rejects.toMatchObject({ code: "DEEPSEEK_TIMEOUT", status: 504 });
+  await vi.advanceTimersByTimeAsync(timeoutMs - 1);
+  expect(waitingRequest.signal()?.aborted).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  await rejected;
+  expect(waitingRequest.signal()?.aborted).toBe(true);
 }
 
 describe("DeepSeek stateless JSON client", () => {
@@ -55,7 +109,7 @@ describe("DeepSeek stateless JSON client", () => {
       model: "deepseek-flash",
       thinking: { type: "disabled" },
       response_format: { type: "json_object" },
-      max_tokens: 600,
+      max_tokens: 1200,
     });
     expect(body).not.toHaveProperty("temperature");
     expect(request.signal).toBeInstanceOf(AbortSignal);
@@ -70,32 +124,129 @@ describe("DeepSeek stateless JSON client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("rejects an example copied into the exercise context", async () => {
+  it("uses the configured per-task token budgets", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(response(JSON.stringify({
-      ...validLesson,
-      exercise: {
-        ...validLesson.exercise,
-        activity_type: "sentence",
-        prompt: example,
-      },
-    })));
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
-      .rejects.toMatchObject({ code: "DEEPSEEK_INVALID_OUTPUT" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify(validLesson)))
+      .mockResolvedValueOnce(response(JSON.stringify(validGrade)))
+      .mockResolvedValueOnce(response(JSON.stringify({ is_correct: true, feedback: "释义准确。" })))
+      .mockResolvedValueOnce(response(JSON.stringify(validWrapup)))
+      .mockResolvedValueOnce(response(JSON.stringify(validGrade)));
+
+    await generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." });
+    await gradeSemanticAnswer({ word: "fixture", activity_type: "sentence", instruction: "Translate.", prompt: "A prompt.", answer: "my answer", retry_count: 0 });
+    await gradeEnglishDefinition({ word: "fixture", meaning_zh: "设施", answer: "something installed" });
+    await generateWrapup({ words: ["fixture", "policy"] });
+    await gradeWrapupAnswer({ words: ["fixture"], instruction: "Translate.", prompt: validWrapup.prompt, answer: "my answer", retry_count: 0 });
+
+    const tokenBudgets = fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)).max_tokens);
+    expect(tokenBudgets).toEqual([1200, 600, 400, 900, 700]);
   });
 
-  it("stops after the 12 second hard timeout", async () => {
+  it("includes a concrete JSON object shape in every DeepSeek prompt", () => {
+    for (const prompt of [LESSON_GENERATION_PROMPT, SEMANTIC_GRADING_PROMPT, ENGLISH_DEFINITION_GRADING_PROMPT, WRAPUP_GENERATION_PROMPT, WRAPUP_GRADING_PROMPT]) {
+      expect(prompt).toContain("{");
+    }
+    expect(LESSON_GENERATION_PROMPT).toContain("\"ipa\"");
+    expect(SEMANTIC_GRADING_PROMPT).toContain("\"is_correct\"");
+    expect(ENGLISH_DEFINITION_GRADING_PROMPT).toContain("\"feedback\"");
+    expect(WRAPUP_GRADING_PROMPT).toContain("\"reference_answer\"");
+    expect(LESSON_GENERATION_PROMPT).toContain("\"exercise\"");
+    expect(WRAPUP_GENERATION_PROMPT).toContain("\"multiline\": true");
+  });
+
+  it("retries schema-invalid JSON once, then accepts a valid result", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify({
+        ...validLesson,
+        exercise: {
+          ...validLesson.exercise,
+          activity_type: "sentence",
+          prompt: example,
+        },
+      })))
+      .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
+    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." })).resolves.toMatchObject(validLesson);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns DEEPSEEK_INVALID_OUTPUT after retrying schema-invalid JSON once and logs safe issue paths", async () => {
+    const invalid = {
+      ...validLesson,
+      exercise: { ...validLesson.exercise, activity_type: "sentence", prompt: example },
+    };
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify(invalid)))
+      .mockResolvedValueOnce(response(JSON.stringify(invalid)));
+
+    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+      .rejects.toMatchObject({ code: "DEEPSEEK_INVALID_OUTPUT", details: { httpStatus: 200, issuePaths: ["exercise.prompt"] } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(log).toHaveBeenCalledWith("WordLoop DeepSeek request failed", {
+      code: "DEEPSEEK_INVALID_OUTPUT", http_status: 200, task: "lesson_generation", issues: ["exercise.prompt"],
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("test-key");
+    expect(JSON.stringify(log.mock.calls)).not.toContain("private-provider-raw");
+  });
+
+  it("does not log the user answer or raw provider content for grading errors", async () => {
+    const privateAnswer = "PRIVATE_USER_ANSWER";
+    const privateProviderText = "PRIVATE_PROVIDER_TEXT";
+    const invalid = { ...validGrade, message: "", explanation: privateProviderText };
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(JSON.stringify(invalid)))
+      .mockResolvedValueOnce(response(JSON.stringify(invalid)));
+
+    await expect(gradeSemanticAnswer({
+      word: "fixture", activity_type: "sentence", instruction: "Translate.", prompt: "A prompt.", answer: privateAnswer, retry_count: 0,
+    })).rejects.toMatchObject({ code: "DEEPSEEK_INVALID_OUTPUT", details: { issuePaths: ["message"] } });
+
+    const logs = JSON.stringify(log.mock.calls);
+    expect(log).toHaveBeenCalledWith("WordLoop DeepSeek request failed", {
+      code: "DEEPSEEK_INVALID_OUTPUT", http_status: 200, task: "semantic_lesson_grading", issues: ["message"],
+    });
+    expect(logs).not.toContain(privateAnswer);
+    expect(logs).not.toContain(privateProviderText);
+    expect(logs).not.toContain("test-key");
+  });
+
+  it("does not abort lesson generation at the old 12 second limit", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementationOnce((_input, init) => new Promise((_resolve, reject) => {
-      (init?.signal as AbortSignal).addEventListener("abort", () => reject(new Error("aborted")), { once: true });
-    }));
+    const waitingRequest = waitForAbort();
     const pending = generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." });
-    const rejected = expect(pending).rejects.toMatchObject({ code: "DEEPSEEK_TIMEOUT", status: 504 });
     await vi.advanceTimersByTimeAsync(12_000);
-    await rejected;
+    expect(waitingRequest.signal()?.aborted).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    waitingRequest.resolve(response(JSON.stringify(validLesson)));
+    await expect(pending).resolves.toMatchObject(validLesson);
+  });
+
+  it("returns DEEPSEEK_TIMEOUT only at the lesson generation 30 second deadline", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expectTimeout(() => generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }), 30_000);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the semantic grading 20 second timeout", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expectTimeout(() => gradeSemanticAnswer({ word: "fixture", activity_type: "sentence", instruction: "Translate.", prompt: "A prompt.", answer: "a private answer", retry_count: 0 }), 20_000);
+  });
+
+  it("uses the wrap-up generation, wrap-up grading, and English definition deadlines", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expectTimeout(() => generateWrapup({ words: ["fixture", "policy"] }), 30_000);
+    vi.mocked(fetch).mockClear();
+    await expectTimeout(() => gradeWrapupAnswer({ words: ["fixture"], instruction: "Translate.", prompt: validWrapup.prompt, answer: "a private answer", retry_count: 0 }), 20_000);
+    vi.mocked(fetch).mockClear();
+    await expectTimeout(() => gradeEnglishDefinition({ word: "fixture", meaning_zh: "设施", answer: "a private answer" }), 15_000);
   });
 
   it("does not retry ordinary network failures", async () => {
@@ -109,6 +260,7 @@ describe("DeepSeek stateless JSON client", () => {
   it("does not make an LLM request when the server key is missing", async () => {
     mocks.getDeepSeekApiKey.mockReturnValue(undefined);
     const fetchMock = vi.mocked(fetch);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
     await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
       .rejects.toMatchObject({ code: "DEEPSEEK_NOT_CONFIGURED", status: 503 });
     expect(fetchMock).not.toHaveBeenCalled();

@@ -7,12 +7,32 @@ import { sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 
 const progressSchema = z.object({
   today: z.object({ total: z.number(), known: z.number(), uncertain: z.number(), unknown: z.number(), completed: z.number() }),
+  review_today: z.object({ completed: z.number(), total: z.number(), remaining: z.number() })
+    .default({ completed: 0, total: 0, remaining: 0 }),
   all_time: z.object({ total_words: z.number(), mastered: z.number(), learning: z.number(), error_book: z.number() }),
   fsrs: z.object({ due_now: z.number(), due_today: z.number(), tomorrow: z.number(), due_next_7_days: z.number(), average_stability: z.number() }),
   settings: z.object({ daily_new_word_limit: z.number().int().min(1).max(200) }),
 });
 const payloadSchema = z.object({ widget: z.literal("dashboard"), progress: progressSchema });
 type Progress = z.infer<typeof progressSchema>;
+
+export function DashboardProgressBlock({ title, completed, total, emptyText }: {
+  title: string;
+  completed: number;
+  total: number;
+  emptyText: string;
+}): React.JSX.Element {
+  const hasTasks = total > 0;
+  const percent = hasTasks ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  return <section className="dashboard-progress-block" aria-label={title}>
+    <div className="dashboard-progress-heading"><strong>{title}</strong>
+      <span>{hasTasks ? `${completed} / ${total} 已完成` : emptyText}</span>
+    </div>
+    {hasTasks && <div className="progress-track" role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(completed, total)}>
+      <span style={{ width: `${percent}%` }} />
+    </div>}
+  </section>;
+}
 
 export function LearningDashboard(): React.JSX.Element {
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -23,25 +43,31 @@ export function LearningDashboard(): React.JSX.Element {
   }), []);
 
   if (!progress) return <section className="widget-card skeleton" aria-busy="true"><span>正在读取进度…</span></section>;
-  const percent = progress.today.total === 0 ? 0 : Math.round(progress.today.completed / progress.today.total * 100);
-  const learningToday = Math.max(0, progress.today.completed - progress.today.known);
-
   async function followUp(text: string): Promise<void> {
     await sendUserMessage(text);
   }
 
   return <section className="widget-card" aria-labelledby="dashboard-title">
-    <header className="widget-header dashboard-heading">
-      <div><span className="eyebrow">学习进度</span><h1 id="dashboard-title">今日单词</h1></div>
-      <div className="progress-number"><strong>{progress.today.completed}</strong><span>/ {progress.today.total}</span></div>
+    <header className="widget-header">
+      <div><span className="eyebrow">学习进度</span><h1 id="dashboard-title">WordLoop</h1></div>
     </header>
-    <div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={progress.today.total} aria-valuenow={progress.today.completed}>
-      <span style={{ width: `${percent}%` }} />
+    <div className="dashboard-progress-list">
+      <DashboardProgressBlock
+        title="今日复习"
+        completed={progress.review_today.completed}
+        total={progress.review_today.total}
+        emptyText="无到期复习"
+      />
+      <DashboardProgressBlock
+        title="今日新词"
+        completed={progress.today.completed}
+        total={progress.today.total}
+        emptyText="暂无新词"
+      />
     </div>
     <dl className="metrics">
-      <div><dt>已会</dt><dd>{progress.today.known}</dd></div>
-      <div><dt>学习中</dt><dd>{learningToday}</dd></div>
       <div><dt>错词</dt><dd>{progress.all_time.error_book}</dd></div>
+      <div><dt>已掌握</dt><dd>{progress.all_time.mastered}</dd></div>
     </dl>
     <DailyNewWordControl
       limit={progress.settings.daily_new_word_limit}

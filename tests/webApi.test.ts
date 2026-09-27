@@ -384,6 +384,76 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.active.updated_at).toBe("rev-a");
   });
 
+  it("leaves the durable state and cursor untouched when Lesson generation times out", async () => {
+    const state = makeStudyState({
+      date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "lesson", word: { word: "fixture" } });
+    mocks.generateLesson.mockRejectedValueOnce(new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "DeepSeek request timed out."));
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+
+    expect(response.status).toBe(504);
+    expect(await body(response)).toMatchObject({ error: { code: "DEEPSEEK_TIMEOUT" } });
+    expect(mocks.active.state).toEqual(state);
+    expect(mocks.active.updated_at).toBe("rev-a");
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
+    expect(mocks.advanceEvents).toEqual([]);
+  });
+
+  it("does not freeze a new Lesson queue when real bootstrap reaches a generation timeout", async () => {
+    const state = makeStudyState({
+      date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(state);
+    mocks.getTodayWords.mockResolvedValue([{
+      word: "fixture", display_word: "fixture", status: "unknown", mastered: false,
+      senses: [{ pos: "n.", definition_cn: "设施" }],
+    }]);
+    mocks.getVocabularyItemsByWords.mockImplementation(async (words: string[]) => words.map((word) => ({
+      word, display_word: word, senses: [{ pos: "n.", definition_cn: "设施" }],
+    })));
+    const actualBootstrap = await vi.importActual<typeof import("../server/services/studyBootstrap.js")>("../server/services/studyBootstrap.js");
+    mocks.bootstrap.mockImplementation((options: any) => actualBootstrap.getStudyBootstrap(options));
+    mocks.generateLesson.mockRejectedValueOnce(new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "DeepSeek request timed out."));
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const sessions = await import("../server/services/studySessions.js");
+
+    expect(response.status).toBe(504);
+    expect(await body(response)).toMatchObject({ error: { code: "DEEPSEEK_TIMEOUT" } });
+    expect(mocks.bootstrap).toHaveBeenCalledWith(expect.objectContaining({ deferLessonQueueFreeze: true }));
+    expect(vi.mocked(sessions.freezeLessonQueueForSession)).not.toHaveBeenCalled();
+    expect(mocks.active.state).toEqual(state);
+    expect(mocks.active.updated_at).toBe("rev-a");
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
+    expect(mocks.advanceEvents).toEqual([]);
+  });
+
+  it("does not record an attempt or advance Lesson state after grading times out", async () => {
+    const state = lessonState("sentence");
+    mocks.active = row(state);
+    mocks.gradeSemanticAnswer.mockRejectedValueOnce(new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "DeepSeek request timed out."));
+
+    const response = await handleWebApiRequest(post({ action: "lesson_submit", answer: "private answer" }));
+
+    expect(response.status).toBe(504);
+    expect(await body(response)).toMatchObject({ error: { code: "DEEPSEEK_TIMEOUT" } });
+    expect(mocks.active.state).toEqual(state);
+    expect(mocks.active.updated_at).toBe("rev-a");
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
+    expect(mocks.advanceEvents).toEqual([]);
+  });
+
   it("returns ChatGPT-persisted Lesson feedback unchanged to Web bootstrap", async () => {
     const canonical = makeStudyState({
       date, widget: "lesson", phase: "lesson_feedback", current_word: "fixture", current_index: 0, retry_count: 1,
@@ -509,6 +579,79 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(response.status).toBe(200);
     expect(payload).toMatchObject({ screen: "pretest", state: { phase: "pretest", payload: { items: [{ word: "new-word" }] } } });
     expect(mocks.buildReviewWidgetPayload).not.toHaveBeenCalled();
+  });
+
+  it("routes a contaminated completed Review to Pretest before Lesson generation", async () => {
+    const prematureLessonWords = ["pirate", "feeble", "intensive", "nerve"];
+    const todayWords = Array.from({ length: 50 }, (_, index) => ({
+      word: `new-word-${index + 1}`,
+      display_word: `new-word-${index + 1}`,
+      status: "new" as const,
+      mastered: false,
+      senses: [{ pos: "n.", definition_cn: "新词含义" }],
+    }));
+    const reviewState = makeStudyState({
+      date,
+      widget: "review",
+      phase: "review_complete",
+      current_word: null,
+      current_index: 25,
+      retry_count: 0,
+      flow: { relearn_words: [], lesson_words: prematureLessonWords },
+      payload: { widget: "review", items: Array.from({ length: 25 }, (_, index) => ({ word: `review-${index + 1}` })) },
+    });
+    mocks.active = row(reviewState);
+    mocks.getTodayWords.mockResolvedValue(todayWords);
+    const actualBootstrap = await vi.importActual<typeof import("../server/services/studyBootstrap.js")>("../server/services/studyBootstrap.js");
+    mocks.bootstrap.mockImplementation((options: any) => actualBootstrap.getStudyBootstrap(options));
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const payload = await body(response);
+    const sessions = await import("../server/services/studySessions.js");
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      screen: "pretest",
+      state: {
+        widget: "pretest",
+        phase: "pretest",
+        current_index: 0,
+        payload: { items: Array.from({ length: 6 }, (_, index) => ({ word: `new-word-${index + 1}` })) },
+      },
+    });
+    expect(payload.state.flow).toEqual({ relearn_words: [] });
+    expect(mocks.generateLesson).not.toHaveBeenCalled();
+    expect(vi.mocked(sessions.freezeLessonQueueForSession)).not.toHaveBeenCalled();
+    expect(mocks.getTodayWords).toHaveBeenCalledWith(date, {}, userId);
+  });
+
+  it("does not freeze the Lesson queue in prepareBootstrap before Review progression is decided", async () => {
+    const reviewState = makeStudyState({
+      date,
+      widget: "review",
+      phase: "review_complete",
+      current_word: null,
+      current_index: 25,
+      retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "review", items: Array.from({ length: 25 }, (_, index) => ({ word: `review-${index + 1}` })) },
+    });
+    mocks.active = row(reviewState);
+    mocks.bootstrap.mockResolvedValue({ action: "pretest", words: [{
+      word: "new-word", display_word: "new-word", senses: [{ pos: "n.", definition_cn: "新词含义" }],
+    }] });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const sessions = await import("../server/services/studySessions.js");
+
+    expect(response.status).toBe(200);
+    expect(mocks.bootstrap).toHaveBeenCalledOnce();
+    expect(vi.mocked(sessions.freezeLessonQueueForSession)).not.toHaveBeenCalled();
+    expect(mocks.generateLesson).not.toHaveBeenCalled();
   });
 
   it("keeps wrap-up retry on the same stored exercise without another DeepSeek call or attempt", async () => {

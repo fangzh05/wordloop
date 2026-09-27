@@ -9,7 +9,6 @@ import {
 } from "./deepseekPrompts.js";
 
 const deepseekBase = "https://api.deepseek.com/chat/completions";
-const timeoutMs = 12_000;
 const activityTypes = [
   "cloze", "translation_cn_to_en", "translation_en_to_cn", "collocation", "derivation", "recall", "sentence",
 ] as const;
@@ -108,24 +107,54 @@ export type EnglishDefinitionGrade = z.output<typeof englishDefinitionGradeSchem
 export type WrapupExercise = z.output<typeof wrapupExerciseSchema>;
 export type WrapupGrade = z.output<typeof wrapupGradeSchema>;
 
+interface DeepSeekJsonOptions {
+  maxTokens: number;
+  timeoutMs: number;
+  task: "lesson_generation" | "semantic_lesson_grading" | "english_definition_grading" | "wrapup_generation" | "wrapup_grading";
+}
+
 export class DeepSeekError extends Error {
-  constructor(readonly code: string, readonly status: number, message: string) {
+  constructor(
+    readonly code: string,
+    readonly status: number,
+    message: string,
+    readonly details: { httpStatus?: number; issuePaths?: string[] } = {},
+  ) {
     super(message);
     this.name = "DeepSeekError";
   }
 }
 
-function retryableJsonError(): DeepSeekError {
-  return new DeepSeekError("DEEPSEEK_INVALID_JSON", 502, "DeepSeek returned invalid JSON.");
+function retryableJsonError(httpStatus?: number): DeepSeekError {
+  return new DeepSeekError("DEEPSEEK_INVALID_JSON", 502, "DeepSeek returned invalid JSON.", { httpStatus });
 }
 
-async function deepSeekJson<T>(schema: z.ZodType<T>, prompt: string, input: unknown): Promise<T> {
+function logDeepSeekError(error: DeepSeekError, task: DeepSeekJsonOptions["task"]): void {
+  console.error("WordLoop DeepSeek request failed", {
+    code: error.code,
+    ...(error.details.httpStatus === undefined ? {} : { http_status: error.details.httpStatus }),
+    task,
+    ...(error.details.issuePaths ? { issues: error.details.issuePaths } : {}),
+  });
+}
+
+async function deepSeekJson<T>(
+  schema: z.ZodType<T>,
+  prompt: string,
+  input: unknown,
+  options: DeepSeekJsonOptions,
+): Promise<T> {
   const apiKey = getDeepSeekApiKey();
-  if (!apiKey) throw new DeepSeekError("DEEPSEEK_NOT_CONFIGURED", 503, "DeepSeek is not configured.");
+  if (!apiKey) {
+    const error = new DeepSeekError("DEEPSEEK_NOT_CONFIGURED", 503, "DeepSeek is not configured.");
+    logDeepSeekError(error, options.task);
+    throw error;
+  }
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+    let httpStatus: number | undefined;
     try {
       const response = await fetch(deepseekBase, {
         method: "POST",
@@ -142,11 +171,12 @@ async function deepSeekJson<T>(schema: z.ZodType<T>, prompt: string, input: unkn
             { role: "user", content: JSON.stringify(input) },
           ],
           response_format: { type: "json_object" },
-          max_tokens: 600,
+          max_tokens: options.maxTokens,
         }),
       });
+      httpStatus = response.status;
       if (!response.ok) {
-        throw new DeepSeekError("DEEPSEEK_HTTP_ERROR", 502, `DeepSeek request failed with HTTP ${response.status}.`);
+        throw new DeepSeekError("DEEPSEEK_HTTP_ERROR", 502, `DeepSeek request failed with HTTP ${response.status}.`, { httpStatus });
       }
 
       let content: unknown;
@@ -167,7 +197,7 @@ async function deepSeekJson<T>(schema: z.ZodType<T>, prompt: string, input: unkn
 
       if (typeof content !== "string" || content.trim().length === 0) {
         if (attempt === 0) continue;
-        throw retryableJsonError();
+        throw retryableJsonError(httpStatus);
       }
 
       let parsed: unknown;
@@ -175,24 +205,38 @@ async function deepSeekJson<T>(schema: z.ZodType<T>, prompt: string, input: unkn
         parsed = JSON.parse(content);
       } catch {
         if (attempt === 0) continue;
-        throw retryableJsonError();
+        throw retryableJsonError(httpStatus);
       }
       const validated = schema.safeParse(parsed);
       if (!validated.success) {
-        throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "DeepSeek output did not match the required schema.");
+        if (attempt === 0) continue;
+        const issuePaths = [...new Set(validated.error.issues.map((issue) => issue.path.map(String).join(".") || "$"))];
+        throw new DeepSeekError(
+          "DEEPSEEK_INVALID_OUTPUT",
+          502,
+          "DeepSeek output did not match the required schema.",
+          { httpStatus, issuePaths },
+        );
       }
       return validated.data;
     } catch (error) {
       if (controller.signal.aborted) {
-        throw new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "DeepSeek request timed out.");
+        const timeoutError = new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "DeepSeek request timed out.", { httpStatus });
+        logDeepSeekError(timeoutError, options.task);
+        throw timeoutError;
       }
-      if (error instanceof DeepSeekError) throw error;
-      throw new DeepSeekError("DEEPSEEK_HTTP_ERROR", 502, "DeepSeek request failed.");
+      const requestError = error instanceof DeepSeekError
+        ? error
+        : new DeepSeekError("DEEPSEEK_HTTP_ERROR", 502, "DeepSeek request failed.", { httpStatus });
+      logDeepSeekError(requestError, options.task);
+      throw requestError;
     } finally {
       clearTimeout(timer);
     }
   }
-  throw retryableJsonError();
+  const error = retryableJsonError();
+  logDeepSeekError(error, options.task);
+  throw error;
 }
 
 export function generateLesson(input: {
@@ -201,7 +245,9 @@ export function generateLesson(input: {
   part_of_speech: string;
   ipa?: string;
 }): Promise<LessonGeneration> {
-  return deepSeekJson(lessonGenerationSchema, LESSON_GENERATION_PROMPT, input);
+  return deepSeekJson(lessonGenerationSchema, LESSON_GENERATION_PROMPT, input, {
+    task: "lesson_generation", maxTokens: 1200, timeoutMs: 30_000,
+  });
 }
 
 export function gradeSemanticAnswer(input: {
@@ -212,7 +258,9 @@ export function gradeSemanticAnswer(input: {
   answer: string;
   retry_count: number;
 }): Promise<SemanticGrade> {
-  return deepSeekJson(semanticGradeSchema, SEMANTIC_GRADING_PROMPT, input);
+  return deepSeekJson(semanticGradeSchema, SEMANTIC_GRADING_PROMPT, input, {
+    task: "semantic_lesson_grading", maxTokens: 600, timeoutMs: 20_000,
+  });
 }
 
 export function gradeEnglishDefinition(input: {
@@ -221,11 +269,15 @@ export function gradeEnglishDefinition(input: {
   meaning_zh: string;
   answer: string;
 }): Promise<EnglishDefinitionGrade> {
-  return deepSeekJson(englishDefinitionGradeSchema, ENGLISH_DEFINITION_GRADING_PROMPT, input);
+  return deepSeekJson(englishDefinitionGradeSchema, ENGLISH_DEFINITION_GRADING_PROMPT, input, {
+    task: "english_definition_grading", maxTokens: 400, timeoutMs: 15_000,
+  });
 }
 
 export function generateWrapup(input: { words: string[] }): Promise<WrapupExercise> {
-  return deepSeekJson(wrapupExerciseSchema, WRAPUP_GENERATION_PROMPT, input);
+  return deepSeekJson(wrapupExerciseSchema, WRAPUP_GENERATION_PROMPT, input, {
+    task: "wrapup_generation", maxTokens: 900, timeoutMs: 30_000,
+  });
 }
 
 export function gradeWrapupAnswer(input: {
@@ -235,5 +287,7 @@ export function gradeWrapupAnswer(input: {
   answer: string;
   retry_count: number;
 }): Promise<WrapupGrade> {
-  return deepSeekJson(wrapupGradeSchema, WRAPUP_GRADING_PROMPT, input);
+  return deepSeekJson(wrapupGradeSchema, WRAPUP_GRADING_PROMPT, input, {
+    task: "wrapup_grading", maxTokens: 700, timeoutMs: 20_000,
+  });
 }
