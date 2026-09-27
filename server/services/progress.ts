@@ -1,24 +1,34 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { ProgressResult, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
-import { assertDatabaseResult, dateInTimeZone } from "./shared.js";
+import type { ProgressResult, StudySessionRow, VocabularyItem } from "../types.js";
+import { addCalendarDays, assertDatabaseResult, dateInTimeZone, localDateRange } from "./shared.js";
 import { perf } from "./perf.js";
-import { getActiveStudySession } from "./studySessions.js";
+import { getActiveStudySession, normalizeStudyStateForRead, studyStateSchema } from "./studySessions.js";
 import { getUserTimeZone } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
 
-type ReviewSessionProgressRow = Pick<StudySessionRow, "review_words_count" | "state">;
+type ReviewSessionProgressRow = Pick<StudySessionRow, "review_words_count"> & { state: unknown };
 
-function reviewSnapshotTotal(state: StudyState | null | undefined): number {
+function safeStudyState(value: unknown) {
+  const parsed = studyStateSchema.safeParse(value);
+  return parsed.success ? normalizeStudyStateForRead(parsed.data) : null;
+}
+
+function reviewSnapshotTotal(value: unknown): number {
+  const state = safeStudyState(value);
   return state?.widget === "review" && Array.isArray(state.payload.items) ? state.payload.items.length : 0;
 }
 
-function relearnWords(state: StudyState | null | undefined): string[] {
+function relearnWords(value: unknown): string[] {
+  const state = safeStudyState(value);
   if (!state) return [];
-  return [...new Set((state.flow.relearn_words ?? []).map(normalizeWord).filter(Boolean))];
+  return [...new Set(state.flow.relearn_words.map(normalizeWord).filter(Boolean))];
 }
 
-function completedRelearnWords(state: StudyState | null | undefined): string[] {
-  if (state?.widget !== "lesson" || !Array.isArray(state.flow.lesson_words)) return [];
+function completedRelearnWords(value: unknown): string[] {
+  const state = safeStudyState(value);
+  if (state?.widget !== "lesson" || !Array.isArray(state.flow.lesson_words)
+    || !Number.isInteger(state.current_index) || state.current_index < 0
+    || typeof state.phase !== "string") return [];
   const relearn = new Set(relearnWords(state));
   const completeCount = state.phase === "lesson_complete"
     ? state.flow.lesson_words.length
@@ -33,7 +43,7 @@ export function calculateReviewTodayProgress(
   sessions: readonly ReviewSessionProgressRow[],
   completedAttempts: number,
 ): ProgressResult["review_today"] {
-  const activeState = active?.state;
+  const activeState = safeStudyState(active?.state);
   if (activeState?.widget === "review") {
     const reviewTotal = reviewSnapshotTotal(activeState);
     const total = reviewTotal + relearnWords(activeState).length;
@@ -60,50 +70,13 @@ export function calculateReviewTodayProgress(
   return { completed, total, remaining: Math.max(0, total - completed) };
 }
 
-function localDateStart(date: string, timeZone: string): string {
-  const targetWallTime = Date.parse(`${date}T00:00:00.000Z`);
-  let candidate = targetWallTime;
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const parts = new Map(formatter.formatToParts(new Date(candidate)).map((part) => [part.type, part.value]));
-    const localWallTime = Date.UTC(
-      Number(parts.get("year")),
-      Number(parts.get("month")) - 1,
-      Number(parts.get("day")),
-      Number(parts.get("hour")),
-      Number(parts.get("minute")),
-      Number(parts.get("second")),
-    );
-    const correction = targetWallTime - localWallTime;
-    candidate += correction;
-    if (correction === 0) break;
-  }
-  return new Date(candidate).toISOString();
-}
-
-function addCalendarDays(date: string, days: number): string {
-  const value = new Date(`${date}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
 async function getReviewTodayProgress(db: ReturnType<typeof getDatabase>, userId: string, now: Date): Promise<ProgressResult["review_today"]> {
   const active = await getActiveStudySession(db, userId);
   if (active?.state?.widget === "review") return calculateReviewTodayProgress(active, [], 0);
 
   const timeZone = await getUserTimeZone(db, userId);
   const today = dateInTimeZone(timeZone, now);
-  const start = localDateStart(today, timeZone);
-  const end = localDateStart(addCalendarDays(today, 1), timeZone);
+  const { start, end } = localDateRange(today, timeZone);
   const [sessionResult, attemptsResult] = await Promise.all([
     db.from("study_sessions")
       .select("review_words_count,state")
