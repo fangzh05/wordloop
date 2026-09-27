@@ -3,7 +3,7 @@ import type { RecordReviewSubmissionInput } from "../../shared/toolContracts.js"
 import type { ErrorLayer, FsrsRating, ReviewSource, UserWordRow } from "../types.js";
 import { assertGradeInvariants, gradingRouteForDirection } from "../../web/src/grading/deterministic.js";
 import { assertDatabaseResult } from "./shared.js";
-import { advanceReviewAnswerFromServer } from "./studySessions.js";
+import { advanceReviewAnswerFromServer, hasCompletedLessonRelearnToday } from "./studySessions.js";
 import { normalizeWord } from "./wordNormalization.js";
 import { cardToDatabase, reviewLogToDatabase, scheduleReview, stateName } from "./fsrsScheduler.js";
 
@@ -97,10 +97,12 @@ export async function recordReviewSubmission(
     // A successful FSRS RPC followed by a lost cursor response leaves the
     // card not due while the server-owned cursor still points at this word.
     // Recover only that cursor transition; never schedule FSRS a second time.
-    await advanceReviewAnswerFromServer(word, input.is_correct, db, userId);
+    const suppressRelearn = !input.is_correct && await hasCompletedLessonRelearnToday(word, now, db, userId);
+    await advanceReviewAnswerFromServer(word, input.is_correct, db, userId, { suppressRelearn });
     return { attempt: null, review: null };
   }
 
+  const suppressRelearn = !input.is_correct && await hasCompletedLessonRelearnToday(word, now, db, userId);
   const result = scheduleReview(row, input.rating, now, enableFuzz);
   const { data, error } = await db.rpc("record_review_submission_v1", {
     p_user_id: userId,
@@ -114,7 +116,7 @@ export async function recordReviewSubmission(
     p_log: reviewLogToDatabase(result.log),
   });
   assertDatabaseResult(error);
-  await advanceReviewAnswerFromServer(word, input.is_correct, db, userId);
+  await advanceReviewAnswerFromServer(word, input.is_correct, db, userId, { suppressRelearn });
   const persisted = data as { attempt?: unknown; review?: unknown } | null;
   const persistedReview = persisted?.review && typeof persisted.review === "object"
     ? persisted.review as Record<string, unknown>

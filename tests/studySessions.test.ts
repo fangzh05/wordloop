@@ -135,6 +135,42 @@ describe("durable study session state", () => {
     expect(saved.review_words_count).toBe(18);
   });
 
+  it("does not schedule another same-day relearn after its completed word remains in the durable flow", () => {
+    const review = makeStudyState({
+      date: "2026-09-15",
+      widget: "review",
+      phase: "review",
+      current_word: "embark",
+      current_index: 0,
+      retry_count: 0,
+      flow: { relearn_words: ["embark"], lesson_words: ["embark"] },
+      payload: {
+        widget: "review",
+        items: [{
+          word: "embark",
+          meaning_zh: "启程",
+          direction: "cn_to_en",
+          error_layers: [],
+          is_due: true,
+          review_kind: "fsrs_due",
+          next_review_at: "2026-09-15T00:00:00.000Z",
+        }],
+      },
+    });
+
+    const afterAnotherFailure = advanceStudyState(review, "review_answer", 0, {
+      event: "review_answer",
+      word: "embark",
+      is_correct: false,
+      current_index: 0,
+    });
+
+    expect(afterAnotherFailure).toMatchObject({
+      phase: "review_complete",
+      flow: { relearn_words: ["embark"], lesson_words: ["embark"] },
+    });
+  });
+
   it("retains the completed Review count when the same session advances to Pretest", async () => {
     const reviewItems = Array.from({ length: 25 }, (_, index) => ({
       word: `review-${index}`, meaning_zh: "词义", direction: "cn_to_en" as const,

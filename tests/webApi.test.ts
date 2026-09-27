@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getPronunciationAudio: vi.fn(),
   buildReviewWidgetPayload: vi.fn(),
   recordAttempt: vi.fn(),
+  getTodayCompletedLessonWords: vi.fn(async () => new Set<string>()),
   recordReviewSubmission: vi.fn(),
   finishStudySession: vi.fn(),
   generateLesson: vi.fn(),
@@ -90,7 +91,10 @@ vi.mock("../server/tools/renderWidgets.js", async () => {
   return { ...actual, buildReviewWidgetPayload: mocks.buildReviewWidgetPayload };
 });
 vi.mock("../server/tools/getPronunciationAudio.js", () => ({ getPronunciationAudio: mocks.getPronunciationAudio }));
-vi.mock("../server/services/attempts.js", () => ({ recordAttempt: mocks.recordAttempt }));
+vi.mock("../server/services/attempts.js", () => ({
+  recordAttempt: mocks.recordAttempt,
+  getTodayCompletedLessonWords: mocks.getTodayCompletedLessonWords,
+}));
 vi.mock("../server/services/fsrsReviews.js", () => ({ recordReviewSubmission: mocks.recordReviewSubmission }));
 vi.mock("../server/services/deepseek.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/deepseek.js")>("../server/services/deepseek.js");

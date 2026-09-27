@@ -82,6 +82,8 @@ type FakeDbOptions = {
   word?: UserWordRow;
   rpcError?: { message: string };
   failUpdateOnce?: boolean;
+  sessionHistory?: Array<{ id: string; ended_at: string | null; state: unknown }>;
+  attempts?: Array<{ session_id: string | null; activity_type: string; is_correct: boolean; created_at: string }>;
 };
 
 function fakeDatabase(options: FakeDbOptions) {
@@ -98,6 +100,9 @@ function fakeDatabase(options: FakeDbOptions) {
       const query = {
         select() { return query; },
         eq() { return query; },
+        gte() { return query; },
+        lt() { return query; },
+        in() { return query; },
         is() { return query; },
         order() { return query; },
         limit() { return query; },
@@ -118,7 +123,14 @@ function fakeDatabase(options: FakeDbOptions) {
           return { data: activeSession, error: null };
         },
         async maybeSingle() {
+          if (table === "users") return { data: { timezone: "Asia/Shanghai" }, error: null };
           return { data: activeSession, error: null };
+        },
+        then(resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) {
+          const data = table === "study_sessions" ? options.sessionHistory ?? []
+            : table === "attempts" ? options.attempts ?? []
+              : [];
+          return Promise.resolve({ data, error: null }).then(resolve, reject);
         },
       };
       return query;
@@ -150,6 +162,13 @@ const submission: RecordReviewSubmissionInput = {
   direction: "cn_to_en",
 };
 
+const failedSubmission: RecordReviewSubmissionInput = {
+  ...submission,
+  is_correct: false,
+  error_layer: "meaning",
+  rating: "again",
+};
+
 describe("server-owned Review submission cursor", () => {
   it("persists attempt and FSRS once, then advances the due cursor", async () => {
     const fake = fakeDatabase({ session: reviewSession(["recur", "planet"]) });
@@ -169,6 +188,36 @@ describe("server-owned Review submission cursor", () => {
 
     expect(fake.rpcCalls).toHaveLength(1);
     expect(fake.session.state).toMatchObject({ phase: "review_complete", current_word: null, current_index: 1 });
+  });
+
+  it("allows a first failed Review to enter the Lesson relearn queue", async () => {
+    const fake = fakeDatabase({ session: reviewSession(["recur"]) });
+
+    await recordReviewSubmission(failedSubmission, new Date("2026-09-19T00:00:00Z"), false, fake.db as never, userId);
+
+    expect(fake.rpcCalls[0]?.name).toBe("record_review_submission_v1");
+    expect(fake.rpcCalls[0]?.args.p_is_correct).toBe(false);
+    expect(fake.session.state?.flow.relearn_words).toEqual(["recur"]);
+  });
+
+  it("continues FSRS after a same-day Lesson relearn without queueing that word again", async () => {
+    const initialNextReviewAt = "2026-09-18T00:00:00Z";
+    const fake = fakeDatabase({
+      session: reviewSession(["recur"]),
+      word: userWord(initialNextReviewAt),
+      sessionHistory: [{ id: "finished-relearn", ended_at: "2026-09-19T03:00:00Z", state: {} }],
+      attempts: [
+        { session_id: "finished-relearn", activity_type: "review", is_correct: false, created_at: "2026-09-19T01:00:00Z" },
+        { session_id: "finished-relearn", activity_type: "cloze", is_correct: true, created_at: "2026-09-19T02:00:00Z" },
+      ],
+    });
+
+    await recordReviewSubmission(failedSubmission, new Date("2026-09-19T04:00:00Z"), false, fake.db as never, userId);
+
+    expect(fake.rpcCalls).toHaveLength(1);
+    expect(fake.rpcCalls[0]?.name).toBe("record_review_submission_v1");
+    expect(fake.row.next_review_at).not.toBe(initialNextReviewAt);
+    expect(fake.session.state).toMatchObject({ phase: "review_complete", current_index: 1, flow: { relearn_words: [] } });
   });
 
   it("does not advance the cursor when the FSRS RPC fails", async () => {
