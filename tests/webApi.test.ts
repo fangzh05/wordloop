@@ -200,8 +200,14 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(missing.headers.get("x-content-type-options")).toBe("nosniff");
     expect(missing.headers.get("referrer-policy")).toBe("no-referrer");
 
+    const wrong = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: "Bearer wrong-token" },
+    }));
+    expect(wrong.status).toBe(401);
+
     const invalid = await handleWebApiRequest(post({ action: "lesson_submit", answer: "fixture", word: "other", current_index: 8, rating: "good" }));
     expect(invalid.status).toBe(400);
+    expect(invalid.headers.get("cache-control")).toBe("no-store");
     expect(mocks.recordAttempt).not.toHaveBeenCalled();
   });
 
