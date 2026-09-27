@@ -167,9 +167,7 @@ export function gradeExactRecall(answer: string, target: string): GradeResult {
   if (cleanAnswer && cleanTarget.length > 3 && editDistance(cleanAnswer, cleanTarget) === 1) {
     return { is_correct: true, error_layer: "spelling", rating: "hard", feedback: "拼写接近目标词。", graded_by: "deterministic" };
   }
-  const clearlyAnotherWord = /^[a-z]+$/.test(cleanAnswer)
-    && cleanAnswer.length >= 3
-    && cleanAnswer[0] !== cleanTarget[0];
+  const clearlyAnotherWord = /^[a-z]+$/.test(cleanAnswer) && cleanAnswer.length >= 3;
   return {
     is_correct: false,
     error_layer: clearlyAnotherWord ? "meaning" : "none",
