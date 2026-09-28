@@ -40,6 +40,7 @@ import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, Voc
 import {
   REVIEW_SESSION_MAX,
   LESSON_WIDGET_VERSION,
+  normalizeReviewWidgetPayload,
   reviewWidgetItemSchema,
   reviewWidgetPayloadSchema,
   type ReviewWidgetItem,
@@ -972,7 +973,7 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
   if (active?.state?.widget === "review" && active.state.phase !== "review_complete") {
     const resumed = reviewWidgetPayloadSchema.safeParse(widgetPayloadWithState(active.state.payload, active.state));
     if (!resumed.success) throw new Error("Saved review session payload is invalid.");
-    return resumed.data;
+    return normalizeReviewWidgetPayload(resumed.data);
   }
   if (active?.state && active.state.widget !== "review") {
     throw new Error("A different WordLoop study session is already active.");
@@ -1005,7 +1006,7 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
   const persisted = expectedRevision === undefined
     ? await persistStudyState(state, db, userId, active)
     : await persistStudyStateIfRevision(state, expectedRevision, db, userId, active?.id);
-  return reviewWidgetPayloadSchema.parse(widgetPayloadWithState(persisted.state?.payload ?? payload, persisted.state ?? state));
+  return normalizeReviewWidgetPayload(reviewWidgetPayloadSchema.parse(widgetPayloadWithState(persisted.state?.payload ?? payload, persisted.state ?? state)));
 }
 
 export function registerRenderTools(server: McpServer): void {

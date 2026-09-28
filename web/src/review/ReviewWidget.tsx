@@ -10,6 +10,7 @@ import {
   advanceStudySessionSchema,
   errorLayerSchema,
   fsrsRatingSchema,
+  normalizeReviewWidgetPayload,
   recordAttemptSchema,
   recordReviewSubmissionSchema,
   reviewAnswerSchema,
@@ -172,15 +173,9 @@ function resultLabel(result: GradedAnswer): string {
 
 export function ReviewQuestion({ item }: { item: ReviewItem }): React.JSX.Element {
   return <div className="question-block">
-    {item.direction === "cn_to_en" ? <>
-      <span className="question-label">中 → 英</span>
-      {item.part_of_speech && !meaningIncludesPartOfSpeech(item.meaning_zh, item.part_of_speech) ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
-      <p className="question-prompt">{item.meaning_zh}</p>
-    </> : <>
-      <span className="question-label">英 → 英</span>
-      <p className="question-word">{item.word}</p>
-      {item.part_of_speech ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
-    </>}
+    <span className="question-label">中 → 英</span>
+    {item.part_of_speech && !meaningIncludesPartOfSpeech(item.meaning_zh, item.part_of_speech) ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
+    <p className="question-prompt">{item.meaning_zh}</p>
   </div>;
 }
 
@@ -200,10 +195,11 @@ export function ReviewWidget(): React.JSX.Element {
   const payloadSignatureRef = useRef("");
 
   function initializePayload(nextPayload: Payload, signature: string): void {
-    const persistedIndex = nextPayload.current_index ?? 0;
-    const isComplete = nextPayload.phase === "review_complete" || persistedIndex >= nextPayload.items.length;
-    setPayload(nextPayload);
-    setIndex(Math.min(persistedIndex, nextPayload.items.length - 1));
+    const safePayload = normalizeReviewWidgetPayload(nextPayload);
+    const persistedIndex = safePayload.current_index ?? 0;
+    const isComplete = safePayload.phase === "review_complete" || persistedIndex >= safePayload.items.length;
+    setPayload(safePayload);
+    setIndex(Math.min(persistedIndex, safePayload.items.length - 1));
     setAnswer("");
     setStatus("idle");
     setError("");
@@ -234,7 +230,8 @@ export function ReviewWidget(): React.JSX.Element {
       : event.value.structuredContent;
     const parsed = payloadSchema.safeParse(candidate);
     if (!parsed.success) return;
-    const signature = JSON.stringify(parsed.data);
+    const safePayload = normalizeReviewWidgetPayload(parsed.data);
+    const signature = JSON.stringify(safePayload);
     if (payloadSignatureRef.current === signature) return;
     payloadSignatureRef.current = signature;
     setPayload(null);
@@ -247,7 +244,7 @@ export function ReviewWidget(): React.JSX.Element {
     setResults([]);
     setCompleted(false);
     setContinueStatus("idle");
-    void initializePayload(parsed.data, signature);
+    void initializePayload(safePayload, signature);
   }), []);
 
   useEffect(() => {
