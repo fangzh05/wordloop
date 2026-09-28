@@ -401,6 +401,9 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .standalone-count { color: var(--muted); font-size: 0.83rem; font-variant-numeric: tabular-nums; }
 .standalone-actions { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.9rem; }
 .standalone-actions.standalone-two-actions { grid-template-columns: 5.5rem 1fr; }
+.standalone-actions.standalone-pretest-result-actions { grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
+.standalone-pretest-result-actions .familiar-action-wrap,
+.standalone-pretest-result-actions .familiar-action { width: 100%; }
 .standalone-actions .button { width: 100%; margin: 0; }
 .standalone-actions .button.secondary { color: var(--text); }
 .standalone-input { margin-top: 0.35rem; }

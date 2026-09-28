@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   bootstrap: vi.fn(),
   getProgress: vi.fn(),
   getPretestResults: vi.fn(),
+  markPretestFamiliar: vi.fn(),
   getTodayWords: vi.fn(),
   getVocabularyItemsByWords: vi.fn(),
   recordPretestResult: vi.fn(),
@@ -74,6 +75,7 @@ vi.mock("../server/services/studySessions.js", async () => {
     }),
     getStudyDate: vi.fn(async () => "2026-09-27"),
     getPretestResults: mocks.getPretestResults,
+    markPretestFamiliar: mocks.markPretestFamiliar,
     freezeLessonQueueForSession: vi.fn(async (session: any, _words: unknown[], _db?: unknown, _userId?: string, expectedRevision?: string | null) => {
       if (expectedRevision !== undefined && session.updated_at !== expectedRevision) throw new actual.StaleStudyStateError();
       return session;
@@ -181,6 +183,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.getProgress.mockResolvedValue({ today: { completed: 0, total: 1 } });
     mocks.setDailyNewWordLimit.mockResolvedValue({ daily_new_word_limit: 50, date, prepared: 50, added: 0 });
     mocks.getPretestResults.mockResolvedValue([]);
+    mocks.markPretestFamiliar.mockResolvedValue(undefined);
     mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [], oldRandomReview: [] });
     mocks.getPronunciationAudio.mockResolvedValue({ words: [] });
     mocks.recordAttempt.mockResolvedValue(undefined);
@@ -877,11 +880,94 @@ describe("Standalone Web API shared-state boundaries", () => {
       payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
     }));
     const response = await handleWebApiRequest(post({ action: "pretest_submit", answer: "fixture" }));
+    const payload = await body(response);
     expect(response.status).toBe(200);
     expect(mocks.recordPretestResult).toHaveBeenCalledWith(expect.objectContaining({ word: "fixture", result: "known" }));
-    expect(mocks.advanceEvents).toEqual(["pretest_result", "pretest_complete"]);
-    expect(mocks.active.state).toMatchObject({ phase: "pretest_complete", current_index: 1, current_word: null });
+    expect(mocks.advanceEvents).toEqual(["pretest_result"]);
+    expect(mocks.active.state).toMatchObject({ phase: "pretest_result", current_index: 0, current_word: "fixture" });
+    expect(payload).toMatchObject({
+      state: { phase: "pretest_result", current_index: 0, current_word: "fixture" },
+      result: { status: "known", user_answer: "fixture", is_correct: true, error_layer: "none" },
+    });
     expect(mocks.gradeSemanticAnswer).not.toHaveBeenCalled();
+  });
+
+  it("continues a revealed Pretest result exactly once and completes the final cursor", async () => {
+    mocks.active = row(makeStudyState({
+      date, widget: "pretest", phase: "pretest_result", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    }));
+    const response = await handleWebApiRequest(post({ action: "pretest_continue", current_index: 0 }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(mocks.advanceEvents).toEqual(["pretest_complete"]);
+    expect(payload.state).toMatchObject({ phase: "pretest_complete", current_index: 1, current_word: null });
+
+    const retry = await handleWebApiRequest(post({ action: "pretest_continue", current_index: 0 }));
+    expect(retry.status).toBe(200);
+    expect(mocks.advanceEvents).toEqual(["pretest_complete"]);
+    expect(mocks.active.state).toMatchObject({ phase: "pretest_complete", current_index: 1 });
+  });
+
+  it("restores the revealed answer and grading when an active Pretest result is resumed", async () => {
+    mocks.active = row(makeStudyState({
+      date, widget: "pretest", phase: "pretest_result", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    }));
+    mocks.bootstrap.mockResolvedValue({ action: "resume" });
+    mocks.getPretestResults.mockResolvedValue([{
+      word: "fixture", status: "uncertain", user_answer: "fixtur", is_correct: true, error_layer: "spelling",
+    }]);
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(payload.pretest_result).toEqual({
+      word: "fixture", status: "uncertain", user_answer: "fixtur", is_correct: true, error_layer: "spelling",
+    });
+  });
+
+  it("routes the standalone familiar action to the revision-safe server operation", async () => {
+    mocks.active = row(makeStudyState({
+      date, widget: "pretest", phase: "pretest_result", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }, { word: "next", meaning_zh: "下一个" }] },
+    }));
+    mocks.markPretestFamiliar.mockImplementation(async (input: any) => {
+      const state = mocks.active.state;
+      if (!(state.flow.pretest_familiar_words ?? []).includes(input.word)) {
+        mocks.active = {
+          ...mocks.active,
+          state: {
+            ...state,
+            phase: "pretest",
+            current_word: "next",
+            current_index: 1,
+            flow: { ...state.flow, pretest_familiar_words: [input.word] },
+          },
+          updated_at: `rev-${++mocks.revisionNumber}`,
+        };
+      }
+      return { action: "pretest_mark_familiar", word: input.word, phase: mocks.active.state.phase, current_word: mocks.active.state.current_word, current_index: mocks.active.state.current_index, revision: mocks.active.updated_at };
+    });
+
+    const action = { action: "pretest_mark_familiar", word: "fixture", current_index: 0 };
+    const response = await handleWebApiRequest(post(action));
+    const payload = await body(response);
+    expect(response.status).toBe(200);
+    expect(mocks.markPretestFamiliar).toHaveBeenCalledWith({ ...action, expected_revision: "rev-a" });
+    expect(payload.state).toMatchObject({ phase: "pretest", current_index: 1, current_word: "next" });
+
+    const retry = await handleWebApiRequest(post(action));
+    expect(retry.status).toBe(200);
+    expect(mocks.markPretestFamiliar).toHaveBeenCalledTimes(2);
+    expect(mocks.active.state).toMatchObject({ phase: "pretest", current_index: 1, current_word: "next" });
   });
 
   it.each([

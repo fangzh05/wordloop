@@ -259,6 +259,51 @@ export function StandaloneReviewFeedback({ notice, noticeIndex, currentIndex }: 
   return visibleNotice ? <p className="standalone-status" role="status">{visibleNotice}</p> : null;
 }
 
+export function StandalonePretestAnswerReveal({
+  source,
+  word,
+  answer,
+  status,
+  errorLayer,
+  markedFamiliar,
+  busy,
+  onContinue,
+  onMarkFamiliar,
+}: {
+  source: string;
+  word: string;
+  answer: string;
+  status: string;
+  errorLayer: string;
+  markedFamiliar: boolean;
+  busy: boolean;
+  onContinue: () => void;
+  onMarkFamiliar: () => void;
+}): React.JSX.Element {
+  const known = status === "known";
+  const feedback = markedFamiliar
+    ? "已标记为熟词。"
+    : known
+      ? "拼写正确。"
+      : errorLayer === "spelling"
+        ? "拼写接近，但仍有拼写错误。"
+        : "这次没有准确回忆出这个词。";
+  const canMarkFamiliar = source === "new_word" && !known;
+
+  return <div className="pretest-reveal standalone-pretest-reveal" role="status">
+    <p>你的答案：<strong>{answer || "未作答"}</strong></p>
+    <p>正确答案：<strong>{word}</strong></p>
+    <p className="pretest-reveal-feedback">{feedback}</p>
+    <div className="standalone-actions standalone-pretest-result-actions">
+      <Button type="button" disabled={busy} onClick={onContinue}>继续学习</Button>
+      {canMarkFamiliar ? <div className="familiar-action-wrap">
+        <Button className="secondary familiar-action" type="button" disabled={busy} onClick={onMarkFamiliar}>我本来会这个词</Button>
+        <small>标记后将跳过本轮新词学习，但未来仍可能正常复习。</small>
+      </div> : null}
+    </div>
+  </div>;
+}
+
 export function StandaloneProgressBlock({ title, completed, total, emptyText, detail }: {
   title: string;
   completed: number;
@@ -674,7 +719,7 @@ export default function StandaloneApp(): React.JSX.Element {
           if (lessonDraftTransitioned(previousDraftContext, nextDraftContext)) {
             try { sessionStorage.removeItem("wordloop_draft"); } catch { /* storage is optional */ }
             setAnswer("");
-          } else if (actionName === "review_submit" || actionName === "pretest_submit") {
+          } else if (["review_submit", "pretest_submit", "pretest_continue", "pretest_mark_familiar"].includes(actionName)) {
             setAnswer("");
           }
           if (actionName === "review_submit") {
@@ -816,7 +861,9 @@ export default function StandaloneApp(): React.JSX.Element {
       const item = items[currentIndex] ?? {};
       const complete = state.phase === "pretest_complete";
       const summary = view.pretest_summary ?? { known: 0, uncertain: 0, unknown: 0 };
-      const audioStage = ["pretest_result", "listen_repeat", "listen_recall"].includes(String(state.phase));
+      const resultStage = state.phase === "pretest_result";
+      const result = { ...record(view.pretest_result), ...record(view.result) };
+      const audioStage = ["listen_repeat", "listen_recall"].includes(String(state.phase));
       return <section className="widget-card standalone-card" aria-labelledby="study-title">
         <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={() => setPage("dashboard")} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
         {complete ? <div className="standalone-content">
@@ -827,6 +874,18 @@ export default function StandaloneApp(): React.JSX.Element {
             <div><strong>{summary.unknown}</strong><span>不会</span></div>
           </div>
           <div className="standalone-actions"><Button type="button" onClick={() => void dispatch({ action: "continue" })}>开始正式学习</Button></div>
+        </div> : resultStage ? <div className="standalone-content">
+          <StandalonePretestAnswerReveal
+            source={String(payload.source ?? "")}
+            word={String(item.word ?? state.current_word ?? "")}
+            answer={String(result.user_answer ?? "")}
+            status={String(result.status ?? "")}
+            errorLayer={String(result.error_layer ?? "")}
+            markedFamiliar={result.mark_familiar === true}
+            busy={busy !== null}
+            onContinue={() => void dispatch({ action: "pretest_continue", current_index: currentIndex })}
+            onMarkFamiliar={() => void dispatch({ action: "pretest_mark_familiar", word: String(item.word ?? state.current_word ?? ""), current_index: currentIndex })}
+          />
         </div> : audioStage ? <div className="standalone-content"><p>当前预测试正在 ChatGPT 听音阶段，请在 ChatGPT 完成此阶段。</p></div> : <div className="standalone-content">
           <div className="question-block">
             <span className="question-label">中文核心义</span>

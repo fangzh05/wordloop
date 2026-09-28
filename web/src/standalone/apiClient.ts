@@ -34,9 +34,10 @@ export interface WebApiResponse {
   };
   settings_update?: { daily_new_word_limit: number; prepared: number; added: number };
   pronunciation_audio_url?: string | null;
-  result?: { is_correct: boolean; error_layer: string; message?: string };
+  result?: { status?: string; user_answer?: string; is_correct?: boolean; error_layer?: string; mark_familiar?: boolean; message?: string };
   pretest_summary?: { known: number; uncertain: number; unknown: number };
-  pretest_results?: Array<{ word: string; status: string }>;
+  pretest_result?: { word: string; status: string; user_answer?: string; is_correct?: boolean; error_layer?: string };
+  pretest_results?: Array<{ word: string; status: string; user_answer?: string; is_correct?: boolean; error_layer?: string }>;
   message?: string;
   error?: { code: string; message: string };
 }

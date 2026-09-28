@@ -13,6 +13,7 @@ import {
   makeStudyState,
   normalizeLegacyLessonSession,
   normalizeStudyStateForRead,
+  markPretestFamiliar,
   persistStudyStateIfRevision,
   StaleStudyStateError,
 } from "./services/studySessions.js";
@@ -38,6 +39,7 @@ import {
 } from "../web/src/grading/deterministic.js";
 import {
   lessonNavigationSchema,
+  pretestMarkFamiliarSchema,
   recordReviewSubmissionSchema,
   reviewWidgetItemSchema,
   setDailyNewWordLimitSchema,
@@ -65,6 +67,8 @@ const webActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("continue"), ...mutationBase }).strict(),
   z.object({ action: z.literal("review_submit"), answer: z.string().max(4000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
   z.object({ action: z.literal("pretest_submit"), answer: z.string().max(2000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
+  z.object({ action: z.literal("pretest_continue"), current_index: z.number().int().min(0).max(6), expected_revision: z.string().trim().min(1).max(80) }).strict(),
+  pretestMarkFamiliarSchema,
   z.object({ action: z.literal("lesson_start_exercise"), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_retry"), ...mutationBase }).strict(),
@@ -125,10 +129,20 @@ function authenticate(request: Request): void {
 function toApiError(error: unknown): WebApiError {
   if (error instanceof WebApiError) return error;
   if (error instanceof DeepSeekError) return new WebApiError(error.status, error.code, error.message);
-  if (error instanceof StaleStudyStateError || (error instanceof Error && error.message === "STALE_STUDY_STATE")) {
+  if (error instanceof StaleStudyStateError || (error instanceof Error && ["STALE_STUDY_STATE", "STUDY_SESSION_REVISION_MISMATCH"].includes(error.message))) {
     return new WebApiError(409, "STALE_STUDY_STATE", "Study state changed in another client.");
   }
   const message = error instanceof Error ? error.message : "";
+  if ([
+    "PRETEST_SESSION_NOT_ACTIVE",
+    "PRETEST_FAMILIAR_SOURCE_NOT_ALLOWED",
+    "PRETEST_FAMILIAR_CURSOR_MISMATCH",
+    "PRETEST_FAMILIAR_ALREADY_KNOWN",
+    "PRETEST_FAMILIAR_RESULT_NOT_ELIGIBLE",
+    "PRETEST_WORD_NOT_FOUND",
+  ].includes(message)) {
+    return new WebApiError(409, "INVALID_STUDY_STATE", "The current Pretest result cannot perform this action.");
+  }
   if (message === "NO_ACTIVE_SESSION" || /No resumable active study session|No active study session/.test(message)) {
     return new WebApiError(409, "NO_ACTIVE_SESSION", "There is no active study session.");
   }
@@ -232,14 +246,18 @@ async function successForSession(
   const state = ensureState(session);
   const response = resultForState(session, state, extra);
   if (state.widget === "lesson") response.pronunciation_audio_url = audioUrl === undefined ? await pronunciationUrl(state.current_word) : audioUrl;
-  if (state.widget === "pretest" && state.phase === "pretest_complete") {
+  if (state.widget === "pretest" && (state.phase === "pretest_result" || state.phase === "pretest_complete")) {
     const results = await getPretestResults(session);
-    const counts = { known: 0, uncertain: 0, unknown: 0 };
-    for (const result of results) {
-      if (result.status === "known" || result.status === "uncertain" || result.status === "unknown") counts[result.status] += 1;
-    }
     response.pretest_results = results;
-    response.pretest_summary = counts;
+    if (state.phase === "pretest_result") {
+      response.pretest_result = results.find((result) => normalizeWord(result.word) === normalizeWord(state.current_word ?? ""));
+    } else {
+      const counts = { known: 0, uncertain: 0, unknown: 0 };
+      for (const result of results) {
+        if (result.status === "known" || result.status === "uncertain" || result.status === "unknown") counts[result.status] += 1;
+      }
+      response.pretest_summary = counts;
+    }
   }
   const progress = await progressIfAvailable();
   if (progress !== undefined) response.progress = progress;
@@ -554,12 +572,49 @@ async function submitPretest(action: Extract<WebAction, { action: "pretest_submi
     activity_type: "pretest_cn_to_en",
   });
   const nextResult = await advanceStudySessionIfRevision("pretest_result", state.current_index, action.expected_revision, active.id);
+  return successForSession(nextResult, {
+    result: {
+      status: result,
+      user_answer: action.answer,
+      is_correct: grade?.is_correct ?? false,
+      error_layer: grade?.error_layer ?? "meaning",
+    },
+  });
+}
+
+async function continuePretest(action: Extract<WebAction, { action: "pretest_continue" }>): Promise<Record<string, unknown>> {
+  const active = await getActiveStudySession();
+  const state = activeState(active, "pretest");
+  if (!active || state.payload.source !== "new_word") {
+    throw new WebApiError(409, "INVALID_STUDY_STATE", "There is no current new-word Pretest result.");
+  }
+  const items = z.array(z.object({ word: z.string().min(1) })).min(1).max(7).safeParse(state.payload.items);
+  if (!items.success) throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved Pretest questions are invalid.");
   const itemCount = items.data.length;
-  const next = state.current_index + 1;
-  const completed = next >= itemCount
-    ? await advanceStudySessionIfRevision("pretest_complete", itemCount, nextResult.updated_at, active.id)
-    : await advanceStudySessionIfRevision("pretest_question", next, nextResult.updated_at, active.id);
-  return successForSession(completed, { result: { status: result } });
+
+  if (active.updated_at !== action.expected_revision) {
+    const alreadyAdvanced = state.phase === "pretest" && state.current_index === action.current_index + 1;
+    const alreadyCompleted = state.phase === "pretest_complete"
+      && state.current_index === itemCount
+      && action.current_index === itemCount - 1;
+    if (alreadyAdvanced || alreadyCompleted) return successForSession(active);
+    throw new StaleStudyStateError();
+  }
+  if (state.phase !== "pretest_result" || state.current_index !== action.current_index) {
+    throw new WebApiError(409, "INVALID_STUDY_STATE", "There is no revealed result at this Pretest cursor.");
+  }
+
+  const nextIndex = action.current_index + 1;
+  const event = nextIndex >= itemCount ? "pretest_complete" : "pretest_question";
+  const saved = await advanceStudySessionIfRevision(event, event === "pretest_complete" ? itemCount : nextIndex, action.expected_revision, active.id);
+  return successForSession(saved);
+}
+
+async function markPretestFamiliarFromWeb(action: Extract<WebAction, { action: "pretest_mark_familiar" }>): Promise<Record<string, unknown>> {
+  await markPretestFamiliar(action);
+  const updated = await getActiveStudySession();
+  if (!updated) throw new WebApiError(409, "INVALID_STUDY_STATE", "The Pretest session is no longer active.");
+  return successForSession(updated, { result: { status: "known", mark_familiar: true } });
 }
 
 const lessonExerciseSchema = z.object({
@@ -940,6 +995,8 @@ async function performAction(action: WebAction): Promise<Record<string, unknown>
   if (action.action === "set_daily_new_word_limit") return setDailyNewWordLimitAction(action);
   if (action.action === "refresh_progress") return { screen: "done", session_revision: action.expected_revision, state: {}, progress: await getProgress() };
   if (action.action === "continue") return resolveBootstrap(action.expected_revision);
+  if (action.action === "pretest_mark_familiar") return markPretestFamiliarFromWeb(action);
+  if (action.action === "pretest_continue") return continuePretest(action);
   const active = await assertActiveStudySessionRevision(action.expected_revision);
   switch (action.action) {
     case "review_submit": return submitReview(action, active);
