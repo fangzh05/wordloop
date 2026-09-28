@@ -634,6 +634,41 @@ describe("strict resumable widget schemas", () => {
     expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "translation_cn_to_en", instruction: "完成题目。", prompt: "这次试验失败后，团队仍深受冲击。", multiline: false } }).success).toBe(true);
     expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "translation_cn_to_en", instruction: "完成题目。", prompt: "Use reel from.", multiline: false } }).success).toBe(false);
     expect(lessonInputSchema.safeParse({ ...base, exercise: { activity_type: "translation_en_to_cn", instruction: "完成题目。", prompt: "The team was reeling from the result.", multiline: false } }).success).toBe(true);
+
+    const exactCloze = {
+      activity_type: "exact_cloze",
+      instruction: "根据语境填入目标词。提示：帝国；大型商业集团",
+      prompt: "After a series of acquisitions, the startup quickly grew into a vast media ___.",
+      multiline: false,
+    };
+    expect(lessonInputSchema.safeParse({ ...base, word: "empire", exercise: exactCloze }).success).toBe(true);
+    const mixedLanguageCloze = lessonInputSchema.safeParse({
+      ...base,
+      word: "empire",
+      exercise: {
+        ...exactCloze,
+        prompt: "经过一系列收购，这家初创公司迅速成长为一家庞大的媒体 ___。",
+      },
+    });
+    expect(mixedLanguageCloze.success).toBe(false);
+    if (!mixedLanguageCloze.success) {
+      expect(mixedLanguageCloze.error.issues).toContainEqual(expect.objectContaining({
+        code: "custom",
+        message: "An exact_cloze prompt must be a natural English sentence.",
+        path: ["exercise", "prompt"],
+      }));
+    }
+    expect(lessonInputSchema.safeParse({
+      mode: "exercise",
+      word: "empire",
+      progress: "6 / 6",
+      ...exactCloze,
+    }).success).toBe(true);
+    expect(lessonInputSchema.safeParse({
+      ...base,
+      word: "empire",
+      exercise: { ...exactCloze, prompt: "After the acquisitions, the company became a media empire." },
+    }).success).toBe(false);
   });
 
   it("rejects incomplete lesson exercise and feedback payloads", () => {

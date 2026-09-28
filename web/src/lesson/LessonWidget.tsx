@@ -8,6 +8,8 @@ import { z } from "zod";
 import {
   LESSON_WIDGET_VERSION,
   advanceStudySessionSchema,
+  containsTargetWord,
+  isValidExactClozePrompt,
   lessonNavigationSchema,
   lessonSubmissionSchema,
   type AdvanceStudySessionInput,
@@ -18,12 +20,59 @@ export { LESSON_WIDGET_VERSION } from "../../../shared/toolContracts.js";
 export const LESSON_WIDGET_LOAD_ERROR = "WordLoop 学习卡数据不完整，请重新进入学习。";
 export const LESSON_WIDGET_REFRESH_ERROR = "WordLoop 未能刷新学习卡，请重试。";
 
+function validateExactClozePrompt(
+  value: { activity_type: string; prompt: string },
+  context: z.RefinementCtx,
+  pathPrefix: Array<string | number> = [],
+): void {
+  if (value.activity_type !== "exact_cloze") return;
+  if ((value.prompt.match(/___/g) ?? []).length !== 1) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze prompt must contain exactly one ___ blank.",
+      path: [...pathPrefix, "prompt"],
+    });
+  }
+  if (!isValidExactClozePrompt(value.prompt)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze prompt must be a natural English sentence.",
+      path: [...pathPrefix, "prompt"],
+    });
+  }
+}
+
+function validateExactClozeTargetExposure(
+  word: string,
+  exercise: { activity_type: string; instruction: string; prompt: string },
+  context: z.RefinementCtx,
+  pathPrefix: Array<string | number> = [],
+): void {
+  if (exercise.activity_type !== "exact_cloze") return;
+  if (containsTargetWord(exercise.instruction, word)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze instruction must not reveal the target word.",
+      path: [...pathPrefix, "instruction"],
+    });
+  }
+  if (containsTargetWord(exercise.prompt, word)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze prompt must not reveal the target word.",
+      path: [...pathPrefix, "prompt"],
+    });
+  }
+}
+
 const exerciseSchema = z.object({
   activity_type: z.string().trim().min(1).max(80),
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  validateExactClozePrompt(value, context);
+});
 
 const feedbackSchema = z.object({
   is_correct: z.boolean(),
@@ -58,7 +107,9 @@ const explainPayloadSchema = z.object({
   example_en: z.string().trim().min(1).max(1000),
   note: z.string().trim().min(1).max(1000),
   exercise: exerciseSchema,
-}).passthrough();
+}).passthrough().superRefine((value, context) => {
+  validateExactClozeTargetExposure(value.word, value.exercise, context, ["exercise"]);
+});
 
 const exercisePayloadSchema = z.object({
   ...payloadCommon,
@@ -69,7 +120,10 @@ const exercisePayloadSchema = z.object({
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
-}).passthrough();
+}).passthrough().superRefine((value, context) => {
+  validateExactClozePrompt(value, context);
+  validateExactClozeTargetExposure(value.word, value, context);
+});
 
 const feedbackPayloadSchema = z.object({
   ...payloadCommon,
@@ -78,7 +132,9 @@ const feedbackPayloadSchema = z.object({
   progress: z.string().trim().min(1).max(40),
   exercise: exerciseSchema,
   feedback: feedbackSchema,
-}).passthrough();
+}).passthrough().superRefine((value, context) => {
+  validateExactClozeTargetExposure(value.word, value.exercise, context, ["exercise"]);
+});
 
 export const lessonPayloadSchema = z.discriminatedUnion("mode", [
   explainPayloadSchema,
@@ -179,6 +235,25 @@ export function feedbackGuidanceLabel(reveal: boolean): string {
   return reveal ? "解释" : "错因与改法";
 }
 
+export function buildLessonExerciseHeader(input: {
+  activityType: string;
+  wrapup: boolean;
+  progress?: string;
+  title?: string;
+}): { eyebrow: string; heading: string } {
+  if (input.wrapup) return { eyebrow: "长难句收尾", heading: "先找主干，再翻译" };
+  if (input.activityType === "exact_cloze") {
+    return {
+      eyebrow: "新词学习" + (input.progress ? " · " + input.progress : ""),
+      heading: "填空练习",
+    };
+  }
+  return {
+    eyebrow: input.title ?? "练习",
+    heading: input.progress ?? "当前练习",
+  };
+}
+
 function modeForPhase(phase: Payload["phase"]): Mode | null {
   if (phase === "lesson_exercise") return "exercise";
   if (phase === "lesson_feedback") return "feedback";
@@ -198,7 +273,7 @@ export function buildLessonSubmissionMessage(input: {
     prompt: input.prompt,
     answer: input.answer,
   });
-  return `提交 WordLoop 正式学习答案。\n\n目标词：${submission.word}\n练习类型：${submission.activity_type}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n判定规则：若练习类型属于确定性题型（pretest_cn_to_en、listen_recall、spelling、word_recall），用确定性判分得到 is_correct 与 error_layer（不要凭语感判断；错误层只允许 none/spelling/meaning）；其余题型按 Teaching Prompt 做语义批改。然后调用 record_attempt 记录本次作答（record_attempt 只负责持久化，不会替你判分）。最后调用 render_lesson_widget mode=feedback，批改用词与解释由你负责。\n\n错误反馈必须帮助用户自纠：第一次答错时，message 要指出用户答案中的至少一个具体错误片段或位置，不能只写“有几处错误”或只报错误层；explanation 要说明为什么错以及下一步改哪里/怎么改，但不能给出完整改后句。第一次答错时设 reveal_answer=false 并省略 reference_answer。只有连续第二次仍错时，才可以提供 reference_answer 和完整 explanation，并设 reveal_answer=true。\n\nThe current submitted answer is authoritative: the 用户答案 field in THIS submission is the only answer to grade. Grade only this submitted answer; do not substitute or reuse an answer from an earlier chat turn.\n\nAfter grading, your response to this submission must complete BOTH tool actions:\n1. call record_attempt exactly once\n2. call render_lesson_widget exactly once with mode="feedback". Reuse this submission's word, current exercise (activity_type and prompt), and user_answer; do not generate another exercise, switch questions, or change words.\n\nDo not output the grading as ordinary chat text. The feedback is not complete until render_lesson_widget succeeds. After the feedback Widget renders successfully, remain silent in chat.`;
+  return `提交 WordLoop 正式学习答案。\n\n目标词：${submission.word}\n练习类型：${submission.activity_type}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n判定规则：exact_cloze 采用确定性填空判分，accepted_answers 仅为上方目标词；答案首尾去空格并统一大小写后必须精确匹配，不得按语义放宽。拼写接近但不匹配时记录 spelling 错误，其余错误记录 meaning。pretest_cn_to_en、listen_recall、spelling、word_recall 也使用确定性判分；其余题型按 Teaching Prompt 做语义批改。然后调用 record_attempt 记录本次作答（record_attempt 只负责持久化，不会替你判分）。最后调用 render_lesson_widget mode=feedback，批改用词与解释由你负责。\n\n错误反馈必须帮助用户自纠：第一次答错时，message 要指出用户答案中的至少一个具体错误片段或位置，不能只写“有几处错误”或只报错误层；explanation 要说明为什么错以及下一步改哪里/怎么改，但不能给出完整改后句。第一次答错时设 reveal_answer=false 并省略 reference_answer。只有连续第二次仍错时，才可以提供 reference_answer 和完整 explanation，并设 reveal_answer=true。\n\nThe current submitted answer is authoritative: the 用户答案 field in THIS submission is the only answer to grade. Grade only this submitted answer; do not substitute or reuse an answer from an earlier chat turn.\n\nAfter grading, your response to this submission must complete BOTH tool actions:\n1. call record_attempt exactly once\n2. call render_lesson_widget exactly once with mode="feedback". Reuse this submission's word, current exercise (activity_type and prompt), and user_answer; do not generate another exercise, switch questions, or change words.\n\nDo not output the grading as ordinary chat text. The feedback is not complete until render_lesson_widget succeeds. After the feedback Widget renders successfully, remain silent in chat.`;
 }
 
 export function buildLessonWrapupSubmissionMessage(input: {
@@ -469,11 +544,17 @@ export function LessonWidget(): React.JSX.Element {
   }
 
   if (mode === "exercise") {
+    const exerciseHeader = buildLessonExerciseHeader({
+      activityType,
+      wrapup: payload.wrapup === true,
+      progress: payload.progress,
+      title: payload.title,
+    });
     return <section className="widget-card lesson-card" aria-labelledby="lesson-exercise-title">
       <header className="widget-header compact-header">
         <div>
-          <span className="eyebrow">{payload.wrapup ? "长难句收尾" : payload.title ?? "练习"}</span>
-          <h1 id="lesson-exercise-title">{payload.wrapup ? "先找主干，再翻译" : payload.progress ?? "当前练习"}</h1>
+          <span className="eyebrow">{exerciseHeader.eyebrow}</span>
+          <h1 id="lesson-exercise-title">{exerciseHeader.heading}</h1>
         </div>
         <FocusButton />
       </header>

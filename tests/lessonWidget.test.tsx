@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  buildLessonExerciseHeader,
   buildLessonSubmissionMessage,
   buildLessonWrapupSubmissionMessage,
   buildRoundCompleteMessage,
@@ -66,6 +67,43 @@ describe("guided lesson widget", () => {
     expect(isLessonRenderCandidate({ active: true, widget: "lesson", phase: "lesson_exercise" })).toBe(false);
     expect(isLessonRenderCandidate({ resume: true })).toBe(false);
     expect(isLessonRenderCandidate(null)).toBe(false);
+  });
+
+  it("accepts English exact cloze prompts and rejects Chinese mixed-language blanks", () => {
+    const valid = {
+      widget: "lesson",
+      mode: "exercise" as const,
+      word: "empire",
+      progress: "6 / 6",
+      activity_type: "exact_cloze",
+      instruction: "根据语境填入目标词。提示：帝国；大型商业集团",
+      prompt: "After a series of acquisitions, the startup quickly grew into a vast media ___.",
+      multiline: false,
+    };
+    expect(lessonPayloadSchema.safeParse(valid).success).toBe(true);
+    expect(lessonPayloadSchema.safeParse({
+      ...valid,
+      prompt: valid.prompt + "（提示：帝国；大型商业集团）",
+    }).success).toBe(true);
+    expect(lessonPayloadSchema.safeParse({
+      ...valid,
+      prompt: valid.prompt + "（" + "帝".repeat(25) + "）",
+    }).success).toBe(false);
+    expect(lessonPayloadSchema.safeParse({
+      ...valid,
+      prompt: "经过一系列收购，这家初创公司迅速成长为一家庞大的媒体 ___。",
+    }).success).toBe(false);
+    expect(lessonPayloadSchema.safeParse({
+      ...valid,
+      prompt: "After a series of acquisitions, the startup quickly grew into a vast media empire.",
+    }).success).toBe(false);
+
+    expect(buildLessonExerciseHeader({
+      activityType: "exact_cloze",
+      wrapup: false,
+      progress: "6 / 6",
+      title: "empire",
+    })).toEqual({ eyebrow: "新词学习 · 6 / 6", heading: "填空练习" });
   });
 
   it("ignores every Lesson tool input", () => {

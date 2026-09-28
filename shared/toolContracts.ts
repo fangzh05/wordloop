@@ -21,11 +21,41 @@ export const fsrsRatingSchema = z.enum(FSRS_RATINGS);
 
 export const ACTIVITY_TYPES = [
   "pretest_cn_to_en", "pretest_en_definition", "translation_cn_to_en",
-  "translation_en_to_cn", "cloze", "derivation", "listening",
+  "translation_en_to_cn", "cloze", "exact_cloze", "derivation", "listening",
   "collocation", "sentence", "review", "recall",
 ] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 export const activityTypeSchema = z.enum(ACTIVITY_TYPES);
+
+/** The visible sentence must stay English-led; parenthetical Chinese hints are allowed. */
+export function isValidExactClozePrompt(prompt: string): boolean {
+  if ((prompt.match(/___/g) ?? []).length !== 1) return false;
+  const sentence = prompt
+    .replace(/\([^()]*\)|（[^（）]*）/g, " ")
+    .replace(/___/g, " ")
+    .trim();
+  const englishWords = sentence.match(/[A-Za-z]+(?:['’][A-Za-z]+)*/g) ?? [];
+  const parentheticalHints = [...prompt.matchAll(/\(([^()]*)\)|（([^（）]*)）/g)]
+    .map((match) => match[1] ?? match[2] ?? "")
+    .join(" ");
+  const chineseHintCharacters = parentheticalHints.match(/\p{Script=Han}/gu) ?? [];
+  return englishWords.length >= 6
+    && !/\p{Script=Han}/u.test(sentence)
+    && chineseHintCharacters.length <= 24
+    && /[.!?]["'’”]?$/.test(sentence);
+}
+
+/** Match the complete English target as a word or phrase, without matching substrings. */
+export function containsTargetWord(text: string, target: string): boolean {
+  const cleanTarget = target.trim();
+  if (!cleanTarget) return false;
+  const escapedTarget = cleanTarget.replace(/[.*+?^\x24()|[\]\\]/g, "\\$&");
+  const targetPattern = new RegExp(
+    "(^|[^\\p{L}\\p{N}])" + escapedTarget + "(?=$|[^\\p{L}\\p{N}])",
+    "iu",
+  );
+  return targetPattern.test(text);
+}
 
 export const PRETEST_ACTIVITY_TYPES = ["pretest_cn_to_en", "pretest_en_definition"] as const;
 export type PretestActivityType = (typeof PRETEST_ACTIVITY_TYPES)[number];
