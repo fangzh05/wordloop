@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
 import { ArrowIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
 import { gradeTargetWord } from "../grading/deterministic.js";
-import { callServerTool, getSamplingAvailability, sampleHostText, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
+import { callServerTool, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
 import {
   advanceStudySessionSchema,
   errorLayerSchema,
   fsrsRatingSchema,
+  normalizeReviewWidgetPayload,
   recordAttemptSchema,
   recordReviewSubmissionSchema,
   reviewAnswerSchema,
@@ -19,23 +19,15 @@ import {
   type RecordAttemptInput,
   type RecordReviewSubmissionInput,
   type ReviewAnswerInput,
+  type ReviewWidgetPayload,
 } from "../../../shared/toolContracts.js";
 
 const payloadSchema = reviewWidgetPayloadSchema;
-
-const gradeSchema = z.object({
-  is_correct: z.boolean(),
-  rating: fsrsRatingSchema,
-  error_layer: errorLayerSchema,
-  feedback: z.string().trim().min(1).max(120),
-});
-
-const gradeSystemPrompt = "你只负责批改一次独立英语词汇复习。只返回严格 JSON，不教学，不加 Markdown。";
 const REVIEW_AUTO_ADVANCE_MS = 450;
 const REVIEW_CORRECT_AUTO_ADVANCE_MS = 150;
 const REVIEW_SPELLING_AUTO_ADVANCE_MS = 900;
 
-type Payload = z.infer<typeof payloadSchema>;
+type Payload = ReviewWidgetPayload;
 export type ReviewItem = Payload["items"][number];
 type AnswerStatus = "idle" | "sending" | "sent" | "error";
 type GradedAnswer = {
@@ -99,21 +91,6 @@ export function buildReviewAnswerSubmission(
   return answer;
 }
 
-function parseGrade(raw: string): z.infer<typeof gradeSchema> {
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("ChatGPT 返回的批改格式无效，请重试。");
-  const parsed = gradeSchema.safeParse(JSON.parse(match[0]));
-  if (!parsed.success) throw new Error("ChatGPT 返回的批改格式无效，请重试。");
-  return parsed.data;
-}
-
-export function effectiveReviewDirection(
-  direction: ReviewItem["direction"],
-  samplingAvailable: boolean,
-): ReviewItem["direction"] {
-  return direction === "en_definition" && !samplingAvailable ? "cn_to_en" : direction;
-}
-
 export function shouldAdvanceFsrs(reviewKind: ReviewItem["review_kind"]): boolean {
   return reviewKind === "fsrs_due" || reviewKind === "both";
 }
@@ -154,13 +131,7 @@ export function reviewAutoAdvanceDelay(isCorrectOrErrorLayer: boolean | ErrorLay
   return isCorrect ? REVIEW_CORRECT_AUTO_ADVANCE_MS : REVIEW_AUTO_ADVANCE_MS;
 }
 
-function isSamplingCapabilityError(caught: unknown): boolean {
-  return caught instanceof Error
-    && /sampling unavailable|host capability missing|createSamplingMessage|sampling undefined/i.test(caught.message);
-}
-
 function reviewErrorMessage(caught: unknown): string {
-  if (isSamplingCapabilityError(caught)) return "暂时无法完成智能批改，请重试。";
   if (caught instanceof Error && /FSRS_CARD_NOT_DUE|FSRS card is not due/i.test(caught.message)) return "这张卡已经完成复习。";
   return caught instanceof Error ? caught.message : "答案未能提交，请重试。";
 }
@@ -171,15 +142,9 @@ function resultLabel(result: GradedAnswer): string {
 
 export function ReviewQuestion({ item }: { item: ReviewItem }): React.JSX.Element {
   return <div className="question-block">
-    {item.direction === "cn_to_en" ? <>
-      <span className="question-label">中 → 英</span>
-      {item.part_of_speech ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
-      <p className="question-prompt">{item.meaning_zh}</p>
-    </> : <>
-      <span className="question-label">英 → 英</span>
-      <p className="question-word">{item.word}</p>
-      {item.part_of_speech ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
-    </>}
+    <span className="question-label">中 → 英</span>
+    {item.part_of_speech ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
+    <p className="question-prompt">{item.meaning_zh}</p>
   </div>;
 }
 
@@ -193,16 +158,16 @@ export function ReviewWidget(): React.JSX.Element {
   const [results, setResults] = useState<GradedAnswer[]>([]);
   const [completed, setCompleted] = useState(false);
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
-  const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const answerRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
   const payloadSignatureRef = useRef("");
 
   function initializePayload(nextPayload: Payload, signature: string): void {
-    const persistedIndex = nextPayload.current_index ?? 0;
-    const isComplete = nextPayload.phase === "review_complete" || persistedIndex >= nextPayload.items.length;
-    setPayload(nextPayload);
-    setIndex(Math.min(persistedIndex, nextPayload.items.length - 1));
+    const safePayload = normalizeReviewWidgetPayload(nextPayload);
+    const persistedIndex = safePayload.current_index ?? 0;
+    const isComplete = safePayload.phase === "review_complete" || persistedIndex >= safePayload.items.length;
+    setPayload(safePayload);
+    setIndex(Math.min(persistedIndex, safePayload.items.length - 1));
     setAnswer("");
     setStatus("idle");
     setError("");
@@ -210,20 +175,6 @@ export function ReviewWidget(): React.JSX.Element {
     setResults([]);
     setCompleted(isComplete);
     setContinueStatus("idle");
-
-    if (!nextPayload.items.some((entry) => entry.direction === "en_definition")) return;
-    void getSamplingAvailability().then((available) => {
-      if (payloadSignatureRef.current !== signature) return;
-      setSamplingAvailable(available);
-      if (available) return;
-      setPayload((current) => current ? {
-        ...current,
-        items: current.items.map((entry) => ({
-          ...entry,
-          direction: effectiveReviewDirection(entry.direction, available),
-        })),
-      } : current);
-    });
   }
 
   useEffect(() => subscribeToApp((event) => {
@@ -233,11 +184,11 @@ export function ReviewWidget(): React.JSX.Element {
       : event.value.structuredContent;
     const parsed = payloadSchema.safeParse(candidate);
     if (!parsed.success) return;
-    const signature = JSON.stringify(parsed.data);
+    const safePayload = normalizeReviewWidgetPayload(parsed.data);
+    const signature = JSON.stringify(safePayload);
     if (payloadSignatureRef.current === signature) return;
     payloadSignatureRef.current = signature;
     setPayload(null);
-    setSamplingAvailable(null);
     setIndex(0);
     setAnswer("");
     setStatus("idle");
@@ -246,7 +197,7 @@ export function ReviewWidget(): React.JSX.Element {
     setResults([]);
     setCompleted(false);
     setContinueStatus("idle");
-    void initializePayload(parsed.data, signature);
+    void initializePayload(safePayload, signature);
   }), []);
 
   useEffect(() => {
@@ -274,18 +225,6 @@ export function ReviewWidget(): React.JSX.Element {
   }, [completed, payload, continueStatus]);
 
   const item = payload?.items[index];
-
-  function switchCurrentToChineseTest(): void {
-    setPayload((current) => current ? {
-      ...current,
-      items: current.items.map((entry, entryIndex) => entryIndex === index ? { ...entry, direction: "cn_to_en" } : entry),
-    } : current);
-    setSamplingAvailable(false);
-    setAnswer("");
-    setFeedback(null);
-    setStatus("idle");
-    setError("当前环境已切换为中→英测试。");
-  }
 
   async function persistReviewDraft(
     reviewItem: ReviewItem,
@@ -335,30 +274,7 @@ export function ReviewWidget(): React.JSX.Element {
     setStatus("sending");
     setError("");
     try {
-      let grade: z.infer<typeof gradeSchema> | ReturnType<typeof gradeReviewCnToEn>;
-      if (item.direction === "cn_to_en") {
-        grade = gradeReviewCnToEn(cleanAnswer, item.word);
-      } else if (window.__WORDLOOP_PREVIEW__) {
-        grade = {
-          is_correct: cleanAnswer.length > 0,
-          rating: "good" as const,
-          error_layer: "none" as const,
-          feedback: "结果已记录在卡片中。",
-        };
-      } else {
-        try {
-          grade = parseGrade(await sampleHostText(
-            `题型：英文单词 → 简单英文解释\n英文单词：${item.word}\n词性：${item.part_of_speech ?? ""}\n中文核心义（仅供判断，不要求照抄）：${item.meaning_zh}\n用户答案：${cleanAnswer}\n\n判定：用自然英文表达该词任意一个正确、常见核心义为 is_correct=true；语义方向正确但明显不完整可为 false 并标 meaning。不要要求字典原文、完整覆盖全部词义、固定句型或完整句子。正确答案时 rating 可为 hard/good/easy，错误答案必须为 again。用中文写一句不超过30字的反馈。只返回 {"is_correct":true,"rating":"good","error_layer":"none","feedback":"..."}。`,
-            gradeSystemPrompt,
-          ));
-        } catch (caught) {
-          if (isSamplingCapabilityError(caught)) {
-            switchCurrentToChineseTest();
-            return;
-          }
-          throw caught;
-        }
-      }
+      const grade = gradeReviewCnToEn(cleanAnswer, item.word);
       const graded = await persistReviewDraft(item, index, {
         user_answer: cleanAnswer,
         is_correct: grade.is_correct,
@@ -474,7 +390,7 @@ export function ReviewWidget(): React.JSX.Element {
           void submit();
         }
       }}
-      placeholder={item.direction === "cn_to_en" ? "输入英文单词…" : "用简单英文解释这个词…"}
+      placeholder="输入英文单词…"
       autoCapitalize="none"
       autoComplete="off"
       spellCheck={false}
