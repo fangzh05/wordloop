@@ -114,6 +114,15 @@ export const recordPretestResultSchema = z.object({
 });
 export type RecordPretestResultInput = z.output<typeof recordPretestResultSchema>;
 
+/** Manual classification is allowed only for the revealed result of a new-word Pretest. */
+export const pretestMarkFamiliarSchema = z.object({
+  action: z.literal("pretest_mark_familiar"),
+  word: z.string().trim().min(1).max(100),
+  current_index: z.number().int().min(0).max(6),
+  expected_revision: z.string().trim().min(1).max(80),
+}).strict();
+export type PretestMarkFamiliarInput = z.output<typeof pretestMarkFamiliarSchema>;
+
 export const reviewAnswerSchema = z.object({
   event: z.literal("review_answer"),
   word: z.string().trim().min(1).max(100),

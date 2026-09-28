@@ -4,6 +4,7 @@ import type { UserWordRow, VocabularyItem, WordStatus } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
 import { normalizeWord, prepareWordList } from "./wordNormalization.js";
 import { cardToDatabase, reviewLogToDatabase, scheduleReview } from "./fsrsScheduler.js";
+import { gradeExactRecall } from "../../web/src/grading/deterministic.js";
 
 interface RpcImportResult {
   date: string;
@@ -124,7 +125,7 @@ export async function recordPretestResult(input: {
   result: Extract<WordStatus, "known" | "uncertain" | "unknown">;
   user_answer?: string;
   activity_type?: "pretest_cn_to_en" | "pretest_en_definition";
-}, db = getDatabase(), userId = getAuthenticatedUserId()): Promise<{ word: string; result: string }> {
+}, db = getDatabase(), userId = getAuthenticatedUserId(), sessionStartedAt?: string): Promise<{ word: string; result: string }> {
   const normalizedWord = normalizeWord(input.word);
   const { data: joined, error: lookupError } = await db
     .from("user_words")
@@ -146,7 +147,66 @@ export async function recordPretestResult(input: {
     p_log: reviewLogToDatabase(scheduled.log),
   });
   assertDatabaseResult(error);
-  return data as { word: string; result: string };
+  const recorded = data as { word: string; result: string; already_recorded?: boolean };
+  const activityType = input.activity_type ?? "pretest_cn_to_en";
+  if (sessionStartedAt && activityType === "pretest_cn_to_en") {
+    const grade = gradeExactRecall(input.user_answer ?? "", normalizedWord);
+    const attemptQuery = await db
+      .from("attempts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("word_id", (joined as UserWordRow).word_id)
+      .eq("activity_type", activityType)
+      .eq("user_answer", input.user_answer ?? "")
+      .gte("created_at", sessionStartedAt)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    assertDatabaseResult(attemptQuery.error);
+    if (attemptQuery.data) {
+      const { data: updatedAttempt, error: updateAttemptError } = await db
+        .from("attempts")
+        .update({ is_correct: grade.is_correct, error_layer: grade.error_layer })
+        .eq("id", (attemptQuery.data as { id: string }).id)
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
+      assertDatabaseResult(updateAttemptError);
+      if (!updatedAttempt) throw new Error("PRETEST_ATTEMPT_NOT_FOUND");
+    } else if (!recorded.already_recorded) {
+      throw new Error("PRETEST_ATTEMPT_NOT_FOUND");
+    }
+  }
+  return recorded;
+}
+
+/** Mark a new-word Pretest item known without touching its attempt or FSRS card. */
+export async function markPretestWordKnown(
+  word: string,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<void> {
+  const normalizedWord = normalizeWord(word);
+  const { data: joined, error: lookupError } = await db
+    .from("user_words")
+    .select("id,status,word:words!inner(normalized_word)")
+    .eq("user_id", userId)
+    .eq("word.normalized_word", normalizedWord)
+    .single();
+  assertDatabaseResult(lookupError);
+  const row = joined as { id: string; status: string } | null;
+  if (!row?.id) throw new Error("PRETEST_WORD_NOT_FOUND");
+  if (row.status === "known") return;
+
+  const { data, error } = await db
+    .from("user_words")
+    .update({ status: "known" })
+    .eq("id", row.id)
+    .eq("user_id", userId)
+    .select("id,status")
+    .maybeSingle();
+  assertDatabaseResult(error);
+  if (!data) throw new Error("PRETEST_WORD_NOT_FOUND");
 }
 
 export async function getTodayWords(

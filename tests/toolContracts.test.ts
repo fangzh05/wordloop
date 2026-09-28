@@ -6,6 +6,7 @@ import {
   emptyToolArgsSchema,
   lessonNavigationSchema,
   lessonSubmissionSchema,
+  pretestMarkFamiliarSchema,
   recordAttemptSchema,
   recordPretestResultSchema,
   recordReviewSubmissionSchema,
@@ -15,7 +16,12 @@ import {
 } from "../shared/toolContracts.js";
 import { buildLessonSessionAdvance, buildLessonSubmissionMessage } from "../web/src/lesson/LessonWidget.js";
 import { buildDailyNewWordLimitRequest } from "../web/src/components/DailyNewWordControl.js";
-import { buildPretestActiveSessionRequest, buildPretestResultSubmission, buildPretestSessionAdvance } from "../web/src/pretest/PretestWidget.js";
+import {
+  buildPretestActiveSessionRequest,
+  buildPretestMarkFamiliarAction,
+  buildPretestResultSubmission,
+  buildPretestSessionAdvance,
+} from "../web/src/pretest/PretestWidget.js";
 import { buildReviewAnswerSubmission, buildReviewSubmission, gradeReviewCnToEn } from "../web/src/review/ReviewWidget.js";
 
 const reviewKinds = ["error_repair", "fsrs_due", "both"] as const;
@@ -139,6 +145,9 @@ describe("Widget to tool contracts", () => {
       const advance = buildPretestSessionAdvance(event, 1);
       expect(advanceStudySessionSchema.parse(advance)).toEqual(advance);
     }
+    const familiar = buildPretestMarkFamiliarAction("alleviate", 0, "2026-09-28T00:00:00.000Z");
+    expect(pretestMarkFamiliarSchema.parse(familiar)).toEqual(familiar);
+    expect(() => pretestMarkFamiliarSchema.parse({ ...familiar, rating: "good" })).toThrow();
   });
 
   it("keeps the server-owned Review payload bounded at 200 cards", () => {

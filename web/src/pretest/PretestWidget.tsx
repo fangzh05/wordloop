@@ -25,10 +25,12 @@ import {
   advanceStudySessionSchema,
   directionSchema,
   emptyToolArgsSchema,
+  pretestMarkFamiliarSchema,
   pretestResultSchema,
   recordPretestResultSchema,
   type AdvanceStudySessionInput,
   type EmptyToolArgs,
+  type PretestMarkFamiliarInput,
   type RecordPretestResultInput,
 } from "../../../shared/toolContracts.js";
 
@@ -45,6 +47,8 @@ const itemSchema = z.object({
 const payloadSchema = z.object({
   widget: z.literal("pretest"),
   items: z.array(itemSchema).min(1).max(7),
+  source: z.literal("new_word").default("new_word"),
+  revision: z.string().trim().min(1).max(80).optional(),
   phase: z.enum(["pretest", "pretest_result", "listen_repeat", "listen_recall", "pretest_complete"]).optional(),
   current_index: z.number().int().min(0).max(7).optional(),
   title: z.string().trim().min(1).max(100).optional(),
@@ -57,7 +61,7 @@ type AnswerStatus = "idle" | "sending" | "sent" | "error";
 type PronunciationStage = "result" | "listen_repeat" | "listen_recall" | "ready";
 export type PronunciationRecallOutcome = "correct" | "wrong";
 type RecallStatus = "idle" | PronunciationRecallOutcome;
-type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string };
+type GradedAnswer = { word: string; answer: string; result: PretestResult; feedback: string; familiar?: boolean };
 type PretestSessionEvent = "pretest_question" | "pretest_result" | "listen_repeat" | "listen_recall" | "pretest_complete";
 
 export const PRETEST_RECALL_CORRECT_ADVANCE_DELAY_MS = 600;
@@ -69,13 +73,17 @@ export function shouldApplyPronunciationAudioResult(currentSignature: string, re
 
 export function selectPronunciationWords(
   items: PretestItem[],
-  results: Array<{ word: string; result: PretestResult }>,
+  results: Array<{ word: string; result: PretestResult; familiar?: boolean }>,
 ): PretestItem[] {
-  const resultByWord = new Map(results.map((entry) => [normalizePretestWord(entry.word), entry.result]));
+  const resultByWord = new Map(results.map((entry) => [normalizePretestWord(entry.word), entry]));
   return items.filter((candidate) => {
     const result = resultByWord.get(normalizePretestWord(candidate.word));
-    return result !== undefined && result !== "known";
+    return result !== undefined && result.result !== "known" && result.familiar !== true;
   });
+}
+
+export function shouldOfferMarkFamiliar(source: string | undefined, result: PretestResult): boolean {
+  return source === "new_word" && result !== "known";
 }
 
 export function isExactPronunciationRecall(answer: string, target: string): boolean {
@@ -159,6 +167,19 @@ export function buildPretestSessionAdvance(
   return advanceStudySessionSchema.parse({
     event,
     ...(currentIndex === undefined ? {} : { current_index: currentIndex }),
+  });
+}
+
+export function buildPretestMarkFamiliarAction(
+  word: string,
+  currentIndex: number,
+  expectedRevision: string,
+): PretestMarkFamiliarInput {
+  return pretestMarkFamiliarSchema.parse({
+    action: "pretest_mark_familiar",
+    word,
+    current_index: currentIndex,
+    expected_revision: expectedRevision,
   });
 }
 
@@ -277,12 +298,6 @@ function parseGrade(raw: string): z.infer<typeof gradeSchema> {
   return parsed.data;
 }
 
-function resultStatus(result: PretestResult): string {
-  if (result === "known") return "✓ 已会";
-  if (result === "uncertain") return "△ 模糊";
-  return "× 不会";
-}
-
 export function PretestQuestion({ item }: { item: PretestItem }): React.JSX.Element {
   return <div className="question-block">
     {item.direction === "cn_to_en" ? <>
@@ -313,6 +328,8 @@ export function PretestWidget(): React.JSX.Element {
   const [recallAdvancing, setRecallAdvancing] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
   const [continueStatus, setContinueStatus] = useState<AnswerStatus>("idle");
+  const [resultTransitioning, setResultTransitioning] = useState(false);
+  const [showFamiliarHint, setShowFamiliarHint] = useState(true);
   const [samplingAvailable, setSamplingAvailable] = useState<boolean | null>(null);
   const [englishVoiceAvailable, setEnglishVoiceAvailable] = useState(false);
   const [dictionaryAudio, setDictionaryAudio] = useState<Record<string, string>>({});
@@ -323,10 +340,18 @@ export function PretestWidget(): React.JSX.Element {
   const recallAdvancingRef = useRef(false);
   const interactionStartedRef = useRef(false);
   const payloadSignatureRef = useRef("");
+  const revisionRef = useRef("");
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechAvailable = typeof window !== "undefined"
     && "speechSynthesis" in window
     && "SpeechSynthesisUtterance" in window;
+
+  function clearAdvanceTimer(): void {
+    if (advanceTimerRef.current !== null) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  }
 
   useEffect(() => {
     if (!speechAvailable) return;
@@ -338,13 +363,6 @@ export function PretestWidget(): React.JSX.Element {
     synthesis.addEventListener("voiceschanged", updateVoiceAvailability);
     return () => synthesis.removeEventListener("voiceschanged", updateVoiceAvailability);
   }, [speechAvailable]);
-
-  function clearAdvanceTimer(): void {
-    if (advanceTimerRef.current !== null) {
-      clearTimeout(advanceTimerRef.current);
-      advanceTimerRef.current = null;
-    }
-  }
 
   function focusInput(input: HTMLInputElement | null): void {
     if (typeof requestAnimationFrame === "function") {
@@ -366,6 +384,7 @@ export function PretestWidget(): React.JSX.Element {
     };
     setSamplingAvailable(available);
     setPayload(effectivePayload);
+    revisionRef.current = effectivePayload.revision ?? "";
     const requestSignature = signature;
     setDictionaryAudio({});
     setDictionaryReady(false);
@@ -396,6 +415,7 @@ export function PretestWidget(): React.JSX.Element {
     setRecallAdvancing(false);
     setContinueStatus("idle");
     setStatus("idle");
+    setShowFamiliarHint(true);
     interactionStartedRef.current = false;
     if (!window.__WORDLOOP_PREVIEW__) {
       void restoreSavedProgress(effectivePayload);
@@ -430,12 +450,16 @@ export function PretestWidget(): React.JSX.Element {
       setRecallAdvancing(false);
       setStatus("idle");
       setContinueStatus("idle");
+      setResultTransitioning(false);
       interactionStartedRef.current = false;
       void initializePayload(parsed.data, signature);
     });
     return () => {
       unsubscribe();
-      clearAdvanceTimer();
+      if (advanceTimerRef.current !== null) {
+        clearTimeout(advanceTimerRef.current);
+        advanceTimerRef.current = null;
+      }
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
   }, []);
@@ -450,20 +474,29 @@ export function PretestWidget(): React.JSX.Element {
       if (stored.isError) return;
       const context = z.object({
         active: z.boolean(),
+        revision: z.string().optional(),
         pretest_results: z.array(z.object({
           word: z.string(),
           status: z.string(),
+          user_answer: z.string().optional(),
+          is_correct: z.boolean().optional(),
+          error_layer: z.string().optional(),
         })).optional(),
       }).safeParse(stored.structuredContent);
       if (!context.success || !context.data.active || !context.data.pretest_results || interactionStartedRef.current) return;
+      revisionRef.current = context.data.revision ?? nextPayload.revision ?? "";
       const statusByWord = new Map(context.data.pretest_results.map((entry) => [normalizePretestWord(entry.word), entry.status]));
       const restored = nextPayload.items.flatMap((entry): GradedAnswer[] => {
-        const saved = statusByWord.get(normalizePretestWord(entry.word));
+        const savedEntry = context.data.pretest_results?.find((result) => normalizePretestWord(result.word) === normalizePretestWord(entry.word));
+        const saved = savedEntry?.status ?? statusByWord.get(normalizePretestWord(entry.word));
         if (!saved || saved === "new") return [];
         const result: PretestResult = saved === "known" || saved === "mastered"
           ? "known"
           : saved === "uncertain" ? "uncertain" : "unknown";
-        return [{ word: entry.word, answer: "", result, feedback: "已从 Wordloop 恢复。" }];
+        const restoredFeedback = savedEntry?.is_correct && savedEntry.error_layer === "spelling"
+          ? "拼写接近目标词。"
+          : "已从 Wordloop 恢复。";
+        return [{ word: entry.word, answer: savedEntry?.user_answer ?? "", result, feedback: restoredFeedback }];
       });
       setResults(restored);
       const persistedIndex = nextPayload.current_index ?? 0;
@@ -473,6 +506,16 @@ export function PretestWidget(): React.JSX.Element {
         setFinished(true);
         setStage("ready");
         setPronunciationIndex(0);
+        return;
+      }
+      if (nextPayload.phase === "pretest_result") {
+        const current = restored.find((entry) => normalizePretestWord(entry.word) === normalizePretestWord(nextPayload.items[persistedIndex]?.word ?? ""));
+        setIndex(Math.min(persistedIndex, nextPayload.items.length - 1));
+        setFinished(false);
+        setStage("result");
+        setFeedback(current ?? null);
+        setAnswer(current?.answer ?? "");
+        setStatus(current ? "sent" : "idle");
         return;
       }
       if (nextPayload.phase && nextPayload.phase !== "pretest") {
@@ -500,10 +543,13 @@ export function PretestWidget(): React.JSX.Element {
     }
   }
 
-  async function advanceSession(event: PretestSessionEvent, currentIndex?: number): Promise<void> {
-    if (window.__WORDLOOP_PREVIEW__) return;
+  async function advanceSession(event: PretestSessionEvent, currentIndex?: number): Promise<Record<string, unknown>> {
+    if (window.__WORDLOOP_PREVIEW__) return {};
     const result = await callServerTool("advance_study_session", buildPretestSessionAdvance(event, currentIndex));
     if (result.isError) throw new Error("学习阶段保存失败，请重试。");
+    const response = z.object({ revision: z.string().optional() }).passthrough().safeParse(result.structuredContent);
+    if (response.success && response.data.revision) revisionRef.current = response.data.revision;
+    return response.success ? response.data : {};
   }
 
   function switchCurrentToChineseTest(): void {
@@ -560,29 +606,99 @@ export function PretestWidget(): React.JSX.Element {
       if (stored.isError) throw new Error("结果未能保存，请重试。");
     }
     const graded: GradedAnswer = { word: item.word, answer: cleanAnswer, ...grade };
+    await advanceSession("pretest_result", index);
     setResults((current) => [...current.filter((entry) => entry.word !== item.word), graded]);
     setFeedback(graded);
     setStatus("sent");
-    const isLast = index === payload.items.length - 1;
-    schedulePretestAdvance(advanceTimerRef, async () => {
-      try {
-        if (isLast) {
-          await advanceSession("pretest_result", index);
+  }
+
+  async function continueAfterResult(): Promise<void> {
+    if (!payload || !feedback || status !== "sent" || resultTransitioning) return;
+    setResultTransitioning(true);
+    setShowFamiliarHint(false);
+    setError("");
+    try {
+      if (index === payload.items.length - 1) {
+        setFinished(true);
+        setStage("result");
+        setFeedback(null);
+        setAnswer("");
+        setStatus("idle");
+      } else {
+        await advanceSession("pretest_question", index + 1);
+        setIndex((value) => value + 1);
+        setFeedback(null);
+        setAnswer("");
+        setStatus("idle");
+        focusInput(answerRef.current);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "学习阶段保存失败，请重试。");
+    } finally {
+      setResultTransitioning(false);
+    }
+  }
+
+  async function markCurrentFamiliar(): Promise<void> {
+    if (!payload || !feedback || !shouldOfferMarkFamiliar(payload.source, feedback.result) || status !== "sent" || resultTransitioning) return;
+    if (!revisionRef.current) {
+      setError("学习阶段版本已过期，请重新打开当前预测试后再试。");
+      return;
+    }
+    setResultTransitioning(true);
+    setShowFamiliarHint(false);
+    setError("");
+    try {
+      if (!window.__WORDLOOP_PREVIEW__) {
+        const response = await callServerTool("pretest_mark_familiar", buildPretestMarkFamiliarAction(feedback.word, index, revisionRef.current));
+        if (response.isError) throw new Error("熟词标记未能保存，请重试。");
+        const parsed = z.object({
+          action: z.literal("pretest_mark_familiar"),
+          word: z.string(),
+          phase: z.string(),
+          current_word: z.string().nullable(),
+          current_index: z.number().int().min(0),
+          revision: z.string(),
+        }).safeParse(response.structuredContent);
+        if (!parsed.success) throw new Error("熟词标记响应无效，请重新打开当前预测试。");
+        revisionRef.current = parsed.data.revision;
+        setResults((current) => current.map((entry) => normalizePretestWord(entry.word) === normalizePretestWord(feedback.word)
+          ? { ...entry, result: "known", familiar: true, feedback: "已标记为熟词。" }
+          : entry));
+        if (parsed.data.current_index > index) {
+          setIndex(parsed.data.current_index);
+          setFeedback(null);
+          setAnswer("");
+          setStatus("idle");
+          setFinished(false);
+          setStage("result");
+          focusInput(answerRef.current);
+        } else {
+          setFinished(true);
+          setStage("result");
+          setFeedback(null);
+          setAnswer("");
+          setStatus("idle");
+        }
+      } else {
+        setResults((current) => current.map((entry) => normalizePretestWord(entry.word) === normalizePretestWord(feedback.word)
+          ? { ...entry, result: "known", familiar: true, feedback: "已标记为熟词。" }
+          : entry));
+        if (index === payload.items.length - 1) {
           setFinished(true);
           setStage("result");
         } else {
-          await advanceSession("pretest_question", index + 1);
           setIndex((value) => value + 1);
-          focusInput(answerRef.current);
         }
         setFeedback(null);
         setAnswer("");
         setStatus("idle");
-      } catch (caught) {
-        setStatus("error");
-        setError(caught instanceof Error ? caught.message : "学习阶段保存失败，请重试。");
       }
-    });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "熟词标记未能保存，请重试。");
+    } finally {
+      setResultTransitioning(false);
+    }
   }
 
   async function markUnknown(): Promise<void> {
@@ -714,9 +830,9 @@ export function PretestWidget(): React.JSX.Element {
 
   const currentItem = payload.items[index];
   const resultCounts = {
-    known: results.filter((entry) => entry.result === "known").length,
-    uncertain: results.filter((entry) => entry.result === "uncertain").length,
-    unknown: results.filter((entry) => entry.result === "unknown").length,
+    known: results.filter((entry) => entry.result === "known" || entry.familiar).length,
+    uncertain: results.filter((entry) => entry.result === "uncertain" && !entry.familiar).length,
+    unknown: results.filter((entry) => entry.result === "unknown" && !entry.familiar).length,
   };
   const pronunciationWords = selectPronunciationWords(payload.items, results);
   const currentPronunciation = pronunciationWords[pronunciationIndex];
@@ -871,36 +987,46 @@ export function PretestWidget(): React.JSX.Element {
       <span style={{ width: String(percent) + "%" }} />
     </div>
     <PretestQuestion item={currentItem} />
-    <label className="answer-label" htmlFor="pretest-answer">你的答案</label>
-    <input
-      ref={answerRef}
-      id="pretest-answer"
-      className="answer-input"
-      type="text"
-      value={answer}
-      onChange={(event) => setAnswer(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          void submit();
-        }
-      }}
-      placeholder={isChineseToEnglish ? "输入英文单词…" : "用简单英文解释这个词…"}
-      autoCapitalize="none"
-      autoComplete="off"
-      spellCheck={false}
-      enterKeyHint="send"
-      disabled={status === "sending" || status === "sent"}
-    />
     {error ? <p className="error-text" role={status === "error" ? "alert" : "status"}>{error}</p> : null}
-    {feedback ? <div className={"inline-feedback status-only " + feedback.result} role="status"><strong>{resultStatus(feedback.result)}</strong></div> : null}
-    <div className="pretest-actions">
-      {status !== "sent" ? <>
+    {status === "sent" && feedback ? <div className="pretest-reveal" role="status">
+      <p>你的答案：<strong>{feedback.answer || "未作答"}</strong></p>
+      <p>正确答案：<strong>{feedback.word}</strong></p>
+      <p className="pretest-reveal-feedback">{feedback.feedback}</p>
+      <div className="pretest-actions result-actions">
+        <Button onClick={() => void continueAfterResult()} disabled={resultTransitioning}>继续学习</Button>
+        {shouldOfferMarkFamiliar(payload.source, feedback.result) ? <div className="familiar-action-wrap">
+          <Button className="secondary familiar-action" onClick={() => void markCurrentFamiliar()} disabled={resultTransitioning}>我本来会这个词</Button>
+          {showFamiliarHint ? <small>标记后将跳过本轮新词学习，但未来仍可能正常复习。</small> : null}
+        </div> : null}
+      </div>
+    </div> : <>
+      <label className="answer-label" htmlFor="pretest-answer">你的答案</label>
+      <input
+        ref={answerRef}
+        id="pretest-answer"
+        className="answer-input"
+        type="text"
+        value={answer}
+        onChange={(event) => setAnswer(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void submit();
+          }
+        }}
+        placeholder={isChineseToEnglish ? "输入英文单词…" : "用简单英文解释这个词…"}
+        autoCapitalize="none"
+        autoComplete="off"
+        spellCheck={false}
+        enterKeyHint="send"
+        disabled={status === "sending"}
+      />
+      <div className="pretest-actions">
         <Button className="secondary unknown-action" onClick={() => void markUnknown()} disabled={status === "sending"}>不会</Button>
         <Button onClick={() => void submit()} disabled={!answer.trim() || status === "sending"}>
           {status === "sending" ? "正在保存…" : "提交"}
         </Button>
-      </> : null}
-    </div>
+      </div>
+    </>}
   </section>;
 }

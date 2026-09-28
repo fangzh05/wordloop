@@ -173,6 +173,13 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .pretest-actions .button { flex: 1; }
 .pretest-actions .button.unknown-action { flex: 0 0 5.5rem; color: var(--text); background: var(--control); }
 .pretest-actions .button.unknown-action:hover:not(:disabled), .pretest-actions .button.unknown-action:active:not(:disabled) { background: var(--control-hover); }
+.pretest-reveal { display: grid; gap: 0.4rem; margin-top: 1rem; color: var(--muted); font-size: 0.95rem; }
+.pretest-reveal p { margin: 0; }
+.pretest-reveal strong { color: var(--text); }
+.pretest-reveal-feedback { padding-top: 0.2rem; }
+.pretest-actions.result-actions { align-items: flex-start; margin-top: 0.8rem; }
+.familiar-action-wrap { display: grid; justify-items: start; gap: 0.3rem; }
+.familiar-action-wrap small { color: var(--muted); font-size: 0.75rem; line-height: 1.35; }
 .compact-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.8rem; }
 .compact-header > div { min-width: 0; }
 .focus-control { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.45rem; }

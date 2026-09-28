@@ -813,7 +813,12 @@ describe("durable study session state", () => {
     expect(isLegacyCompletedPretestState(legacy)).toBe(true);
     expect(normalizeStudyStateForRead(legacy)).toMatchObject({ phase: "pretest_complete", current_word: null, current_index: 2 });
     expect(isLegacyCompletedPretestState(inProgress)).toBe(false);
-    expect(normalizeStudyStateForRead(inProgress)).toBe(inProgress);
+    expect(normalizeStudyStateForRead(inProgress)).toMatchObject({
+      widget: "pretest",
+      current_index: 1,
+      current_word: "planet",
+      payload: { source: "new_word" },
+    });
   });
 
   it("returns only the durable session summary", () => {

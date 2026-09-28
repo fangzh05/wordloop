@@ -324,7 +324,10 @@ function resumablePayload(session: StudySessionRow | null, widget: StudyState["w
   if (!state || state.widget !== widget) {
     throw new Error(`No resumable active ${widget} study session.`);
   }
-  return widgetPayloadWithState(state.payload, state);
+  return {
+    ...widgetPayloadWithState(state.payload, state),
+    ...(widget === "pretest" && session ? { revision: session.updated_at } : {}),
+  };
 }
 
 export async function resumableLessonPayload(session: StudySessionRow | null): Promise<Record<string, unknown>> {
@@ -384,8 +387,11 @@ async function saveWidgetState(input: {
     flow: flow ?? knownActive?.state?.flow,
     ...stateInput,
   });
-  await persistStudyState(state, getDatabase(), getAuthenticatedUserId(), knownActive);
-  return widgetPayloadWithState(input.payload, state);
+  const persisted = await persistStudyState(state, getDatabase(), getAuthenticatedUserId(), knownActive);
+  return {
+    ...widgetPayloadWithState(persisted.state?.payload ?? input.payload, persisted.state ?? state),
+    ...(input.widget === "pretest" ? { revision: persisted.updated_at } : {}),
+  };
 }
 
 function lessonRenderIndex(
@@ -543,9 +549,14 @@ async function validateLessonWord(
   const date = await getStudyDate();
   const todayWords = await getTodayWords(date);
   const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
-  const lessonWords = buildLessonWords([], todayWords, completedTodayLessonWords);
+  const lessonWords = buildLessonWords(
+    [],
+    todayWords,
+    completedTodayLessonWords,
+    active?.state?.flow.pretest_familiar_words,
+  );
   assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
-  return { date, active: null, flow: { relearn_words: [], lesson_words: lessonWords } };
+  return { date, active: null, flow: { relearn_words: [], pretest_familiar_words: [], lesson_words: lessonWords } };
 }
 
 export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): ReviewWidgetItem {
@@ -653,7 +664,7 @@ export function registerRenderTools(server: McpServer): void {
     const active = await getActiveStudySession();
     const todayWords = await getTodayWords(date);
     const items = validatePretestItems(parsedInput.items, todayWords);
-    const payload = { widget: "pretest", ...parsedInput, items };
+    const payload = { widget: "pretest", ...parsedInput, source: "new_word", items };
     return saveWidgetState({
       date,
       knownActive: active,

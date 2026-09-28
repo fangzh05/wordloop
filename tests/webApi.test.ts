@@ -1048,7 +1048,7 @@ describe("Standalone Web API shared-state boundaries", () => {
         payload: { items: Array.from({ length: 6 }, (_, index) => ({ word: `new-word-${index + 1}` })) },
       },
     });
-    expect(payload.state.flow).toEqual({ relearn_words: [] });
+    expect(payload.state.flow).toEqual({ relearn_words: [], pretest_familiar_words: [] });
     expect(mocks.generateLesson).not.toHaveBeenCalled();
     expect(vi.mocked(sessions.freezeLessonQueueForSession)).not.toHaveBeenCalled();
     expect(mocks.getTodayWords).toHaveBeenCalledWith(date, {}, userId);

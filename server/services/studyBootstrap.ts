@@ -95,7 +95,12 @@ async function continueCompletedReview(
 
   if (deferLessonQueueFreeze) {
     const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
-    const lessonWords = buildLessonWords(active.state?.flow?.relearn_words ?? [], todayWords, completedTodayLessonWords);
+    const lessonWords = buildLessonWords(
+      active.state?.flow?.relearn_words ?? [],
+      todayWords,
+      completedTodayLessonWords,
+      active.state?.flow?.pretest_familiar_words,
+    );
     return lessonAction(lessonWords, db, userId, true);
   }
 
@@ -120,7 +125,12 @@ export async function continueCompletedPretest(
   const todayWords = await getTodayWords(date, db, userId);
   if (deferLessonQueueFreeze) {
     const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
-    const lessonWords = buildLessonWords(active.state?.flow?.relearn_words ?? [], todayWords, completedTodayLessonWords);
+    const lessonWords = buildLessonWords(
+      active.state?.flow?.relearn_words ?? [],
+      todayWords,
+      completedTodayLessonWords,
+      active.state?.flow?.pretest_familiar_words,
+    );
     const planned = await lessonAction(lessonWords, db, userId, true);
     if (planned.action === "lesson") return planned;
     const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);

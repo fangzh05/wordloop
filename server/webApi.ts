@@ -404,7 +404,12 @@ async function createLessonFromBootstrap(
         getTodayWords(state.date, db, userId),
         getTodayCompletedLessonWords(db, userId),
       ]);
-      lessonWords = buildLessonWords(state.flow.relearn_words, todayWords, completedTodayLessonWords);
+      lessonWords = buildLessonWords(
+        state.flow.relearn_words,
+        todayWords,
+        completedTodayLessonWords,
+        state.flow.pretest_familiar_words,
+      );
     }
     const currentFlow = { ...state.flow, lesson_words: lessonWords };
     const firstWord = lessonWordAt(lessonWords ?? [], 0);

@@ -92,6 +92,16 @@ describe("durable Lesson queue invariant", () => {
     expect(buildLessonWords(["EMBARK", "embark"], [item("embark", "unknown")], completedToday)).toEqual(["embark"]);
   });
 
+  it("lets a current-session familiar override suppress relearn and uncertain new-word routing", () => {
+    expect(buildLessonWords(
+      ["alleviate", "recur"],
+      [item("alleviate", "unknown"), item("recur", "uncertain"), item("other", "unknown")],
+      new Set(),
+      ["alleviate", "recur"],
+    )).toEqual(["other"]);
+    expect(buildLessonWords([], [item("alleviate", "known")], new Set(), ["alleviate"])).toEqual([]);
+  });
+
   it("recovers pending relearn words that were before a legacy current cursor", () => {
     const recovered = recoverLegacyLessonWords({
       relearnWords: ["expression", "planet", "shrink"],
