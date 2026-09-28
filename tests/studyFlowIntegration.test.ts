@@ -206,10 +206,15 @@ describe("complete WordLoop study flow", () => {
     ];
     bootstrapMocks.getActiveStudySession.mockImplementation(async () => active);
     bootstrapMocks.ensureTodayQueue.mockResolvedValue({ date, prepared: 3, added: 3 });
-    bootstrapMocks.getDueReviewSelection.mockResolvedValue({
-      rollingReview: [vocabulary("a", "review"), vocabulary("b", "review")],
-      oldRandomReview: [],
-    });
+    bootstrapMocks.getDueReviewSelection
+      .mockResolvedValueOnce({
+        rollingReview: [
+          { ...vocabulary("a", "review"), next_review_at: "2026-09-16T00:00:00Z" },
+          { ...vocabulary("b", "review"), next_review_at: "2026-09-16T00:00:00Z" },
+        ],
+        oldRandomReview: [],
+      })
+      .mockResolvedValue({ rollingReview: [], oldRandomReview: [] });
     bootstrapMocks.getTodayWords.mockResolvedValue(pretestWords);
     bootstrapMocks.getVocabularyItemsByWords.mockImplementation(async (words: string[]) => words.map((word) => vocabulary(word, "unknown")));
     bootstrapMocks.freezeLessonQueueForSession.mockImplementation(async (session: StudySessionRow, words: VocabularyItem[]) => {

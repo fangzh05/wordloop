@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   buildReviewWidgetPayload: vi.fn(),
   recordAttempt: vi.fn(),
   getTodayCompletedLessonWords: vi.fn(async () => new Set<string>()),
+  getDueReviewSelection: vi.fn(),
   recordReviewSubmission: vi.fn(),
   finishStudySession: vi.fn(),
   generateLesson: vi.fn(),
@@ -95,6 +96,10 @@ vi.mock("../server/services/attempts.js", () => ({
   recordAttempt: mocks.recordAttempt,
   getTodayCompletedLessonWords: mocks.getTodayCompletedLessonWords,
 }));
+vi.mock("../server/services/review.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/services/review.js")>();
+  return { ...actual, getDueReviewSelection: mocks.getDueReviewSelection };
+});
 vi.mock("../server/services/fsrsReviews.js", () => ({ recordReviewSubmission: mocks.recordReviewSubmission }));
 vi.mock("../server/services/deepseek.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/deepseek.js")>("../server/services/deepseek.js");
@@ -173,6 +178,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.token = "web-test-token";
     mocks.getProgress.mockResolvedValue({ today: { completed: 0, total: 1 } });
     mocks.getPretestResults.mockResolvedValue([]);
+    mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [], oldRandomReview: [] });
     mocks.getPronunciationAudio.mockResolvedValue({ words: [] });
     mocks.recordAttempt.mockResolvedValue(undefined);
     mocks.recordPretestResult.mockResolvedValue(undefined);

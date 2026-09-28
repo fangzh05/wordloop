@@ -44,11 +44,15 @@ vi.mock("../server/db.js", () => ({
 vi.mock("../server/services/dailyQueue.js", () => ({
   ensureTodayQueue: mocks.ensureTodayQueue,
 }));
-vi.mock("../server/services/review.js", () => ({
-  getDueReviewSelection: mocks.getDueReviewSelection,
-  getFirstSessionLearningWord: mocks.getFirstSessionLearningWord,
-  findFirstLearningWord: mocks.findFirstLearningWord,
-}));
+vi.mock("../server/services/review.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/services/review.js")>();
+  return {
+    ...actual,
+    getDueReviewSelection: mocks.getDueReviewSelection,
+    getFirstSessionLearningWord: mocks.getFirstSessionLearningWord,
+    findFirstLearningWord: mocks.findFirstLearningWord,
+  };
+});
   vi.mock("../server/services/words.js", () => ({
     getTodayWords: mocks.getTodayWords,
     getVocabularyItemsByWords: mocks.getVocabularyItemsByWords,
