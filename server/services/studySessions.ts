@@ -3,13 +3,15 @@ import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import {
   REVIEW_SESSION_MAX,
+  pretestMarkFamiliarSchema,
   reviewAnswerSchema,
   reviewWidgetItemSchema,
+  type PretestMarkFamiliarInput,
   type ReviewAnswerInput,
 } from "../../shared/toolContracts.js";
 import type { StudyFlow, StudyPhase, StudySessionEvent, StudySessionRow, StudyState, StudyWidget, VocabularyItem } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone } from "./shared.js";
-import { getTodayWords, getUserTimeZone } from "./words.js";
+import { getTodayWords, getUserTimeZone, markPretestWordKnown } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
 import {
   buildLessonWords,
@@ -27,8 +29,9 @@ const lessonExerciseSchema = z.object({
 });
 const studyFlowSchema = z.object({
   relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX),
+  pretest_familiar_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX).default([]),
   lesson_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX).optional(),
-}).strict().default({ relearn_words: [] });
+}).strict().default({ relearn_words: [], pretest_familiar_words: [] });
 const reviewSessionPayloadSchema = z.object({
   widget: z.literal("review"),
   items: z.array(reviewWidgetItemSchema).min(1).max(REVIEW_SESSION_MAX),
@@ -115,7 +118,7 @@ async function updateSessionState(
   userId: string,
 ): Promise<StudySessionRow> {
   const nextState = assertState(state);
-  const updatedAt = new Date().toISOString();
+  const updatedAt = nextSessionRevision(session.updated_at);
   const { data, error } = await db
     .from("study_sessions")
     .update({ state: nextState, updated_at: updatedAt })
@@ -195,6 +198,36 @@ export async function persistStudyState(
   return parseSession(data);
 }
 
+function nextSessionRevision(previous: string): string {
+  const previousTime = Date.parse(previous);
+  return new Date(Math.max(Date.now(), Number.isFinite(previousTime) ? previousTime + 1 : 0)).toISOString();
+}
+
+async function updateSessionStateAtRevision(
+  session: StudySessionRow,
+  state: StudyState,
+  expectedRevision: string,
+  db: StudySessionDb,
+  userId: string,
+): Promise<StudySessionRow | null> {
+  const nextState = assertState(state);
+  const { data, error } = await db
+    .from("study_sessions")
+    .update({
+      state: nextState,
+      new_words_count: session.new_words_count + 1,
+      updated_at: nextSessionRevision(session.updated_at),
+    })
+    .eq("id", session.id)
+    .eq("user_id", userId)
+    .is("ended_at", null)
+    .eq("updated_at", expectedRevision)
+    .select(sessionColumns)
+    .maybeSingle();
+  assertStudySessionDatabaseResult(error);
+  return data ? parseSession(data) : null;
+}
+
 /** Freeze the first Lesson queue for an existing study flow. */
 export async function freezeLessonQueueForSession(
   session: StudySessionRow,
@@ -204,7 +237,11 @@ export async function freezeLessonQueueForSession(
 ): Promise<StudySessionRow> {
   const state = session.state;
   if (!state || state.flow.lesson_words !== undefined) return session;
-  const lessonWords = buildLessonWords(state.flow.relearn_words, todayWords);
+  const lessonWords = buildLessonWords(
+    state.flow.relearn_words,
+    todayWords,
+    state.flow.pretest_familiar_words,
+  );
   if (lessonWords.length === 0) return session;
   return persistStudyState({
     ...state,
@@ -261,6 +298,7 @@ export async function normalizeLegacyLessonSession(
     todayWords,
     attemptWords,
     currentWord: state.current_word,
+    excludedWords: state.flow.pretest_familiar_words,
   });
   if (lessonWords.length === 0) throw new Error("LESSON_QUEUE_EMPTY");
 
@@ -312,6 +350,9 @@ export function isLegacyCompletedPretestState(state: StudyState): boolean {
 }
 
 export function normalizeStudyStateForRead(state: StudyState): StudyState {
+  if (state.widget === "pretest" && state.payload.source === undefined) {
+    state = { ...state, payload: { ...state.payload, source: "new_word" } };
+  }
   if (isLegacyCompletedPretestState(state)) {
     return {
       ...state,
@@ -466,6 +507,111 @@ export function makeStudyState(input: {
   return assertState({ version: 1, flow: { relearn_words: [] }, ...input });
 }
 
+function hasPretestFamiliarWord(state: StudyState, word: string): boolean {
+  const normalized = normalizeWord(word);
+  return (state.flow.pretest_familiar_words ?? []).some((entry) => normalizeWord(entry) === normalized);
+}
+
+async function getPretestWordStatus(
+  word: string,
+  db: StudySessionDb,
+  userId: string,
+): Promise<string> {
+  const { data, error } = await db
+    .from("user_words")
+    .select("status,word:words!inner(normalized_word)")
+    .eq("user_id", userId)
+    .eq("word.normalized_word", word)
+    .maybeSingle();
+  assertStudySessionDatabaseResult(error);
+  if (!data || typeof data.status !== "string") throw new Error("PRETEST_WORD_NOT_FOUND");
+  return data.status;
+}
+
+function pretestFamiliarResult(session: StudySessionRow, markedWord: string): {
+  action: "pretest_mark_familiar";
+  word: string;
+  phase: StudyPhase;
+  current_word: string | null;
+  current_index: number;
+  revision: string;
+} {
+  const state = session.state;
+  if (!state) throw new Error("No resumable active study session.");
+  return {
+    action: "pretest_mark_familiar",
+    word: markedWord,
+    phase: state.phase,
+    current_word: state.current_word,
+    current_index: state.current_index,
+    revision: session.updated_at,
+  };
+}
+
+/**
+ * Correct the current new-word classification after its answer is revealed.
+ * The session revision and the session-scoped marker make cursor movement and
+ * the new-word counter a single idempotent compare-and-swap operation.
+ */
+export async function markPretestFamiliar(
+  input: PretestMarkFamiliarInput,
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<ReturnType<typeof pretestFamiliarResult>> {
+  const parsed = pretestMarkFamiliarSchema.parse(input);
+  const word = normalizeWord(parsed.word);
+  const active = await getActiveStudySession(db, userId);
+  if (!active?.state || active.state.widget !== "pretest") {
+    throw new Error("PRETEST_SESSION_NOT_ACTIVE");
+  }
+  const state = normalizeStudyStateForRead(active.state);
+  if (state.payload.source !== "new_word") throw new Error("PRETEST_FAMILIAR_SOURCE_NOT_ALLOWED");
+
+  if (hasPretestFamiliarWord(state, word)) {
+    await markPretestWordKnown(word, db, userId);
+    return pretestFamiliarResult({ ...active, state }, word);
+  }
+
+  if (active.updated_at !== parsed.expected_revision) throw new Error("STUDY_SESSION_REVISION_MISMATCH");
+  if (state.phase !== "pretest_result"
+    || state.current_index !== parsed.current_index
+    || state.flow.lesson_words !== undefined
+    || !state.current_word
+    || normalizeWord(state.current_word) !== word) {
+    throw new Error("PRETEST_FAMILIAR_CURSOR_MISMATCH");
+  }
+  const pretestStatus = await getPretestWordStatus(word, db, userId);
+  if (pretestStatus === "known") throw new Error("PRETEST_FAMILIAR_ALREADY_KNOWN");
+  if (pretestStatus !== "uncertain" && pretestStatus !== "unknown") {
+    throw new Error("PRETEST_FAMILIAR_RESULT_NOT_ELIGIBLE");
+  }
+
+  const itemCount = pretestItemCount(state.payload);
+  const markedWords = [...(state.flow.pretest_familiar_words ?? []), word];
+  const advanced = parsed.current_index + 1 < itemCount
+    ? advanceStudyState(state, "pretest_question", parsed.current_index + 1)
+    : state;
+  const nextState = assertState({
+    ...advanced,
+    flow: {
+      ...advanced.flow,
+      relearn_words: advanced.flow.relearn_words.filter((entry) => normalizeWord(entry) !== word),
+      pretest_familiar_words: markedWords,
+    },
+  });
+  let updated = await updateSessionStateAtRevision(active, nextState, parsed.expected_revision, db, userId);
+  if (!updated) {
+    const winner = await getActiveStudySession(db, userId);
+    if (!winner?.state || winner.state.widget !== "pretest"
+      || !hasPretestFamiliarWord(normalizeStudyStateForRead(winner.state), word)) {
+      throw new Error("STUDY_SESSION_REVISION_MISMATCH");
+    }
+    updated = winner;
+  }
+  await markPretestWordKnown(word, db, userId);
+  return pretestFamiliarResult(updated, word);
+}
+
 export function advanceStudyState(
   state: StudyState,
   event: StudySessionEvent,
@@ -611,7 +757,7 @@ export async function getPretestResults(
   session: StudySessionRow | null,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
-): Promise<Array<{ word: string; status: string }>> {
+): Promise<Array<{ word: string; status: string; user_answer?: string; is_correct?: boolean; error_layer?: string }>> {
   if (!session?.state || session.state.widget !== "pretest") return [];
   const parsedItems = pretestItemsSchema.safeParse(session.state.payload.items);
   if (!parsedItems.success) return [];
@@ -619,28 +765,65 @@ export async function getPretestResults(
   if (words.length === 0) return [];
   const { data, error } = await db
     .from("user_words")
-    .select("status,word:words!inner(normalized_word)")
+    .select("id,status,word:words!inner(normalized_word)")
     .eq("user_id", userId)
     .in("word.normalized_word", words);
   assertStudySessionDatabaseResult(error);
-  type ResultRow = { status: string; word: { normalized_word: string } | Array<{ normalized_word: string }> };
-  const byWord = new Map(((data ?? []) as unknown as ResultRow[]).map((row) => {
+  type ResultRow = { id: string; status: string; word: { normalized_word: string } | Array<{ normalized_word: string }> };
+  const userWords = (data ?? []) as unknown as ResultRow[];
+  const normalizedById = new Map(userWords.map((row) => {
     const word = Array.isArray(row.word) ? row.word[0]?.normalized_word : row.word.normalized_word;
-    return [word, row.status] as const;
+    return [row.id, word] as const;
   }));
+  let attempts: unknown[] = [];
+  if (userWords.length > 0) {
+    const result = await db
+      .from("attempts")
+      .select("word_id,user_answer,is_correct,error_layer,activity_type,created_at")
+      .eq("user_id", userId)
+      .in("word_id", userWords.map((row) => row.id))
+      .in("activity_type", ["pretest_cn_to_en", "pretest_en_definition"])
+      .gte("created_at", session.started_at)
+      .order("created_at", { ascending: false });
+    assertStudySessionDatabaseResult(result.error);
+    attempts = result.data ?? [];
+  }
+  type AttemptRow = { word_id: string; user_answer: string; is_correct: boolean; error_layer: string; activity_type: string };
+  const attemptByWord = new Map<string, AttemptRow>();
+  for (const attempt of (attempts ?? []) as AttemptRow[]) {
+    const word = normalizedById.get(attempt.word_id);
+    if (word && !attemptByWord.has(word)) attemptByWord.set(word, attempt);
+  }
   return words.flatMap((word) => {
-    const status = byWord.get(word);
-    return status ? [{ word, status }] : [];
+    const row = userWords.find((entry) => normalizedById.get(entry.id) === word);
+    if (!row) return [];
+    const attempt = attemptByWord.get(word);
+    return [{
+      word,
+      status: row.status,
+      ...(attempt ? {
+        user_answer: attempt.user_answer,
+        is_correct: attempt.is_correct,
+        error_layer: attempt.error_layer,
+      } : {}),
+    }];
   });
 }
 
-export function studySessionSummary(session: StudySessionRow | null, pretestResults?: Array<{ word: string; status: string }>): {
+export function studySessionSummary(session: StudySessionRow | null, pretestResults?: Array<{
+  word: string;
+  status: string;
+  user_answer?: string;
+  is_correct?: boolean;
+  error_layer?: string;
+}>): {
   active: boolean;
   widget?: StudyWidget;
   phase?: StudyPhase;
   current_word?: string | null;
   current_index?: number;
-  pretest_results?: Array<{ word: string; status: string }>;
+  revision?: string;
+  pretest_results?: Array<{ word: string; status: string; user_answer?: string; is_correct?: boolean; error_layer?: string }>;
 } {
   if (!session || session.ended_at || !session.state) return { active: false };
   const summary = {
@@ -651,7 +834,7 @@ export function studySessionSummary(session: StudySessionRow | null, pretestResu
     current_index: session.state.current_index,
   };
   if (session.state.widget === "pretest" && pretestResults) {
-    return { ...summary, pretest_results: pretestResults };
+    return { ...summary, revision: session.updated_at, pretest_results: pretestResults };
   }
   return summary;
 }

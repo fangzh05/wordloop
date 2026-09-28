@@ -20,6 +20,7 @@ export function registerAdvanceStudySessionTool(server: McpServer): void {
       phase: session.state?.phase,
       current_word: session.state?.current_word,
       current_index: session.state?.current_index,
+      ...(session.state?.widget === "pretest" ? { revision: session.updated_at } : {}),
     };
   }));
 }

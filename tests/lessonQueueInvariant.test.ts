@@ -69,6 +69,15 @@ describe("durable Lesson queue invariant", () => {
     )).toEqual(["expression", "planet", "shrink", "marine", "thermometer"]);
   });
 
+  it("lets a current-session familiar override suppress relearn and uncertain new-word routing", () => {
+    expect(buildLessonWords(
+      ["alleviate", "recur"],
+      [item("alleviate", "unknown"), item("recur", "uncertain"), item("other", "unknown")],
+      ["alleviate", "recur"],
+    )).toEqual(["other"]);
+    expect(buildLessonWords([], [item("alleviate", "known")], ["alleviate"])).toEqual([]);
+  });
+
   it("recovers pending relearn words that were before a legacy current cursor", () => {
     const recovered = recoverLegacyLessonWords({
       relearnWords: ["expression", "planet", "shrink"],

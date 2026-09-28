@@ -12,6 +12,7 @@ import { registerGetPronunciationAudioTool } from "./tools/getPronunciationAudio
 import { registerImportWordsTool } from "./tools/importWords.js";
 import { registerRecordAttemptTool } from "./tools/recordAttempt.js";
 import { registerRecordPretestResultTool } from "./tools/recordPretestResult.js";
+import { registerPretestMarkFamiliarTool } from "./tools/pretestMarkFamiliar.js";
 import { LEGACY_WIDGET_URIS, registerRenderTools, WIDGET_URIS } from "./tools/renderWidgets.js";
 import { registerSaveSentenceTool } from "./tools/saveSentence.js";
 import { registerRecordReviewResultTool } from "./tools/recordReviewResult.js";
@@ -37,7 +38,7 @@ For “开始学习”“继续学习”“wordloop 开始” or “wordloop 继
 
 An active session always resumes its persisted payload, including an active lesson_complete state. Do not rebuild an exercise from chat, regenerate saved content, reorder a queue, or finish that session before its persisted round handoff is answered and graded. After the pretest Widget completes its durable handoff, call get_study_bootstrap and follow the new action; its embedded pronunciation flow does not use the independent pronunciation tool.
 
-The pretest Widget accepts only cn_to_en or en_definition and only the backend-returned batch. Choose the direction when needed, but never add, skip, or reorder words. For an explicit “听写” request, use the Dictation Widget's word mode with 5–7 recently taught or recent spelling/pronunciation-error words. Send mode="words", the words array, and title="单词听写"; do not reveal the target words or add hints in the chat. This is audio-only spelling recall, not paragraph dictation. Keep the legacy text mode available only when a text/passage dictation is explicitly requested.
+The pretest Widget accepts only cn_to_en or en_definition and only the backend-returned batch. Choose the direction when needed, but never add, skip, or reorder words. After an answer is revealed, the Widget may invoke pretest_mark_familiar only after the user explicitly chooses “我本来会这个词”; never call it on your own or from Review. For an explicit “听写” request, use the Dictation Widget's word mode with 5–7 recently taught or recent spelling/pronunciation-error words. Send mode="words", the words array, and title="单词听写"; do not reveal the target words or add hints in the chat. This is audio-only spelling recall, not paragraph dictation. Keep the legacy text mode available only when a text/passage dictation is explicitly requested.
 
 ### Backend-owned Review and attempt boundaries
 
@@ -116,6 +117,7 @@ export function createWordloopMcpServer(loadWidgetHtml: WidgetHtmlLoader): McpSe
   registerGetNextLearningWordTool(server);
   registerGetNextRoundTool(server);
   registerRecordPretestResultTool(server);
+  registerPretestMarkFamiliarTool(server);
   registerRecordAttemptTool(server);
   registerRecordReviewResultTool(server);
   registerRecordReviewSubmissionTool(server);

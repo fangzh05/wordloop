@@ -1,7 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { PretestQuestion, shouldApplyPronunciationAudioResult } from "../web/src/pretest/PretestWidget.js";
+import {
+  PretestQuestion,
+  buildPretestMarkFamiliarAction,
+  selectPronunciationWords,
+  shouldApplyPronunciationAudioResult,
+  shouldOfferMarkFamiliar,
+} from "../web/src/pretest/PretestWidget.js";
 
 const base = {
   ipa: "/rɪˈkɜːr/",
@@ -33,22 +39,46 @@ describe("PretestQuestion", () => {
     expect(markup).not.toContain("Give an English definition");
   });
 
-  it("auto-advances after grading and clears pending timers", () => {
+  it("reveals the answer and waits for an explicit next-step choice", () => {
     const source = readFileSync(new URL("../web/src/pretest/PretestWidget.tsx", import.meta.url), "utf8");
     expect(source).toContain("schedulePretestAdvance");
     expect(source).toContain("600");
-    expect(source).toContain("clearAdvanceTimer");
     expect(source).toContain("listen_repeat");
     expect(source).toContain("listen_recall");
     expect(source).toContain("pretest_complete");
     expect(source).toContain("advance_study_session");
     expect(source).toContain("get_study_bootstrap");
+    expect(source).toContain("你的答案：");
+    expect(source).toContain("正确答案：");
+    expect(source).toContain("继续学习");
+    expect(source).toContain("我本来会这个词");
     expect(source).toContain('advanceSession("pretest_complete", transition.sourceIndex)');
     expect(source).not.toContain('advanceSession("listen_recall", transition.sourceIndex)');
     expect(source).not.toContain("updateModelContext");
     expect(source).not.toContain("get_next_round");
     expect(source).not.toContain("function nextQuestion()");
     expect(source).not.toContain("下一题");
+    const saveGrade = source.indexOf("async function saveGrade(");
+    const continueAfterResult = source.indexOf("async function continueAfterResult(", saveGrade);
+    expect(saveGrade).toBeGreaterThanOrEqual(0);
+    expect(continueAfterResult).toBeGreaterThan(saveGrade);
+    expect(source.slice(saveGrade, continueAfterResult)).not.toContain("schedulePretestAdvance");
+  });
+
+  it("offers manual familiarity only after a non-known new-word result", () => {
+    expect(shouldOfferMarkFamiliar("new_word", "uncertain")).toBe(true);
+    expect(shouldOfferMarkFamiliar("new_word", "unknown")).toBe(true);
+    expect(shouldOfferMarkFamiliar("new_word", "known")).toBe(false);
+    expect(shouldOfferMarkFamiliar("review", "unknown")).toBe(false);
+    expect(buildPretestMarkFamiliarAction("alleviate", 0, "2026-09-28T00:00:00.000Z")).toEqual({
+      action: "pretest_mark_familiar",
+      word: "alleviate",
+      current_index: 0,
+      expected_revision: "2026-09-28T00:00:00.000Z",
+    });
+    expect(selectPronunciationWords([
+      { word: "alleviate", ipa: "/x/", part_of_speech: "v.", meaning_zh: "缓解", direction: "cn_to_en" },
+    ], [{ word: "alleviate", result: "unknown", familiar: true }])).toEqual([]);
   });
 
   it("advances failed listening recall and sends the original source index", () => {
