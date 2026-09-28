@@ -23,7 +23,7 @@ export const LESSON_GENERATION_PROMPT = `为考研英语一 80+ 与 IELTS 7.5 �
   }
 }`;
 
-export const SEMANTIC_GRADING_PROMPT = `按题目要求批改用户本次英文输出，宽容接受意思准确的自然表达。判断是否完成目标词义、搭配和语法要求。message 和 explanation 必须使用简体中文；可引用用户答案中的英文错误片段。错误时指出具体片段并解释可执行的修改方向；第一次错误不要泄露完整参考答案。只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
+export const SEMANTIC_GRADING_PROMPT = `按题目要求批改用户本次英文输出，宽容接受意思准确的自然表达。判断是否完成目标词义、搭配和语法要求。如果输入提供 target_words，必须逐一检查这些词在答案中的词义、词形、搭配和句法位置是否符合题目要求；word 只是当前 Lesson 记录词，不应覆盖题目明确要求的 target_words。message 和 explanation 必须使用简体中文；可引用用户答案中的英文错误片段。错误时指出具体片段并解释可执行的修改方向；第一次错误不要泄露完整参考答案。只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
 {
   "is_correct": false,
   "error_layer": "meaning",
@@ -38,11 +38,19 @@ export const ENGLISH_DEFINITION_GRADING_PROMPT = `判断用户给出的简短英
   "feedback": "..."
 }`;
 
-export const WRAPUP_GENERATION_PROMPT = `生成一道考研英语一 / IELTS Academic 难度的长难句翻译与结构理解题。英文句子必须 25–40 个单词，包含明显主干，并自然使用提供的本轮 2–3 个目标词；避免冷僻专业术语。instruction 必须使用简体中文。只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
+export const WRAPUP_GENERATION_PROMPT = `生成一道周期性英译中长难句巩固题，不是每个 Lesson round 都要生成。句子面向考研英语一阅读/翻译或 IELTS Academic，必须为 25–40 个英文单词，结构自然正式，有清晰主干和有价值的从句或修饰关系。请从提供的 2–3 个目标词中自然使用至少 2 个；不要为了塞词破坏句子，也不要堆冷僻词或专业术语。instruction 固定使用“先找出句子主干，再把整句翻译成自然中文。”只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
+{
+  "activity_type": "translation_en_to_cn",
+  "instruction": "先找出句子主干，再把整句翻译成自然中文。",
+  "prompt": "...",
+  "multiline": true
+}`;
+
+export const SENTENCE_CONSOLIDATION_GENERATION_PROMPT = `生成一道短自由造句巩固任务，不是普通单词 Lesson 练习。用户只需写 1 个自然英文句子，答案长度为 15–30 个英文单词，并使用提供的 1–2 个目标词。题目主要检查词义、搭配、词性、句法位置和自然表达；允许简单句或复合句，不要求学术风格。语境优先教育、科技、社会、工作、健康、环境、媒体、大学、消费、城市、公共服务或日常决策；不要增加冷僻词。instruction 和 prompt 使用简体中文，并在 prompt 中准确写出所有目标词。只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
 {
   "activity_type": "sentence",
-  "instruction": "...",
-  "prompt": "...",
+  "instruction": "写一个自然英文句子，控制在 15–30 个单词。",
+  "prompt": "请用 ... 写一个自然英文句子。",
   "multiline": true
 }`;
 

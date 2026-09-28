@@ -5,6 +5,7 @@ vi.mock("../server/db.js", () => ({ getDeepSeekApiKey: mocks.getDeepSeekApiKey }
 
 import {
   generateLesson,
+  generateSentenceConsolidation,
   generateWrapup,
   gradeEnglishDefinition,
   gradeSemanticAnswer,
@@ -16,6 +17,7 @@ import {
   ENGLISH_DEFINITION_GRADING_PROMPT,
   LESSON_GENERATION_PROMPT,
   SEMANTIC_GRADING_PROMPT,
+  SENTENCE_CONSOLIDATION_GENERATION_PROMPT,
   WRAPUP_GENERATION_PROMPT,
   WRAPUP_GRADING_PROMPT,
 } from "../server/services/deepseekPrompts.js";
@@ -46,8 +48,8 @@ const validLesson: LessonGeneration = {
   },
 };
 const validWrapup = {
-  activity_type: "sentence",
-  instruction: "翻译句子并指出主句。",
+  activity_type: "translation_en_to_cn",
+  instruction: "先找出句子主干，再把整句翻译成自然中文。",
   prompt: "Although the policy appeared modest, its careful wording encouraged local leaders to invest in public libraries, which gradually widened access to education for families across neighboring districts over several years.",
   multiline: true,
 };
@@ -144,20 +146,47 @@ describe("DeepSeek stateless JSON client", () => {
       .mockResolvedValueOnce(response(JSON.stringify(validGrade)))
       .mockResolvedValueOnce(response(JSON.stringify({ is_correct: true, feedback: "释义准确。" })))
       .mockResolvedValueOnce(response(JSON.stringify(validWrapup)))
+      .mockResolvedValueOnce(response(JSON.stringify({
+        activity_type: "sentence",
+        instruction: "写一个自然英文句子，控制在 15–30 个单词。",
+        prompt: "请用 alleviate 和 pressure 写一个自然英文句子。",
+        multiline: true,
+      })))
       .mockResolvedValueOnce(response(JSON.stringify(validGrade)));
 
     await generateLesson(lessonInput);
     await gradeSemanticAnswer({ word: "fixture", activity_type: "sentence", instruction: "Translate.", prompt: "A prompt.", answer: "my answer", retry_count: 0 });
     await gradeEnglishDefinition({ word: "fixture", meaning_zh: "设施", answer: "something installed" });
     await generateWrapup({ words: ["fixture", "policy"] });
+    await generateSentenceConsolidation({ words: ["alleviate", "pressure"] });
     await gradeWrapupAnswer({ words: ["fixture"], instruction: "Translate.", prompt: validWrapup.prompt, answer: "my answer", retry_count: 0 });
 
     const tokenBudgets = fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)).max_tokens);
-    expect(tokenBudgets).toEqual([1200, 600, 400, 900, 700]);
+    expect(tokenBudgets).toEqual([1200, 600, 400, 900, 400, 700]);
+  });
+
+  it("keeps long-sentence translation and sentence consolidation activity types distinct", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(JSON.stringify(validWrapup)))
+      .mockResolvedValueOnce(response(JSON.stringify({
+        activity_type: "sentence",
+        instruction: "写一个自然英文句子，控制在 15–30 个单词。",
+        prompt: "请用 alleviate 和 pressure 写一个自然英文句子。",
+        multiline: true,
+      })))
+      .mockResolvedValueOnce(response(JSON.stringify({
+        activity_type: "sentence",
+        instruction: "写一个自然英文句子，控制在 15–30 个单词。",
+        prompt: "请用 alleviate 写一个自然英文句子。",
+        multiline: true,
+      })));
+    await expect(generateWrapup({ words: ["alleviate", "pressure"] })).resolves.toMatchObject({ activity_type: "translation_en_to_cn", multiline: true });
+    await expect(generateSentenceConsolidation({ words: ["alleviate", "pressure"] })).resolves.toMatchObject({ activity_type: "sentence", multiline: true });
+    await expect(generateSentenceConsolidation({ words: ["alleviate", "pressure"] })).rejects.toMatchObject({ code: "DEEPSEEK_INVALID_OUTPUT" });
   });
 
   it("includes a concrete JSON object shape in every DeepSeek prompt", () => {
-    for (const prompt of [LESSON_GENERATION_PROMPT, SEMANTIC_GRADING_PROMPT, ENGLISH_DEFINITION_GRADING_PROMPT, WRAPUP_GENERATION_PROMPT, WRAPUP_GRADING_PROMPT]) {
+    for (const prompt of [LESSON_GENERATION_PROMPT, SEMANTIC_GRADING_PROMPT, ENGLISH_DEFINITION_GRADING_PROMPT, WRAPUP_GENERATION_PROMPT, SENTENCE_CONSOLIDATION_GENERATION_PROMPT, WRAPUP_GRADING_PROMPT]) {
       expect(prompt).toContain("{");
     }
     expect(LESSON_GENERATION_PROMPT).toContain("\"ipa\"");
@@ -170,6 +199,8 @@ describe("DeepSeek stateless JSON client", () => {
     expect(LESSON_GENERATION_PROMPT).toContain("exact_cloze");
     expect(LESSON_GENERATION_PROMPT).toContain("简体中文");
     expect(WRAPUP_GENERATION_PROMPT).toContain("\"multiline\": true");
+    expect(WRAPUP_GENERATION_PROMPT).toContain("\"activity_type\": \"translation_en_to_cn\"");
+    expect(SENTENCE_CONSOLIDATION_GENERATION_PROMPT).toContain("15–30");
   });
 
   it("retries schema-invalid JSON once, then accepts a valid result", async () => {

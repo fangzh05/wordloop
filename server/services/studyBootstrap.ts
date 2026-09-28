@@ -181,10 +181,10 @@ export async function getStudyBootstrap(options?: {
     }
     if (normalizedActive?.state) {
       if (normalizedActive.state.widget === "lesson" && normalizedActive.state.phase === "lesson_complete") {
-        // The vocabulary cursor is complete, but the active study session is
-        // intentionally still open until the persisted long-sentence
-        // wrap-up has been answered and graded. Returning resume lets the
-        // Lesson Widget restore either the round handoff or its wrap-up card.
+        // The vocabulary cursor is complete, but the active study session stays
+        // open until the backend cadence handoff is finished. Returning resume
+        // restores either the primary feedback, its one consolidation, or the
+        // final continue action without inferring cadence in bootstrap.
         return { action: "resume", widget: "lesson", phase: "lesson_complete" };
       }
       if (normalizedActive.state.widget === "review" && normalizedActive.state.phase === "review_complete") {
