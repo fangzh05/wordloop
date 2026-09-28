@@ -125,7 +125,7 @@ export function normalizeAnswer(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
-const INTERNAL_RECALL_SEPARATOR_PATTERN = /([\\p{L}\\p{N}])(?:\\s*[-\\u2010\\u2011\\u2013\\u2014]\\s*|\\s+)(?=[\\p{L}\\p{N}])/gu;
+const INTERNAL_RECALL_SEPARATOR_PATTERN = /([\p{L}\p{N}])(?:\s*[-\u2010\u2011\u2013\u2014]\s*|\s+)(?=[\p{L}\p{N}])/gu;
 
 /**
  * Canonical form used only for exact target-word recall. Word-internal
@@ -135,9 +135,9 @@ const INTERNAL_RECALL_SEPARATOR_PATTERN = /([\\p{L}\\p{N}])(?:\\s*[-\\u2010\\u20
  */
 export function canonicalizeRecallForm(value: string): string {
   return normalizeAnswer(value)
-    .replace(/\\s+/gu, " ")
+    .replace(/\s+/gu, " ")
     .replace(INTERNAL_RECALL_SEPARATOR_PATTERN, "$1 ")
-    .replace(/\\s+/gu, " ")
+    .replace(/\s+/gu, " ")
     .trim();
 }
 
