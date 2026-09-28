@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getTodayWords: vi.fn(),
   getVocabularyItemsByWords: vi.fn(),
   recordPretestResult: vi.fn(),
+  setDailyNewWordLimit: vi.fn(),
   getPronunciationAudio: vi.fn(),
   buildReviewWidgetPayload: vi.fn(),
   recordAttempt: vi.fn(),
@@ -86,6 +87,7 @@ vi.mock("../server/services/words.js", () => ({
   getTodayWords: mocks.getTodayWords,
   getVocabularyItemsByWords: mocks.getVocabularyItemsByWords,
   recordPretestResult: mocks.recordPretestResult,
+  setDailyNewWordLimit: mocks.setDailyNewWordLimit,
 }));
 vi.mock("../server/tools/renderWidgets.js", async () => {
   const actual = await vi.importActual<typeof import("../server/tools/renderWidgets.js")>("../server/tools/renderWidgets.js");
@@ -177,6 +179,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.advanceEvents.length = 0;
     mocks.token = "web-test-token";
     mocks.getProgress.mockResolvedValue({ today: { completed: 0, total: 1 } });
+    mocks.setDailyNewWordLimit.mockResolvedValue({ daily_new_word_limit: 50, date, prepared: 50, added: 0 });
     mocks.getPretestResults.mockResolvedValue([]);
     mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [], oldRandomReview: [] });
     mocks.getPronunciationAudio.mockResolvedValue({ words: [] });
@@ -227,6 +230,87 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(invalid.status).toBe(400);
     expect(invalid.headers.get("cache-control")).toBe("no-store");
     expect(mocks.recordAttempt).not.toHaveBeenCalled();
+  });
+
+  it("raises today's queue from 50 to 70 and returns 50 / 70 progress without an active session", async () => {
+    mocks.setDailyNewWordLimit.mockResolvedValue({ daily_new_word_limit: 70, date, prepared: 70, added: 20 });
+    const progress = {
+      today: { total: 70, completed: 50 },
+      review_today: { completed: 0, total: 0, remaining: 0 },
+      all_time: { error_book: 0, mastered: 0 },
+      fsrs: { due_now: 0, tomorrow: 0, due_next_7_days: 0 },
+      settings: { daily_new_word_limit: 70 },
+    };
+    mocks.getProgress.mockResolvedValue(progress);
+
+    const response = await handleWebApiRequest(post({ action: "set_daily_new_word_limit", limit: 70 }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(mocks.setDailyNewWordLimit).toHaveBeenCalledWith(70);
+    expect(payload).toMatchObject({
+      screen: "done",
+      settings_update: { daily_new_word_limit: 70, prepared: 70, added: 20 },
+      progress: { today: { completed: 50, total: 70 }, settings: { daily_new_word_limit: 70 } },
+    });
+  });
+
+  it("keeps 70 prepared words and the frozen Lesson queue when the future target is lowered to 50", async () => {
+    const activeState = lessonState();
+    mocks.active = row(activeState, "rev-a");
+    mocks.setDailyNewWordLimit.mockResolvedValue({ daily_new_word_limit: 50, date, prepared: 70, added: 0 });
+    mocks.getProgress.mockResolvedValue({
+      today: { total: 70, completed: 50 },
+      review_today: { completed: 0, total: 0, remaining: 0 },
+      all_time: { error_book: 0, mastered: 0 },
+      fsrs: { due_now: 0, tomorrow: 0, due_next_7_days: 0 },
+      settings: { daily_new_word_limit: 50 },
+    });
+
+    const response = await handleWebApiRequest(post({ action: "set_daily_new_word_limit", limit: 50 }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(mocks.setDailyNewWordLimit).toHaveBeenCalledWith(50);
+    expect(payload).toMatchObject({
+      screen: "lesson",
+      session_revision: "rev-a",
+      state: activeState,
+      settings_update: { daily_new_word_limit: 50, prepared: 70, added: 0 },
+      progress: { today: { completed: 50, total: 70 }, settings: { daily_new_word_limit: 50 } },
+    });
+    expect(mocks.active.state.flow.lesson_words).toEqual(["fixture"]);
+    expect(mocks.advanceEvents).toEqual([]);
+  });
+
+  it("leaves an active six-word Pretest snapshot untouched when the limit increases", async () => {
+    const items = ["A", "B", "C", "D", "E", "F"].map((word) => ({ word, meaning_zh: `${word} 的含义` }));
+    const activeState = makeStudyState({
+      date,
+      widget: "pretest",
+      phase: "pretest",
+      current_word: "C",
+      current_index: 2,
+      retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "pretest", items },
+    });
+    mocks.active = row(activeState, "rev-a");
+    mocks.setDailyNewWordLimit.mockResolvedValue({ daily_new_word_limit: 70, date, prepared: 70, added: 20 });
+
+    const response = await handleWebApiRequest(post({ action: "set_daily_new_word_limit", limit: 70 }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({ screen: "pretest", session_revision: "rev-a", state: activeState });
+    expect(mocks.active.state.payload.items).toEqual(items);
+    expect(mocks.advanceEvents).toEqual([]);
+  });
+
+  it.each([0, 201, 1.5, Number.NaN])("rejects invalid daily target %s", async (limit) => {
+    const response = await handleWebApiRequest(post({ action: "set_daily_new_word_limit", limit }));
+    expect(response.status).toBe(400);
+    expect(mocks.setDailyNewWordLimit).not.toHaveBeenCalled();
   });
 
   it("rejects a stale Web submission before grading or recording an attempt", async () => {

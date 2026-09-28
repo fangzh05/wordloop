@@ -7,6 +7,7 @@ import {
   lessonDraftAnswerForWord,
   StandaloneDashboard,
   StandaloneReviewHeader,
+  todayTasksComplete,
   visibleStandalonePage,
 } from "../web/src/standalone/StandaloneApp.js";
 import type { WebApiResponse } from "../web/src/standalone/apiClient.js";
@@ -192,5 +193,37 @@ describe("Standalone Dashboard and Study navigation", () => {
     expect(markup).toContain("预测试");
     expect(dashboardNextStep(completedReview)).toBe("预测试");
     expect(dashboardContinueBehavior(completedReview)).toBe("continue");
+  });
+
+  it("reopens the Dashboard task after raising the server-saved target from 50 to 70", () => {
+    const previouslyComplete: WebApiResponse = {
+      screen: "done",
+      session_revision: null,
+      state: {},
+      progress: {
+        ...progress,
+        today: { ...progress.today, total: 50, completed: 50 },
+        review_today: { completed: 25, total: 25, remaining: 0 },
+      },
+    };
+    const raisedTarget: WebApiResponse = {
+      ...previouslyComplete,
+      progress: {
+        ...previouslyComplete.progress!,
+        today: { ...previouslyComplete.progress!.today, total: 70, completed: 50 },
+        settings: { daily_new_word_limit: 70 },
+      },
+    };
+    const markup = renderToStaticMarkup(<StandaloneDashboard view={raisedTarget} busy={false} onContinue={() => undefined} />);
+
+    expect(todayTasksComplete(previouslyComplete.progress)).toBe(true);
+    expect(markup).toContain("50 / 70");
+    expect(markup).toContain("剩余 20");
+    expect(markup).toContain("每日目标");
+    expect(markup).toContain(">70</strong>");
+    expect(markup).toContain('aria-expanded="false"');
+    expect(todayTasksComplete(raisedTarget.progress)).toBe(false);
+    expect(dashboardNextStep(raisedTarget)).toBe("预测试");
+    expect(markup).not.toContain("今日任务完成");
   });
 });
