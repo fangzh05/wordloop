@@ -125,6 +125,17 @@ export function normalizeAnswer(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
+/**
+ * Canonical form used only for exact target-word recall. Word-internal
+ * whitespace and dash-like separators are orthographic variants here, while
+ * punctuation with lexical value (apostrophes, periods, etc.) is preserved.
+ */
+export function canonicalizeRecallForm(value: string): string {
+  return normalizeAnswer(value)
+    .replace(/[\\s\\u00a0\\u2010\\u2011\\u2012\\u2013\\u2014\\u2015-]+/g, " ")
+    .trim();
+}
+
 export function editDistance(left: string, right: string): number {
   const source = normalizeAnswer(left);
   const target = normalizeAnswer(right);
@@ -164,7 +175,13 @@ export function gradeExactRecall(answer: string, target: string): GradeResult {
   if (cleanAnswer && cleanAnswer === cleanTarget) {
     return { is_correct: true, error_layer: "none", rating: "good", feedback: "答案正确。", graded_by: "deterministic" };
   }
-  if (cleanAnswer && cleanTarget.length > 3 && editDistance(cleanAnswer, cleanTarget) === 1) {
+
+  const recallAnswer = canonicalizeRecallForm(answer);
+  const recallTarget = canonicalizeRecallForm(target);
+  if (recallAnswer && recallAnswer === recallTarget) {
+    return { is_correct: true, error_layer: "none", rating: "good", feedback: "答案正确。", graded_by: "deterministic" };
+  }
+  if (recallAnswer && recallTarget.length > 3 && editDistance(recallAnswer, recallTarget) === 1) {
     return { is_correct: true, error_layer: "spelling", rating: "hard", feedback: "拼写接近目标词。", graded_by: "deterministic" };
   }
   const clearlyAnotherWord = /^[a-z]+$/.test(cleanAnswer) && cleanAnswer.length >= 3;
