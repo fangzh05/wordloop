@@ -3,6 +3,7 @@ import type { UserWordRow, StudySessionRow } from "../server/types.js";
 import { recordReviewSubmission } from "../server/services/fsrsReviews.js";
 import { makeStudyState } from "../server/services/studySessions.js";
 import type { RecordReviewSubmissionInput, ReviewWidgetPayload } from "../shared/toolContracts.js";
+import { gradeExactRecall } from "../web/src/grading/deterministic.js";
 
 const userId = "00000000-0000-4000-8000-000000000001";
 const sessionId = "00000000-0000-4000-8000-000000000002";
@@ -169,7 +170,78 @@ const failedSubmission: RecordReviewSubmissionInput = {
   rating: "again",
 };
 
+describe("exact recall separator canonicalization", () => {
+  it.each([
+    ["air-conditioning", "air-conditioning"],
+    ["air conditioning", "air-conditioning"],
+    ["air   conditioning", "air-conditioning"],
+    ["air–conditioning", "air-conditioning"],
+    ["air—conditioning", "air-conditioning"],
+    ["air‑conditioning", "air-conditioning"],
+    ["well being", "well-being"],
+  ])("treats %s as orthographically equivalent to %s", (answer, target) => {
+    expect(gradeExactRecall(answer, target)).toMatchObject({
+      is_correct: true,
+      error_layer: "none",
+      rating: "good",
+      graded_by: "deterministic",
+    });
+  });
+
+  it("does not erase punctuation that carries spelling meaning", () => {
+    expect(gradeExactRecall("cant", "can't")).not.toMatchObject({
+      is_correct: true,
+      error_layer: "none",
+      rating: "good",
+    });
+  });
+
+  it("keeps a real one-character miss as spelling Hard after separator canonicalization", () => {
+    expect(gradeExactRecall("air conditoning", "air-conditioning")).toMatchObject({
+      is_correct: true,
+      error_layer: "spelling",
+      rating: "hard",
+    });
+    expect(gradeExactRecall("opague", "opaque")).toMatchObject({
+      is_correct: true,
+      error_layer: "spelling",
+      rating: "hard",
+    });
+  });
+});
+
 describe("server-owned Review submission cursor", () => {
+  it("uses Good scheduling for separator-equivalent air-conditioning recall", async () => {
+    const now = new Date("2026-09-19T00:00:00Z");
+    const learningWord = {
+      ...userWord("2026-09-18T00:00:00Z"),
+      fsrs_state: 1,
+      fsrs_learning_steps: 0,
+    };
+    const fake = fakeDatabase({ session: reviewSession(["air-conditioning"]), word: learningWord });
+    const grade = gradeExactRecall("air conditioning", "air-conditioning");
+
+    await recordReviewSubmission({
+      word: "air-conditioning",
+      user_answer: "air conditioning",
+      is_correct: grade.is_correct,
+      error_layer: grade.error_layer,
+      rating: grade.rating!,
+      direction: "cn_to_en",
+    }, now, false, fake.db as never, userId);
+
+    expect(fake.rpcCalls).toHaveLength(1);
+    expect(fake.rpcCalls[0]?.args).toMatchObject({
+      p_normalized_word: "air-conditioning",
+      p_user_answer: "air conditioning",
+      p_is_correct: true,
+      p_error_layer: "none",
+      p_rating: 3,
+    });
+    const card = fake.rpcCalls[0]?.args.p_card as Record<string, unknown>;
+    expect(Date.parse(String(card.next_review_at))).toBeGreaterThan(now.getTime());
+  });
+
   it("persists attempt and FSRS once, then advances the due cursor", async () => {
     const fake = fakeDatabase({ session: reviewSession(["recur", "planet"]) });
 
