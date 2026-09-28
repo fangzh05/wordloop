@@ -248,6 +248,10 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .daily-limit-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
 .daily-limit-input-row .button { min-height: 44px; padding-inline: 0.75rem; }
 .daily-limit .helper-text { margin: 0.6rem 0 0; }
+.daily-limit-quick-row { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; color: var(--muted); font-size: 0.75rem; }
+.daily-limit-preset { min-height: 36px; padding: 0.25rem 0.55rem; border: 1px solid var(--separator); border-radius: 999px; background: var(--material-raised); color: var(--text); font: inherit; font-size: 0.75rem; cursor: pointer; }
+.daily-limit-preset[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.daily-limit-preset:disabled { cursor: not-allowed; opacity: 0.5; }
 
 .pronunciation-list { display: grid; gap: 0; overflow: hidden; background: var(--control); border-radius: 15px; }
 .pronunciation-row { display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; min-height: 3.8rem; margin: 0 0.85rem; padding: 0.65rem 0; border-bottom: 1px solid var(--separator); }
@@ -361,6 +365,18 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .standalone-card { width: 100%; max-width: none; padding: 1.1rem; }
 .standalone-progress-card { padding: 0.9rem 1rem; }
 .standalone-progress-block + .standalone-progress-block { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid var(--separator); }
+.standalone-daily-goal { min-width: 0; max-width: 100%; margin-top: 0.5rem; }
+.standalone-daily-goal-toggle { display: flex; width: 100%; min-width: 0; min-height: 44px; align-items: center; gap: 0.55rem; padding: 0.2rem 0; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 0.82rem; text-align: left; cursor: pointer; }
+.standalone-daily-goal-toggle strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.standalone-daily-goal-toggle:disabled { cursor: not-allowed; opacity: 0.55; }
+.standalone-daily-goal-chevron { margin-left: auto; color: var(--accent); font-size: 1.15rem; line-height: 1; }
+.daily-limit.standalone-daily-limit-editor { width: 100%; max-width: 100%; min-width: 0; margin: 0; padding: 0.45rem 0 0; background: transparent; box-sizing: border-box; }
+.standalone-daily-limit-editor .daily-limit-input-row { display: grid; width: 100%; max-width: 100%; min-width: 0; grid-template-columns: 44px minmax(48px, 64px) 44px 60px; gap: 0.35rem; align-items: center; margin-top: 0; }
+.standalone-daily-limit-editor .daily-limit-input-row > button { width: 44px; min-width: 44px; min-height: 44px; box-sizing: border-box; }
+.standalone-daily-limit-editor .daily-limit-input-row input { width: 100%; min-width: 0; min-height: 44px; box-sizing: border-box; font-size: 1rem; }
+.standalone-daily-limit-editor .daily-limit-input-row .daily-limit-save { grid-column: 4; width: 60px; min-width: 60px; min-height: 44px; margin: 0; padding-inline: 0.4rem; white-space: nowrap; }
+.standalone-daily-limit-editor .daily-limit-quick-row { max-width: 100%; }
+.standalone-daily-limit-editor .helper-text { overflow-wrap: anywhere; }
 .standalone-progress-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; }
 .standalone-progress-heading strong { font-size: 0.9rem; }
 .standalone-progress-heading span { color: var(--muted); font-size: 0.78rem; }

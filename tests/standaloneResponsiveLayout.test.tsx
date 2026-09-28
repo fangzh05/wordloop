@@ -8,6 +8,11 @@ import {
   StandaloneReviewHeader,
   standaloneLessonDisplayTitle,
 } from "../web/src/standalone/StandaloneApp.js";
+import {
+  DailyNewWordLimitEditor,
+  dailyNewWordLimitFeedback,
+  isValidDailyNewWordLimit,
+} from "../web/src/components/DailyNewWordLimitEditor.js";
 import type { WebApiResponse } from "../web/src/standalone/apiClient.js";
 
 const styles = readFileSync(new URL("../web/src/styles.css", import.meta.url), "utf8");
@@ -145,5 +150,34 @@ describe("Standalone responsive layout", () => {
     expect(styles).toContain("max-width: 1240px");
     expect(styles).toContain("max-width: 820px");
     expect(styles).toContain("max-width: 68ch");
+  });
+
+  it("renders the inline daily target editor with numeric input and mobile-safe touch targets", () => {
+    const markup = renderToStaticMarkup(<DailyNewWordLimitEditor
+      limit={70}
+      compact
+      onSave={async (limit) => ({ daily_new_word_limit: limit, prepared: 70, added: 0 })}
+    />);
+
+    expect(markup).toContain('inputMode="numeric"');
+    expect(markup).toContain('aria-label="减少每日新词数量"');
+    expect(markup).toContain('aria-label="增加每日新词数量"');
+    expect(markup).toContain("快捷：");
+    for (const value of [50, 60, 70, 75, 80]) expect(markup).toContain(`>${value}</button>`);
+    expect(isValidDailyNewWordLimit(0)).toBe(false);
+    expect(isValidDailyNewWordLimit(201)).toBe(false);
+    expect(isValidDailyNewWordLimit(1.5)).toBe(false);
+    expect(isValidDailyNewWordLimit(Number.NaN)).toBe(false);
+    expect(isValidDailyNewWordLimit(200)).toBe(true);
+    expect(dailyNewWordLimitFeedback(70, { prepared: 70, added: 20 }))
+      .toBe("每日目标已设为 70，今天新增 20 个新词。");
+    expect(dailyNewWordLimitFeedback(50, { prepared: 70, added: 0 }))
+      .toBe("每日目标已设为 50。今天已经准备 70 个，不会移除；从之后的每日队列按 50 个执行。");
+
+    expect(styles).toMatch(/\.standalone-daily-goal\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/);
+    expect(styles).toMatch(/\.standalone-daily-limit-editor \.daily-limit-input-row\s*\{[^}]*max-width:\s*100%;[^}]*grid-template-columns:\s*44px minmax\(48px, 64px\) 44px 60px;/);
+    expect(styles).toMatch(/\.standalone-daily-limit-editor \.daily-limit-input-row > button\s*\{[^}]*min-height:\s*44px;/);
+    expect(styles).toMatch(/\.standalone-daily-limit-editor \.daily-limit-input-row input\s*\{[^}]*min-height:\s*44px;/);
+    expect(styles).toMatch(/\.standalone-daily-limit-editor \.daily-limit-input-row \.daily-limit-save\s*\{[^}]*grid-column:\s*4;/);
   });
 });

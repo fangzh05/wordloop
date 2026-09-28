@@ -1,5 +1,6 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../components/Button.js";
+import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
 import {
   ApiError,
   StaleStudyStateError,
@@ -133,7 +134,7 @@ export function dashboardNextStep(view: WebApiResponse): string {
   if (view.screen === "lesson") return "正式学习";
   if (!hasDashboardProgress(view.progress)) return "继续学习";
   const today = record(record(view.progress).today);
-  return numberValue(today.total) > numberValue(today.completed) ? "继续学习" : "今日任务已完成";
+  return numberValue(today.total) > numberValue(today.completed) ? "预测试" : "今日任务已完成";
 }
 
 export function activeStudySummary(view: WebApiResponse | null): string | null {
@@ -279,16 +280,23 @@ export function StandaloneProgressBlock({ title, completed, total, emptyText, de
   </div>;
 }
 
-export function StandaloneDashboard({ view, busy, onContinue, isStudying = false }: {
+export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, isStudying = false }: {
   view: WebApiResponse;
   busy: boolean;
   onContinue: () => void;
+  onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
   isStudying?: boolean;
 }): React.JSX.Element {
+  const [dailyLimitExpanded, setDailyLimitExpanded] = useState(false);
+  const dailyLimitEditorId = useId();
   const hasProgress = hasDashboardProgress(view.progress);
   const progress = record(view.progress);
   const review = record(progress.review_today);
   const today = record(progress.today);
+  const settings = record(progress.settings);
+  const dailyLimitValue = settings.daily_new_word_limit;
+  const dailyLimit = typeof dailyLimitValue === "number" && Number.isInteger(dailyLimitValue)
+    && dailyLimitValue >= 1 && dailyLimitValue <= 200 ? dailyLimitValue : null;
   const allTime = record(progress.all_time);
   const fsrs = record(progress.fsrs);
   const activeSummary = activeStudySummary(view);
@@ -319,8 +327,28 @@ export function StandaloneDashboard({ view, busy, onContinue, isStudying = false
           completed={numberValue(today.completed)}
           total={numberValue(today.total)}
           emptyText="暂无新词"
-          detail="已完成"
+          detail={`已完成 · 剩余 ${Math.max(0, numberValue(today.total) - numberValue(today.completed))}`}
         />
+        {dailyLimit !== null && <div className="standalone-daily-goal">
+          <button
+            className="standalone-daily-goal-toggle"
+            type="button"
+            aria-expanded={dailyLimitExpanded}
+            aria-controls={dailyLimitEditorId}
+            disabled={busy}
+            onClick={() => setDailyLimitExpanded((expanded) => !expanded)}
+          >
+            <span>每日目标</span><strong>{dailyLimit}</strong><span className="standalone-daily-goal-chevron" aria-hidden="true">{dailyLimitExpanded ? "⌄" : "›"}</span>
+          </button>
+          <div id={dailyLimitEditorId} hidden={!dailyLimitExpanded}>
+            {dailyLimitExpanded && onSaveDailyNewWordLimit && <DailyNewWordLimitEditor
+              limit={dailyLimit}
+              onSave={onSaveDailyNewWordLimit}
+              compact
+              disabled={busy}
+            />}
+          </div>
+        </div>}
         {todayTasksComplete(view.progress) && <p className="standalone-status" role="status">今日任务完成</p>}
       </> : <p className="standalone-status" role="status">进度暂时无法读取</p>}
       {activeSummary && <div className="standalone-active-study">
@@ -353,11 +381,12 @@ export function StandaloneDashboard({ view, busy, onContinue, isStudying = false
   </>;
 }
 
-export function StandaloneResponsiveLayout({ page, view, busy, onContinue, hasMainContent, children }: {
+export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, hasMainContent, children }: {
   page: StandalonePage;
   view: WebApiResponse | null;
   busy: boolean;
   onContinue: () => void;
+  onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
   hasMainContent: boolean;
   children?: ReactNode;
 }): React.JSX.Element {
@@ -368,7 +397,7 @@ export function StandaloneResponsiveLayout({ page, view, busy, onContinue, hasMa
     data-main-content={hasMainContent ? "true" : "false"}
   >
     <aside className="standalone-sidebar" aria-label="Dashboard" aria-hidden={!view}>
-      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} isStudying={page === "study"} />}
+      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onSaveDailyNewWordLimit={onSaveDailyNewWordLimit} isStudying={page === "study"} />}
     </aside>
     <section className="standalone-main" aria-label="学习区">
       {children}
@@ -614,16 +643,17 @@ export default function StandaloneApp(): React.JSX.Element {
     }, flushPendingRefresh);
   };
 
-  const dispatch = async (fields: Record<string, unknown>) => {
+  const dispatch = async (fields: Record<string, unknown>): Promise<WebApiResponse | null> => {
     const actionName = String(fields.action ?? "");
     const answerActions = new Set(["review_submit", "pretest_submit", "lesson_submit", "wrapup_submit"]);
     if (answerActions.has(actionName) && fields.mark_unknown !== true
-      && (typeof fields.answer !== "string" || !fields.answer.trim())) return;
-    if (requestInFlightRef.current) return;
+      && (typeof fields.answer !== "string" || !fields.answer.trim())) return null;
+    if (requestInFlightRef.current) return null;
     const revision = view?.session_revision ?? null;
     const action = { ...fields, expected_revision: revision } as WebAction;
     const submittedIndex = typeof view?.state.current_index === "number" ? view.state.current_index : null;
     const previousDraftContext = lessonDraftContext(view?.state);
+    let actionResponse: WebApiResponse | null = null;
     await runForegroundRequest(requestInFlightRef, async () => {
       setBusy(actionName || "action");
       setErrorMessage("");
@@ -632,6 +662,7 @@ export default function StandaloneApp(): React.JSX.Element {
       setRetryFields(fields);
       try {
         const next = await postAction(action);
+        actionResponse = next;
         sessionRevisionRef.current = next.session_revision ?? sessionRevisionRef.current;
         if (actionName === "refresh_progress") {
           setView((previous) => previous ? { ...previous, progress: next.progress } : next);
@@ -681,6 +712,13 @@ export default function StandaloneApp(): React.JSX.Element {
         setBusy(null);
       }
     }, flushPendingRefresh);
+    return actionResponse;
+  };
+
+  const saveDailyNewWordLimit = async (limit: number): Promise<DailyNewWordLimitSaveResult> => {
+    const response = await dispatch({ action: "set_daily_new_word_limit", limit });
+    if (!response?.settings_update) throw new Error("每日目标未能保存，请重试。");
+    return response.settings_update;
   };
 
   const retry = () => {
@@ -739,6 +777,7 @@ export default function StandaloneApp(): React.JSX.Element {
       view={view}
       busy={busy !== null}
       onContinue={continueFromDashboard}
+      onSaveDailyNewWordLimit={saveDailyNewWordLimit}
       hasMainContent={hasMainContent}
     >
 

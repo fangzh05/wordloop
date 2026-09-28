@@ -23,7 +23,7 @@ import {
   lessonWordAt,
   lessonWordIndex,
 } from "./services/lessonQueue.js";
-import { getTodayWords, getVocabularyItemsByWords, recordPretestResult } from "./services/words.js";
+import { getTodayWords, getVocabularyItemsByWords, recordPretestResult, setDailyNewWordLimit } from "./services/words.js";
 import { buildReviewWidgetPayload } from "./tools/renderWidgets.js";
 import { getPronunciationAudio } from "./tools/getPronunciationAudio.js";
 import { getTodayCompletedLessonWords, recordAttempt } from "./services/attempts.js";
@@ -40,6 +40,7 @@ import {
   lessonNavigationSchema,
   recordReviewSubmissionSchema,
   reviewWidgetItemSchema,
+  setDailyNewWordLimitSchema,
   type ReviewWidgetItem,
 } from "../shared/toolContracts.js";
 import type { StudySessionRow, StudyState, VocabularyItem } from "./types.js";
@@ -60,6 +61,7 @@ import { deriveLessonProfile } from "./services/lessonProfile.js";
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
 const webActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("set_daily_new_word_limit"), ...setDailyNewWordLimitSchema.shape, ...mutationBase }).strict(),
   z.object({ action: z.literal("continue"), ...mutationBase }).strict(),
   z.object({ action: z.literal("review_submit"), answer: z.string().max(4000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
   z.object({ action: z.literal("pretest_submit"), answer: z.string().max(2000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
@@ -907,7 +909,30 @@ async function finishWrapup(action: Extract<WebAction, { action: "wrapup_finish"
   return resolveBootstrap(null);
 }
 
+async function setDailyNewWordLimitAction(
+  action: Extract<WebAction, { action: "set_daily_new_word_limit" }>,
+): Promise<Record<string, unknown>> {
+  const current = await getActiveStudySession();
+  if (current && action.expected_revision !== null && current.updated_at !== action.expected_revision) {
+    throw new StaleStudyStateError();
+  }
+
+  const saved = await setDailyNewWordLimit(action.limit);
+  const active = await getActiveStudySession();
+  const response = active ? await successForSession(active) : await doneResponse(null);
+  return {
+    ...response,
+    progress: await getProgress(),
+    settings_update: {
+      daily_new_word_limit: saved.daily_new_word_limit,
+      prepared: saved.prepared,
+      added: saved.added,
+    },
+  };
+}
+
 async function performAction(action: WebAction): Promise<Record<string, unknown>> {
+  if (action.action === "set_daily_new_word_limit") return setDailyNewWordLimitAction(action);
   if (action.action === "refresh_progress") return { screen: "done", session_revision: action.expected_revision, state: {}, progress: await getProgress() };
   if (action.action === "continue") return resolveBootstrap(action.expected_revision);
   const active = await assertActiveStudySessionRevision(action.expected_revision);

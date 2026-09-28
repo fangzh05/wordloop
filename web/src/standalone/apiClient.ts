@@ -32,6 +32,7 @@ export interface WebApiResponse {
     fsrs: { due_now: number; due_today: number; tomorrow: number; due_next_7_days: number; average_stability: number };
     settings: { daily_new_word_limit: number };
   };
+  settings_update?: { daily_new_word_limit: number; prepared: number; added: number };
   pronunciation_audio_url?: string | null;
   result?: { is_correct: boolean; error_layer: string; message?: string };
   pretest_summary?: { known: number; uncertain: number; unknown: number };
@@ -40,7 +41,9 @@ export interface WebApiResponse {
   error?: { code: string; message: string };
 }
 
-export type WebAction = { action: string; expected_revision: string | null; [key: string]: unknown };
+export type WebAction =
+  | { action: "set_daily_new_word_limit"; limit: number; expected_revision: string | null }
+  | { action: string; expected_revision: string | null; [key: string]: unknown };
 
 function storedToken(): string | null {
   try {
