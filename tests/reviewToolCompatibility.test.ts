@@ -26,13 +26,17 @@ vi.mock("../server/services/attempts.js", () => ({
   getTodayCompletedLessonWords: vi.fn(async () => new Set<string>()),
 }));
 
-vi.mock("../server/services/review.js", () => ({
-  getDueReviewSelection: vi.fn(),
-  findFirstLearningWord: vi.fn(),
-  findNextLearningWord: vi.fn(),
-  getFirstSessionLearningWord: vi.fn(),
-  getSessionLearningQueue: vi.fn(),
-}));
+vi.mock("../server/services/review.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/services/review.js")>();
+  return {
+    ...actual,
+    getDueReviewSelection: vi.fn(),
+    findFirstLearningWord: vi.fn(),
+    findNextLearningWord: vi.fn(),
+    getFirstSessionLearningWord: vi.fn(),
+    getSessionLearningQueue: vi.fn(),
+  };
+});
 const wordMocks = vi.hoisted(() => ({ getTodayWords: vi.fn() }));
 vi.mock("../server/services/words.js", () => wordMocks);
 
