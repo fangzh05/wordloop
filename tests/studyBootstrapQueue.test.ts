@@ -169,7 +169,7 @@ describe("study bootstrap daily queue invariant", () => {
     expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
   });
 
-  it("continues a completed Review session into its re-learn queue", async () => {
+  it("continues a completed Review session into its re-learn queue when no new card became due", async () => {
     mocks.getActiveStudySession.mockResolvedValue({
       state: {
         version: 1,
@@ -180,13 +180,81 @@ describe("study bootstrap daily queue invariant", () => {
         current_index: 2,
         retry_count: 0,
         flow: { relearn_words: ["failed-word"] },
-        payload: { widget: "review", items: [] },
+        payload: { widget: "review", items: [{ word: "review-a" }, { word: "review-b" }] },
       },
     });
     mocks.getTodayWords.mockResolvedValue([word(1, "known")]);
     await expect(getStudyBootstrap()).resolves.toMatchObject({ action: "lesson", word: { word: "failed-word" } });
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
+    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+  });
+
+  it("starts a new immutable Review snapshot when another card became due during the completed snapshot", async () => {
+    mocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "review",
+        phase: "review_complete",
+        current_word: null,
+        current_index: 1,
+        retry_count: 0,
+        flow: { relearn_words: [] },
+        payload: { widget: "review", items: [{ word: "review-a" }] },
+      },
+    });
+    const newlyDue = { ...word(2, "review"), word: "review-b", display_word: "review-b", next_review_at: "2026-09-16T04:16:00.000Z" };
+    mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [newlyDue], oldRandomReview: [] });
+
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "review", count: 1 });
+    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+    expect(mocks.getTodayWords).not.toHaveBeenCalled();
+  });
+
+  it("does not reopen an identical completed Review snapshot if a stale due query returns the same cards", async () => {
+    const previous = { ...word(1, "review"), word: "review-a", display_word: "review-a", next_review_at: "2026-09-16T04:00:00.000Z" };
+    mocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "review",
+        phase: "review_complete",
+        current_word: null,
+        current_index: 1,
+        retry_count: 0,
+        flow: { relearn_words: [] },
+        payload: { widget: "review", items: [{ word: "review-a" }] },
+      },
+    });
+    mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [previous], oldRandomReview: [] });
+    mocks.getTodayWords.mockResolvedValue([word(3, "known")]);
+
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+    expect(mocks.getTodayWords).toHaveBeenCalledOnce();
+  });
+
+  it("keeps an active Review snapshot immutable even if another card would be due now", async () => {
+    const state = {
+      version: 1 as const,
+      date: "2026-09-16",
+      widget: "review" as const,
+      phase: "review" as const,
+      current_word: "review-a",
+      current_index: 0,
+      retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "review", items: [{ word: "review-a" }] },
+    };
+    mocks.getActiveStudySession.mockResolvedValue({ state });
+    mocks.getDueReviewSelection.mockResolvedValue({
+      rollingReview: [{ ...word(2, "review"), word: "review-b", display_word: "review-b" }],
+      oldRandomReview: [],
+    });
+
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "resume", widget: "review", phase: "review" });
     expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
+    expect(state.payload.items).toEqual([{ word: "review-a" }]);
   });
 
   it("continues a completed pretest into the session learning queue before new words", async () => {
