@@ -333,7 +333,9 @@ describe("complete WordLoop study flow", () => {
     }
 
     expect(visited).toEqual(["b", "d", "e"]);
-    expect(bootstrapMocks.getDueReviewSelection).toHaveBeenCalledOnce();
+    // One strict due-only query starts the fresh flow; the second runs only
+    // after the immutable Review snapshot completes.
+    expect(bootstrapMocks.getDueReviewSelection).toHaveBeenCalledTimes(2);
     expect(bootstrapMocks.getActiveStudySession).toHaveBeenCalledTimes(3);
   });
 });
