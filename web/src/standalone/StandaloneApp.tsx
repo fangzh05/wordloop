@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button.js";
 import {
   ApiError,
@@ -106,6 +106,11 @@ export function standaloneLessonProgressLabel(
   return index < relearnTotal
     ? `复习补学 · ${Math.min(index + 1, relearnTotal)} / ${relearnTotal}`
     : `新词学习 · ${Math.min(index - relearnTotal + 1, Math.max(1, queue.length - relearnTotal))} / ${Math.max(0, queue.length - relearnTotal)}`;
+}
+
+export function standaloneLessonDisplayTitle(word: string, exerciseMode: boolean, wrapup: boolean): string {
+  if (!exerciseMode) return word || "Lesson";
+  return wrapup ? "本轮收尾" : "填空练习";
 }
 
 export function dashboardContinueBehavior(view: WebApiResponse): "study" | "continue" {
@@ -274,10 +279,11 @@ export function StandaloneProgressBlock({ title, completed, total, emptyText, de
   </div>;
 }
 
-export function StandaloneDashboard({ view, busy, onContinue }: {
+export function StandaloneDashboard({ view, busy, onContinue, isStudying = false }: {
   view: WebApiResponse;
   busy: boolean;
   onContinue: () => void;
+  isStudying?: boolean;
 }): React.JSX.Element {
   const hasProgress = hasDashboardProgress(view.progress);
   const progress = record(view.progress);
@@ -287,6 +293,16 @@ export function StandaloneDashboard({ view, busy, onContinue }: {
   const fsrs = record(progress.fsrs);
   const activeSummary = activeStudySummary(view);
   const nextStep = dashboardNextStep(view);
+  const state = record(view.state);
+  const flow = record(state.flow);
+  const lessonProgress = view.screen === "lesson"
+    ? standaloneLessonProgressLabel(
+      wordsFrom(flow.relearn_words),
+      wordsFrom(flow.lesson_words),
+      numberValue(state.current_index),
+      state.phase === "lesson_complete" && record(state.payload).wrapup === true,
+    )
+    : null;
 
   return <>
     <section className="widget-card standalone-card standalone-progress-card" aria-label="今日学习进度">
@@ -310,29 +326,57 @@ export function StandaloneDashboard({ view, busy, onContinue }: {
       {activeSummary && <div className="standalone-active-study">
         <span className="eyebrow">当前学习</span>
         <p>{activeSummary}</p>
+        {lessonProgress && <p className="standalone-current-study-stage">{lessonProgress}</p>}
       </div>}
       <div className="standalone-active-study">
         <p><span>当前下一步：</span><strong>{nextStep}</strong></p>
+        {isStudying && <p className="standalone-current-learning" role="status">正在学习</p>}
       </div>
-      <div className="standalone-actions">
+      {!isStudying && <div className="standalone-actions">
         <Button className="primary" type="button" disabled={busy} onClick={onContinue}>继续学习</Button>
-      </div>
+      </div>}
     </section>
 
     {hasProgress && <section className="widget-card standalone-card" aria-label="学习状态">
       <span className="eyebrow">学习状态</span>
-      <dl className="metrics">
+      <dl className="metrics standalone-metrics-lifetime">
         <div><dt>错词</dt><dd>{numberValue(allTime.error_book)}</dd></div>
         <div><dt>已掌握</dt><dd>{numberValue(allTime.mastered)}</dd></div>
       </dl>
       <span className="eyebrow">复习安排</span>
-      <dl className="metrics">
+      <dl className="metrics standalone-metrics-fsrs">
         <div><dt>当前到期</dt><dd>{numberValue(fsrs.due_now)}</dd></div>
         <div><dt>明日到期</dt><dd>{numberValue(fsrs.tomorrow)}</dd></div>
         <div><dt>未来 7 天</dt><dd>{numberValue(fsrs.due_next_7_days)}</dd></div>
       </dl>
     </section>}
   </>;
+}
+
+export function StandaloneResponsiveLayout({ page, view, busy, onContinue, hasMainContent, children }: {
+  page: StandalonePage;
+  view: WebApiResponse | null;
+  busy: boolean;
+  onContinue: () => void;
+  hasMainContent: boolean;
+  children?: ReactNode;
+}): React.JSX.Element {
+  return <div
+    className="standalone-layout"
+    data-page={page}
+    data-has-dashboard={view ? "true" : "false"}
+    data-main-content={hasMainContent ? "true" : "false"}
+  >
+    <aside className="standalone-sidebar" aria-label="Dashboard" aria-hidden={!view}>
+      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} isStudying={page === "study"} />}
+    </aside>
+    <section className="standalone-main" aria-label="学习区">
+      {children}
+      {page === "dashboard" && view && !hasMainContent && <section className="widget-card standalone-card standalone-desktop-prompt" aria-label="学习提示">
+        <p>选择继续学习以恢复当前任务。</p>
+      </section>}
+    </section>
+  </div>;
 }
 
 function StandaloneStudyBackButton({ onBack }: { onBack: () => void }): React.JSX.Element {
@@ -348,6 +392,16 @@ export function StandaloneReviewHeader({ currentIndex, total, complete, onBack }
   return <header className="widget-header compact-header">
     <div className="standalone-study-heading"><StandaloneStudyBackButton onBack={onBack} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">复习</h1></div></div>
     <span className="standalone-count">{complete ? total : `${Math.min(currentIndex + 1, total)} / ${total}`}</span>
+  </header>;
+}
+
+export function StandaloneLessonHeader({ title, progressLabel, onBack }: {
+  title: string;
+  progressLabel: string;
+  onBack: () => void;
+}): React.JSX.Element {
+  return <header className="widget-header compact-header">
+    <div className="standalone-study-heading"><StandaloneStudyBackButton onBack={onBack} /><div><span className="eyebrow">{progressLabel}</span><div className="lesson-word-heading"><strong id="study-title">{title}</strong></div></div></div>
   </header>;
 }
 
@@ -673,9 +727,20 @@ export default function StandaloneApp(): React.JSX.Element {
     </main>;
   }
 
+  const hasMainContent = Boolean(errorMessage)
+    || pageStatus === "loading"
+    || (pageStatus === "ready" && !view && !errorMessage)
+    || visiblePage === "study";
+
   return <main className="standalone-shell">
     <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
-    {visiblePage === "dashboard" && view && <StandaloneDashboard view={view} busy={busy !== null} onContinue={continueFromDashboard} />}
+    <StandaloneResponsiveLayout
+      page={visiblePage}
+      view={view}
+      busy={busy !== null}
+      onContinue={continueFromDashboard}
+      hasMainContent={hasMainContent}
+    >
 
     {errorMessage && <section className="widget-card standalone-card" role="alert">
       <p className="standalone-status error">{errorMessage}</p>
@@ -752,23 +817,26 @@ export default function StandaloneApp(): React.JSX.Element {
       const feedbackMode = payload.mode === "feedback";
       const exerciseMode = payload.mode === "exercise";
       const phase = String(state.phase ?? "");
+      const displayTitle = standaloneLessonDisplayTitle(title, exerciseMode, isWrapup);
       const progressLabel = standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, isWrapup);
       return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
-        <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={() => setPage("dashboard")} /><div><span className="eyebrow">{progressLabel}</span><div className="lesson-word-heading"><strong id="study-title">{title}</strong></div></div></div></header>
+        <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={() => setPage("dashboard")} />
 
         {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content">
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>词性与核心义</h2><p>{String(payload.part_of_speech ?? "")} · {String(payload.meaning_zh ?? "")}</p></section>
-          <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).map((value) => <li key={value}>{value}</li>)}</ul></section>
-          <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
-          <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <p className="lesson-example-translation">{payload.example_zh}</p>}</section>
-          <section className="lesson-section"><h2>易混提醒</h2><p>{String(payload.note ?? "")}</p></section>
+          <div className="lesson-detail-grid">
+            <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).map((value) => <li key={value}>{value}</li>)}</ul></section>
+            <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
+          </div>
+          <section className="lesson-section"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p>}</section>
+          <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width">{String(payload.note ?? "")}</p></section>
           <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
         </div>}
 
         {phase === "lesson_exercise" && exerciseMode && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
-          <div className="lesson-prompt">{String(exercise.prompt ?? "")}</div>
+          <div className="lesson-prompt standalone-reading-width">{String(exercise.prompt ?? "")}</div>
           {exercise.multiline === true
             ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} />
             : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (!answer.trim()) return; void dispatch({ action: "lesson_submit", answer }); } }} />}
@@ -776,7 +844,7 @@ export default function StandaloneApp(): React.JSX.Element {
         </div>}
 
         {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
-          <div className="standalone-feedback"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
+          <div className="standalone-feedback standalone-reading-width"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           {notice && <p className="standalone-status" role="status">{notice}</p>}
           <div className="standalone-actions">
             {feedback.is_correct !== true && feedback.reveal_answer !== true
@@ -789,13 +857,13 @@ export default function StandaloneApp(): React.JSX.Element {
 
         {phase === "lesson_complete" && exerciseMode && isWrapup && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
-          <div className="lesson-prompt">{String(exercise.prompt ?? "")}</div>
+          <div className="lesson-prompt standalone-reading-width">{String(exercise.prompt ?? "")}</div>
           <textarea className="standalone-input" aria-label="长难句翻译与结构分析" value={answer} onChange={(event) => saveAnswer(event.target.value)} />
           <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "wrapup_submit", answer })}>提交收尾题</Button></div>
         </div>}
 
         {phase === "lesson_complete" && feedbackMode && isWrapup && <div className="standalone-content">
-          <div className="standalone-feedback"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
+          <div className="standalone-feedback standalone-reading-width"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           <div className="standalone-actions">
             {feedback.is_correct === true || feedback.reveal_answer === true
               ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "wrapup_finish" })}>完成本轮</Button>
@@ -813,6 +881,7 @@ export default function StandaloneApp(): React.JSX.Element {
     })()}
 
     {pageStatus === "loading" && view && <p className="standalone-status" role="status">{busyLabel ?? "正在同步学习状态…"}</p>}
+    </StandaloneResponsiveLayout>
   </main>;
 }
 
