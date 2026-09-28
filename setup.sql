@@ -72,7 +72,7 @@ create table if not exists public.attempts (
   session_id uuid references public.study_sessions(id) on delete set null,
   activity_type text not null check (activity_type in (
     'pretest_cn_to_en', 'pretest_en_definition', 'translation_cn_to_en',
-    'translation_en_to_cn', 'cloze', 'derivation', 'listening',
+    'translation_en_to_cn', 'cloze', 'exact_cloze', 'derivation', 'listening',
     'collocation', 'sentence', 'review', 'recall'
   )),
   user_answer text not null default '',
