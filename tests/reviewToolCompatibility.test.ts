@@ -106,6 +106,98 @@ describe("Review render tool schema compatibility", () => {
     wordMocks.getTodayWords.mockReset().mockResolvedValue([]);
   });
 
+  it("keeps an in-progress Review snapshot immutable when another card becomes due", async () => {
+    const snapshot = {
+      widget: "review",
+      title: "复习",
+      items: [{
+        word: "review-a",
+        meaning_zh: "测试含义",
+        direction: "cn_to_en",
+        error_layers: [],
+        is_due: true,
+        review_kind: "fsrs_due",
+        next_review_at: "2026-09-16T00:00:00.000Z",
+      }],
+    };
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      id: "review-a-session",
+      updated_at: "rev-a",
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "review",
+        phase: "review",
+        current_word: "review-a",
+        current_index: 0,
+        retry_count: 0,
+        flow: { relearn_words: [] },
+        payload: snapshot,
+      },
+    });
+    mockedGetDueReviewSelection.mockResolvedValue({
+      rollingReview: [reviewItem("review-b", "2026-09-16T00:05:00.000Z")],
+      oldRandomReview: [],
+    });
+
+    await withReviewClient(async (client) => {
+      const payload = payloadOf(await client.callTool({ name: "render_review_widget_v2", arguments: {} }));
+      expect(payload.items).toEqual(snapshot.items);
+    });
+    expect(mockedGetDueReviewSelection).not.toHaveBeenCalled();
+    expect(sessionMocks.persistStudyState).not.toHaveBeenCalled();
+  });
+
+  it("creates a new Review snapshot after the previous snapshot completes", async () => {
+    const completedPayload = {
+      widget: "review",
+      title: "复习",
+      items: [{
+        word: "review-a",
+        meaning_zh: "测试含义",
+        direction: "cn_to_en",
+        error_layers: [],
+        is_due: true,
+        review_kind: "fsrs_due",
+        next_review_at: "2026-09-16T00:00:00.000Z",
+      }],
+    };
+    const completedState = {
+      version: 1,
+      date: "2026-09-16",
+      widget: "review",
+      phase: "review_complete",
+      current_word: null,
+      current_index: 1,
+      retry_count: 0,
+      flow: { relearn_words: ["failed-word"] },
+      payload: completedPayload,
+    };
+    sessionMocks.getActiveStudySession.mockResolvedValue({
+      id: "review-a-session",
+      updated_at: "rev-a",
+      state: completedState,
+    });
+    mockedGetDueReviewSelection.mockResolvedValue({
+      rollingReview: [reviewItem("review-b", "2026-09-16T00:05:00.000Z")],
+      oldRandomReview: [],
+    });
+
+    await withReviewClient(async (client) => {
+      const payload = payloadOf(await client.callTool({ name: "render_review_widget_v2", arguments: {} }));
+      expect((payload.items as Array<{ word: string }>).map((item) => item.word)).toEqual(["review-b"]);
+    });
+    const persisted = sessionMocks.persistStudyState.mock.calls.at(-1)?.[0] as any;
+    expect(persisted).toMatchObject({
+      widget: "review",
+      phase: "review",
+      current_word: "review-b",
+      current_index: 0,
+      flow: { relearn_words: ["failed-word"] },
+    });
+    expect(completedState.payload.items).toEqual(completedPayload.items);
+  });
+
   it("requires word and feedback for the minimal Lesson feedback tool input", async () => {
     await withReviewClient(async (client) => {
       const missingFeedback = await client.callTool({

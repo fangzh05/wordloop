@@ -125,14 +125,19 @@ export function normalizeAnswer(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
+const INTERNAL_RECALL_SEPARATOR_PATTERN = /([\\p{L}\\p{N}])(?:\\s*[-\\u2010\\u2011\\u2013\\u2014]\\s*|\\s+)(?=[\\p{L}\\p{N}])/gu;
+
 /**
  * Canonical form used only for exact target-word recall. Word-internal
- * whitespace and dash-like separators are orthographic variants here, while
- * punctuation with lexical value (apostrophes, periods, etc.) is preserved.
+ * whitespace and the supported hyphen-like separators are orthographic
+ * variants here, while punctuation with lexical value (apostrophes, periods,
+ * leading/trailing hyphens, etc.) remains significant.
  */
 export function canonicalizeRecallForm(value: string): string {
   return normalizeAnswer(value)
-    .replace(/[\\s\\u00a0\\u2010\\u2011\\u2012\\u2013\\u2014\\u2015-]+/g, " ")
+    .replace(/\\s+/gu, " ")
+    .replace(INTERNAL_RECALL_SEPARATOR_PATTERN, "$1 ")
+    .replace(/\\s+/gu, " ")
     .trim();
 }
 
