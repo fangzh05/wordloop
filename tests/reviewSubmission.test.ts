@@ -42,7 +42,7 @@ function reviewSession(words: string[]): StudySessionRow {
     started_at: "2026-09-19T00:00:00Z",
     ended_at: null,
     new_words_count: 0,
-    review_words_count: words.length,
+    review_words_count: 0,
     state,
     updated_at: "2026-09-19T00:00:00Z",
   };
@@ -120,6 +120,8 @@ function fakeDatabase(options: FakeDbOptions) {
             return { data: null, error: { message: "cursor update failed" } };
           }
           if (updateValues?.state) activeSession = { ...activeSession, state: updateValues.state as StudySessionRow["state"] };
+          if (typeof updateValues?.new_words_count === "number") activeSession = { ...activeSession, new_words_count: updateValues.new_words_count };
+          if (typeof updateValues?.review_words_count === "number") activeSession = { ...activeSession, review_words_count: updateValues.review_words_count };
           if (typeof updateValues?.updated_at === "string") activeSession = { ...activeSession, updated_at: updateValues.updated_at };
           successfulUpdates += 1;
           return { data: activeSession, error: null };
@@ -375,6 +377,7 @@ describe("server-owned Review submission cursor", () => {
       .rejects.toThrow("cursor update failed");
     expect(fake.rpcCalls).toHaveLength(1);
     expect(fake.session.state).toMatchObject({ phase: "review", current_word: "recur", current_index: 0 });
+    expect(fake.session.review_words_count).toBe(0);
 
     await recordReviewSubmission(submission, new Date("2026-09-19T00:00:00Z"), false, fake.db as never, userId);
     await recordReviewSubmission(submission, new Date("2026-09-19T00:00:00Z"), false, fake.db as never, userId);
@@ -382,5 +385,6 @@ describe("server-owned Review submission cursor", () => {
     expect(fake.rpcCalls).toHaveLength(1);
     expect(fake.successfulUpdates).toBe(1);
     expect(fake.session.state).toMatchObject({ phase: "review_complete", current_word: null, current_index: 1 });
+    expect(fake.session.review_words_count).toBe(1);
   });
 });

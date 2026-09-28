@@ -117,22 +117,110 @@ function assertState(state: StudyState): StudyState {
   return parsed.data;
 }
 
+function isFormalReviewItem(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const reviewKind = (value as { review_kind?: unknown }).review_kind;
+  return reviewKind === "fsrs_due" || reviewKind === "both";
+}
+
 function reviewSnapshotCount(state: StudyState | null | undefined): number {
-  return state?.widget === "review" && Array.isArray(state.payload.items) ? state.payload.items.length : 0;
+  if (state?.widget !== "review" || !Array.isArray(state.payload.items)) return 0;
+  return state.payload.items.filter(isFormalReviewItem).length;
+}
+
+function reviewSnapshotWords(state: StudyState | null | undefined): string[] {
+  if (state?.widget !== "review" || !Array.isArray(state.payload.items)) return [];
+  return state.payload.items.flatMap((item) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) return [];
+    const word = (item as { word?: unknown }).word;
+    const normalized = typeof word === "string" ? normalizeWord(word) : "";
+    return normalized ? [normalized] : [];
+  });
 }
 
 function completedReviewCount(state: StudyState | null | undefined): number {
-  if (state?.widget !== "review") return 0;
-  return state.phase === "review_complete"
-    ? reviewSnapshotCount(state)
-    : Math.min(reviewSnapshotCount(state), Math.max(0, state.current_index));
+  if (state?.widget !== "review" || !Array.isArray(state.payload.items)) return 0;
+  const completedPrefix = state.phase === "review_complete"
+    ? state.payload.items.length
+    : Math.min(state.payload.items.length, Math.max(0, state.current_index));
+  return state.payload.items.slice(0, completedPrefix).filter(isFormalReviewItem).length;
+}
+
+function completedNewWordCount(state: StudyState | null | undefined): number {
+  if (state?.widget !== "pretest") return 0;
+  const parsedItems = pretestItemsSchema.safeParse(state.payload.items);
+  if (!parsedItems.success) return 0;
+
+  const completedCount = state.phase === "pretest_complete"
+    ? parsedItems.data.length
+    : Math.min(parsedItems.data.length, Math.max(0,
+      state.current_index + (state.phase === "pretest" ? 0 : 1),
+    ));
+  const relearnWords = new Set(state.flow.relearn_words.map(normalizeWord));
+  return new Set(parsedItems.data
+    .slice(0, completedCount)
+    .map((item) => normalizeWord(item.word))
+    .filter((word) => word && !relearnWords.has(word))).size;
+}
+
+function sameSnapshotWords(left: readonly string[], right: readonly string[]): boolean {
+  return left.length > 0 && left.length === right.length && left.every((word, index) => word === right[index]);
+}
+
+function samePretestSnapshot(left: StudyState | null | undefined, right: StudyState): boolean {
+  if (left?.widget !== "pretest" || right.widget !== "pretest") return false;
+  const leftItems = pretestItemsSchema.safeParse(left.payload.items);
+  const rightItems = pretestItemsSchema.safeParse(right.payload.items);
+  if (!leftItems.success || !rightItems.success) return false;
+  return sameSnapshotWords(
+    leftItems.data.map((item) => normalizeWord(item.word)),
+    rightItems.data.map((item) => normalizeWord(item.word)),
+  );
+}
+
+function sameReviewSnapshot(left: StudyState | null | undefined, right: StudyState): boolean {
+  if (left?.widget !== "review" || right.widget !== "review") return false;
+  return sameSnapshotWords(reviewSnapshotWords(left), reviewSnapshotWords(right));
+}
+
+function storedCount(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function newWordsCountForUpdate(session: StudySessionRow, nextState: StudyState): number {
+  const savedCount = storedCount(session.new_words_count);
+  const previousSnapshotCount = completedNewWordCount(session.state);
+  const nextSnapshotCount = completedNewWordCount(nextState);
+
+  if (samePretestSnapshot(session.state, nextState)) {
+    const completedBeforeSnapshot = Math.max(0, savedCount - previousSnapshotCount);
+    return Math.max(savedCount, completedBeforeSnapshot + nextSnapshotCount);
+  }
+
+  const completedBeforeNextState = Math.max(savedCount, previousSnapshotCount);
+  return nextState.widget === "pretest"
+    ? completedBeforeNextState + nextSnapshotCount
+    : completedBeforeNextState;
 }
 
 function reviewWordsCountForUpdate(session: StudySessionRow, nextState: StudyState): number {
-  if (nextState.widget === "review") return completedReviewCount(nextState);
-  return session.review_words_count > 0
-    ? session.review_words_count
-    : completedReviewCount(session.state);
+  const savedCount = storedCount(session.review_words_count);
+  const previousSnapshotCount = completedReviewCount(session.state);
+  const nextSnapshotCount = completedReviewCount(nextState);
+
+  if (nextState.widget !== "review") {
+    return Math.max(savedCount, previousSnapshotCount);
+  }
+
+  const startsNextSnapshot = session.state?.widget === "review"
+    && session.state.phase === "review_complete"
+    && nextState.phase === "review";
+  if (!startsNextSnapshot && sameReviewSnapshot(session.state, nextState)) {
+    const completedBeforeSnapshot = Math.max(0, savedCount - previousSnapshotCount);
+    return Math.max(savedCount, completedBeforeSnapshot + nextSnapshotCount);
+  }
+
+  return Math.max(savedCount, previousSnapshotCount) + nextSnapshotCount;
 }
 
 async function updateSessionState(
@@ -143,13 +231,15 @@ async function updateSessionState(
 ): Promise<StudySessionRow> {
   const nextState = assertState(state);
   const updatedAt = new Date().toISOString();
+  const newWordsCount = newWordsCountForUpdate(session, nextState);
   const reviewWordsCount = reviewWordsCountForUpdate(session, nextState);
   const { data, error } = await db
     .from("study_sessions")
     .update({
       state: nextState,
       updated_at: updatedAt,
-      ...(reviewWordsCount > 0 ? { review_words_count: reviewWordsCount } : {}),
+      new_words_count: newWordsCount,
+      review_words_count: reviewWordsCount,
     })
     .eq("id", session.id)
     .eq("user_id", userId)
@@ -273,8 +363,8 @@ export async function getOrCreateActiveStudySession(
   if (initialState) {
     const state = assertState(initialState);
     insertValues.state = state;
-    const reviewWordsCount = completedReviewCount(state);
-    if (reviewWordsCount > 0) insertValues.review_words_count = reviewWordsCount;
+    insertValues.new_words_count = completedNewWordCount(state);
+    insertValues.review_words_count = completedReviewCount(state);
   }
   const { data, error } = await db
     .from("study_sessions")
@@ -303,7 +393,8 @@ export async function persistStudyState(
     .insert({
       user_id: userId,
       state: nextState,
-      ...(completedReviewCount(nextState) > 0 ? { review_words_count: completedReviewCount(nextState) } : {}),
+      new_words_count: completedNewWordCount(nextState),
+      review_words_count: completedReviewCount(nextState),
     })
     .select(sessionColumns)
     .single();
@@ -351,7 +442,8 @@ export async function persistStudyStateIfRevision(
       .insert({
         user_id: userId,
         state: nextState,
-        ...(completedReviewCount(nextState) > 0 ? { review_words_count: completedReviewCount(nextState) } : {}),
+        new_words_count: completedNewWordCount(nextState),
+        review_words_count: completedReviewCount(nextState),
       })
       .select(sessionColumns)
       .maybeSingle();
@@ -362,13 +454,15 @@ export async function persistStudyStateIfRevision(
   }
 
   if (expectedRevision === null) throw new StaleStudyStateError();
+  const newWordsCount = newWordsCountForUpdate(active, nextState);
   const reviewWordsCount = reviewWordsCountForUpdate(active, nextState);
   const { data, error } = await db
     .from("study_sessions")
     .update({
       state: nextState,
       updated_at: nextRevision(expectedRevision),
-      ...(reviewWordsCount > 0 ? { review_words_count: reviewWordsCount } : {}),
+      new_words_count: newWordsCount,
+      review_words_count: reviewWordsCount,
     })
     .eq("id", active.id)
     .eq("user_id", userId)
@@ -771,6 +865,10 @@ export async function advanceStudySession(
     && active.state.phase === "lesson_exercise"
     && (event === "lesson_start_exercise" || event === "lesson_retry")) {
     return active;
+  }
+  if (nextState !== active.state && event === "review_answer" && reviewAnswer && active.state.widget === "review") {
+    const item = reviewItems(active.state)[reviewAnswer.current_index];
+    if (isFormalReviewItem(item)) throw new Error("FSRS_REVIEW_SUBMISSION_REQUIRED");
   }
   return updateSessionState(active, nextState, db, userId);
 }
