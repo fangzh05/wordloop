@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { UserWordRow, StudySessionRow } from "../server/types.js";
 import { recordReviewSubmission } from "../server/services/fsrsReviews.js";
+import { getDueReviewSelection } from "../server/services/review.js";
 import { makeStudyState } from "../server/services/studySessions.js";
 import type { RecordReviewSubmissionInput, ReviewWidgetPayload } from "../shared/toolContracts.js";
 import { gradeExactRecall } from "../web/src/grading/deterministic.js";
@@ -139,8 +140,49 @@ function fakeDatabase(options: FakeDbOptions) {
     async rpc(name: string, args: Record<string, unknown>) {
       rpcCalls.push({ name, args });
       if (options.rpcError) return { data: null, error: options.rpcError };
+      if (name === "get_due_review_candidates_v1") {
+        const isDue = Boolean(row.next_review_at)
+          && Date.parse(row.next_review_at!) <= Date.parse(String(args.p_now));
+        return {
+          data: isDue ? [{
+            word: "air-conditioning",
+            display_word: "air-conditioning",
+            status: row.status,
+            source: row.source,
+            consecutive_correct: row.consecutive_correct,
+            wrong_count: row.wrong_count,
+            mastered: row.mastered,
+            next_review_at: row.next_review_at,
+            meaning_error: row.meaning_error,
+            collocation_error: row.collocation_error,
+            grammar_error: row.grammar_error,
+            pronunciation_error: row.pronunciation_error,
+            spelling_error: row.spelling_error,
+            fsrs_stability: row.fsrs_stability,
+            fsrs_difficulty: row.fsrs_difficulty,
+            fsrs_scheduled_days: row.fsrs_scheduled_days,
+            fsrs_state: row.fsrs_state,
+            ipa_us: null,
+            ipa_uk: null,
+            senses: [],
+          }] : [],
+          error: null,
+        };
+      }
       const card = args.p_card as Record<string, unknown>;
-      row = { ...row, next_review_at: card.next_review_at as string };
+      row = {
+        ...row,
+        next_review_at: card.next_review_at as string,
+        last_reviewed_at: card.last_reviewed_at as string | null,
+        fsrs_stability: card.fsrs_stability as number,
+        fsrs_difficulty: card.fsrs_difficulty as number,
+        fsrs_elapsed_days: card.fsrs_elapsed_days as number,
+        fsrs_scheduled_days: card.fsrs_scheduled_days as number,
+        fsrs_learning_steps: card.fsrs_learning_steps as number,
+        fsrs_reps: card.fsrs_reps as number,
+        fsrs_lapses: card.fsrs_lapses as number,
+        fsrs_state: card.fsrs_state as number,
+      };
       return { data: { attempt: { saved: true }, review: { saved: true } }, error: null };
     },
   };
@@ -171,25 +213,44 @@ const failedSubmission: RecordReviewSubmissionInput = {
 };
 
 describe("exact recall separator canonicalization", () => {
-  it.each([
-    ["air-conditioning", "air-conditioning"],
-    ["air conditioning", "air-conditioning"],
-    ["air   conditioning", "air-conditioning"],
-    ["air–conditioning", "air-conditioning"],
-    ["air—conditioning", "air-conditioning"],
-    ["air‑conditioning", "air-conditioning"],
-    ["well being", "well-being"],
-  ])("treats %s as orthographically equivalent to %s", (answer, target) => {
-    expect(gradeExactRecall(answer, target)).toMatchObject({
+  it("treats requested internal separator variants as mutually exact-equivalent Good recall", () => {
+    const forms = [
+      "air-conditioning",
+      "air conditioning",
+      "air   conditioning",
+      "air–conditioning",
+      "air—conditioning",
+      "air‑conditioning",
+    ];
+    for (const answer of forms) {
+      for (const target of forms) {
+        expect(gradeExactRecall(answer, target)).toMatchObject({
+          is_correct: true,
+          error_layer: "none",
+          rating: "good",
+          graded_by: "deterministic",
+        });
+      }
+    }
+    expect(gradeExactRecall("well being", "well-being")).toMatchObject({
       is_correct: true,
       error_layer: "none",
       rating: "good",
-      graded_by: "deterministic",
     });
   });
 
-  it("does not erase punctuation that carries spelling meaning", () => {
+  it("does not erase punctuation outside internal separators", () => {
     expect(gradeExactRecall("cant", "can't")).not.toMatchObject({
+      is_correct: true,
+      error_layer: "none",
+      rating: "good",
+    });
+    expect(gradeExactRecall("-opaque", "opaque")).not.toMatchObject({
+      is_correct: true,
+      error_layer: "none",
+      rating: "good",
+    });
+    expect(gradeExactRecall("opaque-", "opaque")).not.toMatchObject({
       is_correct: true,
       error_layer: "none",
       rating: "good",
@@ -240,6 +301,9 @@ describe("server-owned Review submission cursor", () => {
     });
     const card = fake.rpcCalls[0]?.args.p_card as Record<string, unknown>;
     expect(Date.parse(String(card.next_review_at))).toBeGreaterThan(now.getTime());
+
+    const due = await getDueReviewSelection(25, fake.db as never, userId, now);
+    expect(due.rollingReview.map((item) => item.word)).not.toContain("air-conditioning");
   });
 
   it("persists attempt and FSRS once, then advances the due cursor", async () => {

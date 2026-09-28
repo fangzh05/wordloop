@@ -6,6 +6,7 @@ import { getTodayCompletedLessonWords } from "../services/attempts.js";
 import { ensureTodayQueue } from "../services/dailyQueue.js";
 import { getProgress } from "../services/progress.js";
 import {
+  filterDueCandidatesAfterCompletedSnapshot,
   getDueReviewSelection,
 } from "../services/review.js";
 import {
@@ -628,16 +629,24 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
   if (expectedRevision !== undefined && (active?.updated_at ?? null) !== expectedRevision) {
     throw new Error("STALE_STUDY_STATE");
   }
-  if (active?.state?.widget === "review") {
+  if (active?.state?.widget === "review" && active.state.phase !== "review_complete") {
     const resumed = reviewWidgetPayloadSchema.safeParse(widgetPayloadWithState(active.state.payload, active.state));
     if (!resumed.success) throw new Error("Saved review session payload is invalid.");
     return normalizeReviewWidgetPayload(resumed.data);
   }
-  if (active?.state) throw new Error("A different WordLoop study session is already active.");
+  if (active?.state && active.state.widget !== "review") {
+    throw new Error("A different WordLoop study session is already active.");
+  }
 
+  const completedReviewState = active?.state?.widget === "review" && active.state.phase === "review_complete"
+    ? active.state
+    : null;
   const { rollingReview } = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
-  if (rollingReview.length === 0) throw new Error("No review words are currently due.");
-  const items = buildReviewWidgetItems(rollingReview, REVIEW_SESSION_MAX);
+  const candidates = completedReviewState
+    ? filterDueCandidatesAfterCompletedSnapshot(rollingReview, completedReviewState.payload.items)
+    : rollingReview;
+  if (candidates.length === 0) throw new Error("No review words are currently due.");
+  const items = buildReviewWidgetItems(candidates, REVIEW_SESSION_MAX);
   if (items.length === 0) throw new Error("到期复习词缺少释义数据。");
   const payload = reviewWidgetPayloadSchema.parse({
     widget: "review",
@@ -651,7 +660,7 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
     current_word: items[0]?.word ?? null,
     current_index: 0,
     retry_count: 0,
-    flow: { relearn_words: [] },
+    flow: completedReviewState?.flow ?? { relearn_words: [] },
     payload,
   });
   const persisted = expectedRevision === undefined

@@ -211,8 +211,9 @@ describe("study bootstrap daily queue invariant", () => {
     expect(mocks.getTodayWords).not.toHaveBeenCalled();
   });
 
-  it("does not reopen an identical completed Review snapshot if a stale due query returns the same cards", async () => {
-    const previous = { ...word(1, "review"), word: "review-a", display_word: "review-a", next_review_at: "2026-09-16T04:00:00.000Z" };
+  it("does not reopen a completed Review card whose due timestamp never advanced", async () => {
+    const previousDue = "2026-09-16T04:00:00.000Z";
+    const previous = { ...word(1, "review"), word: "review-a", display_word: "review-a", next_review_at: previousDue };
     mocks.getActiveStudySession.mockResolvedValue({
       state: {
         version: 1,
@@ -223,7 +224,7 @@ describe("study bootstrap daily queue invariant", () => {
         current_index: 1,
         retry_count: 0,
         flow: { relearn_words: [] },
-        payload: { widget: "review", items: [{ word: "review-a" }] },
+        payload: { widget: "review", items: [{ word: "review-a", next_review_at: previousDue }] },
       },
     });
     mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [previous], oldRandomReview: [] });
@@ -232,6 +233,31 @@ describe("study bootstrap daily queue invariant", () => {
     await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
     expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
     expect(mocks.getTodayWords).toHaveBeenCalledOnce();
+  });
+
+  it("allows the same card into a later snapshot after it received a new due timestamp and became due again", async () => {
+    const oldDue = "2026-09-16T04:00:00.000Z";
+    const rescheduledDue = "2026-09-16T04:10:00.000Z";
+    mocks.getActiveStudySession.mockResolvedValue({
+      state: {
+        version: 1,
+        date: "2026-09-16",
+        widget: "review",
+        phase: "review_complete",
+        current_word: null,
+        current_index: 1,
+        retry_count: 0,
+        flow: { relearn_words: [] },
+        payload: { widget: "review", items: [{ word: "review-a", next_review_at: oldDue }] },
+      },
+    });
+    mocks.getDueReviewSelection.mockResolvedValue({
+      rollingReview: [{ ...word(1, "review"), word: "review-a", display_word: "review-a", next_review_at: rescheduledDue }],
+      oldRandomReview: [],
+    });
+
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "review", count: 1 });
+    expect(mocks.getTodayWords).not.toHaveBeenCalled();
   });
 
   it("keeps an active Review snapshot immutable even if another card would be due now", async () => {

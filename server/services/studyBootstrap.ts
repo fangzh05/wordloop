@@ -3,6 +3,7 @@ import { getTodayCompletedLessonWords } from "./attempts.js";
 import type { StudyPhase, StudySessionRow, VocabularyItem } from "../types.js";
 import { ensureTodayQueue } from "./dailyQueue.js";
 import {
+  filterDueCandidatesAfterCompletedSnapshot,
   getDueReviewSelection,
 } from "./review.js";
 import {
@@ -14,7 +15,6 @@ import {
 } from "./studySessions.js";
 import { getTodayWords, getVocabularyItemsByWords } from "./words.js";
 import { buildLessonWords, lessonWordsFromFlow } from "./lessonQueue.js";
-import { normalizeWord } from "./wordNormalization.js";
 import { perf } from "./perf.js";
 import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 
@@ -63,29 +63,6 @@ async function lessonAction(
     : { action: "lesson", word };
 }
 
-function reviewSnapshotWords(active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>): string[] {
-  const items = active.state?.widget === "review" && Array.isArray(active.state.payload.items)
-    ? active.state.payload.items
-    : [];
-  return items
-    .map((item) => {
-      if (!item || typeof item !== "object" || !("word" in item) || typeof item.word !== "string") return "";
-      return normalizeWord(item.word);
-    })
-    .filter(Boolean);
-}
-
-function isSameReviewSnapshot(
-  active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>,
-  words: readonly VocabularyItem[],
-): boolean {
-  const previous = reviewSnapshotWords(active);
-  const next = words.map((word) => normalizeWord(word.word)).filter(Boolean);
-  return previous.length > 0
-    && previous.length === next.length
-    && previous.every((word, index) => word === next[index]);
-}
-
 async function continueCompletedReview(
   active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>,
   deferLessonQueueFreeze: boolean,
@@ -99,8 +76,12 @@ async function continueCompletedReview(
   // query strict FSRS due cards again so cards that became due during the
   // previous snapshot can form the next small Review snapshot.
   const newlyDue = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
-  if (newlyDue.rollingReview.length > 0 && !isSameReviewSnapshot(active, newlyDue.rollingReview)) {
-    return { action: "review", count: newlyDue.rollingReview.length };
+  const eligibleDue = filterDueCandidatesAfterCompletedSnapshot(
+    newlyDue.rollingReview,
+    active.state?.payload.items,
+  );
+  if (eligibleDue.length > 0) {
+    return { action: "review", count: eligibleDue.length };
   }
 
   const todayWords = await getTodayWords(date, db, userId);

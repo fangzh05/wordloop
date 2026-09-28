@@ -80,6 +80,32 @@ export function selectDueReviewWords(
     .slice(0, boundedLimit);
 }
 
+/**
+ * Exclude only cards whose persisted due timestamp is unchanged from the
+ * completed immutable snapshot. This prevents reopening an unadvanced stale
+ * snapshot without suppressing a card that was successfully rescheduled and
+ * later became genuinely due again.
+ */
+export function filterDueCandidatesAfterCompletedSnapshot(
+  candidates: ReviewVocabularyItem[],
+  completedSnapshotItems: unknown,
+): ReviewVocabularyItem[] {
+  if (!Array.isArray(completedSnapshotItems) || completedSnapshotItems.length === 0) return candidates;
+  const priorDueByWord = new Map<string, string | null>();
+  for (const raw of completedSnapshotItems) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as { word?: unknown; next_review_at?: unknown };
+    if (typeof item.word !== "string") continue;
+    if (typeof item.next_review_at !== "string" && item.next_review_at !== null) continue;
+    priorDueByWord.set(normalizeWord(item.word), item.next_review_at);
+  }
+  return candidates.filter((candidate) => {
+    const normalized = normalizeWord(candidate.word);
+    if (!priorDueByWord.has(normalized)) return true;
+    return (candidate.next_review_at ?? null) !== priorDueByWord.get(normalized);
+  });
+}
+
 export async function getReviewSelection(
   limit = REVIEW_SESSION_MAX,
   db = getDatabase(),

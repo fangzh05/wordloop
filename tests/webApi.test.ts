@@ -738,6 +738,38 @@ describe("Standalone Web API shared-state boundaries", () => {
     log.mockRestore();
   });
 
+  it("submits separator-equivalent air-conditioning recall as Good with no spelling error", async () => {
+    const reviewState = makeStudyState({
+      date, widget: "review", phase: "review", current_word: "air-conditioning", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "review", items: [{
+        word: "air-conditioning", meaning_zh: "空调", direction: "cn_to_en",
+        error_layers: [], is_due: true, review_kind: "fsrs_due", next_review_at: "2026-09-26T00:00:00.000Z",
+      }] },
+    });
+    mocks.recordReviewSubmission.mockImplementation(async () => {
+      mocks.active = {
+        ...mocks.active,
+        state: { ...mocks.active.state, phase: "review_complete", current_word: null, current_index: 1 },
+        updated_at: `rev-${++mocks.revisionNumber}`,
+      };
+    });
+    mocks.active = row(reviewState);
+
+    const response = await handleWebApiRequest(post({ action: "review_submit", answer: "air conditioning" }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.recordReviewSubmission).toHaveBeenCalledTimes(1);
+    expect(mocks.recordReviewSubmission.mock.calls[0]?.[0]).toMatchObject({
+      word: "air-conditioning",
+      user_answer: "air conditioning",
+      is_correct: true,
+      error_layer: "none",
+      rating: "good",
+      direction: "cn_to_en",
+    });
+  });
+
   it("preserves deterministic Review near-miss Hard and failure Again ratings", async () => {
     const reviewState = makeStudyState({
       date, widget: "review", phase: "review", current_word: "fixture", current_index: 0, retry_count: 0,
