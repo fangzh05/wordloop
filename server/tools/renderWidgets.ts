@@ -32,6 +32,7 @@ import {
   LESSON_WIDGET_VERSION,
   containsTargetWord,
   isValidExactClozePrompt,
+  normalizeReviewWidgetPayload,
   reviewWidgetItemSchema,
   reviewWidgetPayloadSchema,
   type ReviewWidgetItem,
@@ -630,7 +631,7 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
   if (active?.state?.widget === "review") {
     const resumed = reviewWidgetPayloadSchema.safeParse(widgetPayloadWithState(active.state.payload, active.state));
     if (!resumed.success) throw new Error("Saved review session payload is invalid.");
-    return resumed.data;
+    return normalizeReviewWidgetPayload(resumed.data);
   }
   if (active?.state) throw new Error("A different WordLoop study session is already active.");
 

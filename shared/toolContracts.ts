@@ -191,6 +191,14 @@ export const reviewWidgetPayloadSchema = z.object({
 }).strict();
 export type ReviewWidgetPayload = z.output<typeof reviewWidgetPayloadSchema>;
 
+/** Review prompts must not expose the English answer before the user responds. */
+export function normalizeReviewWidgetPayload(payload: ReviewWidgetPayload): ReviewWidgetPayload {
+  return {
+    ...payload,
+    items: payload.items.map((item) => ({ ...item, direction: "cn_to_en" as const })),
+  };
+}
+
 export const getNextLearningWordSchema = z.object({
   current_word: z.string().trim().min(1).max(100),
 });

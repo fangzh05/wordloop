@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { normalizeReviewWidgetPayload, reviewWidgetPayloadSchema } from "../shared/toolContracts.js";
 import { buildReviewSubmission, correctSpellingForReview, gradeReviewCnToEn, isReviewCardAlreadyCompleteResult, ReviewQuestion, reviewAutoAdvanceDelay, shouldAdvanceFsrs } from "../web/src/review/ReviewWidget.js";
 
 const base = {
@@ -22,12 +23,23 @@ describe("ReviewQuestion", () => {
     expect(markup).not.toContain("recur");
   });
 
-  it("supports English definition review without exposing the Chinese meaning", () => {
+  it("does not expose the target for legacy English-definition review items", () => {
     const markup = renderToStaticMarkup(<ReviewQuestion item={{ ...base, word: "recur", direction: "en_definition", error_layers: [], is_due: false, review_kind: "fsrs_due", next_review_at: "2026-09-20T00:00:00Z" }} />);
-    expect(markup).toContain("英 → 英");
-    expect(markup).toContain("recur");
+    expect(markup).toContain("中 → 英");
+    expect(markup).toContain("再次发生；复发");
+    expect(markup).not.toContain("recur");
     expect(markup).toContain("v.");
-    expect(markup).not.toContain("再次发生；复发");
+  });
+
+  it("normalizes resumed English-definition review payloads before display", () => {
+    const parsed = reviewWidgetPayloadSchema.parse({
+      widget: "review",
+      items: [{ ...base, word: "recur", direction: "en_definition" }],
+    });
+    const normalized = normalizeReviewWidgetPayload(parsed);
+    expect(normalized.items[0]?.direction).toBe("cn_to_en");
+    const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
+    expect(source).toContain("normalizeReviewWidgetPayload(parsed.data)");
   });
 
   it("grades Chinese-to-English review locally", () => {
@@ -48,15 +60,12 @@ describe("ReviewQuestion", () => {
     expect(source).toContain("正确拼法：");
   });
 
-  it("renders immediately and only checks sampling for legacy English-definition cards", () => {
+  it("normalizes directions before initializing the review UI", () => {
     const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
     const initialize = source.slice(source.indexOf("function initializePayload"), source.indexOf("useEffect(() => subscribeToApp"));
-    expect(initialize).toContain("setPayload(nextPayload)");
+    expect(initialize).toContain("normalizeReviewWidgetPayload(nextPayload)");
+    expect(initialize).toContain("setPayload(safePayload)");
     expect(initialize).toContain("setIndex(Math.min(persistedIndex");
-    expect(initialize).not.toContain("await getSamplingAvailability");
-    expect(initialize).toContain('entry.direction === "en_definition"');
-    expect(initialize).toContain("void getSamplingAvailability().then");
-    expect(initialize).toContain("effectiveReviewDirection(entry.direction, available)");
   });
 
   it("uses the backend review kind without re-querying due state", () => {
