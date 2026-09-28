@@ -396,7 +396,7 @@ describe("study bootstrap daily queue invariant", () => {
     });
   });
 
-  it("keeps a completed Lesson open for the long-sentence wrap-up", async () => {
+  it("keeps a completed Lesson open for its backend cadence handoff", async () => {
     const completed = {
       id: "completed-session",
       ended_at: null as string | null,
@@ -459,7 +459,7 @@ describe("study bootstrap daily queue invariant", () => {
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
   });
 
-  it("does not skip the wrap-up even when the daily flow is empty", async () => {
+  it("keeps the final Lesson handoff even when the daily flow is empty", async () => {
     const completed = {
       id: "completed-session",
       ended_at: null as string | null,
@@ -482,7 +482,7 @@ describe("study bootstrap daily queue invariant", () => {
     expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
   });
 
-  it("does not let due review preempt an unfinished wrap-up", async () => {
+  it("does not let due review preempt an unfinished final Lesson handoff", async () => {
     const completed = {
       id: "completed-session",
       ended_at: null as string | null,

@@ -20,6 +20,7 @@ import {
   lessonWordIndex,
   recoverLegacyLessonWords,
 } from "./lessonQueue.js";
+import { decideLessonConsolidation } from "./lessonConsolidation.js";
 
 const sessionColumns = "id,user_id,started_at,ended_at,new_words_count,review_words_count,state,updated_at";
 const pretestItemsSchema = z.array(z.object({ word: z.string().trim().min(1).max(100) })).max(7);
@@ -946,6 +947,22 @@ export function advanceStudyState(
       return { ...state, phase: "lesson_exercise", payload: nextPayload };
     }
     if (event === "lesson_retry") {
+      if (state.phase === "lesson_complete" && state.payload.consolidation === true) {
+        const status = z.enum(["exercise", "feedback"]).safeParse(state.payload.consolidation_status);
+        const feedback = typeof state.payload.feedback === "object" && state.payload.feedback !== null
+          ? state.payload.feedback as Record<string, unknown>
+          : null;
+        if (requestedIndex !== undefined && requestedIndex !== state.current_index) throw new Error("LESSON_CURSOR_MISMATCH");
+        if (status.success && status.data === "exercise" && state.retry_count === 1) return state;
+        if (!status.success || status.data !== "feedback" || state.retry_count !== 1
+          || feedback?.is_correct !== false || feedback.reveal_answer !== false) {
+          throw stateError(event, state.phase);
+        }
+        return {
+          ...state,
+          payload: { ...exercisePayload(state), consolidation_status: "exercise" },
+        };
+      }
       if (state.phase === "lesson_exercise") {
         if (requestedIndex !== undefined && requestedIndex !== state.current_index) throw stateError(event, state.phase);
         if (isCanonicalLessonExerciseState(state)) return state;
@@ -985,11 +1002,12 @@ export async function advanceStudySession(
 ): Promise<StudySessionRow> {
   const active = await getActiveStudySession(db, userId);
   if (!active?.state) throw new Error("No resumable active study session.");
-  const nextState = advanceStudyState(active.state, event, requestedIndex, reviewAnswer);
-  if (nextState === active.state
-    && active.state.widget === "lesson"
-    && active.state.phase === "lesson_exercise"
-    && (event === "lesson_start_exercise" || event === "lesson_retry")) {
+  let nextState = advanceStudyState(active.state, event, requestedIndex, reviewAnswer);
+  if (event === "lesson_complete" && nextState.widget === "lesson" && nextState.phase === "lesson_complete") {
+    nextState = await decideLessonConsolidation(nextState, db, userId);
+  }
+  if (nextState === active.state && active.state.widget === "lesson"
+    && (event === "lesson_start_exercise" || event === "lesson_retry" || event === "lesson_complete")) {
     return active;
   }
   if (nextState !== active.state && event === "review_answer" && reviewAnswer && active.state.widget === "review") {
@@ -1009,7 +1027,10 @@ export async function advanceStudySessionIfRevision(
 ): Promise<StudySessionRow> {
   const active = await assertActiveStudySessionRevision(expectedRevision, expectedSessionId, db, userId);
   if (!active?.state) throw new Error("NO_ACTIVE_SESSION");
-  const nextState = advanceStudyState(active.state, event, requestedIndex);
+  let nextState = advanceStudyState(active.state, event, requestedIndex);
+  if (event === "lesson_complete" && nextState.widget === "lesson" && nextState.phase === "lesson_complete") {
+    nextState = await decideLessonConsolidation(nextState, db, userId);
+  }
   if (nextState === active.state) return active;
   return persistStudyStateIfRevision(nextState, expectedRevision, db, userId, expectedSessionId);
 }
@@ -1116,15 +1137,27 @@ export function studySessionSummary(session: StudySessionRow | null, pretestResu
   current_word?: string | null;
   current_index?: number;
   revision?: string;
+  consolidation?: { kind: "translation" | "sentence"; trigger_round: number; target_words: string[] };
   pretest_results?: Array<{ word: string; status: string; user_answer?: string; is_correct?: boolean; error_layer?: string }>;
 } {
   if (!session || session.ended_at || !session.state) return { active: false };
+  const rawConsolidation = session.state.payload.consolidation === true
+    && (session.state.payload.consolidation_kind === "translation" || session.state.payload.consolidation_kind === "sentence")
+    && typeof session.state.payload.consolidation_trigger_round === "number"
+    && Array.isArray(session.state.payload.consolidation_target_words)
+    ? {
+      kind: session.state.payload.consolidation_kind as "translation" | "sentence",
+      trigger_round: session.state.payload.consolidation_trigger_round,
+      target_words: session.state.payload.consolidation_target_words.filter((word): word is string => typeof word === "string"),
+    }
+    : null;
   const summary = {
     active: true,
     widget: session.state.widget,
     phase: session.state.phase,
     current_word: session.state.current_word,
     current_index: session.state.current_index,
+    ...(rawConsolidation ? { consolidation: rawConsolidation } : {}),
   };
   if (session.state.widget === "pretest" && pretestResults) {
     return { ...summary, revision: session.updated_at, pretest_results: pretestResults };
@@ -1132,12 +1165,7 @@ export function studySessionSummary(session: StudySessionRow | null, pretestResu
   return summary;
 }
 
-/**
- * A Lesson round is not a finished study session until its one long-sentence
- * wrap-up has produced an accepted or fully revealed feedback payload. Keep
- * this boundary server-owned so a bootstrap retry or an eager model call
- * cannot release the session before the wrap-up is durable.
- */
+/** A persisted legacy translation wrap-up or a completed consolidation may finish the round. */
 export function isCompletedLessonWrapup(state: StudyState | null): boolean {
   if (!state || state.widget !== "lesson" || state.phase !== "lesson_complete") return false;
   const lessonWords = state.flow.lesson_words;
@@ -1157,7 +1185,9 @@ export function isCompletedLessonRound(state: StudyState | null): boolean {
   const lastIndex = (lessonWords?.length ?? 0) - 1;
   if (!lessonWords || lessonWords.length === 0 || state.current_index !== lastIndex
     || !state.current_word || normalizeWord(state.current_word) !== normalizeWord(lessonWords[lastIndex] ?? "")) return false;
-  if (state.payload.mode !== "feedback" || state.payload.wrapup === true) return false;
+  if (state.payload.mode !== "feedback") return false;
+  if (state.payload.consolidation === true && state.payload.consolidation_status !== "feedback") return false;
+  if (state.payload.consolidation !== true && state.payload.wrapup === true) return false;
   if (typeof state.payload.feedback !== "object" || state.payload.feedback === null || Array.isArray(state.payload.feedback)) return false;
   const feedback = state.payload.feedback as Record<string, unknown>;
   return feedback.is_correct === true || feedback.reveal_answer === true;
@@ -1173,10 +1203,9 @@ export async function finishStudySession(
   if (expected && (active.id !== expected.sessionId || active.updated_at !== expected.revision)) {
     throw new StaleStudyStateError();
   }
-  const completed = isCompletedLessonWrapup(active.state)
-    || (expected?.allowLessonRoundCompletion === true && isCompletedLessonRound(active.state));
+  const completed = isCompletedLessonWrapup(active.state) || isCompletedLessonRound(active.state);
   if (!completed) throw new Error("LESSON_WRAPUP_NOT_COMPLETE");
-  const completedLessonRound = expected?.allowLessonRoundCompletion === true && isCompletedLessonRound(active.state);
+  const completedLessonRound = isCompletedLessonWrapup(active.state) || isCompletedLessonRound(active.state);
   const lessonProfileHistory = completedLessonRound ? active.state?.flow.lesson_profile_history ?? [] : [];
   const completedState: StudyState | Record<string, never> = completedLessonRound && active.state
     ? {
@@ -1187,8 +1216,23 @@ export async function finishStudySession(
       current_word: null,
       current_index: 0,
       retry_count: 0,
-      flow: { relearn_words: [] },
-      payload: { widget: "lesson", mode: "completed", lesson_profiles: lessonProfileHistory },
+      flow: {
+        relearn_words: [...active.state.flow.relearn_words],
+        ...(active.state.flow.lesson_words ? { lesson_words: [...active.state.flow.lesson_words] } : {}),
+        ...(lessonProfileHistory.length > 0 ? { lesson_profile_history: lessonProfileHistory } : {}),
+      },
+      payload: {
+        widget: "lesson",
+        mode: "completed",
+        lesson_profiles: lessonProfileHistory,
+        ...(active.state.payload.consolidation === true ? {
+          consolidation: true,
+          consolidation_kind: active.state.payload.consolidation_kind,
+          consolidation_trigger_round: active.state.payload.consolidation_trigger_round,
+          consolidation_target_words: active.state.payload.consolidation_target_words,
+          consolidation_status: "completed",
+        } : {}),
+      },
     }
     : {};
   const now = new Date().toISOString();

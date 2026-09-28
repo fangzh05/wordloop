@@ -407,6 +407,7 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .standalone-actions .button { width: 100%; margin: 0; }
 .standalone-actions .button.secondary { color: var(--text); }
 .standalone-input { margin-top: 0.35rem; }
+.standalone-main textarea.sentence-consolidation-input { min-height: 6rem; }
 .standalone-status { min-height: 1.25rem; margin: 0.35rem 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
 .standalone-status.error { color: var(--error); }
 .standalone-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-top: 0.8rem; }
@@ -464,6 +465,7 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
   .standalone-main .standalone-input { width: 100%; max-width: 760px; }
   .standalone-main input.standalone-input { max-width: 560px; }
   .standalone-main textarea.standalone-input { min-height: 12.5rem; }
+  .standalone-main textarea.sentence-consolidation-input { min-height: 6rem; }
   .standalone-main .standalone-reading-width { max-width: 68ch; }
   .standalone-main .lesson-detail-grid { display: block; }
 }

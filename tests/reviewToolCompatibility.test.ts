@@ -14,6 +14,7 @@ const sessionMocks = vi.hoisted(() => ({
   makeStudyState: vi.fn(),
   normalizeStudyStateForRead: vi.fn((state: unknown) => state),
   persistStudyState: vi.fn(),
+  persistStudyStateIfRevision: vi.fn(),
 }));
 
 vi.mock("../server/db.js", () => ({
@@ -80,7 +81,7 @@ async function withReviewClient<T>(run: (client: Client) => Promise<T>): Promise
 }
 
 function payloadOf(result: Awaited<ReturnType<Client["callTool"]>>): Record<string, unknown> {
-  expect(result.isError).not.toBe(true);
+  if (result.isError) throw new Error(String(result.content));
   return result.structuredContent as Record<string, unknown>;
 }
 
@@ -107,6 +108,7 @@ describe("Review render tool schema compatibility", () => {
       ...input,
     }));
     sessionMocks.persistStudyState.mockReset().mockImplementation(async (state: unknown) => ({ state }));
+    sessionMocks.persistStudyStateIfRevision.mockReset().mockImplementation(async (state: unknown) => ({ state }));
     wordMocks.getTodayWords.mockReset().mockResolvedValue([]);
   });
 
@@ -769,7 +771,7 @@ describe("Review render tool schema compatibility", () => {
     });
   });
 
-  it("renders and resumes the durable long-sentence wrap-up in the same Lesson tool", async () => {
+  it("renders and resumes a server-marked translation consolidation in the same Lesson tool", async () => {
     const lessonWords = ["expression", "shrink"];
     const activeBase = {
       id: "lesson-session",
@@ -782,12 +784,15 @@ describe("Review render tool schema compatibility", () => {
     };
     const exerciseInput = {
       mode: "exercise" as const,
-      wrapup: true as const,
+      consolidation: true as const,
+      consolidation_kind: "translation" as const,
+      consolidation_trigger_round: 2,
+      consolidation_target_words: ["expression", "shrink"],
       word: "shrink",
-      progress: "长难句收尾",
-      activity_type: "sentence",
+      progress: "周期巩固 · 英译中",
+      activity_type: "translation_en_to_cn",
       instruction: "先标出主干，再翻译。",
-      prompt: "Although the sample began to shrink, the researchers continued monitoring it.",
+      prompt: "Although the expression of public concern began to shrink, local leaders continued to scrutinize the policy, whose careful wording encouraged debate about educational reform across neighboring districts over time.",
       multiline: true,
     };
     const exerciseState = {
@@ -799,11 +804,16 @@ describe("Review render tool schema compatibility", () => {
       current_index: 1,
       retry_count: 0,
       flow: { relearn_words: [], lesson_words: lessonWords },
-      payload: { widget: "lesson", ...exerciseInput },
+      payload: {
+        widget: "lesson", mode: "feedback", word: "shrink", consolidation: true,
+        consolidation_kind: "translation", consolidation_trigger_round: 2,
+        consolidation_target_words: ["expression", "shrink"], consolidation_status: "pending",
+        feedback: { is_correct: true, reveal_answer: false },
+      },
     };
     sessionMocks.getActiveStudySession.mockResolvedValue({ ...activeBase, state: {
       ...exerciseState,
-      payload: { widget: "lesson", mode: "feedback", word: "shrink" },
+      payload: exerciseState.payload,
     }});
 
     await withReviewClient(async (client) => {
@@ -811,20 +821,23 @@ describe("Review render tool schema compatibility", () => {
       expect(exercise).toMatchObject({
         widget: "lesson",
         mode: "exercise",
-        wrapup: true,
+        consolidation: true,
+        consolidation_kind: "translation",
+        consolidation_status: "exercise",
         phase: "lesson_complete",
         navigation: { action: "round_complete" },
       });
 
-      const wrapupExercise = {
-        activity_type: "sentence",
+      const consolidationExercise = {
+        activity_type: "translation_en_to_cn",
         instruction: "先标出主干，再翻译。",
         prompt: exerciseInput.prompt,
         multiline: true,
       };
       const feedbackInput = {
         mode: "feedback" as const,
-        wrapup: true as const,
+        consolidation: true as const,
+        consolidation_kind: "translation" as const,
         word: "shrink",
         feedback: {
           is_correct: true,
@@ -834,12 +847,22 @@ describe("Review render tool schema compatibility", () => {
       };
       sessionMocks.getActiveStudySession.mockResolvedValue({
         ...activeBase,
-        state: { ...exerciseState, payload: { ...exerciseInput, ...wrapupExercise, widget: "lesson" } },
+        state: { ...exerciseState, payload: {
+          ...exerciseInput, ...consolidationExercise, consolidation_status: "exercise", widget: "lesson",
+        } },
       });
+      const leakedFirstAnswer = await client.callTool({
+        name: "render_lesson_widget",
+        arguments: {
+          ...feedbackInput,
+          feedback: { is_correct: false, user_answer: "wrong", reveal_answer: false, reference_answer: "must not leak" },
+        },
+      });
+      expect(leakedFirstAnswer.isError).toBe(true);
       const feedback = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: feedbackInput }));
-      expect(feedback).toMatchObject({ mode: "feedback", wrapup: true, phase: "lesson_complete" });
-      expect(feedback.exercise).toEqual(wrapupExercise);
-      expect(feedback.progress).toBe("长难句收尾");
+      expect(feedback).toMatchObject({ mode: "feedback", consolidation: true, consolidation_kind: "translation", phase: "lesson_complete" });
+      expect(feedback.exercise).toEqual(consolidationExercise);
+      expect(feedback.progress).toBe("周期巩固 · 英译中");
 
       sessionMocks.getActiveStudySession.mockResolvedValue({
         ...activeBase,
@@ -849,7 +872,7 @@ describe("Review render tool schema compatibility", () => {
         },
       });
       const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
-      expect(resumed).toMatchObject({ mode: "feedback", wrapup: true, phase: "lesson_complete" });
+      expect(resumed).toMatchObject({ mode: "feedback", consolidation: true, consolidation_kind: "translation", phase: "lesson_complete" });
     });
   });
 });

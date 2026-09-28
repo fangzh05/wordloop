@@ -74,7 +74,7 @@ describe("Standalone responsive layout", () => {
     expect(styles).toMatch(/@media \(min-width: 900px\)[\s\S]*?\.standalone-study-heading \.standalone-back\s*\{\s*display: none;/);
   });
 
-  it("hides the Lesson target word during exercises and uses the wrap-up label", () => {
+  it("hides the Lesson target word during exercises and labels both consolidation tasks", () => {
     const exerciseTitle = standaloneLessonDisplayTitle("empire", true, false);
     const markup = renderToStaticMarkup(
       <StandaloneLessonHeader title={exerciseTitle} progressLabel="新词学习 · 6 / 6" onBack={() => undefined} />,
@@ -82,8 +82,21 @@ describe("Standalone responsive layout", () => {
 
     expect(markup).toContain("填空练习");
     expect(markup).not.toContain("empire");
-    expect(standaloneLessonDisplayTitle("empire", true, true)).toBe("本轮收尾");
+    expect(standaloneLessonDisplayTitle("empire", true, "translation")).toBe("长难句翻译");
+    expect(standaloneLessonDisplayTitle("empire", true, "sentence")).toBe("造句练习");
+    expect(standaloneLessonDisplayTitle("empire", false, "translation")).toBe("长难句翻译");
+    expect(standaloneLessonDisplayTitle("empire", false, "sentence")).toBe("造句练习");
     expect(standaloneLessonDisplayTitle("empire", false, false)).toBe("empire");
+  });
+
+  it("uses the periodic consolidation subtitle and a compact multiline sentence field", () => {
+    const markup = renderToStaticMarkup(
+      <StandaloneLessonHeader title="造句练习" progressLabel="周期巩固 · 主动表达" onBack={() => undefined} />,
+    );
+    expect(markup).toContain("造句练习");
+    expect(markup).toContain("周期巩固 · 主动表达");
+    expect(styles).toContain("textarea.sentence-consolidation-input");
+    expect(styles).toMatch(/\.sentence-consolidation-input\s*\{[^}]*min-height:\s*6rem;/);
   });
 
   it("shows a desktop Dashboard prompt without automatically entering Study", () => {

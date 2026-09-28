@@ -740,6 +740,35 @@ describe("durable study session state", () => {
     expect(advanceStudyState(completed, "lesson_complete")).toBe(completed);
   });
 
+  it("persists a consolidation retry on the same question and rejects a second retry transition", () => {
+    const failed = makeStudyState({
+      date: "2026-09-15", widget: "lesson", phase: "lesson_complete", current_word: "policy", current_index: 0,
+      retry_count: 1, flow: { relearn_words: [], lesson_words: ["policy"] },
+      payload: {
+        widget: "lesson", mode: "feedback", consolidation: true, consolidation_kind: "translation",
+        consolidation_trigger_round: 2, consolidation_target_words: ["policy", "pressure"], consolidation_status: "feedback",
+        word: "policy", progress: "周期巩固 · 英译中",
+        exercise: { activity_type: "translation_en_to_cn", instruction: "Translate.", prompt: "Although policy changes appear modest, residents still need clear information and reliable public services when local conditions disrupt ordinary routines.", multiline: true },
+        feedback: { is_correct: false, user_answer: "first answer", reveal_answer: false, message: "调整主干。", explanation: "核对从句关系。" },
+      },
+    });
+
+    const retry = advanceStudyState(failed, "lesson_retry");
+    expect(retry).toMatchObject({
+      phase: "lesson_complete", retry_count: 1,
+      payload: {
+        mode: "exercise", consolidation: true, consolidation_kind: "translation",
+        consolidation_status: "exercise", activity_type: "translation_en_to_cn",
+        prompt: failed.payload.exercise && (failed.payload.exercise as Record<string, unknown>).prompt,
+      },
+    });
+    expect(advanceStudyState(retry, "lesson_retry")).toBe(retry);
+    expect(() => advanceStudyState({
+      ...failed,
+      payload: { ...failed.payload, feedback: { is_correct: false, reveal_answer: true } },
+    }, "lesson_retry")).toThrow();
+  });
+
   it("persists pretest phases and completes the final listen-recall cursor", () => {
     const pretest = makeStudyState({
       date: "2026-09-15",
@@ -958,6 +987,31 @@ describe("durable study session state", () => {
         },
       },
     });
+    expect(updateValues?.state).toMatchObject({
+      flow: { lesson_words: ["plantation"] },
+    });
+  });
+
+  it("holds a scheduled consolidation open until its own feedback is complete", () => {
+    const consolidationState = makeStudyState({
+      date: "2026-09-15", widget: "lesson", phase: "lesson_complete", current_word: "plantation", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["plantation"] },
+      payload: {
+        widget: "lesson", mode: "feedback", consolidation: true, consolidation_kind: "sentence",
+        consolidation_trigger_round: 3, consolidation_target_words: ["plantation"], consolidation_status: "feedback",
+        exercise: { activity_type: "sentence", instruction: "Write one sentence.", prompt: "Use plantation.", multiline: true },
+        feedback: { is_correct: true, reveal_answer: false },
+      },
+    });
+    expect(isCompletedLessonRound(consolidationState)).toBe(true);
+    expect(isCompletedLessonRound({
+      ...consolidationState,
+      payload: { ...consolidationState.payload, consolidation_status: "pending" },
+    })).toBe(false);
+    expect(isCompletedLessonRound({
+      ...consolidationState,
+      payload: { ...consolidationState.payload, feedback: { is_correct: false, reveal_answer: false } },
+    })).toBe(false);
   });
 
   it("rejects finishing before a persisted wrap-up feedback", async () => {

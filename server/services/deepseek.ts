@@ -4,6 +4,7 @@ import {
   ENGLISH_DEFINITION_GRADING_PROMPT,
   LESSON_GENERATION_PROMPT,
   SEMANTIC_GRADING_PROMPT,
+  SENTENCE_CONSOLIDATION_GENERATION_PROMPT,
   WRAPUP_GENERATION_PROMPT,
   WRAPUP_GRADING_PROMPT,
 } from "./deepseekPrompts.js";
@@ -72,7 +73,7 @@ export const englishDefinitionGradeSchema = z.object({
 });
 
 export const wrapupExerciseSchema = z.object({
-  activity_type: z.literal("sentence"),
+  activity_type: z.literal("translation_en_to_cn"),
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.literal(true),
@@ -81,6 +82,13 @@ export const wrapupExerciseSchema = z.object({
   if (count < 25 || count > 40) {
     context.addIssue({ code: "custom", message: "The wrap-up sentence must contain 25–40 English words.", path: ["prompt"] });
   }
+});
+
+export const sentenceConsolidationExerciseSchema = z.object({
+  activity_type: z.literal("sentence"),
+  instruction: z.string().trim().min(1).max(300),
+  prompt: z.string().trim().min(1).max(4000),
+  multiline: z.literal(true),
 });
 
 export const wrapupGradeSchema = z.object({
@@ -95,6 +103,7 @@ export type LessonGeneration = z.output<typeof lessonGenerationSchema>;
 export type SemanticGrade = z.output<typeof semanticGradeSchema>;
 export type EnglishDefinitionGrade = z.output<typeof englishDefinitionGradeSchema>;
 export type WrapupExercise = z.output<typeof wrapupExerciseSchema>;
+export type SentenceConsolidationExercise = z.output<typeof sentenceConsolidationExerciseSchema>;
 export type WrapupGrade = z.output<typeof wrapupGradeSchema>;
 
 export interface LessonExerciseValidationContext {
@@ -220,7 +229,7 @@ function lessonGenerationSchemaFor(context: LessonExerciseValidationContext) {
 interface DeepSeekJsonOptions {
   maxTokens: number;
   timeoutMs: number;
-  task: "lesson_generation" | "semantic_lesson_grading" | "english_definition_grading" | "wrapup_generation" | "wrapup_grading";
+  task: "lesson_generation" | "semantic_lesson_grading" | "english_definition_grading" | "wrapup_generation" | "sentence_consolidation_generation" | "wrapup_grading";
 }
 
 export class DeepSeekError extends Error {
@@ -398,6 +407,7 @@ export function generateLesson(input: {
 
 export function gradeSemanticAnswer(input: {
   word: string;
+  target_words?: string[];
   activity_type: string;
   instruction: string;
   prompt: string;
@@ -421,9 +431,31 @@ export function gradeEnglishDefinition(input: {
 }
 
 export function generateWrapup(input: { words: string[] }): Promise<WrapupExercise> {
-  return deepSeekJson(wrapupExerciseSchema, WRAPUP_GENERATION_PROMPT, input, {
+  const words = [...new Set(input.words.map((word) => word.trim()).filter(Boolean))];
+  if (words.length < 2 || words.length > 3) {
+    throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "Translation consolidation requires two or three target words.");
+  }
+  return deepSeekJson(wrapupExerciseSchema, WRAPUP_GENERATION_PROMPT, { words }, {
     task: "wrapup_generation", maxTokens: 900, timeoutMs: 30_000,
   });
+}
+
+export async function generateSentenceConsolidation(input: { words: string[] }): Promise<SentenceConsolidationExercise> {
+  const words = [...new Set(input.words.map((word) => word.trim()).filter(Boolean))];
+  if (words.length < 1 || words.length > 2) {
+    throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "Sentence consolidation requires one or two target words.");
+  }
+  const exercise = await deepSeekJson(sentenceConsolidationExerciseSchema, SENTENCE_CONSOLIDATION_GENERATION_PROMPT, { words }, {
+    task: "sentence_consolidation_generation", maxTokens: 400, timeoutMs: 20_000,
+  });
+  const generatedWords = englishWords(exercise.prompt).map((word) => word.toLocaleLowerCase());
+  if (!words.every((word) => generatedWords.includes(word.toLocaleLowerCase()))) {
+    throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "Sentence consolidation did not include every target word.");
+  }
+  return {
+    ...exercise,
+    instruction: "写一个自然英文句子，控制在 15–30 个单词。",
+  };
 }
 
 export function gradeWrapupAnswer(input: {

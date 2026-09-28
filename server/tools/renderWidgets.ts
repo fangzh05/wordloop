@@ -128,6 +128,11 @@ const lessonCommon = {
   progress: z.string().trim().max(40).optional(),
   lesson_profile: lessonProfile.optional(),
   error_focus: lessonErrorFocus.optional(),
+  consolidation: z.literal(true).optional(),
+  consolidation_kind: z.enum(["translation", "sentence"]).optional(),
+  consolidation_trigger_round: z.number().int().positive().optional(),
+  consolidation_target_words: z.array(z.string().trim().min(1).max(100)).max(3).optional(),
+  consolidation_status: z.enum(["pending", "exercise", "feedback", "completed"]).optional(),
 };
 const explainPayload = z.object({
   ...lessonCommon,
@@ -176,6 +181,8 @@ const lessonInput = z.union([lessonPayload, z.object({ resume: z.literal(true) }
 const feedbackToolPayload = z.object({
   mode: z.literal("feedback"),
   wrapup: z.literal(true).optional(),
+  consolidation: z.literal(true).optional(),
+  consolidation_kind: z.enum(["translation", "sentence"]).optional(),
   word: z.string().trim().min(1).max(100),
   lesson_profile: lessonProfile.optional(),
   error_focus: lessonErrorFocus.optional(),
@@ -249,6 +256,20 @@ const lessonPhaseByMode = {
 type LessonInput = z.infer<typeof lessonInput>;
 
 const lessonExerciseKeys = ["activity_type", "instruction", "prompt", "multiline", "accepted_answers"] as const;
+function containsWholeEnglishWord(text: string, word: string): boolean {
+  const haystack = text.toLocaleLowerCase();
+  const needle = word.toLocaleLowerCase();
+  let offset = 0;
+  while (offset <= haystack.length - needle.length) {
+    const index = haystack.indexOf(needle, offset);
+    if (index < 0) return false;
+    const before = index === 0 ? "" : haystack[index - 1] ?? "";
+    const after = haystack[index + needle.length] ?? "";
+    if (!/[a-z]/.test(before) && !/[a-z]/.test(after)) return true;
+    offset = index + 1;
+  }
+  return false;
+}
 const lessonFeedbackKeys = [
   "is_correct",
   "user_answer",
@@ -387,7 +408,9 @@ async function saveWidgetState(input: {
     flow: flow ?? knownActive?.state?.flow,
     ...stateInput,
   });
-  const persisted = await persistStudyState(state, getDatabase(), getAuthenticatedUserId(), knownActive);
+  const persisted = state.payload.consolidation === true && knownActive
+    ? await persistStudyStateIfRevision(state, knownActive.updated_at, getDatabase(), getAuthenticatedUserId(), knownActive.id)
+    : await persistStudyState(state, getDatabase(), getAuthenticatedUserId(), knownActive);
   return {
     ...widgetPayloadWithState(persisted.state?.payload ?? input.payload, persisted.state ?? state),
     ...(input.widget === "pretest" ? { revision: persisted.updated_at } : {}),
@@ -482,6 +505,76 @@ async function validateLessonWord(
 
   if (input.mode === "exercise" || input.mode === "feedback") {
     const state = resolvedActive?.state?.widget === "lesson" ? resolvedActive.state : null;
+    const marker = state?.payload.consolidation === true
+      ? z.object({
+        consolidation_kind: z.enum(["translation", "sentence"]),
+        consolidation_trigger_round: z.number().int().positive(),
+        consolidation_target_words: z.array(z.string().trim().min(1).max(100)).min(1).max(3),
+        consolidation_status: z.enum(["pending", "exercise", "feedback", "completed"]),
+      }).superRefine((value, context) => {
+        const validCount = value.consolidation_kind === "translation"
+          ? value.consolidation_target_words.length >= 2
+          : value.consolidation_target_words.length <= 2;
+        if (!validCount) context.addIssue({ code: "custom", message: "LESSON_CONSOLIDATION_TARGET_COUNT_INVALID" });
+      }).safeParse(state.payload)
+      : null;
+    if (input.consolidation === true) {
+      if (!state || !marker?.success || state.phase !== "lesson_complete"
+        || marker.data.consolidation_status === "completed"
+        || input.consolidation_kind !== marker.data.consolidation_kind) {
+        throw new Error("LESSON_CONSOLIDATION_NOT_READY");
+      }
+      const lessonWords = state.flow.lesson_words;
+      const lastIndex = (lessonWords?.length ?? 0) - 1;
+      if (!lessonWords || lessonWords.length === 0 || state.current_index !== lastIndex
+        || !state.current_word || normalizeWord(state.current_word) !== normalizeWord(lessonWords[lastIndex] ?? "")) {
+        throw new Error("LESSON_CONSOLIDATION_NOT_READY");
+      }
+      assertLessonWordMatches(state.current_word, input.word);
+      const expectedActivity = marker.data.consolidation_kind === "translation" ? "translation_en_to_cn" : "sentence";
+      const words = marker.data.consolidation_target_words;
+      if (input.mode === "exercise") {
+        if (marker.data.consolidation_status !== "pending"
+          && !(marker.data.consolidation_status === "exercise"
+            && state.payload.mode === "exercise"
+            && state.payload.activity_type === input.activity_type
+            && state.payload.prompt === input.prompt)) {
+          throw new Error("LESSON_CONSOLIDATION_ALREADY_RENDERED");
+        }
+        if (input.activity_type !== expectedActivity || !input.multiline) {
+          throw new Error("LESSON_CONSOLIDATION_ACTIVITY_INVALID");
+        }
+        const included = words.filter((word) => containsWholeEnglishWord(input.prompt, word));
+        if (marker.data.consolidation_kind === "translation") {
+          const count = input.prompt.toLocaleLowerCase().match(/[a-z]+(?:['’][a-z]+)?/g)?.length ?? 0;
+          if (count < 25 || count > 40 || included.length < 2) throw new Error("LESSON_CONSOLIDATION_CONTENT_INVALID");
+        } else if (included.length !== words.length) {
+          throw new Error("LESSON_CONSOLIDATION_CONTENT_INVALID");
+        }
+      } else {
+        const savedExercise = state.payload.mode === "feedback" ? state.payload.exercise : state.payload;
+        const saved = lessonExercise.safeParse(projectPersistedFields(savedExercise, lessonExerciseKeys));
+        if (!["exercise", "feedback"].includes(marker.data.consolidation_status)
+          || !saved.success
+          || saved.data.activity_type !== expectedActivity
+          || input.exercise.activity_type !== expectedActivity
+          || input.exercise.prompt !== saved.data.prompt) {
+          throw new Error("LESSON_CONSOLIDATION_EXERCISE_MISSING");
+        }
+        if (!input.feedback.is_correct) {
+          if (state.retry_count === 0 && (input.feedback.reveal_answer || input.feedback.reference_answer !== undefined)) {
+            throw new Error("LESSON_CONSOLIDATION_FIRST_RETRY_MUST_HIDE_ANSWER");
+          }
+          if (state.retry_count >= 1 && (!input.feedback.reveal_answer || !input.feedback.reference_answer?.trim())) {
+            throw new Error("LESSON_CONSOLIDATION_SECOND_MISS_MUST_REVEAL_ANSWER");
+          }
+        }
+      }
+      return { date: state.date, active: resolvedActive, flow: state.flow };
+    }
+    if (marker?.success && marker.data.consolidation_status !== "completed") {
+      throw new Error("LESSON_CONSOLIDATION_REQUIRED");
+    }
     if (input.wrapup === true) {
       const lessonWords = state?.flow.lesson_words;
       const lastIndex = (lessonWords?.length ?? 0) - 1;
@@ -492,11 +585,11 @@ async function validateLessonWord(
         throw new Error("LESSON_WRAPUP_NOT_READY");
       }
       assertLessonWordMatches(state.current_word, input.word);
-      if (input.mode === "exercise" && input.activity_type !== "sentence") {
+      if (input.mode === "exercise" && input.activity_type !== "translation_en_to_cn") {
         throw new Error("LESSON_WRAPUP_ACTIVITY_INVALID");
       }
       if (input.mode === "feedback"
-        && (input.exercise.activity_type !== "sentence"
+        && (input.exercise.activity_type !== "translation_en_to_cn"
           || (state.payload.mode !== "exercise" && state.payload.mode !== "feedback")
           || state.payload.wrapup !== true)) {
         throw new Error("LESSON_WRAPUP_EXERCISE_MISSING");
@@ -706,7 +799,7 @@ export function registerRenderTools(server: McpServer): void {
 
   registerAppTool(server, "render_lesson_widget", {
     title: "打开单词学习",
-    description: "显示一个单词的讲解、练习或批改卡片。Lesson answer grading must terminate in render_lesson_widget mode=feedback; chat-only grading is invalid. Reuse the current word and exercise; backend supplies navigation. 正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。收到 WORDLOOP_ROUND_COMPLETE 时必须在此工具中用 mode=exercise、wrapup=true 显示唯一长难句收尾题，用户作答后再用 mode=feedback、wrapup=true 显示批改；不要把长句只写在聊天区，也不要提前 finish_study_session。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考句；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
+    description: "显示一个单词的讲解、练习或批改卡片。Lesson answer grading must terminate in render_lesson_widget mode=feedback; chat-only grading is invalid. Reuse the current word and exercise; backend supplies navigation. 正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。Lesson round 完成后只有 backend 返回 consolidation 标记时才生成一个对应任务；按 consolidation_kind 使用 translation_en_to_cn 或 sentence，不要自行判断 cadence 或生成第二题。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考答案；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
     inputSchema: lessonToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.lesson } },
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -728,6 +821,9 @@ export function registerRenderTools(server: McpServer): void {
       const progress = typeof storedPayload?.progress === "string" && storedPayload.progress.trim()
         ? storedPayload.progress
         : "当前练习";
+      if (toolInput.consolidation === true && !exercise?.success) {
+        throw new Error("LESSON_CONSOLIDATION_EXERCISE_MISSING");
+      }
       if (toolInput.wrapup === true && !exercise?.success) {
         await validateLessonWord({
           mode: "feedback",
@@ -741,6 +837,7 @@ export function registerRenderTools(server: McpServer): void {
       parsedInput = feedbackPayload.parse({
         mode: "feedback",
         ...(toolInput.wrapup === true ? { wrapup: true } : {}),
+        ...(toolInput.consolidation === true ? { consolidation: true, consolidation_kind: toolInput.consolidation_kind } : {}),
         ...persistedLessonProfileFields(normalizedState ?? undefined, toolInput.word),
         word: toolInput.word,
         progress,
@@ -758,11 +855,31 @@ export function registerRenderTools(server: McpServer): void {
     const {
       lesson_profile: _clientLessonProfile,
       error_focus: _clientErrorFocus,
+      consolidation: _clientConsolidation,
+      consolidation_kind: _clientConsolidationKind,
+      consolidation_trigger_round: _clientConsolidationRound,
+      consolidation_target_words: _clientConsolidationWords,
+      consolidation_status: _clientConsolidationStatus,
       ...content
     } = parsedInput;
+    const savedConsolidation = validated.active?.state?.widget === "lesson"
+      && validated.active.state.payload.consolidation === true
+      ? validated.active.state.payload
+      : null;
+    const consolidationFields = parsedInput.consolidation === true && savedConsolidation
+      ? {
+        consolidation: true as const,
+        consolidation_kind: savedConsolidation.consolidation_kind,
+        consolidation_trigger_round: savedConsolidation.consolidation_trigger_round,
+        consolidation_target_words: savedConsolidation.consolidation_target_words,
+        consolidation_status: parsedInput.mode === "exercise" ? "exercise" : "feedback",
+        progress: savedConsolidation.consolidation_kind === "translation" ? "周期巩固 · 英译中" : "周期巩固 · 主动表达",
+      }
+      : {};
     const payload = lessonWidgetPayload({
       widget: "lesson",
       ...content,
+      ...consolidationFields,
       ...persistedLessonProfileFields(validated.active?.state ?? undefined, parsedInput.word),
       navigation,
     });
@@ -770,7 +887,7 @@ export function registerRenderTools(server: McpServer): void {
       date: validated.date,
       knownActive: validated.active,
       widget: "lesson",
-      phase: parsedInput.mode !== "explain" && parsedInput.wrapup === true
+      phase: parsedInput.mode !== "explain" && (parsedInput.wrapup === true || parsedInput.consolidation === true)
         ? "lesson_complete"
         : lessonPhaseByMode[parsedInput.mode],
       current_word: parsedInput.word,

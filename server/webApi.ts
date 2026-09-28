@@ -9,7 +9,7 @@ import {
   getActiveStudySession,
   getPretestResults,
   getStudyDate,
-  isCompletedLessonWrapup,
+  isCompletedLessonRound,
   makeStudyState,
   normalizeLegacyLessonSession,
   normalizeStudyStateForRead,
@@ -17,6 +17,7 @@ import {
   persistStudyStateIfRevision,
   StaleStudyStateError,
 } from "./services/studySessions.js";
+import { decideLessonConsolidation, type ConsolidationKind } from "./services/lessonConsolidation.js";
 import {
   buildLessonNavigation,
   buildLessonWords,
@@ -49,6 +50,7 @@ import type { StudySessionRow, StudyState, VocabularyItem } from "./types.js";
 import {
   DeepSeekError,
   generateLesson,
+  generateSentenceConsolidation,
   generateWrapup,
   gradeEnglishDefinition,
   gradeSemanticAnswer as requestSemanticGrade,
@@ -73,6 +75,11 @@ const webActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("lesson_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_retry"), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_next"), ...mutationBase }).strict(),
+  z.object({ action: z.literal("consolidation_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
+  z.object({ action: z.literal("consolidation_retry"), ...mutationBase }).strict(),
+  z.object({ action: z.literal("consolidation_finish"), ...mutationBase }).strict(),
+  // Accept the previous standalone action names while clients update; state still
+  // has to carry an explicit server-issued consolidation marker.
   z.object({ action: z.literal("wrapup_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
   z.object({ action: z.literal("wrapup_retry"), ...mutationBase }).strict(),
   z.object({ action: z.literal("wrapup_finish"), ...mutationBase }).strict(),
@@ -468,6 +475,10 @@ async function resolveBootstrap(expectedRevision?: string | null): Promise<Recor
   const { bootstrap, active, revision } = prepared;
   if (bootstrap.action === "resume") {
     if (!active) throw new WebApiError(409, "NO_ACTIVE_SESSION", "There is no active study session to resume.");
+    const consolidation = active.state?.widget === "lesson" ? lessonConsolidation(active.state) : null;
+    if (active.state?.phase === "lesson_complete" && consolidation?.consolidation_status === "pending") {
+      return generateAndReturnConsolidation(active);
+    }
     return successForSession(active);
   }
   if (bootstrap.action === "review") {
@@ -623,6 +634,23 @@ const lessonExerciseSchema = z.object({
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
 });
+const lessonConsolidationSchema = z.object({
+  consolidation: z.literal(true),
+  consolidation_kind: z.enum(["translation", "sentence"]),
+  consolidation_trigger_round: z.number().int().positive(),
+  consolidation_target_words: z.array(z.string().trim().min(1).max(100)).min(1).max(3),
+  consolidation_status: z.enum(["pending", "exercise", "feedback", "completed"]),
+}).superRefine((value, context) => {
+  const validCount = value.consolidation_kind === "translation"
+    ? value.consolidation_target_words.length >= 2 && value.consolidation_target_words.length <= 3
+    : value.consolidation_target_words.length >= 1 && value.consolidation_target_words.length <= 2;
+  if (!validCount) context.addIssue({ code: "custom", message: "LESSON_CONSOLIDATION_TARGET_COUNT_INVALID", path: ["consolidation_target_words"] });
+});
+
+function lessonConsolidation(state: StudyState) {
+  const parsed = lessonConsolidationSchema.safeParse(state.payload);
+  return parsed.success ? parsed.data : null;
+}
 
 const recordableLessonTypes = new Set([
   "pretest_cn_to_en", "pretest_en_definition", "translation_cn_to_en", "translation_en_to_cn", "cloze",
@@ -726,7 +754,6 @@ function lessonFeedbackState(
   exercise: z.infer<typeof lessonExerciseSchema>,
   answer: string,
   grade: Awaited<ReturnType<typeof gradeLesson>>,
-  wrapup: boolean,
 ): StudyState {
   const queue = assertLessonCursor(state);
   const nextRetry = grade.is_correct ? state.retry_count : state.retry_count + 1;
@@ -740,20 +767,29 @@ function lessonFeedbackState(
   const navigation = buildLessonNavigation(queue, state.current_index, state.current_word!);
   const referenceAnswer = grade.reference_answer;
   const acceptedAnswers = savedAcceptedAnswers(state);
+  const consolidation = lessonConsolidation(state);
   return {
     ...state,
-    phase: wrapup ? "lesson_complete" : "lesson_feedback",
+    phase: consolidation ? "lesson_complete" : "lesson_feedback",
     retry_count: nextRetry,
     payload: {
       widget: "lesson",
       widget_version: 3,
       mode: "feedback",
-      ...(wrapup ? { wrapup: true } : {}),
+      ...(consolidation ? {
+        consolidation: true,
+        consolidation_kind: consolidation.consolidation_kind,
+        consolidation_trigger_round: consolidation.consolidation_trigger_round,
+        consolidation_target_words: consolidation.consolidation_target_words,
+        consolidation_status: "feedback",
+      } : {}),
       ...(Object.prototype.hasOwnProperty.call(state.payload, "lesson_profile") ? { lesson_profile: state.payload.lesson_profile } : {}),
       ...(Object.prototype.hasOwnProperty.call(state.payload, "error_focus") ? { error_focus: state.payload.error_focus } : {}),
       word: state.current_word!,
       ...(acceptedAnswers.length > 0 ? { accepted_answers: acceptedAnswers } : {}),
-      progress: wrapup ? "本轮长难句收尾" : lessonProgressLabel(state.flow.relearn_words, queue, state.current_index),
+      progress: consolidation
+        ? consolidation.consolidation_kind === "translation" ? "周期巩固 · 英译中" : "周期巩固 · 主动表达"
+        : lessonProgressLabel(state.flow.relearn_words, queue, state.current_index),
       exercise: exercisePayload,
       feedback: {
         is_correct: grade.is_correct,
@@ -784,7 +820,7 @@ async function submitLesson(action: Extract<WebAction, { action: "lesson_submit"
   const exercise = lessonExercise(state);
   const grade = await gradeLesson(state, exercise, action.answer);
   await assertActiveStudySessionRevision(action.expected_revision, active.id);
-  const nextState = lessonFeedbackState(state, exercise, action.answer, grade, false);
+  const nextState = lessonFeedbackState(state, exercise, action.answer, grade);
   await recordAttempt({
     word: state.current_word!,
     session_id: active.id,
@@ -802,10 +838,14 @@ async function submitLesson(action: Extract<WebAction, { action: "lesson_submit"
 async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>, active: StudySessionRow | null): Promise<Record<string, unknown>> {
   const state = activeState(active, "lesson");
   if (!active) throw new WebApiError(409, "NO_ACTIVE_SESSION", "There is no active Lesson session.");
-  if (state.phase === "lesson_complete" && state.payload.mode === "feedback" && state.payload.wrapup !== true) {
+  if (state.phase === "lesson_complete" && state.payload.mode === "feedback" && state.payload.consolidation !== true) {
+    const scheduled = await ensureLessonConsolidationScheduled(active);
+    const consolidation = scheduled.state ? lessonConsolidation(scheduled.state) : null;
+    if (consolidation?.consolidation_status === "pending") return generateAndReturnConsolidation(scheduled);
+    if (consolidation) throw new WebApiError(409, "INVALID_STUDY_STATE", "The scheduled consolidation must be completed before continuing.");
     await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
-      revision: action.expected_revision ?? "",
-      sessionId: active.id,
+      revision: scheduled.updated_at,
+      sessionId: scheduled.id,
       allowLessonRoundCompletion: true,
     });
     return resolveBootstrap(null);
@@ -839,6 +879,9 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
     return successForSession(result.session, {}, result.audioUrl);
   }
   const completed = await advanceStudySessionIfRevision("lesson_complete", state.current_index, action.expected_revision, active.id);
+  const consolidation = completed.state ? lessonConsolidation(completed.state) : null;
+  if (consolidation?.consolidation_status === "pending") return generateAndReturnConsolidation(completed);
+  if (consolidation) throw new WebApiError(409, "INVALID_STUDY_STATE", "The scheduled consolidation must be completed before continuing.");
   await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
     revision: completed.updated_at,
     sessionId: active.id,
@@ -847,21 +890,37 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
   return resolveBootstrap(null);
 }
 
-export async function generateAndReturnWrapup(active: StudySessionRow): Promise<Record<string, unknown>> {
+async function ensureLessonConsolidationScheduled(active: StudySessionRow): Promise<StudySessionRow> {
   const state = activeState(active, "lesson");
-  if (state.phase !== "lesson_complete" || !state.current_word) {
-    throw new WebApiError(409, "LESSON_WRAPUP_NOT_READY", "The Lesson round is not ready for its wrap-up.");
+  if (lessonConsolidation(state)) return active;
+  const scheduled = await decideLessonConsolidation(state, getDatabase(), getAuthenticatedUserId());
+  if (scheduled === state) return active;
+  return persistStudyStateIfRevision(scheduled, active.updated_at, getDatabase(), getAuthenticatedUserId(), active.id);
+}
+
+function wordInText(text: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, "i").test(text);
+}
+
+export async function generateAndReturnConsolidation(active: StudySessionRow): Promise<Record<string, unknown>> {
+  const state = activeState(active, "lesson");
+  const consolidation = lessonConsolidation(state);
+  if (state.phase !== "lesson_complete" || !state.current_word || !consolidation
+    || consolidation.consolidation_status !== "pending") {
+    throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "The scheduled consolidation is not ready to generate.");
   }
   const queue = assertLessonCursor(state);
-  if (state.current_index !== queue.length - 1) throw new WebApiError(409, "LESSON_WRAPUP_NOT_READY", "The Lesson round is not at its final word.");
-  const words = queue.slice(-3);
-  const exercise = await generateWrapup({ words });
-  const included = words.filter((word) => new RegExp(`(^|[^a-z])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z]|$)`, "i").test(exercise.prompt));
-  if (included.length < Math.min(2, words.length)) {
-    throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "DeepSeek output did not use enough words from the Lesson round.");
+  if (state.current_index !== queue.length - 1) throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "The Lesson round is not at its final word.");
+  const words = consolidation.consolidation_target_words;
+  const exercise = consolidation.consolidation_kind === "translation"
+    ? await generateWrapup({ words })
+    : await generateSentenceConsolidation({ words });
+  const included = words.filter((word) => wordInText(exercise.prompt, word));
+  const requiredWords = consolidation.consolidation_kind === "translation" ? 2 : words.length;
+  if (included.length < requiredWords) {
+    throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "The consolidation exercise did not use enough target words.");
   }
-  await assertActiveStudySessionRevision(active.updated_at, active.id);
-  const navigation = buildLessonNavigation(queue, state.current_index, state.current_word);
   const nextState: StudyState = {
     ...state,
     phase: "lesson_complete",
@@ -869,38 +928,75 @@ export async function generateAndReturnWrapup(active: StudySessionRow): Promise<
       widget: "lesson",
       widget_version: 3,
       mode: "exercise",
-      wrapup: true,
-      ...(Object.prototype.hasOwnProperty.call(state.payload, "lesson_profile") ? { lesson_profile: state.payload.lesson_profile } : {}),
-      ...(Object.prototype.hasOwnProperty.call(state.payload, "error_focus") ? { error_focus: state.payload.error_focus } : {}),
+      consolidation: true,
+      consolidation_kind: consolidation.consolidation_kind,
+      consolidation_trigger_round: consolidation.consolidation_trigger_round,
+      consolidation_target_words: words,
+      consolidation_status: "exercise",
       word: state.current_word,
-      progress: "本轮长难句收尾",
+      progress: consolidation.consolidation_kind === "translation" ? "周期巩固 · 英译中" : "周期巩固 · 主动表达",
       ...exercise,
-      navigation,
+      ...(consolidation.consolidation_kind === "translation" ? {
+        instruction: "先找出句子主干，再把整句翻译成自然中文。",
+      } : {}),
+      navigation: buildLessonNavigation(queue, state.current_index, state.current_word),
     },
   };
-  const saved = await persistStudyStateIfRevision(nextState, active.updated_at, getDatabase(), getAuthenticatedUserId(), active.id);
-  return successForSession(saved);
+  try {
+    const saved = await persistStudyStateIfRevision(nextState, active.updated_at, getDatabase(), getAuthenticatedUserId(), active.id);
+    return successForSession(saved);
+  } catch (error) {
+    if (!(error instanceof StaleStudyStateError)) throw error;
+    const winner = await getActiveStudySession();
+    const winnerMarker = winner?.state?.widget === "lesson" ? lessonConsolidation(winner.state) : null;
+    if (winner?.id === active.id && winnerMarker
+      && winnerMarker.consolidation_kind === consolidation.consolidation_kind
+      && winnerMarker.consolidation_trigger_round === consolidation.consolidation_trigger_round
+      && JSON.stringify(winnerMarker.consolidation_target_words) === JSON.stringify(words)
+      && winnerMarker.consolidation_status !== "pending") {
+      return successForSession(winner);
+    }
+    throw error;
+  }
 }
 
-async function submitWrapup(action: Extract<WebAction, { action: "wrapup_submit" }>, active: StudySessionRow | null): Promise<Record<string, unknown>> {
+async function submitConsolidation(action: { answer: string; expected_revision: string | null }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
   const state = activeState(active, "lesson");
-  if (!active || state.phase !== "lesson_complete" || state.payload.mode !== "exercise" || state.payload.wrapup !== true) {
-    throw new WebApiError(409, "LESSON_WRAPUP_NOT_READY", "The saved wrap-up exercise is unavailable.");
+  const consolidation = lessonConsolidation(state);
+  if (!active || state.phase !== "lesson_complete" || state.payload.mode !== "exercise"
+    || consolidation?.consolidation_status !== "exercise") {
+    throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "The saved consolidation exercise is unavailable.");
   }
   const exercise = lessonExercise(state);
-  if (exercise.activity_type !== "sentence" || !exercise.multiline) {
-    throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved wrap-up exercise is invalid.");
+  const expectedType = consolidation.consolidation_kind === "translation" ? "translation_en_to_cn" : "sentence";
+  if (exercise.activity_type !== expectedType || !exercise.multiline) {
+    throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved consolidation exercise is invalid.");
   }
-  const queue = assertLessonCursor(state);
-  const grade: WrapupGrade = await gradeWrapupAnswer({
-    words: queue.slice(-3),
-    instruction: exercise.instruction,
-    prompt: exercise.prompt,
-    answer: action.answer,
-    retry_count: state.retry_count,
-  });
+  let grade: WrapupGrade | SemanticGrade;
+  if (consolidation.consolidation_kind === "translation") {
+    grade = await gradeWrapupAnswer({
+      words: consolidation.consolidation_target_words,
+      instruction: exercise.instruction,
+      prompt: exercise.prompt,
+      answer: action.answer,
+      retry_count: state.retry_count,
+    });
+  } else {
+    grade = await requestSemanticGrade({
+      word: state.current_word!,
+      target_words: consolidation.consolidation_target_words,
+      activity_type: "sentence",
+      instruction: exercise.instruction,
+      prompt: exercise.prompt,
+      answer: action.answer,
+      retry_count: state.retry_count,
+    });
+  }
   if (!grade.is_correct && grade.error_layer === "none") {
     throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "DeepSeek output did not satisfy the grading rules.");
+  }
+  if (!grade.is_correct && state.retry_count >= 1 && !grade.reference_answer?.trim()) {
+    throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "A second incorrect consolidation grade must include a reference expression.");
   }
   const canonicalGrade = buildSemanticGrade({
     isCorrect: grade.is_correct,
@@ -908,18 +1004,18 @@ async function submitWrapup(action: Extract<WebAction, { action: "wrapup_submit"
     feedback: grade.message,
     advancesFsrs: false,
   });
-  assertGradeInvariants(canonicalGrade, { activity_type: "sentence", advancesFsrs: false });
+  assertGradeInvariants(canonicalGrade, { activity_type: expectedType, advancesFsrs: false });
   await assertActiveStudySessionRevision(action.expected_revision, active.id);
   const feedbackState = lessonFeedbackState(state, exercise, action.answer, {
     ...canonicalGrade,
     message: grade.message,
     explanation: grade.explanation,
     ...(grade.reference_answer ? { reference_answer: grade.reference_answer } : {}),
-  }, true);
+  });
   await recordAttempt({
     word: state.current_word!,
     session_id: active.id,
-    activity_type: "sentence",
+    activity_type: expectedType as never,
     user_answer: action.answer,
     is_correct: grade.is_correct,
     error_layer: canonicalGrade.error_layer,
@@ -928,17 +1024,18 @@ async function submitWrapup(action: Extract<WebAction, { action: "wrapup_submit"
   return successForSession(saved);
 }
 
-async function retryWrapup(action: Extract<WebAction, { action: "wrapup_retry" }>, active: StudySessionRow | null): Promise<Record<string, unknown>> {
+async function retryConsolidation(action: { expected_revision: string | null }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
   const state = activeState(active, "lesson");
+  const consolidation = lessonConsolidation(state);
   const feedback = typeof state.payload.feedback === "object" && state.payload.feedback !== null
     ? state.payload.feedback as Record<string, unknown>
     : null;
-  if (!active || state.phase !== "lesson_complete" || state.payload.mode !== "feedback" || state.payload.wrapup !== true
+  if (!active || state.phase !== "lesson_complete" || state.payload.mode !== "feedback"
+    || consolidation?.consolidation_status !== "feedback"
     || feedback?.is_correct !== false || feedback.reveal_answer !== false) {
-    throw new WebApiError(409, "LESSON_WRAPUP_NOT_READY", "The wrap-up is not eligible for a retry.");
+    throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "The consolidation is not eligible for a retry.");
   }
   const exercise = lessonExercise(state);
-  if (exercise.activity_type !== "sentence") throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved wrap-up exercise is invalid.");
   const queue = assertLessonCursor(state);
   const nextState: StudyState = {
     ...state,
@@ -947,11 +1044,13 @@ async function retryWrapup(action: Extract<WebAction, { action: "wrapup_retry" }
       widget: "lesson",
       widget_version: 3,
       mode: "exercise",
-      wrapup: true,
-      ...(Object.prototype.hasOwnProperty.call(state.payload, "lesson_profile") ? { lesson_profile: state.payload.lesson_profile } : {}),
-      ...(Object.prototype.hasOwnProperty.call(state.payload, "error_focus") ? { error_focus: state.payload.error_focus } : {}),
+      consolidation: true,
+      consolidation_kind: consolidation.consolidation_kind,
+      consolidation_trigger_round: consolidation.consolidation_trigger_round,
+      consolidation_target_words: consolidation.consolidation_target_words,
+      consolidation_status: "exercise",
       word: state.current_word!,
-      progress: "本轮长难句收尾",
+      progress: consolidation.consolidation_kind === "translation" ? "周期巩固 · 英译中" : "周期巩固 · 主动表达",
       ...exercise,
       navigation: buildLessonNavigation(queue, state.current_index, state.current_word!),
     },
@@ -960,12 +1059,17 @@ async function retryWrapup(action: Extract<WebAction, { action: "wrapup_retry" }
   return successForSession(saved);
 }
 
-async function finishWrapup(action: Extract<WebAction, { action: "wrapup_finish" }>, active: StudySessionRow | null): Promise<Record<string, unknown>> {
+async function finishConsolidation(action: { expected_revision: string | null }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
   const state = activeState(active, "lesson");
-  if (!active || !isCompletedLessonWrapup(state)) {
-    throw new WebApiError(409, "LESSON_WRAPUP_NOT_COMPLETE", "The wrap-up must be correct or fully revealed before finishing.");
+  const consolidation = lessonConsolidation(state);
+  if (!active || !consolidation || consolidation.consolidation_status !== "feedback" || !isCompletedLessonRound(state)) {
+    throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_COMPLETE", "The consolidation must be correct or fully revealed before finishing.");
   }
-  await finishStudySession(getDatabase(), getAuthenticatedUserId(), { revision: action.expected_revision ?? "", sessionId: active.id });
+  await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
+    revision: action.expected_revision ?? "",
+    sessionId: active.id,
+    allowLessonRoundCompletion: true,
+  });
   return resolveBootstrap(null);
 }
 
@@ -1015,9 +1119,12 @@ async function performAction(action: WebAction): Promise<Record<string, unknown>
       return successForSession(saved);
     }
     case "lesson_next": return lessonNext(action, active);
-    case "wrapup_submit": return submitWrapup(action, active);
-    case "wrapup_retry": return retryWrapup(action, active);
-    case "wrapup_finish": return finishWrapup(action, active);
+    case "consolidation_submit":
+    case "wrapup_submit": return submitConsolidation(action, active);
+    case "consolidation_retry":
+    case "wrapup_retry": return retryConsolidation(action, active);
+    case "consolidation_finish":
+    case "wrapup_finish": return finishConsolidation(action, active);
     default: throw new WebApiError(400, "INVALID_REQUEST", "The requested study action is invalid.");
   }
 }

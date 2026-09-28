@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { toolResultData } from "../web/src/mcpBridge.js";
 import {
   attachLessonRecoveryLifecycle,
+  buildLessonConsolidationSubmissionMessage,
   buildLessonSubmissionMessage,
   buildLessonWrapupSubmissionMessage,
   buildRoundCompleteMessage,
@@ -364,22 +365,26 @@ describe("guided lesson widget", () => {
     expect(message).toContain("do not generate another exercise, switch questions, or change words");
   });
 
-  it("sends long-sentence wrap-up answers back through the same Lesson Widget", () => {
-    const message = buildLessonWrapupSubmissionMessage({
+  it("sends consolidation answers back through the same Lesson Widget without FSRS", () => {
+    const message = buildLessonConsolidationSubmissionMessage({
       word: "shrink",
+      activityType: "translation_en_to_cn",
+      kind: "translation",
       prompt: "Although the sample began to shrink, the researchers continued monitoring it.",
       answer: "主干：researchers continued monitoring; 尽管样本开始缩小，研究人员仍继续监测。",
     });
-    expect(message).toContain("长难句收尾");
+    expect(message).toContain("周期巩固");
     expect(message).toContain("word 必须使用上面的精确锚点");
-    expect(message).toContain("mode=feedback、wrapup=true");
+    expect(message).toContain("mode=feedback、consolidation=true");
     expect(message).toContain("record_attempt");
+    expect(message).toContain("不推进 FSRS");
     expect(message).toContain("current submitted answer is authoritative");
     expect(message).toContain("record_attempt exactly once");
-    expect(message).toContain('render_lesson_widget exactly once with mode="feedback", wrapup=true');
-    expect(message).toContain("Do not output the grading as ordinary chat text");
-    expect(message).toContain("After the feedback Widget renders successfully, remain silent in chat");
-    expect(message).toContain("finish_study_session exactly once");
+    expect(message).toContain("render_lesson_widget exactly once");
+    expect(message).toContain("mode=feedback、consolidation=true");
+    expect(message).toContain("Do not output feedback as ordinary chat text");
+    expect(message).toContain("After the feedback Widget succeeds, remain silent in chat");
+    expect(message).toContain("不要生成新题");
   });
 
   it("shows the backend next word, round wrap-up, or retry as the feedback next step", () => {
@@ -393,7 +398,7 @@ describe("guided lesson widget", () => {
       canContinue
       navigation={{ action: "round_complete", next_word: null, next_index: null, total_count: 10 }}
     />);
-    expect(roundComplete).toContain("下一步：本轮长难句收尾");
+    expect(roundComplete).toContain("下一步：完成本轮并继续");
     expect(roundComplete).not.toContain("下一词：");
 
     const retry = renderToStaticMarkup(<LessonFeedbackNextStep
@@ -450,35 +455,21 @@ describe("guided lesson widget", () => {
     expect(canStartNextLesson("sent")).toBe(false);
   });
 
-  it("gives the model a direct round-complete fact", () => {
+  it("lets backend cadence decide whether round completion has one consolidation", () => {
     expect(buildRoundCompleteMessage()).toBe([
       "WORDLOOP_ROUND_COMPLETE",
       "",
-      "The current Lesson round is complete.",
-      "",
-      "This is ROUND completion, not SESSION completion.",
-      "",
-      "Do exactly one round-end activity:",
-      "generate one 考研英语一难度 long sentence naturally using",
-      "2–3 words from this completed round.",
-      "",
-      "Render that sentence in the existing LessonWidget, not as chat text.",
-      "Call render_lesson_widget with mode=exercise, wrapup=true,",
-      "word set to the exact final Lesson word from the completed card,",
-      "activity_type=sentence, multiline=true, and an instruction to",
-      "identify the sentence backbone first (subject + verb + core object",
-      "or predicative), then translate it.",
-      "",
-      "Do NOT start session-end free recall.",
-      "Do NOT ask the user to list all learned words.",
-      "Do NOT repeat this round-complete instruction.",
-      "Do NOT render another vocabulary explain card or send the sentence",
-      "only in the chat; the required wrap-up exercise must be in the card.",
-      "",
-      "Only when the user explicitly says:",
-      "结束学习 / 今天到这里 / 不学了",
-      "",
-      "enter session-end free recall.",
+      "The server reports no periodic consolidation for this Lesson round.",
+      "Call finish_study_session exactly once, then immediately call get_study_bootstrap.",
+      "Do not generate any round-end exercise or infer cadence from chat history.",
     ].join("\n"));
+    const translation = buildRoundCompleteMessage("shrink", { kind: "translation", trigger_round: 2, target_words: ["policy", "pressure"] });
+    expect(translation).toContain("consolidation_kind=translation");
+    expect(translation).toContain("activity_type=translation_en_to_cn");
+    expect(translation).toContain("25–40-word formal English sentence");
+    const sentence = buildRoundCompleteMessage("shrink", { kind: "sentence", trigger_round: 3, target_words: ["alleviate"] });
+    expect(sentence).toContain("consolidation_kind=sentence");
+    expect(sentence).toContain("activity_type=sentence");
+    expect(sentence).toContain("15–30-word English sentence");
   });
 });

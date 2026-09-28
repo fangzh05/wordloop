@@ -41,7 +41,7 @@ describe("Streamable HTTP server", () => {
       "round_complete",
       "finish_study_session",
       "resume",
-      "wrapup",
+      "consolidation",
       "For every Lesson answer submitted from the LessonWidget, ordinary chat feedback is invalid.",
       'render_lesson_widget mode="feedback"',
       "the Lesson turn is incomplete until the feedback Widget has rendered.",
@@ -58,7 +58,7 @@ describe("Streamable HTTP server", () => {
       "get_active_study_session", "get_study_bootstrap", "advance_study_session", "finish_study_session",
     ]));
     const bootstrapTool = response.tools.find((tool) => tool.name === "get_study_bootstrap");
-    expect(bootstrapTool?.description).toContain("active Lesson phase=lesson_complete 时只恢复现有 Lesson 收尾状态");
+    expect(bootstrapTool?.description).toContain("active Lesson phase=lesson_complete 时恢复原题或 backend 标记的单道周期巩固题");
     expect(bootstrapTool?.description).not.toContain("action: done");
     expect(bootstrapTool?.annotations).toMatchObject({ readOnlyHint: false, idempotentHint: true });
     const reviewSubmissionTool = response.tools.find((tool) => tool.name === "record_review_submission");
@@ -106,8 +106,8 @@ describe("Streamable HTTP server", () => {
     expect(JSON.stringify(advanceTool?.inputSchema)).toContain("lesson_retry");
     const finishTool = response.tools.find((tool) => tool.name === "finish_study_session");
     expect(finishTool?.inputSchema).toMatchObject({ type: "object" });
-    expect(finishTool?.description).toContain("exactly once after the current Lesson round's long-sentence wrap-up");
-    expect(finishTool?.description).toContain("immediately call get_study_bootstrap");
+    expect(finishTool?.description).toContain("any backend-scheduled consolidation has been answered and graded");
+    expect(finishTool?.description).toContain("finish immediately; then call get_study_bootstrap");
     expect(finishTool?.description).toContain("not the session-end free recall trigger");
     const lessonTool = response.tools.find((tool) => tool.name === "render_lesson_widget");
     expect(WIDGET_URIS.lesson).toBe("ui://wordloop/lesson-v9.html");
@@ -119,8 +119,8 @@ describe("Streamable HTTP server", () => {
     expect(LESSON_WIDGET_VERSION).toBe(3);
     expect(JSON.stringify(lessonTool?._meta ?? {})).toContain(WIDGET_URIS.lesson);
     expect(JSON.stringify(response.tools.find((tool) => tool.name === "render_dictation_widget")?._meta ?? {})).toContain(WIDGET_URIS.dictation);
-    expect(lessonTool?.description).toContain("mode=exercise、wrapup=true");
-    expect(lessonTool?.description).toContain("mode=feedback、wrapup=true");
+    expect(lessonTool?.description).toContain("backend 返回 consolidation 标记");
+    expect(lessonTool?.description).toContain("translation_en_to_cn 或 sentence");
     expect(lessonTool?.description).toContain("Lesson answer grading must terminate in render_lesson_widget mode=feedback");
     expect(lessonTool?.description).toContain("chat-only grading is invalid");
     expect(lessonTool?.description).toContain("Reuse the current word and exercise; backend supplies navigation.");

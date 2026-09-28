@@ -111,7 +111,8 @@ describe("shared Review and daily progress presentation", () => {
       ["grieve", "embark", "shallow", "electrical", "chief", "delegate", "textile", "recall"],
       3,
     )).toBe("新词学习 · 3 / 7");
-    expect(standaloneLessonProgressLabel(relearn, queue, 4, true)).toBe("本轮收尾");
+    expect(standaloneLessonProgressLabel(relearn, queue, 4, "translation")).toBe("周期巩固 · 英译中");
+    expect(standaloneLessonProgressLabel(relearn, queue, 4, "sentence")).toBe("周期巩固 · 主动表达");
   });
 
   it("shows part of speech and Chinese meaning on cn_to_en Review cards", () => {
