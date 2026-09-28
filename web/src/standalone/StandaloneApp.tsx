@@ -851,7 +851,7 @@ export default function StandaloneApp(): React.JSX.Element {
               ? <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_retry" })}>重做当前题</Button>
               : navigation.action === "next_word"
                 ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>下一词</Button>
-                : <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>本轮长难句收尾</Button>}
+                : <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>完成本轮并继续</Button>}
           </div>
         </div>}
 
@@ -872,8 +872,8 @@ export default function StandaloneApp(): React.JSX.Element {
         </div>}
 
         {phase === "lesson_complete" && feedbackMode && !isWrapup && <div className="standalone-content">
-          <p>正在准备本轮长难句收尾题。</p>
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>生成收尾题</Button></div>
+          <p>本轮 Lesson 已完成，可以继续当天的学习流程。</p>
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>完成本轮并继续</Button></div>
         </div>}
 
         {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}

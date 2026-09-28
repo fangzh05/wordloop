@@ -4,6 +4,7 @@ import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { getTodayCompletedLessonWords, LESSON_ACTIVITY_TYPES } from "./attempts.js";
 import {
   REVIEW_SESSION_MAX,
+  activeErrorLayerSchema,
   reviewAnswerSchema,
   reviewWidgetItemSchema,
   type ReviewAnswerInput,
@@ -30,6 +31,11 @@ const lessonExerciseSchema = z.object({
 const studyFlowSchema = z.object({
   relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX),
   lesson_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX).optional(),
+  lesson_profile_history: z.array(z.object({
+    word: z.string().trim().min(1).max(100),
+    lesson_profile: z.enum(["quick_recall", "reinforce", "targeted_relearn"]),
+    error_focus: activeErrorLayerSchema.nullable(),
+  }).strict()).max(REVIEW_SESSION_MAX).optional(),
 }).strict().default({ relearn_words: [] });
 const reviewSessionPayloadSchema = z.object({
   widget: z.literal("review"),
@@ -987,21 +993,51 @@ export function isCompletedLessonWrapup(state: StudyState | null): boolean {
   return feedback.is_correct === true || feedback.reveal_answer === true;
 }
 
+/** A standalone Lesson round can finish after its one final primary exercise. */
+export function isCompletedLessonRound(state: StudyState | null): boolean {
+  if (!state || state.widget !== "lesson" || state.phase !== "lesson_complete") return false;
+  const lessonWords = state.flow.lesson_words;
+  const lastIndex = (lessonWords?.length ?? 0) - 1;
+  if (!lessonWords || lessonWords.length === 0 || state.current_index !== lastIndex
+    || !state.current_word || normalizeWord(state.current_word) !== normalizeWord(lessonWords[lastIndex] ?? "")) return false;
+  if (state.payload.mode !== "feedback" || state.payload.wrapup === true) return false;
+  if (typeof state.payload.feedback !== "object" || state.payload.feedback === null || Array.isArray(state.payload.feedback)) return false;
+  const feedback = state.payload.feedback as Record<string, unknown>;
+  return feedback.is_correct === true || feedback.reveal_answer === true;
+}
+
 export async function finishStudySession(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
-  expected?: { revision: string; sessionId: string },
+  expected?: { revision: string; sessionId: string; allowLessonRoundCompletion?: boolean },
 ): Promise<StudySessionRow> {
   const active = await getActiveStudySession(db, userId);
   if (!active) throw new Error("No active study session to finish.");
   if (expected && (active.id !== expected.sessionId || active.updated_at !== expected.revision)) {
     throw new StaleStudyStateError();
   }
-  if (!isCompletedLessonWrapup(active.state)) throw new Error("LESSON_WRAPUP_NOT_COMPLETE");
+  const completed = isCompletedLessonWrapup(active.state)
+    || (expected?.allowLessonRoundCompletion === true && isCompletedLessonRound(active.state));
+  if (!completed) throw new Error("LESSON_WRAPUP_NOT_COMPLETE");
+  const completedLessonRound = expected?.allowLessonRoundCompletion === true && isCompletedLessonRound(active.state);
+  const lessonProfileHistory = completedLessonRound ? active.state?.flow.lesson_profile_history ?? [] : [];
+  const completedState: StudyState | Record<string, never> = completedLessonRound && active.state
+    ? {
+      version: 1,
+      date: active.state.date,
+      widget: "lesson",
+      phase: "lesson_complete",
+      current_word: null,
+      current_index: 0,
+      retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "lesson", mode: "completed", lesson_profiles: lessonProfileHistory },
+    }
+    : {};
   const now = new Date().toISOString();
   let update = db
     .from("study_sessions")
-    .update({ ended_at: now, state: {}, updated_at: now })
+    .update({ ended_at: now, state: completedState, updated_at: now })
     .eq("id", active.id)
     .eq("user_id", userId)
     .is("ended_at", null);

@@ -9,6 +9,8 @@ import {
   gradeEnglishDefinition,
   gradeSemanticAnswer,
   gradeWrapupAnswer,
+  type LessonGeneration,
+  validateGeneratedLessonExercise,
 } from "../server/services/deepseek.js";
 import {
   ENGLISH_DEFINITION_GRADING_PROMPT,
@@ -19,7 +21,14 @@ import {
 } from "../server/services/deepseekPrompts.js";
 
 const example = "Although the committee postponed its decision, the evidence continued to influence public debate about educational reform.";
-const validLesson = {
+const lessonInput = {
+  word: "fixture",
+  meaning_zh: "设施",
+  part_of_speech: "n.",
+  lesson_profile: "quick_recall" as const,
+  error_focus: null,
+};
+const validLesson: LessonGeneration = {
   ipa: "/ˈfɪks.tʃər/",
   part_of_speech: "n.（名词）",
   meaning_zh: "固定的事物；设施",
@@ -29,9 +38,10 @@ const validLesson = {
   example_zh: "尽管委员会推迟了决定，证据仍持续影响有关教育改革的公共讨论。",
   note: "fixture 也可指固定设施。",
   exercise: {
-    activity_type: "translation_cn_to_en",
-    instruction: "使用目标词翻译句子。",
-    prompt: "尽管预算有限，学校仍然决定改善图书馆设施。",
+    activity_type: "exact_cloze",
+    instruction: "根据语境回忆目标词并填空。",
+    prompt: "The city added a ___ near the library entrance for visiting students.",
+    accepted_answers: ["fixture"],
     multiline: false,
   },
 };
@@ -102,16 +112,18 @@ describe("DeepSeek stateless JSON client", () => {
       navigation: { action: "next_word", next_word: "untrusted", next_index: 100 },
     })));
 
-    const result = await generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." });
+    const result = await generateLesson(lessonInput);
     expect(result).toEqual(validLesson);
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    const body = JSON.parse(String(request.body)) as Record<string, unknown>;
+    const body = JSON.parse(String(request.body)) as Record<string, unknown> & { messages: { content: string }[] };
     expect(body).toMatchObject({
       model: "deepseek-flash",
       thinking: { type: "disabled" },
       response_format: { type: "json_object" },
       max_tokens: 1200,
     });
+    expect(body.messages[1]?.content).toContain('"lesson_profile":"quick_recall"');
+    expect(body.messages[1]?.content).toContain('"error_focus":null');
     expect(body).not.toHaveProperty("temperature");
     expect(request.signal).toBeInstanceOf(AbortSignal);
   });
@@ -121,7 +133,7 @@ describe("DeepSeek stateless JSON client", () => {
     fetchMock
       .mockResolvedValueOnce(response("not-json"))
       .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." })).resolves.toMatchObject(validLesson);
+    await expect(generateLesson(lessonInput)).resolves.toMatchObject(validLesson);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -134,7 +146,7 @@ describe("DeepSeek stateless JSON client", () => {
       .mockResolvedValueOnce(response(JSON.stringify(validWrapup)))
       .mockResolvedValueOnce(response(JSON.stringify(validGrade)));
 
-    await generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." });
+    await generateLesson(lessonInput);
     await gradeSemanticAnswer({ word: "fixture", activity_type: "sentence", instruction: "Translate.", prompt: "A prompt.", answer: "my answer", retry_count: 0 });
     await gradeEnglishDefinition({ word: "fixture", meaning_zh: "设施", answer: "something installed" });
     await generateWrapup({ words: ["fixture", "policy"] });
@@ -164,15 +176,15 @@ describe("DeepSeek stateless JSON client", () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(response(JSON.stringify({
-        ...validLesson,
-        exercise: {
-          ...validLesson.exercise,
-          activity_type: "exact_cloze",
-          prompt: "A team of electricians arrived after the storm.",
-        },
+      ...validLesson,
+      exercise: {
+        ...validLesson.exercise,
+        activity_type: "exact_cloze",
+        prompt: "A team of electricians arrived after the winter storm to restore power.",
+      },
       })))
       .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." })).resolves.toMatchObject(validLesson);
+    await expect(generateLesson(lessonInput)).resolves.toMatchObject(validLesson);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -189,7 +201,7 @@ describe("DeepSeek stateless JSON client", () => {
     };
     fetchMock.mockResolvedValueOnce(response(JSON.stringify(cosmeticDeviation)));
 
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+    await expect(generateLesson(lessonInput))
       .resolves.toMatchObject(cosmeticDeviation);
     expect(fetchMock).toHaveBeenCalledOnce();
 
@@ -198,7 +210,7 @@ describe("DeepSeek stateless JSON client", () => {
       example_en: "Although the committee postponed its decision, evidence influenced public debate about educational reform among students, teachers, parents, and local leaders across districts in the region today.",
     };
     fetchMock.mockResolvedValueOnce(response(JSON.stringify(longerExample)));
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+    await expect(generateLesson(lessonInput))
       .resolves.toMatchObject(longerExample);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -207,7 +219,7 @@ describe("DeepSeek stateless JSON client", () => {
     const invalid = {
       ...validLesson,
       example_en: "",
-      exercise: { activity_type: "exact_cloze", instruction: "Fill the blank.", prompt: "A team of ___ arrived.", multiline: false },
+      exercise: { activity_type: "exact_cloze", instruction: "Fill the blank.", prompt: "After the winter storm, workers checked whether every ___ remained secure inside the public hall.", multiline: false },
     };
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchMock = vi.mocked(fetch);
@@ -215,7 +227,7 @@ describe("DeepSeek stateless JSON client", () => {
       .mockResolvedValueOnce(response(JSON.stringify(invalid)))
       .mockResolvedValueOnce(response(JSON.stringify(invalid)));
 
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+    await expect(generateLesson(lessonInput))
       .rejects.toMatchObject({ code: "DEEPSEEK_INVALID_OUTPUT", details: { httpStatus: 200, issuePaths: ["example_en", "exercise.accepted_answers"] } });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const repairRequest = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
@@ -234,15 +246,15 @@ describe("DeepSeek stateless JSON client", () => {
   it("uses repair feedback and accepts a valid second generation response", async () => {
     const invalid = {
       ...validLesson,
-      exercise: { activity_type: "exact_cloze", instruction: "Fill the blank.", prompt: "A team of ___ arrived.", multiline: false },
+      exercise: { activity_type: "exact_cloze", instruction: "Fill the blank.", prompt: "After the winter storm, workers checked whether every ___ remained secure inside the public hall.", multiline: false },
     };
     const repaired = {
       ...validLesson,
       exercise: {
         activity_type: "exact_cloze",
         instruction: "Fill the blank.",
-        prompt: "A team of ___ arrived.",
-        accepted_answers: ["electricians"],
+        prompt: "The city added a ___ near the library entrance for visiting students.",
+        accepted_answers: ["fixture"],
         multiline: false,
       },
     };
@@ -251,13 +263,100 @@ describe("DeepSeek stateless JSON client", () => {
       .mockResolvedValueOnce(response(JSON.stringify(invalid)))
       .mockResolvedValueOnce(response(JSON.stringify(repaired)));
 
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+    await expect(generateLesson(lessonInput))
       .resolves.toMatchObject(repaired);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const repairRequest = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
     expect(repairRequest.messages[1].content).toContain("exercise.accepted_answers");
     expect(repairRequest.messages[1].content).toContain("返回完整 JSON");
+  });
+
+  it("repairs an exact cloze that leaks the target outside its blank", async () => {
+    const leaked = {
+      ...validLesson,
+      exercise: { ...validLesson.exercise, prompt: "The fixture near the library remains ___ for visiting students." },
+    };
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify(leaked)))
+      .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
+
+    await expect(generateLesson(lessonInput)).resolves.toMatchObject(validLesson);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const repairRequest = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(repairRequest.messages[1].content).toContain("exercise.prompt");
+  });
+
+  it("rejects target leakage and an exercise that repeats the example sentence", () => {
+    const alleviateContext = {
+      word: "alleviate",
+      lesson_profile: "quick_recall" as const,
+      error_focus: null,
+    };
+    const leaked = validateGeneratedLessonExercise(lessonInput, {
+      example_en: example,
+      exercise: { ...validLesson.exercise, prompt: "A fixture was placed near the entrance after ___." },
+    });
+    expect(leaked.map((issue) => issue.path.join("."))).toContain("exercise.prompt");
+
+    const leakedAlleviate = validateGeneratedLessonExercise(alleviateContext, {
+      example_en: "The new subsidy may alleviate some of the financial pressure on small firms.",
+      exercise: {
+        activity_type: "exact_cloze", instruction: "Fill the blank.",
+        prompt: "Regular stretching may alleviate the discomfort caused by ___ for long periods.",
+        accepted_answers: ["alleviate"], multiline: false,
+      },
+    });
+    expect(leakedAlleviate.some((issue) => issue.path.join(".") === "exercise.prompt" && issue.message.includes("target word"))).toBe(true);
+
+    const repeated = validateGeneratedLessonExercise(lessonInput, {
+      example_en: "The museum installed a fixture to display the new map.",
+      exercise: { ...validLesson.exercise, prompt: "The museum installed a ___ to display the new map." },
+    });
+    expect(repeated.some((issue) => issue.path.join(".") === "exercise.prompt" && issue.message.includes("new context"))).toBe(true);
+  });
+
+  it("requires one deterministic single-line exact cloze for quick_recall", () => {
+    const invalid = validateGeneratedLessonExercise(lessonInput, {
+      example_en: example,
+      exercise: { ...validLesson.exercise, multiline: true },
+    });
+    expect(invalid.map((issue) => issue.path.join("."))).toContain("exercise.multiline");
+    expect(invalid.some((issue) => issue.path.join(".") === "exercise.activity_type")).toBe(false);
+
+    const hyphenVariantLeak = validateGeneratedLessonExercise({ ...lessonInput, word: "air conditioning" }, {
+      example_en: "The old air conditioning system requires regular maintenance.",
+      exercise: {
+        activity_type: "exact_cloze", instruction: "Fill the blank.",
+        prompt: "Air-conditioning keeps the offices comfortable throughout ___.",
+        accepted_answers: ["air conditioning"], multiline: false,
+      },
+    });
+    expect(hyphenVariantLeak.some((issue) => issue.message.includes("target word"))).toBe(true);
+  });
+
+  it("keeps ordinary Lesson generation closed while allowing a targeted collocation task", () => {
+    const collocationExercise = {
+      activity_type: "collocation" as const,
+      instruction: "回忆目标搭配。",
+      prompt: "What phrase means a permanent installation?",
+      multiline: false,
+    };
+    expect(validateGeneratedLessonExercise(lessonInput, { example_en: example, exercise: collocationExercise })
+      .some((issue) => issue.path.join(".") === "exercise.activity_type")).toBe(true);
+
+    expect(validateGeneratedLessonExercise({
+      ...lessonInput,
+      lesson_profile: "targeted_relearn",
+      error_focus: "collocation",
+    }, { example_en: example, exercise: collocationExercise })).toEqual([]);
+
+    const sentence = validateGeneratedLessonExercise(lessonInput, {
+      example_en: example,
+      exercise: { ...collocationExercise, activity_type: "sentence", prompt: "Write a sentence about fixtures." },
+    });
+    expect(sentence.some((issue) => issue.path.join(".") === "exercise.activity_type")).toBe(true);
   });
 
   it("does not log the user answer or raw provider content for grading errors", async () => {
@@ -286,7 +385,7 @@ describe("DeepSeek stateless JSON client", () => {
     vi.useFakeTimers();
     const fetchMock = vi.mocked(fetch);
     const waitingRequest = waitForAbort();
-    const pending = generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." });
+    const pending = generateLesson(lessonInput);
     await vi.advanceTimersByTimeAsync(12_000);
     expect(waitingRequest.signal()?.aborted).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -297,7 +396,7 @@ describe("DeepSeek stateless JSON client", () => {
   it("returns DEEPSEEK_TIMEOUT only at the lesson generation 30 second deadline", async () => {
     vi.useFakeTimers();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await expectTimeout(() => generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }), 30_000);
+    await expectTimeout(() => generateLesson(lessonInput), 30_000);
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
   });
 
@@ -323,7 +422,7 @@ describe("DeepSeek stateless JSON client", () => {
     fetchMock
       .mockResolvedValueOnce(new Response("{}", { status }))
       .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
-    const pending = generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." });
+    const pending = generateLesson(lessonInput);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(499);
@@ -336,7 +435,7 @@ describe("DeepSeek stateless JSON client", () => {
   it.each([400, 401, 403])("does not retry non-transient HTTP %i", async (status) => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(new Response("{}", { status }));
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+    await expect(generateLesson(lessonInput))
       .rejects.toMatchObject({ code: "DEEPSEEK_HTTP_ERROR" });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
@@ -344,7 +443,7 @@ describe("DeepSeek stateless JSON client", () => {
   it("does not retry ordinary network failures", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockRejectedValueOnce(new Error("network unavailable"));
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+    await expect(generateLesson(lessonInput))
       .rejects.toMatchObject({ code: "DEEPSEEK_HTTP_ERROR" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -353,7 +452,7 @@ describe("DeepSeek stateless JSON client", () => {
     mocks.getDeepSeekApiKey.mockReturnValue(undefined);
     const fetchMock = vi.mocked(fetch);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await expect(generateLesson({ word: "fixture", meaning_zh: "设施", part_of_speech: "n." }))
+    await expect(generateLesson(lessonInput))
       .rejects.toMatchObject({ code: "DEEPSEEK_NOT_CONFIGURED", status: 503 });
     expect(fetchMock).not.toHaveBeenCalled();
   });

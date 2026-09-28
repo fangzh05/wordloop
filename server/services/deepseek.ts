@@ -7,6 +7,8 @@ import {
   WRAPUP_GENERATION_PROMPT,
   WRAPUP_GRADING_PROMPT,
 } from "./deepseekPrompts.js";
+import { canonicalizeRecallForm } from "../../web/src/grading/deterministic.js";
+import type { LessonErrorFocus, LessonProfile } from "./lessonProfile.js";
 
 const deepseekBase = "https://api.deepseek.com/chat/completions";
 const activityTypes = [
@@ -94,6 +96,126 @@ export type SemanticGrade = z.output<typeof semanticGradeSchema>;
 export type EnglishDefinitionGrade = z.output<typeof englishDefinitionGradeSchema>;
 export type WrapupExercise = z.output<typeof wrapupExerciseSchema>;
 export type WrapupGrade = z.output<typeof wrapupGradeSchema>;
+
+export interface LessonExerciseValidationContext {
+  word: string;
+  lesson_profile: LessonProfile;
+  error_focus: LessonErrorFocus;
+}
+
+export interface LessonExerciseValidationIssue {
+  path: (string | number)[];
+  message: string;
+}
+
+function canonicalWordTokens(value: string): string[] {
+  return canonicalizeRecallForm(value).match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? [];
+}
+
+function containsTokenSequence(haystack: readonly string[], needle: readonly string[]): boolean {
+  if (needle.length === 0 || needle.length > haystack.length) return false;
+  return haystack.some((_, start) => needle.every((token, offset) => haystack[start + offset] === token));
+}
+
+function promptContainsTarget(prompt: string, word: string): boolean {
+  const targetTokens = canonicalWordTokens(word);
+  return prompt.split("___").some((part) => containsTokenSequence(canonicalWordTokens(part), targetTokens));
+}
+
+function promptRepeatsExample(prompt: string, example: string, word: string): boolean {
+  const normalizedPrompt = prompt.trim().toLocaleLowerCase().replace(/\s+/gu, " ");
+  const normalizedExample = example.trim().toLocaleLowerCase().replace(/\s+/gu, " ");
+  if (normalizedPrompt === normalizedExample) return true;
+
+  const promptParts = prompt.split("___");
+  if (promptParts.length !== 2) return false;
+  const promptShape = [
+    ...canonicalWordTokens(promptParts[0] ?? ""),
+    "<blank>",
+    ...canonicalWordTokens(promptParts[1] ?? ""),
+  ];
+  const exampleTokens = canonicalWordTokens(example);
+  const targetTokens = canonicalWordTokens(word);
+  const exampleShape: string[] = [];
+  let replacedTarget = false;
+  for (let index = 0; index < exampleTokens.length;) {
+    if (targetTokens.length > 0 && targetTokens.every((token, offset) => exampleTokens[index + offset] === token)) {
+      exampleShape.push("<blank>");
+      index += targetTokens.length;
+      replacedTarget = true;
+    } else {
+      exampleShape.push(exampleTokens[index] ?? "");
+      index += 1;
+    }
+  }
+  return replacedTarget && promptShape.join(" ") === exampleShape.join(" ");
+}
+
+function allowedLessonActivityTypes(context: LessonExerciseValidationContext): readonly string[] {
+  if (context.lesson_profile === "quick_recall") return ["exact_cloze"];
+  if (context.lesson_profile === "reinforce") return ["exact_cloze", "translation_cn_to_en"];
+  if (context.error_focus === "collocation") return ["exact_cloze", "translation_cn_to_en", "collocation"];
+  if (context.error_focus === "grammar") return ["exact_cloze", "translation_cn_to_en"];
+  if (context.error_focus === null) return ["exact_cloze", "translation_cn_to_en"];
+  return ["exact_cloze"];
+}
+
+/** Validate generated exercise content against the server-owned profile. */
+export function validateGeneratedLessonExercise(
+  context: LessonExerciseValidationContext,
+  generated: Pick<LessonGeneration, "example_en" | "exercise">,
+): LessonExerciseValidationIssue[] {
+  const issues: LessonExerciseValidationIssue[] = [];
+  const { exercise } = generated;
+  if (!allowedLessonActivityTypes(context).includes(exercise.activity_type)) {
+    issues.push({
+      path: ["exercise", "activity_type"],
+      message: `This Lesson profile only allows: ${allowedLessonActivityTypes(context).join(", ")}.`,
+    });
+  }
+  if (exercise.multiline) {
+    issues.push({ path: ["exercise", "multiline"], message: "Ordinary Lesson exercises must be single-line." });
+  }
+  if (exercise.activity_type === "exact_cloze") {
+    if ((exercise.prompt.match(/___/gu) ?? []).length !== 1) {
+      issues.push({ path: ["exercise", "prompt"], message: "An exact cloze must contain exactly one blank." });
+    }
+    if (!exercise.accepted_answers?.length) {
+      issues.push({ path: ["exercise", "accepted_answers"], message: "An exact cloze requires at least one accepted answer." });
+    }
+    if (promptContainsTarget(exercise.prompt, context.word)) {
+      issues.push({ path: ["exercise", "prompt"], message: "The target word must not appear outside the blank." });
+    }
+    if (promptRepeatsExample(exercise.prompt, generated.example_en, context.word)) {
+      issues.push({ path: ["exercise", "prompt"], message: "Use a new context instead of turning the example into the exercise." });
+    }
+  }
+  if (exercise.prompt.trim().toLocaleLowerCase().replace(/\s+/gu, " ")
+    === generated.example_en.trim().toLocaleLowerCase().replace(/\s+/gu, " ")) {
+    issues.push({ path: ["exercise", "prompt"], message: "The exercise prompt must differ from the example." });
+  }
+  if (context.lesson_profile === "quick_recall") {
+    const wordCount = canonicalWordTokens(exercise.prompt).length + 1;
+    if (exercise.activity_type !== "exact_cloze") {
+      issues.push({ path: ["exercise", "activity_type"], message: "quick_recall must use deterministic exact_cloze." });
+    }
+    if (exercise.multiline) {
+      issues.push({ path: ["exercise", "multiline"], message: "quick_recall must be single-line." });
+    }
+    if (wordCount < 8 || wordCount > 18 || /\p{Script=Han}/u.test(exercise.prompt)) {
+      issues.push({ path: ["exercise", "prompt"], message: "quick_recall needs a simple English context of 8–18 words." });
+    }
+  }
+  return issues;
+}
+
+function lessonGenerationSchemaFor(context: LessonExerciseValidationContext) {
+  return lessonGenerationSchema.superRefine((generated, refinementContext) => {
+    for (const issue of validateGeneratedLessonExercise(context, generated)) {
+      refinementContext.addIssue({ code: "custom", message: issue.message, path: issue.path });
+    }
+  });
+}
 
 interface DeepSeekJsonOptions {
   maxTokens: number;
@@ -266,8 +388,10 @@ export function generateLesson(input: {
   meaning_zh: string;
   part_of_speech: string;
   ipa?: string;
+  lesson_profile: LessonProfile;
+  error_focus: LessonErrorFocus;
 }): Promise<LessonGeneration> {
-  return deepSeekJson(lessonGenerationSchema, LESSON_GENERATION_PROMPT, input, {
+  return deepSeekJson(lessonGenerationSchemaFor(input), LESSON_GENERATION_PROMPT, input, {
     task: "lesson_generation", maxTokens: 1200, timeoutMs: 30_000,
   });
 }

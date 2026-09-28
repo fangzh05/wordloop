@@ -121,9 +121,13 @@ const lessonFeedback = z.object({
   explanation: z.string().trim().max(4000).optional().describe("错误时说明错因和下一步改哪里/怎么改；第一次错误只能给自纠提示，不得给完整改后句。"),
   reveal_answer: z.boolean(),
 }).strict();
+const lessonProfile = z.enum(["quick_recall", "reinforce", "targeted_relearn"]);
+const lessonErrorFocus = z.enum(["meaning", "collocation", "grammar", "spelling", "pronunciation"]).nullable();
 const lessonCommon = {
   title: z.string().trim().max(120).optional(),
   progress: z.string().trim().max(40).optional(),
+  lesson_profile: lessonProfile.optional(),
+  error_focus: lessonErrorFocus.optional(),
 };
 const explainPayload = z.object({
   ...lessonCommon,
@@ -173,6 +177,8 @@ const feedbackToolPayload = z.object({
   mode: z.literal("feedback"),
   wrapup: z.literal(true).optional(),
   word: z.string().trim().min(1).max(100),
+  lesson_profile: lessonProfile.optional(),
+  error_focus: lessonErrorFocus.optional(),
   feedback: lessonFeedback,
 }).strict();
 const lessonToolInputBranches = [
@@ -300,6 +306,17 @@ function widgetPayloadWithState(payload: Record<string, unknown>, state: StudySt
 
 function lessonWidgetPayload(payload: Record<string, unknown>): Record<string, unknown> {
   return { ...payload, widget_version: LESSON_WIDGET_VERSION };
+}
+
+function persistedLessonProfileFields(state: StudyState | null | undefined, word?: string): Record<string, unknown> {
+  if (!state || state.widget !== "lesson") return {};
+  if (word && (!state.current_word || normalizeWord(state.current_word) !== normalizeWord(word))) return {};
+  const profile = lessonProfile.safeParse(state.payload.lesson_profile);
+  const errorFocus = lessonErrorFocus.safeParse(state.payload.error_focus);
+  return {
+    ...(profile.success ? { lesson_profile: profile.data } : {}),
+    ...(errorFocus.success ? { error_focus: errorFocus.data } : {}),
+  };
 }
 
 function resumablePayload(session: StudySessionRow | null, widget: StudyState["widget"]): Record<string, unknown> {
@@ -713,6 +730,7 @@ export function registerRenderTools(server: McpServer): void {
       parsedInput = feedbackPayload.parse({
         mode: "feedback",
         ...(toolInput.wrapup === true ? { wrapup: true } : {}),
+        ...persistedLessonProfileFields(normalizedState ?? undefined, toolInput.word),
         word: toolInput.word,
         progress,
         exercise: exercise?.success ? exercise.data : undefined,
@@ -726,7 +744,17 @@ export function registerRenderTools(server: McpServer): void {
     const lessonWords = validated.flow?.lesson_words;
     if (!lessonWords) throw new Error("LESSON_QUEUE_MISSING");
     const navigation = buildLessonNavigation(lessonWords, currentIndex, parsedInput.word);
-    const payload = lessonWidgetPayload({ widget: "lesson", ...parsedInput, navigation });
+    const {
+      lesson_profile: _clientLessonProfile,
+      error_focus: _clientErrorFocus,
+      ...content
+    } = parsedInput;
+    const payload = lessonWidgetPayload({
+      widget: "lesson",
+      ...content,
+      ...persistedLessonProfileFields(validated.active?.state ?? undefined, parsedInput.word),
+      navigation,
+    });
     return saveWidgetState({
       date: validated.date,
       knownActive: validated.active,

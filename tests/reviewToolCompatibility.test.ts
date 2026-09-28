@@ -680,7 +680,10 @@ describe("Review render tool schema compatibility", () => {
       current_index: 8,
       retry_count: 0,
       flow: { relearn_words: [], lesson_words: lessonWords },
-      payload: { widget: "lesson", mode: "exercise", word: "shrink", progress: "9 / 9", ...exercise },
+      payload: {
+        widget: "lesson", mode: "exercise", word: "shrink", progress: "9 / 9",
+        lesson_profile: "targeted_relearn", error_focus: "grammar", ...exercise,
+      },
     };
     sessionMocks.getActiveStudySession.mockResolvedValue({
       id: "lesson-session",
@@ -704,6 +707,7 @@ describe("Review render tool schema compatibility", () => {
       });
       const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as { payload: Record<string, unknown> };
       expect(persisted.payload.navigation).toEqual({ action: "round_complete", next_word: null, next_index: null, total_count: 9 });
+      expect(persisted.payload).toMatchObject({ lesson_profile: "targeted_relearn", error_focus: "grammar" });
 
       const feedbackState = {
         ...exerciseState,
@@ -713,6 +717,8 @@ describe("Review render tool schema compatibility", () => {
           mode: "feedback",
           word: "shrink",
           progress: "9 / 9",
+          lesson_profile: "targeted_relearn",
+          error_focus: "grammar",
           navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
           exercise: { ...exercise, legacy_context: "old" },
           feedback: { ...feedbackInput.feedback, legacy_context: "old" },
@@ -736,6 +742,8 @@ describe("Review render tool schema compatibility", () => {
         widget: "lesson",
         widget_version: 3,
         phase: "lesson_feedback",
+        lesson_profile: "targeted_relearn",
+        error_focus: "grammar",
         navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
       });
       expect(resumed.exercise).toEqual(exercise);

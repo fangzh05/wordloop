@@ -182,14 +182,14 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.getPronunciationAudio.mockResolvedValue({ words: [] });
     mocks.recordAttempt.mockResolvedValue(undefined);
     mocks.recordPretestResult.mockResolvedValue(undefined);
-    mocks.finishStudySession.mockImplementation(async (_db?: unknown, _userId?: string, expected?: { revision: string; sessionId: string }) => {
+    mocks.finishStudySession.mockImplementation(async (_db?: unknown, _userId?: string, expected?: { revision: string; sessionId: string; allowLessonRoundCompletion?: boolean }) => {
       if (expected && (mocks.active?.updated_at !== expected.revision || mocks.active?.id !== expected.sessionId)) throw new Error("STALE_STUDY_STATE");
       const finished = { ...mocks.active, ended_at: "2026-09-27T01:00:00.000Z", state: {} };
       mocks.active = null;
       return finished;
     });
     mocks.getVocabularyItemsByWords.mockResolvedValue([{
-      word: "fixture", display_word: "fixture", ipa_us: "/ˈfɪks.tʃər/",
+      word: "fixture", display_word: "fixture", status: "unknown", error_layers: [], ipa_us: "/ˈfɪks.tʃər/",
       senses: [{ pos: "n.", definition_cn: "设施；固定的事物" }],
     }]);
     mocks.generateLesson.mockResolvedValue({
@@ -197,7 +197,7 @@ describe("Standalone Web API shared-state boundaries", () => {
       collocations: ["a permanent fixture"], derivations: ["fix v."],
       example_en: "Although the committee postponed its decision, the evidence continued to influence public debate about educational reform.",
       note: "可指固定设施。",
-      exercise: { activity_type: "translation_cn_to_en", instruction: "翻译句子。", prompt: "学校改善了图书馆设施。", multiline: false },
+      exercise: { activity_type: "exact_cloze", instruction: "根据语境回忆目标词并填空。", prompt: "The school added a ___ for families to use during evening events.", multiline: false, accepted_answers: ["fixture"] },
       next_word: "hostile", current_index: 99, navigation: { action: "next_word", next_word: "hostile", next_index: 100 },
     });
   });
@@ -255,6 +255,8 @@ describe("Standalone Web API shared-state boundaries", () => {
     const state = lessonState("exact_cloze");
     state.payload.prompt = "The city hired a team of ___ to restore power.";
     state.payload.accepted_answers = ["electricians"];
+    state.payload.lesson_profile = "quick_recall";
+    state.payload.error_focus = null;
     mocks.active = row(state);
 
     const response = await handleWebApiRequest(post({ action: "lesson_submit", answer: "electricians" }));
@@ -272,6 +274,7 @@ describe("Standalone Web API shared-state boundaries", () => {
       error_layer: "none",
       user_answer: "electricians",
     });
+    expect(mocks.active.state.payload).toMatchObject({ lesson_profile: "quick_recall", error_focus: null });
     expect(responsePayload.state.payload).not.toHaveProperty("accepted_answers");
   });
 
@@ -414,6 +417,12 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.recordAttempt).toHaveBeenCalledTimes(3);
     expect(mocks.active.state).toMatchObject({ phase: "lesson_feedback", retry_count: 2 });
     expect(mocks.active.state.payload.feedback).toMatchObject({ reveal_answer: true, reference_answer: "revealed answer" });
+
+    mocks.bootstrap.mockResolvedValue({ action: "done" });
+    const next = await handleWebApiRequest(post({ action: "lesson_next" }, mocks.active.updated_at));
+    expect(next.status).toBe(200);
+    expect(mocks.generateWrapup).not.toHaveBeenCalled();
+    expect(mocks.generateLesson).not.toHaveBeenCalled();
   });
 
   it("creates canonical Lesson state from the frozen server queue and ignores model navigation fields", async () => {
@@ -437,16 +446,122 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(payload.state).toMatchObject({
       widget: "lesson", phase: "lesson_explain", current_word: "fixture", current_index: 0,
       flow: { lesson_words: ["fixture", "next-word"] },
-      payload: { mode: "explain", word: "fixture", navigation: { action: "next_word", next_word: "next-word", next_index: 1 } },
+      payload: { mode: "explain", word: "fixture", lesson_profile: "reinforce", error_focus: null, navigation: { action: "next_word", next_word: "next-word", next_index: 1 } },
     });
     expect(payload.state.payload).not.toMatchObject({ current_index: 99, next_word: "hostile" });
-    expect(mocks.generateLesson).toHaveBeenCalledWith(expect.objectContaining({ word: "fixture" }));
+    expect(mocks.generateLesson).toHaveBeenCalledWith(expect.objectContaining({ word: "fixture", lesson_profile: "reinforce", error_focus: null }));
     const chatgptResume = await resumableLessonPayload(mocks.active);
     expect(chatgptResume).toMatchObject({
       widget: "lesson", phase: "lesson_explain", current_index: 0, mode: "explain", word: "fixture",
-      exercise: { activity_type: "translation_cn_to_en", prompt: "学校改善了图书馆设施。" },
+      exercise: { activity_type: "exact_cloze", prompt: "The school added a ___ for families to use during evening events." },
       navigation: { action: "next_word", next_word: "next-word", next_index: 1 },
     });
+    expect(payload.state.flow.lesson_profile_history).toEqual([
+      { word: "fixture", lesson_profile: "reinforce", error_focus: null },
+    ]);
+  });
+
+  it("targets an explicitly queued Review relearn even after live status changes", async () => {
+    const start = makeStudyState({
+      date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
+      flow: { relearn_words: ["FIXTURE"], lesson_words: ["fixture"] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(start);
+    mocks.getVocabularyItemsByWords.mockResolvedValueOnce([{
+      word: "fixture", display_word: "fixture", status: "known", error_layers: [],
+      senses: [{ pos: "n.", definition_cn: "设施" }],
+    }]);
+    mocks.bootstrap.mockResolvedValue({ action: "lesson", word: { word: "fixture" } });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.generateLesson).toHaveBeenCalledWith(expect.objectContaining({
+      lesson_profile: "targeted_relearn", error_focus: null,
+    }));
+    expect(mocks.active.state.payload).toMatchObject({ lesson_profile: "targeted_relearn", error_focus: null });
+  });
+
+  it("passes a current spelling error layer into targeted Lesson generation", async () => {
+    const start = makeStudyState({
+      date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(start);
+    mocks.getVocabularyItemsByWords.mockResolvedValueOnce([{
+      word: "fixture", display_word: "fixture", status: "uncertain", error_layers: ["spelling"],
+      senses: [{ pos: "n.", definition_cn: "设施" }],
+    }]);
+    mocks.bootstrap.mockResolvedValue({ action: "lesson", word: { word: "fixture" } });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.generateLesson).toHaveBeenCalledWith(expect.objectContaining({
+      lesson_profile: "targeted_relearn", error_focus: "spelling",
+    }));
+    expect(mocks.active.state.payload).toMatchObject({ lesson_profile: "targeted_relearn", error_focus: "spelling" });
+  });
+
+  it("uses quick_recall for an uncertain word with no active error", async () => {
+    const start = makeStudyState({
+      date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(start);
+    mocks.getVocabularyItemsByWords.mockResolvedValueOnce([{
+      word: "fixture", display_word: "fixture", status: "uncertain", error_layers: [],
+      senses: [{ pos: "n.", definition_cn: "设施" }],
+    }]);
+    mocks.bootstrap.mockResolvedValue({ action: "lesson", word: { word: "fixture" } });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.generateLesson).toHaveBeenCalledWith(expect.objectContaining({
+      lesson_profile: "quick_recall", error_focus: null,
+    }));
+    expect(mocks.active.state.payload).toMatchObject({ lesson_profile: "quick_recall", error_focus: null });
+  });
+
+  it("resumes the stored profile, exercise, and cursor without recalculating or regenerating", async () => {
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_exercise", current_word: "fixture", current_index: 1, retry_count: 0,
+      flow: { relearn_words: ["fixture"], lesson_words: ["before", "fixture", "after"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode: "exercise", word: "fixture",
+        lesson_profile: "targeted_relearn", error_focus: "spelling",
+        activity_type: "exact_cloze", instruction: "填入目标词形。",
+        prompt: "The museum has one ___ that displays old local photographs.",
+        accepted_answers: ["fixture"], multiline: false,
+      },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "resume", widget: "lesson", phase: "lesson_exercise" });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(payload.state).toMatchObject({
+      current_index: 1, current_word: "fixture",
+      payload: {
+        lesson_profile: "targeted_relearn", error_focus: "spelling",
+        prompt: "The museum has one ___ that displays old local photographs.",
+      },
+    });
+    expect(mocks.generateLesson).not.toHaveBeenCalled();
   });
 
   it("persists fixed answers in the server Lesson state but omits them from the Web response", async () => {
@@ -501,7 +616,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     });
     mocks.active = row(state);
     mocks.getVocabularyItemsByWords.mockImplementationOnce(async (words: string[]) => [{
-      word: words[0]!, display_word: words[0]!, ipa_us: "/nekst/", senses: [{ pos: "n.", definition_cn: "下一个词" }],
+      word: words[0]!, display_word: words[0]!, status: "unknown", error_layers: [], ipa_us: "/nekst/", senses: [{ pos: "n.", definition_cn: "下一个词" }],
     }]);
     const response = await handleWebApiRequest(post({ action: "lesson_next" }));
     const payload = await body(response);
@@ -512,6 +627,55 @@ describe("Standalone Web API shared-state boundaries", () => {
       flow: { lesson_words: ["fixture", "next-word"] },
       payload: { word: "next-word", navigation: { action: "round_complete", total_count: 2 } },
     });
+  });
+
+  it("finishes the standalone Lesson round after its one final exercise without generating a wrap-up", async () => {
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_feedback", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode: "feedback", word: "fixture",
+        lesson_profile: "quick_recall", error_focus: null,
+        exercise: { activity_type: "exact_cloze", instruction: "填空。", prompt: "An ___ keeps the chairs secure in the hall.", multiline: false },
+        feedback: { is_correct: true, user_answer: "fixture", error_layer: "none", message: "正确。", explanation: "答对了。", reveal_answer: false },
+        navigation: buildLessonNavigation(["fixture"], 0, "fixture"),
+      },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "done" });
+
+    const response = await handleWebApiRequest(post({ action: "lesson_next" }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(payload.screen).toBe("done");
+    expect(mocks.advanceEvents).toEqual(["lesson_complete"]);
+    expect(mocks.finishStudySession).toHaveBeenCalledWith({}, userId, expect.objectContaining({ allowLessonRoundCompletion: true }));
+    expect(mocks.generateWrapup).not.toHaveBeenCalled();
+    expect(mocks.generateLesson).not.toHaveBeenCalled();
+  });
+
+  it("recovers a persisted final Lesson feedback by finishing it instead of generating a wrap-up", async () => {
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_complete", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode: "feedback", word: "fixture",
+        lesson_profile: "quick_recall", error_focus: null,
+        exercise: { activity_type: "exact_cloze", instruction: "填空。", prompt: "An ___ keeps the chairs secure in the hall.", multiline: false },
+        feedback: { is_correct: true, user_answer: "fixture", error_layer: "none", message: "正确。", explanation: "答对了。", reveal_answer: false },
+        navigation: buildLessonNavigation(["fixture"], 0, "fixture"),
+      },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "done" });
+
+    const response = await handleWebApiRequest(post({ action: "lesson_next" }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.advanceEvents).toEqual([]);
+    expect(mocks.finishStudySession).toHaveBeenCalledWith({}, userId, expect.objectContaining({ allowLessonRoundCompletion: true }));
+    expect(mocks.generateWrapup).not.toHaveBeenCalled();
   });
 
   it("leaves the current pretest-complete session untouched when Lesson generation fails", async () => {
@@ -565,7 +729,7 @@ describe("Standalone Web API shared-state boundaries", () => {
       senses: [{ pos: "n.", definition_cn: "设施" }],
     }]);
     mocks.getVocabularyItemsByWords.mockImplementation(async (words: string[]) => words.map((word) => ({
-      word, display_word: word, senses: [{ pos: "n.", definition_cn: "设施" }],
+      word, display_word: word, status: "unknown", error_layers: [], senses: [{ pos: "n.", definition_cn: "设施" }],
     })));
     const actualBootstrap = await vi.importActual<typeof import("../server/services/studyBootstrap.js")>("../server/services/studyBootstrap.js");
     mocks.bootstrap.mockImplementation((options: any) => actualBootstrap.getStudyBootstrap(options));

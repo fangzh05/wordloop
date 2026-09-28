@@ -111,6 +111,12 @@ export interface StudyFlow {
   relearn_words: string[];
   /** Immutable server-owned Lesson queue for this study session. */
   lesson_words?: string[];
+  /** Server-owned profile used for each generated word, retained for session analytics. */
+  lesson_profile_history?: Array<{
+    word: string;
+    lesson_profile: "quick_recall" | "reinforce" | "targeted_relearn";
+    error_focus: ActiveErrorLayer | null;
+  }>;
 }
 
 export interface StudySessionRow {

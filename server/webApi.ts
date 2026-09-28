@@ -55,6 +55,7 @@ import {
   type WrapupGrade,
 } from "./services/deepseek.js";
 import { normalizeWord } from "./services/wordNormalization.js";
+import { deriveLessonProfile } from "./services/lessonProfile.js";
 
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
@@ -325,12 +326,22 @@ async function generateAndPersistLesson(input: {
   const meaning = persistedMeaning(item);
   if (!meaning) throw new WebApiError(409, "INVALID_STUDY_STATE", "The queued Lesson word has no saved Chinese meaning.");
   const pos = persistedPartOfSpeech(item) ?? "未标注词性";
+  const lessonProfile = deriveLessonProfile({
+    status: item.status,
+    is_relearn: input.flow.relearn_words.some((word) => normalizeWord(word) === normalizeWord(item.word)),
+    error_layers: item.error_layers,
+  });
+  const lessonProfileHistory = [
+    ...(input.flow.lesson_profile_history ?? []).filter((entry) => normalizeWord(entry.word) !== normalizeWord(item.word)),
+    { word: item.word, ...lessonProfile },
+  ];
   const [generated, audioUrl] = await Promise.all([
     generateLesson({
       word: item.word,
       meaning_zh: meaning,
       part_of_speech: pos,
       ...(item.ipa_us?.trim() ? { ipa: item.ipa_us.trim() } : {}),
+      ...lessonProfile,
     }),
     pronunciationUrl(item.word),
   ]);
@@ -347,11 +358,12 @@ async function generateAndPersistLesson(input: {
     current_word: item.word,
     current_index: input.index,
     retry_count: 0,
-    flow: input.flow,
+    flow: { ...input.flow, lesson_profile_history: lessonProfileHistory },
     payload: {
       widget: "lesson",
       widget_version: 3,
       mode: "explain",
+      ...lessonProfile,
       word: item.word,
       progress: lessonProgressLabel(input.flow.relearn_words, queue, input.index),
       ipa: generated.ipa,
@@ -675,6 +687,8 @@ function lessonFeedbackState(
       widget_version: 3,
       mode: "feedback",
       ...(wrapup ? { wrapup: true } : {}),
+      ...(Object.prototype.hasOwnProperty.call(state.payload, "lesson_profile") ? { lesson_profile: state.payload.lesson_profile } : {}),
+      ...(Object.prototype.hasOwnProperty.call(state.payload, "error_focus") ? { error_focus: state.payload.error_focus } : {}),
       word: state.current_word!,
       ...(acceptedAnswers.length > 0 ? { accepted_answers: acceptedAnswers } : {}),
       progress: wrapup ? "本轮长难句收尾" : lessonProgressLabel(state.flow.relearn_words, queue, state.current_index),
@@ -727,7 +741,12 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
   const state = activeState(active, "lesson");
   if (!active) throw new WebApiError(409, "NO_ACTIVE_SESSION", "There is no active Lesson session.");
   if (state.phase === "lesson_complete" && state.payload.mode === "feedback" && state.payload.wrapup !== true) {
-    return generateAndReturnWrapup(active);
+    await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
+      revision: action.expected_revision ?? "",
+      sessionId: active.id,
+      allowLessonRoundCompletion: true,
+    });
+    return resolveBootstrap(null);
   }
   if (state.phase !== "lesson_feedback") throw new WebApiError(409, "INVALID_STUDY_STATE", "The Lesson has no completed exercise to advance.");
   if (action.expected_revision === null) throw new StaleStudyStateError();
@@ -758,10 +777,15 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
     return successForSession(result.session, {}, result.audioUrl);
   }
   const completed = await advanceStudySessionIfRevision("lesson_complete", state.current_index, action.expected_revision, active.id);
-  return generateAndReturnWrapup(completed);
+  await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
+    revision: completed.updated_at,
+    sessionId: active.id,
+    allowLessonRoundCompletion: true,
+  });
+  return resolveBootstrap(null);
 }
 
-async function generateAndReturnWrapup(active: StudySessionRow): Promise<Record<string, unknown>> {
+export async function generateAndReturnWrapup(active: StudySessionRow): Promise<Record<string, unknown>> {
   const state = activeState(active, "lesson");
   if (state.phase !== "lesson_complete" || !state.current_word) {
     throw new WebApiError(409, "LESSON_WRAPUP_NOT_READY", "The Lesson round is not ready for its wrap-up.");
@@ -784,6 +808,8 @@ async function generateAndReturnWrapup(active: StudySessionRow): Promise<Record<
       widget_version: 3,
       mode: "exercise",
       wrapup: true,
+      ...(Object.prototype.hasOwnProperty.call(state.payload, "lesson_profile") ? { lesson_profile: state.payload.lesson_profile } : {}),
+      ...(Object.prototype.hasOwnProperty.call(state.payload, "error_focus") ? { error_focus: state.payload.error_focus } : {}),
       word: state.current_word,
       progress: "本轮长难句收尾",
       ...exercise,
@@ -860,6 +886,8 @@ async function retryWrapup(action: Extract<WebAction, { action: "wrapup_retry" }
       widget_version: 3,
       mode: "exercise",
       wrapup: true,
+      ...(Object.prototype.hasOwnProperty.call(state.payload, "lesson_profile") ? { lesson_profile: state.payload.lesson_profile } : {}),
+      ...(Object.prototype.hasOwnProperty.call(state.payload, "error_focus") ? { error_focus: state.payload.error_focus } : {}),
       word: state.current_word!,
       progress: "本轮长难句收尾",
       ...exercise,

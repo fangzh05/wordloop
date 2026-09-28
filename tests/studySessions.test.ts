@@ -5,6 +5,7 @@ import {
   advanceStudyState,
   finishStudySession,
   getActiveStudySession,
+  isCompletedLessonRound,
   isStudySessionSchemaMismatch,
   makeStudyState,
   isLegacyCompletedPretestState,
@@ -894,6 +895,64 @@ describe("durable study session state", () => {
       updated_at: expect.any(String),
     });
     await expect(getActiveStudySession(db as any, "user")).resolves.toBeNull();
+  });
+
+  it("allows standalone completion after accepted final primary feedback", async () => {
+    const state = makeStudyState({
+      date: "2026-09-15", widget: "lesson", phase: "lesson_complete", current_word: "plantation", current_index: 0,
+      retry_count: 0, flow: {
+        relearn_words: [], lesson_words: ["plantation"],
+        lesson_profile_history: [{ word: "plantation", lesson_profile: "quick_recall", error_focus: null }],
+      },
+      payload: {
+        widget: "lesson", mode: "feedback", word: "plantation", lesson_profile: "quick_recall", error_focus: null,
+        exercise: { activity_type: "exact_cloze", instruction: "Fill the blank.", prompt: "A tea ___ supports local farms.", multiline: false },
+        feedback: { is_correct: true, reveal_answer: false },
+      },
+    });
+    const activeRow: StudySessionRow = {
+      id: "session", user_id: "user", started_at: "2026-09-15T00:00:00.000Z", ended_at: null,
+      new_words_count: 1, review_words_count: 0, state, updated_at: "2026-09-15T00:00:00.000Z",
+    };
+    const finishedRow = { ...activeRow, ended_at: "2026-09-15T01:00:00.000Z", state: {} };
+    let updateValues: Record<string, unknown> | undefined;
+    const readBuilder = (result: unknown) => {
+      const builder: Record<string, any> = {};
+      builder.select = vi.fn(() => builder);
+      builder.eq = vi.fn(() => builder);
+      builder.is = vi.fn(() => builder);
+      builder.order = vi.fn(() => builder);
+      builder.limit = vi.fn(() => builder);
+      builder.maybeSingle = vi.fn(async () => result);
+      return builder;
+    };
+    const updateBuilder: Record<string, any> = {};
+    updateBuilder.eq = vi.fn(() => updateBuilder);
+    updateBuilder.is = vi.fn(() => updateBuilder);
+    updateBuilder.select = vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: finishedRow, error: null })) }));
+    let fromCalls = 0;
+    const db = { from: vi.fn(() => {
+      fromCalls += 1;
+      if (fromCalls === 1) return readBuilder({ data: activeRow, error: null });
+      return { update: vi.fn((values: Record<string, unknown>) => { updateValues = values; return updateBuilder; }) };
+    }) };
+
+    expect(isCompletedLessonRound(state)).toBe(true);
+    await expect(finishStudySession(db as any, "user", {
+      revision: activeRow.updated_at,
+      sessionId: activeRow.id,
+      allowLessonRoundCompletion: true,
+    })).resolves.toMatchObject({ id: "session", ended_at: finishedRow.ended_at });
+    expect(updateValues).toMatchObject({
+      ended_at: expect.any(String),
+      state: {
+        version: 1, widget: "lesson", flow: { relearn_words: [] },
+        payload: {
+          widget: "lesson", mode: "completed",
+          lesson_profiles: [{ word: "plantation", lesson_profile: "quick_recall", error_focus: null }],
+        },
+      },
+    });
   });
 
   it("rejects finishing before a persisted wrap-up feedback", async () => {
