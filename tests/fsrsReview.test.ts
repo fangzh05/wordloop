@@ -58,6 +58,19 @@ describe("attempt/review transaction boundary", () => {
     expect(body).toContain("next_review_at");
   });
 
+  it("keeps Pretest attempt and FSRS persistence with review_source pretest", () => {
+    const body = sql.slice(
+      sql.indexOf("create or replace function public.record_pretest_result_v2"),
+      sql.indexOf("create or replace function public.import_vocabulary_batch_v1"),
+    );
+    expect(body).toContain("insert into attempts");
+    expect(body).toContain("insert into fsrs_review_logs");
+    expect(body).toContain("'pretest'");
+    expect(body).toContain("fsrs_stability=(p_card->>'fsrs_stability')");
+    expect(body).toContain("fsrs_difficulty=(p_card->>'fsrs_difficulty')");
+    expect(body).toContain("next_review_at=(p_card->>'next_review_at')");
+  });
+
   it("checks due state after locking the card", () => {
     const body = integritySql.slice(integritySql.indexOf("record_review_result_v1"));
     expect(body).toContain("for update of uw");

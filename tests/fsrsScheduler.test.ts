@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { State } from "ts-fsrs";
-import { cardFromUserWord, cardToDatabase, scheduleReview } from "../server/services/fsrsScheduler.js";
+import { fsrs, State } from "ts-fsrs";
+import { cardFromUserWord, cardToDatabase, createFsrsScheduler, scheduleReview } from "../server/services/fsrsScheduler.js";
 import type { UserWordRow } from "../server/types.js";
 
 function row(overrides: Partial<UserWordRow> = {}): UserWordRow {
@@ -17,13 +17,36 @@ function row(overrides: Partial<UserWordRow> = {}): UserWordRow {
 }
 
 describe("FSRS v6 scheduler", () => {
-  for (const rating of ["again", "hard", "good", "easy"] as const) {
-    it(`schedules New + ${rating}`, () => {
-      const result = scheduleReview(row(), rating, new Date("2026-09-13T00:00:00Z"), false);
-      expect(result.card.reps).toBe(1);
-      expect(result.card.due.getTime()).toBeGreaterThan(Date.parse("2026-09-13T00:00:00Z"));
+  it("uses the one production long-term policy without changing retention, interval cap, or weights", () => {
+    const scheduler = createFsrsScheduler();
+    expect(scheduler.parameters).toMatchObject({
+      request_retention: 0.9,
+      maximum_interval: 36500,
+      enable_short_term: false,
+      enable_fuzz: true,
     });
-  }
+    expect(scheduler.parameters.w).toEqual(fsrs().parameters.w);
+  });
+
+  it.each([
+    ["again", 0.75, 1.5],
+    ["hard", 1.5, 3],
+    ["good", 2, 5],
+    ["easy", 6, 14],
+  ] as const)("schedules Fresh + %s at a day-scale interval with production fuzz", (rating, minDays, maxDays) => {
+    const now = new Date("2026-09-13T00:00:00Z");
+    const result = scheduleReview(row(), rating, now);
+    const intervalDays = (result.card.due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000);
+
+    expect(result.card.state).toBe(State.Review);
+    expect(result.card.learning_steps).toBe(0);
+    expect(result.card.reps).toBe(1);
+    expect(result.card.due.getTime() - now.getTime()).toBeGreaterThan(6 * 60 * 60 * 1000);
+    expect(intervalDays).toBeGreaterThanOrEqual(minDays);
+    expect(intervalDays).toBeLessThanOrEqual(maxDays);
+    expect(Number.isFinite(result.card.stability)).toBe(true);
+    expect(Number.isFinite(result.card.difficulty)).toBe(true);
+  });
 
   it("Good advances due and a later Again increments lapse", () => {
     let current = row();

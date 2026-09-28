@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { State } from "ts-fsrs";
 import type { UserWordRow, StudySessionRow } from "../server/types.js";
 import { recordReviewSubmission } from "../server/services/fsrsReviews.js";
+import { buildLessonWords } from "../server/services/lessonQueue.js";
 import { getDueReviewSelection } from "../server/services/review.js";
 import { makeStudyState } from "../server/services/studySessions.js";
 import type { RecordReviewSubmissionInput, ReviewWidgetPayload } from "../shared/toolContracts.js";
@@ -330,12 +332,22 @@ describe("server-owned Review submission cursor", () => {
 
   it("allows a first failed Review to enter the Lesson relearn queue", async () => {
     const fake = fakeDatabase({ session: reviewSession(["recur"]) });
+    const now = new Date("2026-09-19T00:00:00Z");
 
-    await recordReviewSubmission(failedSubmission, new Date("2026-09-19T00:00:00Z"), false, fake.db as never, userId);
+    await recordReviewSubmission(failedSubmission, now, true, fake.db as never, userId);
 
     expect(fake.rpcCalls[0]?.name).toBe("record_review_submission_v1");
     expect(fake.rpcCalls[0]?.args.p_is_correct).toBe(false);
+    const card = fake.rpcCalls[0]?.args.p_card as Record<string, unknown>;
+    expect(card.fsrs_state).toBe(State.Review);
+    expect(card.fsrs_learning_steps).toBe(0);
+    expect(card.fsrs_scheduled_days).toBeGreaterThan(0);
+    expect(Date.parse(String(card.next_review_at)) - now.getTime()).toBeGreaterThan(6 * 60 * 60 * 1000);
     expect(fake.session.state?.flow.relearn_words).toEqual(["recur"]);
+    expect(buildLessonWords(fake.session.state!.flow.relearn_words, [])).toEqual(["recur"]);
+
+    const due = await getDueReviewSelection(25, fake.db as never, userId, now);
+    expect(due.rollingReview.map((item) => item.word)).not.toContain("recur");
   });
 
   it("continues FSRS after a same-day Lesson relearn without queueing that word again", async () => {
