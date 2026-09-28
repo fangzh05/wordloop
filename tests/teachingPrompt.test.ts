@@ -9,6 +9,9 @@ describe("exam-focused teaching policy", () => {
     expect(TEACHING_PROMPT).toContain("通用正式语境");
     expect(TEACHING_PROMPT).toContain("15–25 个英文词");
     expect(TEACHING_PROMPT).toContain("25–40 词");
+    expect(TEACHING_PROMPT).toContain("For exact_cloze:");
+    expect(TEACHING_PROMPT).toContain("Never put an English answer blank inside a Chinese sentence.");
+    expect(TEACHING_PROMPT).toContain("use activity_type=translation_cn_to_en");
     expect(TEACHING_PROMPT).not.toContain("例句和练习尽量使用医学、肿瘤免疫、RNA-seq");
     expect(TEACHING_PROMPT).not.toContain("每完成 2 轮做一次 30–40 词的连贯听写");
   });

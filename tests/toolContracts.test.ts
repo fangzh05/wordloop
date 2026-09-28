@@ -159,6 +159,18 @@ describe("Widget to tool contracts", () => {
     const messageInput = { word: "planet", activity_type: "sentence", prompt: "Use planet in a new scene.", answer: "My answer" };
     expect(lessonSubmissionSchema.parse(messageInput)).toEqual(messageInput);
     expect(buildLessonSubmissionMessage({ word: "planet", activityType: "sentence", prompt: messageInput.prompt, answer: "  My answer  " })).toContain("用户答案：My answer");
+    expect(recordAttemptSchema.parse({
+      word: "empire",
+      activity_type: "exact_cloze",
+      user_answer: "Empire",
+      is_correct: true,
+    })).toMatchObject({ activity_type: "exact_cloze", user_answer: "Empire", error_layer: "none" });
+    expect(buildLessonSubmissionMessage({
+      word: "empire",
+      activityType: "exact_cloze",
+      prompt: "After a series of acquisitions, the startup quickly grew into a vast media ___.",
+      answer: "Empire",
+    })).toContain("accepted_answers 仅为上方目标词");
 
     for (const event of ["lesson_start_exercise", "lesson_retry", "lesson_complete"] as const) {
       const advance = buildLessonSessionAdvance(event);
