@@ -74,6 +74,6 @@ describe("getProgress with historical session snapshots", () => {
     expect(progress.today).toMatchObject({ total: 50, completed: 12 });
     expect(progress.all_time).toMatchObject({ total_words: 6593, mastered: 46, error_book: 45 });
     expect(progress.fsrs.due_now).toBe(6);
-    expect(progress.review_today).toMatchObject({ total: 18, completed: 13, remaining: 5 });
+    expect(progress.review_today).toMatchObject({ total: 17, completed: 17, remaining: 0 });
   });
 });

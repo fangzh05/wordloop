@@ -4,7 +4,6 @@ import { addCalendarDays, assertDatabaseResult, dateInTimeZone, localDateRange }
 import { perf } from "./perf.js";
 import { getActiveStudySession, normalizeStudyStateForRead, studyStateSchema } from "./studySessions.js";
 import { getUserTimeZone } from "./words.js";
-import { normalizeWord } from "./wordNormalization.js";
 
 type ReviewSessionProgressRow = Pick<StudySessionRow, "review_words_count"> & { state: unknown };
 
@@ -13,89 +12,90 @@ function safeStudyState(value: unknown) {
   return parsed.success ? normalizeStudyStateForRead(parsed.data) : null;
 }
 
+function isFormalReviewItem(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const reviewKind = (value as { review_kind?: unknown }).review_kind;
+  return reviewKind === "fsrs_due" || reviewKind === "both";
+}
+
 function reviewSnapshotTotal(value: unknown): number {
   const state = safeStudyState(value);
-  return state?.widget === "review" && Array.isArray(state.payload.items) ? state.payload.items.length : 0;
+  return state?.widget === "review" && Array.isArray(state.payload.items)
+    ? state.payload.items.filter(isFormalReviewItem).length
+    : 0;
 }
 
-function relearnWords(value: unknown): string[] {
+function completedReviewSnapshot(value: unknown): number {
   const state = safeStudyState(value);
-  if (!state) return [];
-  return [...new Set(state.flow.relearn_words.map(normalizeWord).filter(Boolean))];
+  if (state?.widget !== "review" || !Array.isArray(state.payload.items)) return 0;
+  const completedPrefix = state.phase === "review_complete"
+    ? state.payload.items.length
+    : Math.min(state.payload.items.length, Math.max(0, state.current_index));
+  return state.payload.items.slice(0, completedPrefix).filter(isFormalReviewItem).length;
 }
 
-function completedRelearnWords(value: unknown): string[] {
-  const state = safeStudyState(value);
-  if (state?.widget !== "lesson" || !Array.isArray(state.flow.lesson_words)
-    || !Number.isInteger(state.current_index) || state.current_index < 0
-    || typeof state.phase !== "string") return [];
-  const relearn = new Set(relearnWords(state));
-  const completeCount = state.phase === "lesson_complete"
-    ? state.flow.lesson_words.length
-    : Math.max(0, Math.min(state.current_index, state.flow.lesson_words.length));
-  const completedPrefix = new Set(state.flow.lesson_words.slice(0, completeCount).map(normalizeWord));
-  return [...relearn].filter((word) => completedPrefix.has(word));
-}
-
-/** Review work, including assigned same-day re-learning, never changes the daily new-word queue. */
+/** Count only formal FSRS Review cards; Lesson re-learning has its own flow. */
 export function calculateReviewTodayProgress(
-  active: Pick<StudySessionRow, "state"> | null,
+  active: Pick<StudySessionRow, "state"> & Partial<Pick<StudySessionRow, "review_words_count">> | null,
   sessions: readonly ReviewSessionProgressRow[],
-  completedAttempts: number,
 ): ProgressResult["review_today"] {
   const activeState = safeStudyState(active?.state);
   if (activeState?.widget === "review") {
     const reviewTotal = reviewSnapshotTotal(activeState);
-    const total = reviewTotal + relearnWords(activeState).length;
-    const reviewCompleted = activeState.phase === "review_complete"
-      ? reviewTotal
-      : Math.min(reviewTotal, Math.max(0, activeState.current_index));
-    const completed = reviewCompleted + completedRelearnWords(activeState).length;
+    const currentSnapshotCompleted = completedReviewSnapshot(activeState);
+    const storedReviewCount = typeof active?.review_words_count === "number"
+      && Number.isFinite(active.review_words_count)
+      ? Math.max(0, active.review_words_count)
+      : 0;
+    const reviewCompleted = Math.max(
+      storedReviewCount,
+      currentSnapshotCompleted,
+    );
+    const previousSnapshotsCompleted = Math.max(0, reviewCompleted - currentSnapshotCompleted);
+    const total = previousSnapshotsCompleted + reviewTotal;
+    const completed = reviewCompleted;
     return { completed, total, remaining: Math.max(0, total - completed) };
   }
 
-  const savedTotal = sessions.reduce((sum, session) => {
+  const saved = sessions.reduce((totals, session) => {
     const count = typeof session.review_words_count === "number" && Number.isFinite(session.review_words_count)
       ? Math.max(0, session.review_words_count)
       : 0;
-    return sum + Math.max(count, reviewSnapshotTotal(session.state));
-  }, 0);
-  const attempts = Number.isFinite(completedAttempts) ? Math.max(0, completedAttempts) : 0;
-  const relearnTotal = new Set(sessions.flatMap((session) => relearnWords(session.state))).size;
-  const relearnCompleted = new Set(sessions.flatMap((session) => completedRelearnWords(session.state))).size;
-  // Older completed sessions may not have the snapshot count populated. In
-  // that case persisted Review attempts give a safe lower-bound denominator.
-  const total = (savedTotal > 0 ? savedTotal : attempts) + relearnTotal;
-  const completed = Math.min(total, attempts + relearnCompleted);
-  return { completed, total, remaining: Math.max(0, total - completed) };
+    const state = safeStudyState(session.state);
+    if (state?.widget === "review") {
+      const currentCompleted = completedReviewSnapshot(state);
+      const accumulatedCompleted = Math.max(count, currentCompleted);
+      const completedBeforeSnapshot = Math.max(0, accumulatedCompleted - currentCompleted);
+      return {
+        total: totals.total + completedBeforeSnapshot + reviewSnapshotTotal(state),
+        completed: totals.completed + accumulatedCompleted,
+      };
+    }
+    return { total: totals.total + count, completed: totals.completed + count };
+  }, { total: 0, completed: 0 });
+  return {
+    completed: saved.completed,
+    total: saved.total,
+    remaining: Math.max(0, saved.total - saved.completed),
+  };
 }
 
 async function getReviewTodayProgress(db: ReturnType<typeof getDatabase>, userId: string, now: Date): Promise<ProgressResult["review_today"]> {
   const active = await getActiveStudySession(db, userId);
-  if (active?.state?.widget === "review") return calculateReviewTodayProgress(active, [], 0);
+  if (active?.state?.widget === "review") return calculateReviewTodayProgress(active, []);
 
   const timeZone = await getUserTimeZone(db, userId);
   const today = dateInTimeZone(timeZone, now);
   const { start, end } = localDateRange(today, timeZone);
-  const [sessionResult, attemptsResult] = await Promise.all([
-    db.from("study_sessions")
-      .select("review_words_count,state")
-      .eq("user_id", userId)
-      .gte("started_at", start)
-      .lt("started_at", end),
-    db.from("attempts")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("activity_type", "review")
-      .gte("created_at", start)
-      .lt("created_at", end),
-  ]);
+  const sessionResult = await db.from("study_sessions")
+    .select("review_words_count,state")
+    .eq("user_id", userId)
+    .gte("started_at", start)
+    .lt("started_at", end);
   assertDatabaseResult(sessionResult.error);
-  assertDatabaseResult(attemptsResult.error);
   return calculateReviewTodayProgress(
     active,
     (sessionResult.data ?? []) as ReviewSessionProgressRow[],
-    attemptsResult.count ?? 0,
   );
 }
 

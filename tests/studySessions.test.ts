@@ -75,14 +75,53 @@ function sessionState(overrides: Partial<Parameters<typeof makeStudyState>[0]> =
   });
 }
 
-function mockStudySessionDb(state: StudyState) {
+function pretestState(
+  words: string[],
+  phase: "pretest" | "pretest_result" | "listen_repeat" | "listen_recall" | "pretest_complete",
+  currentIndex: number,
+  flow: { relearn_words: string[] } = { relearn_words: [] },
+): StudyState {
+  return makeStudyState({
+    date: "2026-09-15",
+    widget: "pretest",
+    phase,
+    current_word: phase === "pretest_complete" ? null : words[currentIndex] ?? null,
+    current_index: currentIndex,
+    retry_count: 0,
+    flow,
+    payload: { widget: "pretest", items: words.map((word) => ({ word })) },
+  });
+}
+
+function reviewState(
+  words: string[],
+  phase: "review" | "review_complete",
+  currentIndex: number,
+  flow: { relearn_words: string[]; lesson_words?: string[] } = { relearn_words: [] },
+): StudyState {
+  return makeStudyState({
+    date: "2026-09-15",
+    widget: "review",
+    phase,
+    current_word: phase === "review_complete" ? null : words[currentIndex] ?? null,
+    current_index: currentIndex,
+    retry_count: 0,
+    flow,
+    payload: { widget: "review", items: words.map((word) => ({ word, review_kind: "fsrs_due" })) },
+  });
+}
+
+function mockStudySessionDb(
+  state: StudyState,
+  counts: Partial<Pick<StudySessionRow, "new_words_count" | "review_words_count">> = {},
+) {
   let row: StudySessionRow = {
     id: "session",
     user_id: "user",
     started_at: "2026-09-15T00:00:00.000Z",
     ended_at: null,
-    new_words_count: 0,
-    review_words_count: 0,
+    new_words_count: counts.new_words_count ?? 0,
+    review_words_count: counts.review_words_count ?? 0,
     state,
     updated_at: "2026-09-15T00:00:00.000Z",
   };
@@ -101,6 +140,7 @@ function mockStudySessionDb(state: StudyState) {
       ...row,
       state: values.state as StudyState,
       updated_at: String(values.updated_at),
+      ...(typeof values.new_words_count === "number" ? { new_words_count: values.new_words_count } : {}),
       ...(typeof values.review_words_count === "number" ? { review_words_count: values.review_words_count } : {}),
     };
     return updateBuilder;
@@ -116,6 +156,74 @@ function mockStudySessionDb(state: StudyState) {
 }
 
 describe("durable study session state", () => {
+  it("counts the completed prefix of each immutable Pretest snapshot", async () => {
+    const words = Array.from({ length: 6 }, (_, index) => `new-${index}`);
+    const start = pretestState(words, "pretest", 0);
+    const { db } = mockStudySessionDb(start);
+
+    let saved = await persistStudyState(start, db, "user");
+    const counts = [saved.new_words_count];
+    for (let index = 0; index < words.length; index += 1) {
+      saved = await persistStudyState(pretestState(words, "pretest_result", index), db, "user");
+      counts.push(saved.new_words_count);
+      if (index + 1 < words.length) {
+        saved = await persistStudyState(pretestState(words, "pretest", index + 1), db, "user");
+        expect(saved.new_words_count).toBe(index + 1);
+      }
+    }
+    saved = await persistStudyState(pretestState(words, "pretest_complete", words.length), db, "user");
+
+    expect(counts).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(saved.new_words_count).toBe(6);
+  });
+
+  it("keeps a repeated Pretest result at the same count after refresh or retry", async () => {
+    const words = Array.from({ length: 6 }, (_, index) => `new-${index}`);
+    const previous = pretestState(words, "pretest", 3);
+    const { db } = mockStudySessionDb(previous, { new_words_count: 3 });
+    const answeredThirdWord = pretestState(words, "pretest_result", 2);
+
+    const first = await persistStudyState(answeredThirdWord, db, "user");
+    const retry = await persistStudyState(answeredThirdWord, db, "user");
+
+    expect(first.new_words_count).toBe(3);
+    expect(retry.new_words_count).toBe(3);
+  });
+
+  it("accumulates distinct completed Pretest batches across intervening Lesson state", async () => {
+    const batchA = Array.from({ length: 6 }, (_, index) => `batch-a-${index}`);
+    const batchB = Array.from({ length: 6 }, (_, index) => `batch-b-${index}`);
+    const { db } = mockStudySessionDb(pretestState(batchA, "pretest_complete", batchA.length));
+
+    let saved = await persistStudyState(pretestState(batchA, "pretest_complete", batchA.length), db, "user");
+    expect(saved.new_words_count).toBe(6);
+    saved = await persistStudyState(sessionState({
+      current_word: batchA[0] ?? null,
+      flow: { relearn_words: [], lesson_words: [batchA[0] ?? "batch-a-0"] },
+    }), db, "user");
+    expect(saved.new_words_count).toBe(6);
+    saved = await persistStudyState(pretestState(batchB, "pretest", 0), db, "user");
+    expect(saved.new_words_count).toBe(6);
+    saved = await persistStudyState(pretestState(batchB, "pretest_complete", batchB.length), db, "user");
+
+    expect(saved.new_words_count).toBe(12);
+  });
+
+  it("does not count Review relearn words as newly learned words", async () => {
+    const completedReview = reviewState(["opaque"], "review_complete", 1, {
+      relearn_words: ["opaque"], lesson_words: ["opaque"],
+    });
+    const { db } = mockStudySessionDb(completedReview);
+    const lesson = sessionState({
+      current_word: "opaque",
+      flow: { relearn_words: ["opaque"], lesson_words: ["opaque"] },
+    });
+
+    const saved = await persistStudyState(lesson, db, "user");
+
+    expect(saved.new_words_count).toBe(0);
+  });
+
   it("persists the completed Review count in the shared session row", async () => {
     const reviewItems = Array.from({ length: 25 }, (_, index) => ({
       word: `review-${index}`, meaning_zh: "词义", direction: "cn_to_en" as const,
@@ -133,6 +241,17 @@ describe("durable study session state", () => {
 
     expect(updates[0]).toMatchObject({ review_words_count: 18 });
     expect(saved.review_words_count).toBe(18);
+  });
+
+  it("updates one immutable Review snapshot from 10 completed cards to 25", async () => {
+    const words = Array.from({ length: 25 }, (_, index) => `review-${index}`);
+    const { db } = mockStudySessionDb(reviewState(words, "review", 0));
+
+    let saved = await persistStudyState(reviewState(words, "review", 10), db, "user");
+    expect(saved.review_words_count).toBe(10);
+    saved = await persistStudyState(reviewState(words, "review_complete", 25), db, "user");
+
+    expect(saved.review_words_count).toBe(25);
   });
 
   it("does not schedule another same-day relearn after its completed word remains in the durable flow", () => {
@@ -193,6 +312,81 @@ describe("durable study session state", () => {
 
     expect(updates).toHaveLength(1);
     expect(updates[0]).toMatchObject({ review_words_count: 25, state: { widget: "pretest" } });
+    expect(saved.review_words_count).toBe(25);
+  });
+
+  it("accumulates completed cursors across successive immutable Review snapshots", async () => {
+    const snapshotA = Array.from({ length: 25 }, (_, index) => `review-a-${index}`);
+    const snapshotB = Array.from({ length: 5 }, (_, index) => `review-b-${index}`);
+    const { db } = mockStudySessionDb(reviewState(snapshotA, "review_complete", snapshotA.length));
+
+    let saved = await persistStudyState(reviewState(snapshotA, "review_complete", snapshotA.length), db, "user");
+    expect(saved.review_words_count).toBe(25);
+    saved = await persistStudyState(reviewState(snapshotB, "review", 0), db, "user");
+    expect(saved.review_words_count).toBe(25);
+    saved = await persistStudyState(reviewState(snapshotB, "review", 2), db, "user");
+    expect(saved.review_words_count).toBe(27);
+    saved = await persistStudyState(reviewState(snapshotB, "review_complete", snapshotB.length), db, "user");
+
+    expect(saved.review_words_count).toBe(30);
+  });
+
+  it("counts only FSRS-bearing cards in a mixed Review snapshot", async () => {
+    const mixed = makeStudyState({
+      date: "2026-09-15", widget: "review", phase: "review", current_word: "repair", current_index: 1,
+      retry_count: 0, flow: { relearn_words: [] },
+      payload: { widget: "review", items: [
+        { word: "due", review_kind: "fsrs_due" },
+        { word: "repair", review_kind: "error_repair" },
+      ] },
+    });
+    const { db } = mockStudySessionDb(mixed);
+
+    let saved = await persistStudyState(mixed, db, "user");
+    expect(saved.review_words_count).toBe(1);
+    saved = await persistStudyState({ ...mixed, phase: "review_complete", current_word: null, current_index: 2 }, db, "user");
+
+    expect(saved.review_words_count).toBe(1);
+  });
+
+  it("requires a formal FSRS submission before advancing a due Review card", async () => {
+    const state = makeStudyState({
+      date: "2026-09-15", widget: "review", phase: "review", current_word: "due", current_index: 0,
+      retry_count: 0, flow: { relearn_words: [] },
+      payload: { widget: "review", items: [{
+        word: "due", meaning_zh: "词义", direction: "cn_to_en", error_layers: [], is_due: true,
+        review_kind: "fsrs_due", next_review_at: "2026-09-15T00:00:00.000Z",
+      }] },
+    });
+    const { db, updates } = mockStudySessionDb(state);
+
+    await expect(advanceStudySession("review_answer", 0, {
+      event: "review_answer", word: "due", is_correct: true, current_index: 0,
+    }, db, "user")).rejects.toThrow("FSRS_REVIEW_SUBMISSION_REQUIRED");
+
+    expect(updates).toHaveLength(0);
+  });
+
+  it("preserves the formal Review total through later Lesson relearn work", async () => {
+    const reviewWords = Array.from({ length: 25 }, (_, index) => `review-${index}`);
+    const completedReview = reviewState(reviewWords, "review_complete", reviewWords.length, {
+      relearn_words: ["opaque", "tacit", "staid", "wary", "arduous"],
+    });
+    const { db } = mockStudySessionDb(completedReview, { review_words_count: 25 });
+    const lessonWords = ["opaque", "tacit", "staid", "wary", "arduous"];
+    let saved = await persistStudyState(sessionState({
+      current_word: lessonWords[0] ?? null,
+      current_index: 0,
+      flow: { relearn_words: lessonWords, lesson_words: lessonWords },
+    }), db, "user");
+    for (let index = 1; index < lessonWords.length; index += 1) {
+      saved = await persistStudyState(sessionState({
+        current_word: lessonWords[index] ?? null,
+        current_index: index,
+        flow: { relearn_words: lessonWords, lesson_words: lessonWords },
+      }), db, "user");
+    }
+
     expect(saved.review_words_count).toBe(25);
   });
 

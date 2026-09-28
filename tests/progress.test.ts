@@ -1,7 +1,44 @@
-import { describe, expect, it } from "vitest";
-import { calculateProgress, calculateReviewTodayProgress } from "../server/services/progress.js";
+import { describe, expect, it, vi } from "vitest";
+import { calculateProgress, calculateReviewTodayProgress, getProgress } from "../server/services/progress.js";
 import { makeStudyState } from "../server/services/studySessions.js";
 import type { StudyState, VocabularyItem, WordStatus } from "../server/types.js";
+
+const runtimeMocks = vi.hoisted(() => ({
+  getDatabase: vi.fn(),
+  getAuthenticatedUserId: vi.fn(() => "user"),
+  getActiveStudySession: vi.fn(),
+  getUserTimeZone: vi.fn(),
+}));
+
+vi.mock("../server/db.js", async () => {
+  const actual = await vi.importActual<typeof import("../server/db.js")>("../server/db.js");
+  return {
+    ...actual,
+    getDatabase: runtimeMocks.getDatabase,
+    getAuthenticatedUserId: runtimeMocks.getAuthenticatedUserId,
+  };
+});
+
+vi.mock("../server/services/studySessions.js", async () => {
+  const actual = await vi.importActual<typeof import("../server/services/studySessions.js")>("../server/services/studySessions.js");
+  return { ...actual, getActiveStudySession: runtimeMocks.getActiveStudySession };
+});
+
+vi.mock("../server/services/words.js", async () => {
+  const actual = await vi.importActual<typeof import("../server/services/words.js")>("../server/services/words.js");
+  return { ...actual, getUserTimeZone: runtimeMocks.getUserTimeZone };
+});
+
+function tableQuery(result: unknown) {
+  const builder: Record<string, any> = {};
+  builder.select = () => builder;
+  builder.eq = () => builder;
+  builder.gte = () => builder;
+  builder.lt = () => builder;
+  builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+    Promise.resolve(result).then(resolve, reject);
+  return builder;
+}
 
 function item(word: string, status: WordStatus, options: Partial<VocabularyItem> = {}): VocabularyItem {
   return {
@@ -46,26 +83,26 @@ describe("progress calculation", () => {
 
   it("uses the active immutable Review snapshot and cursor for separate Review progress", () => {
     const active = reviewState("review", 18);
-    expect(calculateReviewTodayProgress({ state: active }, [], 0)).toEqual({
+    expect(calculateReviewTodayProgress({ state: active }, [])).toEqual({
       completed: 18, total: 25, remaining: 7,
     });
   });
 
   it("marks a completed Review snapshot as fully complete", () => {
     const completed = reviewState("review_complete", 25);
-    expect(calculateReviewTodayProgress({ state: completed }, [], 0)).toEqual({
+    expect(calculateReviewTodayProgress({ state: completed }, [])).toEqual({
       completed: 25, total: 25, remaining: 0,
     });
   });
 
-  it("includes assigned Review failures as pending Review work before Pretest begins", () => {
+  it("excludes assigned Review failures from formal Review progress", () => {
     const active = makeStudyState({
       date: "2026-09-27", widget: "review", phase: "review_complete", current_word: null, current_index: 25,
       retry_count: 0, flow: { relearn_words: ["pirate", "feeble", "intensive", "nerve"] },
-      payload: { widget: "review", items: Array.from({ length: 25 }, (_, index) => ({ word: `review-${index}` })) },
+      payload: { widget: "review", items: Array.from({ length: 25 }, (_, index) => ({ word: `review-${index}`, review_kind: "fsrs_due" })) },
     });
-    expect(calculateReviewTodayProgress({ state: active }, [], 0)).toEqual({
-      completed: 25, total: 29, remaining: 4,
+    expect(calculateReviewTodayProgress({ state: active }, [])).toEqual({
+      completed: 25, total: 25, remaining: 0,
     });
   });
 
@@ -77,11 +114,10 @@ describe("progress calculation", () => {
     expect(calculateReviewTodayProgress(
       { state: pretest },
       [{ review_words_count: 25, state: pretest }],
-      25,
     )).toEqual({ completed: 25, total: 25, remaining: 0 });
   });
 
-  it("counts assigned re-learning under Review progress and keeps it outside today's new-word queue", () => {
+  it("keeps formal Review progress separate from Lesson relearn and today's new-word queue", () => {
     const relearnWords = ["pirate", "feeble", "intensive", "nerve"];
     const lessonWords = [...relearnWords, ...Array.from({ length: 5 }, (_, index) => `new-${index}`)];
     const lesson = makeStudyState({
@@ -92,13 +128,54 @@ describe("progress calculation", () => {
     const review = calculateReviewTodayProgress(
       { state: lesson },
       [{ review_words_count: 25, state: lesson }],
-      25,
     );
     const newWords = Array.from({ length: 50 }, (_, index) => item(`new-${index}`, index < 6 ? "known" : "new"));
     const today = calculateProgress(newWords, newWords);
 
-    expect(review).toEqual({ completed: 27, total: 29, remaining: 2 });
+    expect(review).toEqual({ completed: 25, total: 25, remaining: 0 });
     expect(today.today).toMatchObject({ completed: 6, total: 50 });
+  });
+
+  it("carries completed cards from Review snapshot A into active snapshot B", () => {
+    const snapshotB = makeStudyState({
+      date: "2026-09-27", widget: "review", phase: "review", current_word: "b-2", current_index: 2,
+      retry_count: 0, flow: { relearn_words: ["opaque"] },
+      payload: { widget: "review", items: Array.from({ length: 5 }, (_, index) => ({ word: `b-${index}`, review_kind: "fsrs_due" })) },
+    });
+
+    expect(calculateReviewTodayProgress(
+      { state: snapshotB, review_words_count: 27 },
+      [],
+    )).toEqual({ completed: 27, total: 30, remaining: 3 });
+  });
+
+  it("returns 30 / 30 after consecutive Review snapshots even while relearn is queued", () => {
+    const lesson = makeStudyState({
+      date: "2026-09-27", widget: "lesson", phase: "lesson_exercise", current_word: "opaque", current_index: 2,
+      retry_count: 0, flow: { relearn_words: ["opaque", "tacit"], lesson_words: ["opaque", "tacit", "new-1"] },
+      payload: { widget: "lesson", mode: "exercise", word: "opaque" },
+    });
+
+    expect(calculateReviewTodayProgress(
+      { state: lesson },
+      [{ review_words_count: 30, state: lesson }],
+    )).toEqual({ completed: 30, total: 30, remaining: 0 });
+  });
+
+  it("excludes non-FSRS error-repair cards from Review progress", () => {
+    const mixed = makeStudyState({
+      date: "2026-09-27", widget: "review", phase: "review_complete", current_word: null, current_index: 2,
+      retry_count: 0, flow: { relearn_words: [] },
+      payload: { widget: "review", items: [
+        { word: "due", review_kind: "fsrs_due" },
+        { word: "repair", review_kind: "error_repair" },
+      ] },
+    });
+
+    expect(calculateReviewTodayProgress(
+      { state: mixed, review_words_count: 1 },
+      [],
+    )).toEqual({ completed: 1, total: 1, remaining: 0 });
   });
 
   it("ignores ended sessions with empty state and safely counts a valid active Lesson", () => {
@@ -115,8 +192,7 @@ describe("progress calculation", () => {
         { review_words_count: 0, state: activeLesson },
         { review_words_count: 0, state: { flow: { relearn_words: null } } },
       ],
-      12,
-    )).toEqual({ completed: 13, total: 18, remaining: 5 });
+    )).toEqual({ completed: 17, total: 17, remaining: 0 });
   });
 
   it("keeps today's new-word queue independent from completed Review work", () => {
@@ -128,7 +204,6 @@ describe("progress calculation", () => {
         retry_count: 0, flow: { relearn_words: [] }, payload: { widget: "pretest", items: [{ word: "new-6" }] },
       }) },
       [{ review_words_count: 25, state: null }],
-      25,
     );
     expect(daily.today).toMatchObject({ total: 50, completed: 6 });
     expect(review_today).toEqual({ completed: 25, total: 25, remaining: 0 });
@@ -137,13 +212,47 @@ describe("progress calculation", () => {
   it("shows an untouched 50-word daily queue as 0 / 50 alongside an active Review snapshot", () => {
     const allNew = Array.from({ length: 50 }, (_, index) => item(`new-${index}`, "new"));
     const daily = calculateProgress(allNew, allNew);
-    const review_today = calculateReviewTodayProgress({ state: reviewState("review_complete", 25) }, [], 25);
+    const review_today = calculateReviewTodayProgress({ state: reviewState("review_complete", 25) }, []);
 
     expect(daily.today).toMatchObject({ total: 50, completed: 0 });
     expect(review_today).toEqual({ completed: 25, total: 25, remaining: 0 });
   });
 
   it("reports no Review total without substituting due_now", () => {
-    expect(calculateReviewTodayProgress(null, [], 0)).toEqual({ completed: 0, total: 0, remaining: 0 });
+    expect(calculateReviewTodayProgress(null, [])).toEqual({ completed: 0, total: 0, remaining: 0 });
+  });
+
+  it("returns daily new-word and cumulative formal Review progress through getProgress", async () => {
+    const lesson = makeStudyState({
+      date: "2026-09-28", widget: "lesson", phase: "lesson_exercise", current_word: "opaque", current_index: 2,
+      retry_count: 0, flow: { relearn_words: ["opaque", "tacit"], lesson_words: ["opaque", "tacit", "new-1"] },
+      payload: { widget: "lesson", mode: "exercise", word: "opaque" },
+    });
+    const session = {
+      id: "session",
+      review_words_count: 30,
+      new_words_count: 12,
+      state: lesson,
+    };
+    const snapshot = {
+      today: { total: 50, known: 49, uncertain: 0, unknown: 0, completed: 49 },
+      all_time: { total_words: 50, mastered: 0, learning: 50, error_book: 0 },
+      fsrs: { due_now: 0, due_today: 0, tomorrow: 0, due_next_7_days: 0, average_stability: 0 },
+      settings: { daily_new_word_limit: 50 },
+    };
+    const db = {
+      rpc: vi.fn(async () => ({ data: snapshot, error: null })),
+      from: vi.fn((table: string) => tableQuery(table === "study_sessions"
+        ? { data: [session], error: null }
+        : { data: null, error: null, count: 30 })),
+    };
+    runtimeMocks.getDatabase.mockReturnValue(db);
+    runtimeMocks.getActiveStudySession.mockResolvedValue(session);
+    runtimeMocks.getUserTimeZone.mockResolvedValue("Asia/Shanghai");
+
+    const progress = await getProgress();
+
+    expect(progress.today).toMatchObject({ completed: 49, total: 50 });
+    expect(progress.review_today).toEqual({ completed: 30, total: 30, remaining: 0 });
   });
 });

@@ -13,8 +13,9 @@ describe("WordLoop hot-path query boundaries", () => {
     expect(code).not.toContain("getTodayWords(");
     expect(code).not.toContain("getDailyNewWordLimit(");
     expect(code).toContain("getUserTimeZone(");
-    expect(code).toContain('.eq("activity_type", "review")');
-    expect(code).toContain('.select("id", { count: "exact", head: true })');
+    expect(code).toContain('.select("review_words_count,state")');
+    expect(code).not.toContain('from("attempts")');
+    expect(code).not.toContain("fsrs_review_logs");
   });
 
   it("uses review candidates from SQL and keeps learning context lightweight", () => {

@@ -12,9 +12,11 @@ import type { FsrsRating, UserWordRow } from "../types.js";
 const parameters = {
   request_retention: 0.90,
   maximum_interval: 36500,
-  enable_short_term: true,
-  learning_steps: ["1m", "10m"] as const,
-  relearning_steps: ["10m"] as const,
+  // WordLoop owns short-term acquisition and relearning through Lesson.
+  // Keep FSRS on long-term intervals; re-enabling short-term steps requires
+  // re-evaluating duplicate Lesson and FSRS practice.
+  // Existing Learning + Again may increment lapses after this strategy switch; preserve FSRS output.
+  enable_short_term: false,
 };
 
 export function createFsrsScheduler(enableFuzz = true) {
