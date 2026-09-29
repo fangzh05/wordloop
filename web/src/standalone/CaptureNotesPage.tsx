@@ -61,7 +61,7 @@ export function CaptureNotesPage({ onBack, onCountsChange }: {
 
   useEffect(() => {
     void load(status);
-  }, [status]);
+  }, [load, status]);
 
   const visibleItems = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
