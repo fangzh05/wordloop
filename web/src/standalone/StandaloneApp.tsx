@@ -953,7 +953,7 @@ export default function StandaloneApp(): React.JSX.Element {
           <section className="lesson-section"><h2>词性与核心义</h2><p>{String(payload.part_of_speech ?? "")} · {String(payload.meaning_zh ?? "")}</p></section>
           <div className="lesson-detail-grid">
           <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).map((value) => <li key={value} data-capture-text="true" data-capture-source="lesson_example" data-capture-type="collocation">{value}</li>)}</ul></section>
-            <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
+            <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value} data-capture-text="true" data-capture-source="lesson_example" data-capture-type="word">{value}</li>)}</ul></section>
           </div>
           <section className="lesson-section"><h2>例句</h2><p className="lesson-example standalone-reading-width" data-capture-text="true" data-capture-source="lesson_example" data-capture-type="sentence">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <p className="lesson-example-translation standalone-reading-width" data-capture-text="true" data-capture-source="lesson_example" data-capture-type="sentence">{payload.example_zh}</p>}</section>
           <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width">{String(payload.note ?? "")}</p></section>
