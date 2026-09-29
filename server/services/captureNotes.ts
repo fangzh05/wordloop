@@ -60,6 +60,31 @@ async function ownedNote(
   return data as CaptureNoteRow;
 }
 
+async function captureNoteById(
+  id: string,
+  db: SupabaseClient,
+  userId: string,
+): Promise<CaptureNote> {
+  const row = await ownedNote(id, db, userId);
+  const { data: occurrence, error } = await db
+    .from("capture_note_occurrences")
+    .select("context_text,source_type,source_ref,created_at")
+    .eq("note_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  assertDatabaseResult(error);
+  return {
+    ...row,
+    latest_occurrence: occurrence ? {
+      context_text: String(occurrence.context_text ?? ""),
+      source_type: occurrence.source_type as CaptureSourceType,
+      source_ref: typeof occurrence.source_ref === "string" ? occurrence.source_ref : null,
+      created_at: String(occurrence.created_at),
+    } : null,
+  };
+}
+
 async function counts(db: SupabaseClient, userId: string): Promise<Record<CaptureStatus, number>> {
   const statuses: CaptureStatus[] = ["inbox", "saved", "learning", "archived"];
   const values = await Promise.all(statuses.map(async (status) => {
@@ -182,10 +207,7 @@ export async function createCaptureNote(input: {
     });
   assertDatabaseResult(occurrenceError);
 
-  const result = await listCaptureNotes({ limit: 200 }, db, userId);
-  const note = result.items.find((item) => item.id === id);
-  if (!note) throw new Error("CAPTURE_NOT_FOUND");
-  return note;
+  return captureNoteById(id, db, userId);
 }
 
 export async function updateCaptureNote(
@@ -202,10 +224,7 @@ export async function updateCaptureNote(
     const { error } = await db.from("capture_notes").update(patch).eq("id", id).eq("user_id", userId);
     assertDatabaseResult(error);
   }
-  const result = await listCaptureNotes({ limit: 200 }, db, userId);
-  const note = result.items.find((item) => item.id === id);
-  if (!note) throw new Error("CAPTURE_NOT_FOUND");
-  return note;
+  return captureNoteById(id, db, userId);
 }
 
 export async function addCaptureNoteToLearning(
