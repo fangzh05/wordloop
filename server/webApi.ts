@@ -1137,11 +1137,11 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
       }
       const parsed = captureUpdateSchema.safeParse(body);
       if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The capture update is invalid.");
-      return jsonApiResponse({ item: await updateCaptureNote(captureMatch[1], parsed.data) });
+      return jsonApiResponse({ item: await updateCaptureNote(captureMatch[1]!, parsed.data) });
     }
     const learnMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/learn$/i.exec(url.pathname);
     if (request.method === "POST" && learnMatch) {
-      const result = await addCaptureNoteToLearning(learnMatch[1]);
+      const result = await addCaptureNoteToLearning(learnMatch[1]!);
       return jsonApiResponse({
         item: result.note,
         learning_update: { prepared: result.prepared, added: result.added },
