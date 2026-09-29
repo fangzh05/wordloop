@@ -13,7 +13,7 @@ import {
 const tabs: Array<{ status: CaptureStatus; label: string }> = [
   { status: "inbox", label: "待整理" },
   { status: "saved", label: "收藏" },
-  { status: "learning", label: "学习中" },
+  { status: "learning", label: "已加入" },
   { status: "archived", label: "归档" },
 ];
 
@@ -108,8 +108,10 @@ export function CaptureNotesPage({ onBack, onCountsChange }: {
     setError("");
     try {
       await updateCaptureNote(item.id, { note: drafts[item.id] ?? item.note });
-      await addCaptureNoteToLearning(item.id);
-      setMessage("已加入 WordLoop 学习池；是否今天出现由每日新词上限决定。");
+      const response = await addCaptureNoteToLearning(item.id);
+      setMessage(response.learning_update?.scheduled_today
+        ? "已加入 WordLoop，今天会作为新词出现。"
+        : "已连接到已有 WordLoop 词条，不会重置现有 FSRS 进度。");
       await load(status);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "加入学习失败，请重试。");
@@ -173,7 +175,7 @@ export function CaptureNotesPage({ onBack, onCountsChange }: {
                 {item.latest_occurrence && <span>{sourceLabel(item.latest_occurrence.source_type)}</span>}
               </div>
             </div>
-            {item.status === "learning" && <span className="capture-state-badge">学习中</span>}
+            {item.status === "learning" && <span className="capture-state-badge">已加入</span>}
           </div>
 
           {item.latest_occurrence?.context_text && <blockquote className="capture-context" data-capture-context="true">
