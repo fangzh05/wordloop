@@ -101,3 +101,99 @@ export function postAction(action: WebAction): Promise<WebApiResponse> {
     body: JSON.stringify(action),
   });
 }
+
+
+export type CaptureStatus = "inbox" | "saved" | "learning" | "archived";
+export type CaptureSelectionType = "word" | "phrase" | "sentence";
+export type CaptureSourceType = "lesson" | "review" | "pretest" | "dashboard" | "manual";
+
+export interface CaptureNote {
+  id: string;
+  selected_text: string;
+  normalized_text: string;
+  selection_type: CaptureSelectionType;
+  note: string;
+  status: CaptureStatus;
+  occurrence_count: number;
+  linked_word_id: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  updated_at: string;
+  latest_occurrence: {
+    context_text: string;
+    source_type: CaptureSourceType;
+    source_ref: string | null;
+    created_at: string;
+  } | null;
+}
+
+export interface CaptureListResponse {
+  items: CaptureNote[];
+  counts: Record<CaptureStatus, number>;
+}
+
+export interface CaptureMutationResponse {
+  item: CaptureNote;
+  learning_update?: { prepared: number; added: number };
+}
+
+async function captureRequest<T>(path: string, init: RequestInit): Promise<T> {
+  const token = storedToken();
+  if (!token) throw new UnauthorizedError();
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  headers.set("accept", "application/json");
+  const response = await fetch(path, { ...init, headers, cache: "no-store" });
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ApiError("INVALID_RESPONSE", "服务器返回了无法读取的响应。", response.status);
+  }
+  if (response.status === 401) throw new UnauthorizedError();
+  if (!response.ok) {
+    const error = typeof payload === "object" && payload !== null && "error" in payload
+      ? (payload as { error?: { code?: string; message?: string } }).error
+      : undefined;
+    throw new ApiError(error?.code ?? "REQUEST_FAILED", error?.message ?? "请求失败，请重试。", response.status);
+  }
+  return payload as T;
+}
+
+export function getCaptureNotes(status?: CaptureStatus, limit = 80): Promise<CaptureListResponse> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  params.set("limit", String(limit));
+  return captureRequest<CaptureListResponse>(`/api/web/captures?${params.toString()}`, { method: "GET" });
+}
+
+export function createCaptureNote(input: {
+  selected_text: string;
+  context_text?: string;
+  selection_type?: CaptureSelectionType;
+  source_type?: CaptureSourceType;
+  source_ref?: string | null;
+}): Promise<CaptureMutationResponse> {
+  return captureRequest<CaptureMutationResponse>("/api/web/captures", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCaptureNote(
+  id: string,
+  input: { note?: string; status?: CaptureStatus },
+): Promise<CaptureMutationResponse> {
+  return captureRequest<CaptureMutationResponse>(`/api/web/captures/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function addCaptureNoteToLearning(id: string): Promise<CaptureMutationResponse> {
+  return captureRequest<CaptureMutationResponse>(`/api/web/captures/${encodeURIComponent(id)}/learn`, {
+    method: "POST",
+  });
+}
