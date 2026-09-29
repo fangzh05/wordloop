@@ -21,10 +21,10 @@ const checks: SchemaCheck[] = [
   { table: "study_sessions", column: "updated_at", migration: "202609150004" },
   { table: "word_sources", column: "user_id", migration: "202609130002" },
   { table: "fsrs_review_logs", column: "user_id", migration: "202609130002" },
-  { table: "captured_notes", column: "normalized_text", migration: "20260929112246" },
-  { table: "captured_notes", column: "converted_user_word_id", migration: "20260929112246" },
-  { table: "captured_note_occurrences", column: "idempotency_key", migration: "20260929112246" },
-  { table: "captured_note_occurrences", column: "context_text", migration: "20260929112246" },
+  { table: "captured_notes", column: "normalized_text", migration: "20260929120641" },
+  { table: "captured_notes", column: "converted_user_word_id", migration: "20260929120641" },
+  { table: "captured_note_occurrences", column: "idempotency_key", migration: "20260929120641" },
+  { table: "captured_note_occurrences", column: "context_text", migration: "20260929120641" },
 ];
 
 const rpcChecks: RpcCheck[] = [
@@ -56,7 +56,7 @@ const rpcChecks: RpcCheck[] = [
   {
     name: "captured_notes_schema_v1",
     args: {},
-    migration: "20260929112246",
+    migration: "20260929120641",
     expectTrue: true,
   },
 ];

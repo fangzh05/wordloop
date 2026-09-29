@@ -108,7 +108,7 @@ wordloop/
 │   ├── 202609160007_review_session.sql
 │   ├── 20260927143358_exact_cloze_activity_type.sql
 │   ├── 20260929021548_formal_lesson_history.sql
-│   └── 20260929112246_captured_notes.sql
+│   └── 20260929120641_captured_notes.sql
 ├── tests/
 │   ├── mcpHttp.test.ts
 │   ├── fsrsReview.test.ts

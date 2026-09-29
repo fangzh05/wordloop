@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const migrationPath = new URL("../supabase/migrations/20260929112246_captured_notes.sql", import.meta.url);
+const migrationPath = new URL("../supabase/migrations/20260929120641_captured_notes.sql", import.meta.url);
 const migration = readFileSync(migrationPath, "utf8");
 
 describe("captured Notes migration contract", () => {
@@ -38,7 +38,7 @@ describe("captured Notes migration contract", () => {
     const builder = readFileSync(new URL("../scripts/build-sites-worker.ts", import.meta.url), "utf8");
     const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
     expect(setup.endsWith(migration.trim())).toBe(true);
-    expect(builder).toContain("20260929112246_captured_notes.sql");
-    expect(readme).toContain("20260929112246_captured_notes.sql");
+    expect(builder).toContain("20260929120641_captured_notes.sql");
+    expect(readme).toContain("20260929120641_captured_notes.sql");
   });
 });
