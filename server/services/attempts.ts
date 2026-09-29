@@ -29,9 +29,10 @@ interface LessonAttemptWordRow {
 export async function getTodayCompletedLessonWords(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  now = new Date(),
 ): Promise<Set<string>> {
   const timeZone = await getUserTimeZone(db, userId);
-  const date = dateInTimeZone(timeZone);
+  const date = dateInTimeZone(timeZone, now);
   const { start, end } = localDateRange(date, timeZone);
   const { data, error } = await db
     .from("attempts")

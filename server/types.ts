@@ -84,6 +84,7 @@ export interface VocabularyItem {
   fsrs_stability: number;
   fsrs_difficulty: number;
   fsrs_scheduled_days: number;
+  fsrs_reps?: number;
   fsrs_state: number;
   ipa_us?: string | null;
   ipa_uk?: string | null;

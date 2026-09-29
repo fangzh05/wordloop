@@ -42,6 +42,7 @@ export interface RpcVocabularyRow {
   fsrs_stability: number;
   fsrs_difficulty: number;
   fsrs_scheduled_days: number;
+  fsrs_reps?: number;
   fsrs_state: number;
   ipa_us: string | null;
   ipa_uk: string | null;
@@ -218,6 +219,7 @@ export function toVocabularyItem(
     fsrs_stability: state.fsrs_stability ?? 0,
     fsrs_difficulty: state.fsrs_difficulty ?? 0,
     fsrs_scheduled_days: state.fsrs_scheduled_days ?? 0,
+    fsrs_reps: state.fsrs_reps,
     fsrs_state: state.fsrs_state ?? 0,
     ipa_us: word.ipa_us,
     ipa_uk: word.ipa_uk,
@@ -239,6 +241,7 @@ export function vocabularyItemFromRpc(row: RpcVocabularyRow): VocabularyItem {
     fsrs_stability: row.fsrs_stability ?? 0,
     fsrs_difficulty: row.fsrs_difficulty ?? 0,
     fsrs_scheduled_days: row.fsrs_scheduled_days ?? 0,
+    fsrs_reps: row.fsrs_reps,
     fsrs_state: row.fsrs_state ?? 0,
     ipa_us: row.ipa_us,
     ipa_uk: row.ipa_uk,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase, getWordloopWebToken } from "./db.js";
 import { getStudyBootstrap } from "./services/studyBootstrap.js";
 import { getProgress } from "./services/progress.js";
+import { AnalyticsServiceError, getAnalytics, getTodayOverview } from "./services/analytics.js";
 import {
   advanceStudySessionIfRevision,
   assertActiveStudySessionRevision,
@@ -62,27 +63,20 @@ import { deriveLessonProfile } from "./services/lessonProfile.js";
 import {
   addCaptureNoteToLearning,
   createCaptureNote,
+  getCaptureNoteById,
+  listCaptureNoteOccurrences,
   listCaptureNotes,
   updateCaptureNote,
-  type CaptureStatus,
+  CaptureServiceError,
 } from "./services/captureNotes.js";
-
-const captureStatusSchema = z.enum(["inbox", "saved", "learning", "archived"]);
-const captureSourceSchema = z.enum(["lesson", "review", "pretest", "dashboard", "manual"]);
-const captureSelectionSchema = z.enum(["word", "phrase", "sentence"]);
-const captureCreateSchema = z.object({
-  selected_text: z.string().trim().min(1).max(500),
-  context_text: z.string().max(4000).optional(),
-  selection_type: captureSelectionSchema.optional(),
-  source_type: captureSourceSchema.optional(),
-  source_ref: z.string().max(500).nullable().optional(),
-}).strict();
-const captureUpdateSchema = z.object({
-  note: z.string().max(2000).optional(),
-  status: captureStatusSchema.optional(),
-}).strict().refine((value) => value.note !== undefined || value.status !== undefined, {
-  message: "At least one capture field is required.",
-});
+import {
+  captureCreateRequestSchema,
+  captureListRequestSchema,
+  captureUpdateRequestSchema,
+} from "../shared/captureContracts.js";
+import { analyticsQuerySchema } from "../shared/analyticsContracts.js";
+import { vocabularyQuerySchema } from "../shared/analyticsContracts.js";
+import { VocabularyServiceError, getVocabularyDetail, listVocabulary } from "./services/vocabulary.js";
 
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
@@ -155,6 +149,9 @@ function authenticate(request: Request): void {
 
 function toApiError(error: unknown): WebApiError {
   if (error instanceof WebApiError) return error;
+  if (error instanceof CaptureServiceError) return new WebApiError(error.status, error.code, error.message);
+  if (error instanceof AnalyticsServiceError) return new WebApiError(error.status, error.code, error.message);
+  if (error instanceof VocabularyServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof DeepSeekError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof StaleStudyStateError || (error instanceof Error && error.message === "STALE_STUDY_STATE")) {
     return new WebApiError(409, "STALE_STUDY_STATE", "Study state changed in another client.");
@@ -1104,17 +1101,42 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
     if (request.method === "GET" && url.pathname === "/api/web/bootstrap") {
       return jsonApiResponse(await resolveBootstrap());
     }
+    if (request.method === "GET" && url.pathname === "/api/web/today") {
+      return jsonApiResponse(await getTodayOverview());
+    }
+    if (request.method === "GET" && url.pathname === "/api/web/analytics") {
+      const parsed = analyticsQuerySchema.safeParse({
+        section: url.searchParams.get("section"),
+        range: url.searchParams.get("range") ?? "30d",
+        cursor: url.searchParams.get("cursor") ?? "",
+        limit: url.searchParams.get("limit") ?? 50,
+      });
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "洞察查询仅支持 overview、memory、weakness、activity 与 7d、30d、90d。");
+      return jsonApiResponse(await getAnalytics(parsed.data.section, parsed.data.range, parsed.data.cursor, parsed.data.limit));
+    }
+    if (request.method === "GET" && url.pathname === "/api/web/vocabulary") {
+      const parsed = vocabularyQuerySchema.safeParse({
+        q: url.searchParams.get("q") ?? "",
+        filters: url.searchParams.getAll("filter"),
+        cursor: url.searchParams.get("cursor") ?? "",
+        limit: url.searchParams.get("limit") ?? 50,
+      });
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "词库搜索与筛选条件无效。");
+      return jsonApiResponse(await listVocabulary(parsed.data));
+    }
+    const vocabularyMatch = /^\/api\/web\/vocabulary\/([0-9a-f-]{36})$/i.exec(url.pathname);
+    if (request.method === "GET" && vocabularyMatch) {
+      return jsonApiResponse(await getVocabularyDetail(vocabularyMatch[1]!));
+    }
     if (request.method === "GET" && url.pathname === "/api/web/captures") {
-      const rawStatus = url.searchParams.get("status");
-      let status: CaptureStatus | undefined;
-      if (rawStatus) {
-        const parsedStatus = captureStatusSchema.safeParse(rawStatus);
-        if (!parsedStatus.success) throw new WebApiError(400, "INVALID_REQUEST", "Unknown capture status.");
-        status = parsedStatus.data;
-      }
-      const rawLimit = Number(url.searchParams.get("limit") ?? "80");
-      const limit = Number.isFinite(rawLimit) ? Math.trunc(rawLimit) : 80;
-      return jsonApiResponse(await listCaptureNotes({ status, limit }));
+      const parsed = captureListRequestSchema.safeParse({
+        status: url.searchParams.get("status") ?? undefined,
+        q: url.searchParams.get("q") ?? "",
+        cursor: url.searchParams.get("cursor") ?? "",
+        limit: url.searchParams.get("limit") ?? 50,
+      });
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "划词笔记查询条件无效。");
+      return jsonApiResponse(await listCaptureNotes(parsed.data));
     }
     if (request.method === "POST" && url.pathname === "/api/web/captures") {
       let body: unknown;
@@ -1123,11 +1145,26 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
       } catch {
         throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
       }
-      const parsed = captureCreateSchema.safeParse(body);
+      const parsed = captureCreateRequestSchema.safeParse(body);
       if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The capture payload is invalid.");
       return jsonApiResponse({ item: await createCaptureNote(parsed.data) }, 201);
     }
+    const occurrenceMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/occurrences$/i.exec(url.pathname);
+    if (request.method === "GET" && occurrenceMatch) {
+      const parsed = z.object({
+        cursor: z.string().max(100).default(""),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      }).strict().safeParse({
+        cursor: url.searchParams.get("cursor") ?? "",
+        limit: url.searchParams.get("limit") ?? 50,
+      });
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "出现记录分页条件无效。");
+      return jsonApiResponse(await listCaptureNoteOccurrences(occurrenceMatch[1]!, parsed.data));
+    }
     const captureMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})$/i.exec(url.pathname);
+    if (request.method === "GET" && captureMatch) {
+      return jsonApiResponse({ item: await getCaptureNoteById(captureMatch[1]!) });
+    }
     if (request.method === "PATCH" && captureMatch) {
       let body: unknown;
       try {
@@ -1135,7 +1172,7 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
       } catch {
         throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
       }
-      const parsed = captureUpdateSchema.safeParse(body);
+      const parsed = captureUpdateRequestSchema.safeParse(body);
       if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The capture update is invalid.");
       return jsonApiResponse({ item: await updateCaptureNote(captureMatch[1]!, parsed.data) });
     }

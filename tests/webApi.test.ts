@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   token: "web-test-token" as string | undefined,
   bootstrap: vi.fn(),
   getProgress: vi.fn(),
+  getTodayOverview: vi.fn(),
+  getAnalytics: vi.fn(),
+  listVocabulary: vi.fn(),
+  getVocabularyDetail: vi.fn(),
   getPretestResults: vi.fn(),
   getTodayWords: vi.fn(),
   getVocabularyItemsByWords: vi.fn(),
@@ -51,6 +55,14 @@ vi.mock("../server/services/lessonConsolidation.js", async () => {
   };
 });
 vi.mock("../server/services/progress.js", () => ({ getProgress: mocks.getProgress }));
+vi.mock("../server/services/analytics.js", async () => {
+  const actual = await vi.importActual<typeof import("../server/services/analytics.js")>("../server/services/analytics.js");
+  return { ...actual, getTodayOverview: mocks.getTodayOverview, getAnalytics: mocks.getAnalytics };
+});
+vi.mock("../server/services/vocabulary.js", async () => {
+  const actual = await vi.importActual<typeof import("../server/services/vocabulary.js")>("../server/services/vocabulary.js");
+  return { ...actual, listVocabulary: mocks.listVocabulary, getVocabularyDetail: mocks.getVocabularyDetail };
+});
 vi.mock("../server/services/studySessions.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/studySessions.js")>("../server/services/studySessions.js");
   const persist = async (state: any, expectedRevision: string | null, _db?: unknown, _userId?: string, expectedSessionId?: string) => {
@@ -197,6 +209,10 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.advanceEvents.length = 0;
     mocks.token = "web-test-token";
     mocks.getProgress.mockResolvedValue({ today: { completed: 0, total: 1 } });
+    mocks.getTodayOverview.mockResolvedValue({ as_of: "2026-09-30T00:43:56Z", timezone: "Asia/Shanghai" });
+    mocks.getAnalytics.mockResolvedValue({ data: {}, as_of: "2026-09-30T00:43:56Z", timezone: "Asia/Shanghai", definition_version: "wordloop-analytics-v1", coverage: {} });
+    mocks.listVocabulary.mockResolvedValue({ data: { items: [] }, as_of: "2026-09-30T00:43:56Z", timezone: "Asia/Shanghai", definition_version: "wordloop-analytics-v1", coverage: {} });
+    mocks.getVocabularyDetail.mockResolvedValue({ data: {}, as_of: "2026-09-30T00:43:56Z", timezone: "Asia/Shanghai", definition_version: "wordloop-analytics-v1", coverage: {} });
     mocks.generateSentenceConsolidation.mockReset();
     mocks.setDailyNewWordLimit.mockResolvedValue({ daily_new_word_limit: 50, date, prepared: 50, added: 0 });
     mocks.getPretestResults.mockResolvedValue([]);
@@ -249,6 +265,39 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(invalid.status).toBe(400);
     expect(invalid.headers.get("cache-control")).toBe("no-store");
     expect(mocks.recordAttempt).not.toHaveBeenCalled();
+  });
+
+  it("serves read-only Today and Analytics routes with validated ranges and no-store headers", async () => {
+    const today = await handleWebApiRequest(new Request("https://wordloop.test/api/web/today", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    expect(today.status).toBe(200);
+    expect(today.headers.get("cache-control")).toBe("no-store");
+    expect(mocks.getTodayOverview).toHaveBeenCalledOnce();
+
+    const analytics = await handleWebApiRequest(new Request("https://wordloop.test/api/web/analytics?section=memory&range=7d", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    expect(analytics.status).toBe(200);
+    expect(mocks.getAnalytics).toHaveBeenCalledWith("memory", "7d", "", 50);
+    const invalid = await handleWebApiRequest(new Request("https://wordloop.test/api/web/analytics?section=overview&range=all", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    expect(invalid.status).toBe(400);
+    expect(mocks.getAnalytics).toHaveBeenCalledOnce();
+  });
+
+  it("serves vocabulary search and detail through owner-scoped read services", async () => {
+    const page = await handleWebApiRequest(new Request("https://wordloop.test/api/web/vocabulary?q=harvest&filter=in_memory&filter=due&limit=50", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    expect(page.status).toBe(200);
+    expect(mocks.listVocabulary).toHaveBeenCalledWith({ q: "harvest", filters: ["in_memory", "due"], cursor: "", limit: 50 });
+    const detail = await handleWebApiRequest(new Request("https://wordloop.test/api/web/vocabulary/00000000-0000-4000-8000-000000000009", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    expect(detail.status).toBe(200);
+    expect(mocks.getVocabularyDetail).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000009");
   });
 
   it("raises today's queue from 50 to 70 and returns 50 / 70 progress without an active session", async () => {
