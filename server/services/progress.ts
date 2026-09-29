@@ -99,11 +99,12 @@ async function getReviewTodayProgress(db: ReturnType<typeof getDatabase>, userId
   );
 }
 
-export async function getProgress(): Promise<ProgressResult> {
+export async function getProgress(
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+  now = new Date(),
+): Promise<ProgressResult> {
   return perf("get_progress", async () => {
-    const db = getDatabase();
-    const userId = getAuthenticatedUserId();
-    const now = new Date();
     const [{ data, error }, review_today] = await Promise.all([
       db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: now.toISOString() }),
       getReviewTodayProgress(db, userId, now),
@@ -125,9 +126,14 @@ export function fsrsForecast(all: VocabularyItem[], timeZone = "Asia/Shanghai", 
     due_today: due.filter((date) => dateInTimeZone(timeZone, date) <= today).length,
     tomorrow: due.filter((date) => dateInTimeZone(timeZone, date) === tomorrow).length,
     due_next_7_days: due.filter((date) => dateInTimeZone(timeZone, date) <= day7).length,
-    average_stability: all.length === 0
-      ? 0
-      : Number((all.reduce((sum, word) => sum + (word.fsrs_stability ?? 0), 0) / all.length).toFixed(1)),
+    average_stability: (() => {
+      const scheduled = all
+        .filter((word) => word.fsrs_reps !== undefined && word.fsrs_reps > 0
+          && Number.isFinite(word.fsrs_stability) && word.fsrs_stability > 0);
+      return scheduled.length === 0
+        ? 0
+        : Number((scheduled.reduce((sum, word) => sum + word.fsrs_stability, 0) / scheduled.length).toFixed(2));
+    })(),
   };
 }
 

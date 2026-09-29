@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError, createCapturedNote, getCapturedNotes, newCaptureIdempotencyKey, promoteCapturedNote, UnauthorizedError, updateCapturedNote, type CaptureSelectionType, type CaptureStatus, type CapturedNote } from "./apiClient.js";
+import { ApiError, createCapturedNote, getCapturedNotes, newCaptureIdempotencyKey, promoteCapturedNote, UnauthorizedError, updateCapturedNote, type CaptureSelectionType, type LegacyCaptureStatus, type CapturedNote } from "./apiClient.js";
 
-const tabs: Array<{ status: CaptureStatus; label: string }> = [
+const tabs: Array<{ status: LegacyCaptureStatus; label: string }> = [
   { status: "inbox", label: "Inbox" },
   { status: "saved", label: "已收藏" },
   { status: "converted", label: "已加入学习" },
@@ -30,7 +30,7 @@ export function CaptureInboxPage({ onBack, onUnauthorized }: {
   onBack: () => void;
   onUnauthorized: () => void;
 }): React.JSX.Element {
-  const [status, setStatus] = useState<CaptureStatus>("inbox");
+  const [status, setStatus] = useState<LegacyCaptureStatus>("inbox");
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<CapturedNote[]>([]);

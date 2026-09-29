@@ -1348,6 +1348,53 @@ revoke all on function public.get_formal_lesson_attempt_words_v1(uuid, timestamp
 grant execute on function public.get_formal_lesson_attempt_words_v1(uuid, timestamptz)
   to service_role;
 
+-- ===== supabase/migrations/202609290001_capture_notes.sql =====
+create table if not exists public.capture_notes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  selected_text text not null check (length(btrim(selected_text)) > 0 and length(selected_text) <= 500),
+  normalized_text text not null check (length(btrim(normalized_text)) > 0),
+  selection_type text not null check (selection_type in ('word', 'phrase', 'sentence')),
+  note text not null default '' check (length(note) <= 2000),
+  status text not null default 'inbox' check (status in ('inbox', 'saved', 'learning', 'archived')),
+  occurrence_count integer not null default 1 check (occurrence_count >= 1),
+  linked_word_id uuid references public.words(id) on delete set null,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, normalized_text)
+);
+
+create table if not exists public.capture_note_occurrences (
+  id uuid primary key default gen_random_uuid(),
+  note_id uuid not null references public.capture_notes(id) on delete cascade,
+  context_text text not null default '' check (length(context_text) <= 4000),
+  source_type text not null default 'manual' check (source_type in ('lesson', 'review', 'pretest', 'dashboard', 'manual')),
+  source_ref text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists capture_notes_user_status_last_seen_idx
+  on public.capture_notes(user_id, status, last_seen_at desc);
+
+create index if not exists capture_note_occurrences_note_created_idx
+  on public.capture_note_occurrences(note_id, created_at desc);
+
+drop trigger if exists capture_notes_touch_updated_at on public.capture_notes;
+create trigger capture_notes_touch_updated_at
+before update on public.capture_notes
+for each row execute function public.touch_updated_at();
+
+alter table public.capture_notes enable row level security;
+alter table public.capture_note_occurrences enable row level security;
+
+comment on table public.capture_notes is
+  'Reading capture inbox. Capturing never mutates FSRS/user_words; only explicit add-to-learning may link a learnable item.';
+comment on table public.capture_note_occurrences is
+  'Contexts for repeated encounters with one normalized capture note.';
+
+-- ===== supabase/migrations/20260929120641_captured_notes.sql =====
 create table public.captured_notes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
@@ -1761,3 +1808,1102 @@ grant execute on function public.create_captured_note_v1(uuid, text, text, text,
 grant execute on function public.list_captured_notes_v1(uuid, text, text, timestamp with time zone, uuid, integer) to service_role;
 grant execute on function public.promote_captured_note_v1(uuid, uuid, date, text) to service_role;
 grant execute on function public.captured_notes_schema_v1() to service_role;
+
+
+-- ===== supabase/migrations/20260929172617_captured_notes_canonical_adapter.sql =====
+-- Canonical Capture source is captured_notes + captured_note_occurrences.
+-- The legacy capture_* tables remain available for reconciliation and rollback.
+
+-- These additive guards make a clean database migration chain reproducible,
+-- while remaining no-ops for environments where the canonical store already exists.
+create table if not exists public.captured_notes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  selected_text text not null check (length(btrim(selected_text)) between 1 and 500),
+  normalized_text text not null check (length(btrim(normalized_text)) between 1 and 500),
+  selection_type text not null check (selection_type in ('word', 'phrase', 'collocation', 'sentence', 'grammar')),
+  note text not null default '' check (length(note) <= 500),
+  status text not null default 'inbox' check (status in ('inbox', 'saved', 'dismissed', 'converted')),
+  converted_user_word_id uuid references public.user_words(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, id),
+  unique (user_id, normalized_text)
+);
+
+-- A clean chain creates both keys above. Older canonical deployments may have
+-- the same globally unique IDs without the composite keys used for ownership.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.captured_notes'::regclass
+      and contype in ('u', 'p')
+      and conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.captured_notes'::regclass and attname = 'user_id'),
+        (select attnum from pg_attribute where attrelid = 'public.captured_notes'::regclass and attname = 'id')
+      ]::smallint[]
+  ) then
+    alter table public.captured_notes
+      add constraint captured_notes_user_id_id_key unique (user_id, id);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.captured_notes'::regclass
+      and contype in ('u', 'p')
+      and conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.captured_notes'::regclass and attname = 'user_id'),
+        (select attnum from pg_attribute where attrelid = 'public.captured_notes'::regclass and attname = 'normalized_text')
+      ]::smallint[]
+  ) then
+    if exists (
+      select 1 from public.captured_notes
+      group by user_id, normalized_text
+      having count(*) > 1
+    ) then
+      raise exception 'CAPTURE_CANONICAL_DUPLICATE_NORMALIZED_TEXT';
+    end if;
+    alter table public.captured_notes
+      add constraint captured_notes_user_normalized_text_key unique (user_id, normalized_text);
+  end if;
+end;
+$$;
+
+create table if not exists public.captured_note_occurrences (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  captured_note_id uuid not null,
+  context_text text not null default '' check (length(context_text) <= 1200),
+  source_type text not null check (source_type in ('lesson_example', 'lesson_prompt', 'review_question', 'manual')),
+  source_ref text check (source_ref is null or length(source_ref) <= 256),
+  source_title text check (source_title is null or length(source_title) <= 200),
+  source_url text check (source_url is null or length(source_url) <= 500),
+  captured_at timestamptz not null default now(),
+  idempotency_key uuid not null,
+  foreign key (user_id, captured_note_id)
+    references public.captured_notes(user_id, id) on delete cascade,
+  unique (user_id, idempotency_key)
+);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.captured_note_occurrences'::regclass
+      and contype in ('u', 'p')
+      and conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.captured_note_occurrences'::regclass and attname = 'user_id'),
+        (select attnum from pg_attribute where attrelid = 'public.captured_note_occurrences'::regclass and attname = 'idempotency_key')
+      ]::smallint[]
+  ) then
+    if exists (
+      select 1 from public.captured_note_occurrences
+      group by user_id, idempotency_key
+      having count(*) > 1
+    ) then
+      raise exception 'CAPTURE_CANONICAL_DUPLICATE_IDEMPOTENCY_KEY';
+    end if;
+    alter table public.captured_note_occurrences
+      add constraint captured_note_occurrences_user_idempotency_key_key unique (user_id, idempotency_key);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.captured_note_occurrences'::regclass
+      and contype = 'f'
+      and conkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.captured_note_occurrences'::regclass and attname = 'user_id'),
+        (select attnum from pg_attribute where attrelid = 'public.captured_note_occurrences'::regclass and attname = 'captured_note_id')
+      ]::smallint[]
+      and confkey = array[
+        (select attnum from pg_attribute where attrelid = 'public.captured_notes'::regclass and attname = 'user_id'),
+        (select attnum from pg_attribute where attrelid = 'public.captured_notes'::regclass and attname = 'id')
+      ]::smallint[]
+  ) then
+    if exists (
+      select 1 from public.captured_note_occurrences as occurrence
+      left join public.captured_notes as note
+        on note.user_id = occurrence.user_id and note.id = occurrence.captured_note_id
+      where note.id is null
+    ) then
+      raise exception 'CAPTURE_CANONICAL_ORPHAN_OCCURRENCE';
+    end if;
+    alter table public.captured_note_occurrences
+      add constraint captured_note_occurrences_user_note_fkey
+      foreign key (user_id, captured_note_id) references public.captured_notes(user_id, id) on delete cascade;
+  end if;
+end;
+$$;
+
+create index if not exists captured_notes_user_status_updated_idx
+  on public.captured_notes(user_id, status, updated_at desc, id desc);
+create index if not exists captured_note_occurrences_user_note_captured_idx
+  on public.captured_note_occurrences(user_id, captured_note_id, captured_at desc);
+alter table public.captured_notes enable row level security;
+alter table public.captured_note_occurrences enable row level security;
+revoke all on public.captured_notes, public.captured_note_occurrences from public, anon, authenticated;
+grant select, insert, update, delete on public.captured_notes, public.captured_note_occurrences to service_role;
+
+create or replace function public.list_captured_notes_v1(
+  p_user_id uuid,
+  p_status text,
+  p_query text,
+  p_before_updated_at timestamptz,
+  p_before_id uuid,
+  p_limit integer
+) returns table(
+  id uuid,
+  selected_text text,
+  normalized_text text,
+  selection_type text,
+  note text,
+  status text,
+  converted_user_word_id uuid,
+  created_at timestamptz,
+  updated_at timestamptz,
+  occurrence_count bigint,
+  occurrences jsonb
+)
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  select
+    n.id, n.selected_text, n.normalized_text, n.selection_type, n.note, n.status,
+    n.converted_user_word_id, n.created_at, n.updated_at,
+    (select count(*) from public.captured_note_occurrences as o
+      where o.user_id = p_user_id and o.captured_note_id = n.id) as occurrence_count,
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'context_text', recent.context_text,
+        'source_type', recent.source_type,
+        'source_ref', recent.source_ref,
+        'source_title', recent.source_title,
+        'source_url', recent.source_url,
+        'captured_at', recent.captured_at
+      ) order by recent.captured_at desc, recent.id desc)
+      from (
+        select o.id, o.context_text, o.source_type, o.source_ref, o.source_title,
+          o.source_url, o.captured_at
+        from public.captured_note_occurrences as o
+        where o.user_id = p_user_id and o.captured_note_id = n.id
+        order by o.captured_at desc, o.id desc
+        limit 3
+      ) as recent
+    ), '[]'::jsonb) as occurrences
+  from public.captured_notes as n
+  where n.user_id = p_user_id
+    and (p_status = 'all' or n.status = p_status)
+    and (p_before_updated_at is null or
+      (p_before_id is not null and (n.updated_at, n.id) < (p_before_updated_at, p_before_id)))
+    and (coalesce(p_query, '') = ''
+      or strpos(lower(n.selected_text), lower(p_query)) > 0
+      or strpos(lower(n.note), lower(p_query)) > 0
+      or exists (
+        select 1 from public.captured_note_occurrences as o
+        where o.user_id = p_user_id and o.captured_note_id = n.id
+          and strpos(lower(o.context_text), lower(p_query)) > 0
+      ))
+  order by n.updated_at desc, n.id desc
+  limit least(greatest(coalesce(p_limit, 25), 1), 51);
+$$;
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.capture_notes as legacy
+    left join public.user_words as uw
+      on uw.user_id = legacy.user_id and uw.word_id = legacy.linked_word_id
+    where legacy.status = 'learning'
+      and (legacy.linked_word_id is null or uw.id is null)
+  ) then
+    raise exception 'CAPTURE_MIGRATION_UNRESOLVED_LEGACY_LINK';
+  end if;
+end;
+$$;
+
+-- Preserve historical text if the older writer exceeded canonical limits.
+do $$
+declare
+  v_note_limit integer;
+  v_context_limit integer;
+  v_source_ref_limit integer;
+begin
+  select greatest(500, coalesce(max(length(note)), 0))
+    into v_note_limit from public.capture_notes;
+  if v_note_limit > 500 then
+    alter table public.captured_notes drop constraint if exists captured_notes_note_check;
+    execute format(
+      'alter table public.captured_notes add constraint captured_notes_note_check check (length(note) <= %s)',
+      v_note_limit
+    );
+  end if;
+
+  select greatest(1200, coalesce(max(length(context_text)), 0))
+    into v_context_limit from public.capture_note_occurrences;
+  if v_context_limit > 1200 then
+    alter table public.captured_note_occurrences drop constraint if exists captured_note_occurrences_context_text_check;
+    execute format(
+      'alter table public.captured_note_occurrences add constraint captured_note_occurrences_context_text_check check (length(context_text) <= %s)',
+      v_context_limit
+    );
+  end if;
+
+  select greatest(256, coalesce(max(length(source_ref)), 0))
+    into v_source_ref_limit from public.capture_note_occurrences;
+  if v_source_ref_limit > 256 then
+    alter table public.captured_note_occurrences drop constraint if exists captured_note_occurrences_source_ref_check;
+    execute format(
+      'alter table public.captured_note_occurrences add constraint captured_note_occurrences_source_ref_check check (source_ref is null or length(source_ref) <= %s)',
+      v_source_ref_limit
+    );
+  end if;
+end;
+$$;
+
+create table if not exists public.capture_note_legacy_map (
+  legacy_note_id uuid primary key,
+  user_id uuid not null references public.users(id) on delete cascade,
+  captured_note_id uuid not null,
+  legacy_word_id uuid,
+  legacy_note text not null,
+  legacy_status text not null,
+  legacy_occurrence_count integer not null,
+  legacy_created_at timestamptz not null,
+  legacy_updated_at timestamptz not null,
+  migrated_at timestamptz not null default now(),
+  constraint capture_note_legacy_map_canonical_fk
+    foreign key (user_id, captured_note_id)
+    references public.captured_notes(user_id, id) on delete cascade
+);
+
+alter table public.capture_note_legacy_map enable row level security;
+revoke all on table public.capture_note_legacy_map from public, anon, authenticated;
+grant all on table public.capture_note_legacy_map to service_role;
+
+-- Preserve each old parent ID and word_id -> user_words.id conversion for audit.
+insert into public.captured_notes(
+  user_id, selected_text, normalized_text, selection_type, note, status,
+  converted_user_word_id, created_at, updated_at
+)
+select
+  legacy.user_id,
+  legacy.selected_text,
+  legacy.normalized_text,
+  legacy.selection_type,
+  legacy.note,
+  case
+    when legacy.status = 'archived' then 'dismissed'
+    when uw.id is not null then 'converted'
+    else legacy.status
+  end,
+  uw.id,
+  legacy.created_at,
+  legacy.updated_at
+from public.capture_notes as legacy
+left join public.user_words as uw
+  on uw.user_id = legacy.user_id and uw.word_id = legacy.linked_word_id
+order by legacy.created_at, legacy.id
+on conflict (user_id, normalized_text) do nothing;
+
+insert into public.capture_note_legacy_map(
+  legacy_note_id, user_id, captured_note_id, legacy_word_id, legacy_note,
+  legacy_status, legacy_occurrence_count, legacy_created_at, legacy_updated_at
+)
+select
+  legacy.id,
+  legacy.user_id,
+  canonical.id,
+  legacy.linked_word_id,
+  legacy.note,
+  legacy.status,
+  legacy.occurrence_count,
+  legacy.created_at,
+  legacy.updated_at
+from public.capture_notes as legacy
+join public.captured_notes as canonical
+  on canonical.user_id = legacy.user_id
+ and canonical.normalized_text = legacy.normalized_text
+on conflict (legacy_note_id) do nothing;
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.capture_note_occurrences as legacy_occurrence
+    join public.capture_note_legacy_map as mapping
+      on mapping.legacy_note_id = legacy_occurrence.note_id
+     and mapping.user_id = (select user_id from public.capture_notes where id = legacy_occurrence.note_id)
+    join public.captured_note_occurrences as canonical_occurrence
+      on canonical_occurrence.user_id = mapping.user_id
+     and canonical_occurrence.idempotency_key = legacy_occurrence.id
+    where canonical_occurrence.captured_note_id <> mapping.captured_note_id
+  ) then
+    raise exception 'CAPTURE_MIGRATION_OCCURRENCE_KEY_CONFLICT';
+  end if;
+end;
+$$;
+
+insert into public.captured_note_occurrences(
+  user_id, captured_note_id, context_text, source_type, source_ref,
+  source_title, source_url, captured_at, idempotency_key
+)
+select
+  mapping.user_id,
+  mapping.captured_note_id,
+  legacy_occurrence.context_text,
+  case legacy_occurrence.source_type
+    when 'lesson' then 'lesson_example'
+    when 'review' then 'review_question'
+    else 'manual'
+  end,
+  legacy_occurrence.source_ref,
+  case legacy_occurrence.source_type
+    when 'pretest' then 'WordLoop · 预测试（旧来源）'
+    when 'dashboard' then 'WordLoop · 今日（旧来源）'
+    else null
+  end,
+  null,
+  legacy_occurrence.created_at,
+  legacy_occurrence.id
+from public.capture_note_occurrences as legacy_occurrence
+join public.capture_note_legacy_map as mapping
+  on mapping.legacy_note_id = legacy_occurrence.note_id
+on conflict (user_id, idempotency_key) do nothing;
+
+update public.captured_notes as canonical
+set updated_at = greatest(canonical.updated_at, recent.last_seen_at)
+from (
+  select captured_note_id, max(captured_at) as last_seen_at
+  from public.captured_note_occurrences
+  group by captured_note_id
+) as recent
+where canonical.id = recent.captured_note_id
+  and recent.last_seen_at > canonical.updated_at;
+
+create or replace function public.create_captured_note_v1(
+  p_user_id uuid,
+  p_selected_text text,
+  p_normalized_text text,
+  p_selection_type text,
+  p_note text,
+  p_context_text text,
+  p_source_type text,
+  p_source_ref text,
+  p_source_title text,
+  p_source_url text,
+  p_idempotency_key uuid
+) returns jsonb
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_note_id uuid;
+  v_occurrence_id uuid;
+  v_occurrence_note_id uuid;
+  v_occurrence_count integer;
+begin
+  insert into public.captured_notes(user_id, selected_text, normalized_text, selection_type, note)
+  values (p_user_id, p_selected_text, p_normalized_text, p_selection_type, coalesce(p_note, ''))
+  on conflict (user_id, normalized_text) do nothing
+  returning id into v_note_id;
+
+  if v_note_id is null then
+    select id into v_note_id
+    from public.captured_notes
+    where user_id = p_user_id and normalized_text = p_normalized_text;
+  end if;
+
+  insert into public.captured_note_occurrences(
+    user_id, captured_note_id, context_text, source_type, source_ref, source_title, source_url, idempotency_key
+  ) values (
+    p_user_id, v_note_id, coalesce(p_context_text, ''), p_source_type, p_source_ref, p_source_title, p_source_url, p_idempotency_key
+  ) on conflict (user_id, idempotency_key) do nothing
+  returning id into v_occurrence_id;
+
+  if v_occurrence_id is null then
+    select captured_note_id into v_occurrence_note_id
+    from public.captured_note_occurrences
+    where user_id = p_user_id and idempotency_key = p_idempotency_key;
+    if v_occurrence_note_id is distinct from v_note_id then
+      raise exception 'CAPTURE_IDEMPOTENCY_CONFLICT';
+    end if;
+  else
+    update public.captured_notes
+    set updated_at = greatest(updated_at, clock_timestamp())
+    where user_id = p_user_id and id = v_note_id;
+  end if;
+
+  select count(*)::integer into v_occurrence_count
+  from public.captured_note_occurrences
+  where user_id = p_user_id and captured_note_id = v_note_id;
+
+  return jsonb_build_object(
+    'note_id', v_note_id,
+    'occurrence_count', v_occurrence_count,
+    'new_occurrence', v_occurrence_id is not null
+  );
+end;
+$$;
+
+create or replace function public.promote_captured_note_v1(
+  p_user_id uuid,
+  p_captured_note_id uuid,
+  p_import_date date,
+  p_display_text text
+) returns jsonb
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_note public.captured_notes%rowtype;
+  v_user_word_id uuid;
+  v_word_id uuid;
+  v_import_id uuid;
+  v_position integer;
+  v_inserted integer;
+begin
+  select * into v_note
+  from public.captured_notes
+  where user_id = p_user_id and id = p_captured_note_id
+  for update;
+
+  if not found then raise exception 'CAPTURE_NOT_FOUND'; end if;
+  if v_note.selection_type not in ('word', 'phrase', 'collocation') then
+    raise exception 'CAPTURE_UNSUPPORTED_TYPE';
+  end if;
+  if p_display_text is null or length(btrim(p_display_text)) = 0 or length(p_display_text) > 100
+    or p_display_text <> btrim(p_display_text) or lower(p_display_text) <> v_note.normalized_text
+    or cardinality(regexp_split_to_array(btrim(p_display_text), '[[:space:]]+')) > 2 then
+    raise exception 'CAPTURE_TERM_INVALID';
+  end if;
+
+  if v_note.converted_user_word_id is not null then
+    select id into v_user_word_id
+    from public.user_words
+    where user_id = p_user_id and id = v_note.converted_user_word_id;
+    if not found then raise exception 'CAPTURE_LINK_INVALID'; end if;
+    return jsonb_build_object(
+      'note_id', v_note.id,
+      'user_word_id', v_user_word_id,
+      'normalized_word', v_note.normalized_text,
+      'is_new', false
+    );
+  end if;
+
+  select uw.id, uw.word_id into v_user_word_id, v_word_id
+  from public.user_words as uw
+  join public.words as w on w.id = uw.word_id
+  where uw.user_id = p_user_id and w.normalized_word = v_note.normalized_text
+  for update of uw;
+
+  if found then
+    update public.captured_notes
+    set converted_user_word_id = v_user_word_id, status = 'converted', updated_at = now()
+    where user_id = p_user_id and id = v_note.id;
+    return jsonb_build_object(
+      'note_id', v_note.id,
+      'user_word_id', v_user_word_id,
+      'normalized_word', v_note.normalized_text,
+      'is_new', false
+    );
+  end if;
+
+  insert into public.words(normalized_word, display_word)
+  values (v_note.normalized_text, p_display_text)
+  on conflict (normalized_word) do update set normalized_word = excluded.normalized_word
+  returning id into v_word_id;
+
+  insert into public.user_words(user_id, word_id, source)
+  values (p_user_id, v_word_id, 'capture')
+  on conflict (user_id, word_id) do nothing;
+  get diagnostics v_inserted = row_count;
+
+  select id into v_user_word_id
+  from public.user_words
+  where user_id = p_user_id and word_id = v_word_id;
+
+  if v_inserted = 1 then
+    insert into public.daily_imports(user_id, import_date, source, raw_count)
+    values (p_user_id, p_import_date, 'capture', 0)
+    on conflict (user_id, import_date, source) do nothing
+    returning id into v_import_id;
+
+    if v_import_id is null then
+      select id into v_import_id
+      from public.daily_imports
+      where user_id = p_user_id and import_date = p_import_date and source = 'capture'
+      for update;
+    end if;
+
+    select coalesce(max(position) + 1, 0) into v_position
+    from public.daily_import_words where import_id = v_import_id;
+    insert into public.daily_import_words(import_id, word_id, position)
+    values (v_import_id, v_word_id, v_position)
+    on conflict (import_id, word_id) do nothing;
+    update public.daily_imports
+    set raw_count = (select count(*) from public.daily_import_words where import_id = v_import_id)
+    where id = v_import_id;
+  end if;
+
+  update public.captured_notes
+  set converted_user_word_id = v_user_word_id, status = 'converted', updated_at = now()
+  where user_id = p_user_id and id = v_note.id;
+
+  return jsonb_build_object(
+    'note_id', v_note.id,
+    'user_word_id', v_user_word_id,
+    'normalized_word', v_note.normalized_text,
+    'is_new', v_inserted = 1
+  );
+end;
+$$;
+
+revoke all on function public.create_captured_note_v1(uuid, text, text, text, text, text, text, text, text, text, uuid) from public, anon, authenticated;
+revoke all on function public.list_captured_notes_v1(uuid, text, text, timestamptz, uuid, integer) from public, anon, authenticated;
+revoke all on function public.promote_captured_note_v1(uuid, uuid, date, text) from public, anon, authenticated;
+grant execute on function public.create_captured_note_v1(uuid, text, text, text, text, text, text, text, text, text, uuid) to service_role;
+grant execute on function public.list_captured_notes_v1(uuid, text, text, timestamptz, uuid, integer) to service_role;
+grant execute on function public.promote_captured_note_v1(uuid, uuid, date, text) to service_role;
+
+
+-- ===== supabase/migrations/20260929172621_analytics_read_models.sql =====
+-- Server-only read models for the standalone Insights pages.
+-- Aggregates always receive an explicit owner and never mutate study state.
+
+create or replace function public.list_user_vocabulary_v1(
+  p_user_id uuid,
+  p_query text,
+  p_filters text[],
+  p_before_first_seen timestamptz,
+  p_before_id uuid,
+  p_limit integer,
+  p_as_of timestamptz
+) returns table(
+  id uuid,
+  user_id uuid,
+  word_id uuid,
+  status text,
+  source text,
+  first_seen_at timestamptz,
+  last_seen_at timestamptz,
+  last_reviewed_at timestamptz,
+  correct_count integer,
+  wrong_count integer,
+  consecutive_correct integer,
+  meaning_error boolean,
+  collocation_error boolean,
+  grammar_error boolean,
+  pronunciation_error boolean,
+  spelling_error boolean,
+  mastered boolean,
+  next_review_at timestamptz,
+  fsrs_stability double precision,
+  fsrs_difficulty double precision,
+  fsrs_elapsed_days integer,
+  fsrs_scheduled_days integer,
+  fsrs_learning_steps integer,
+  fsrs_reps integer,
+  fsrs_lapses integer,
+  fsrs_state smallint,
+  normalized_word text,
+  display_word text,
+  ipa_us text,
+  ipa_uk text,
+  senses jsonb
+)
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  select
+    uw.id, uw.user_id, uw.word_id, uw.status, uw.source,
+    uw.first_seen_at, uw.last_seen_at, uw.last_reviewed_at,
+    uw.correct_count, uw.wrong_count, uw.consecutive_correct,
+    uw.meaning_error, uw.collocation_error, uw.grammar_error,
+    uw.pronunciation_error, uw.spelling_error, uw.mastered,
+    uw.next_review_at, uw.fsrs_stability, uw.fsrs_difficulty,
+    uw.fsrs_elapsed_days, uw.fsrs_scheduled_days, uw.fsrs_learning_steps,
+    uw.fsrs_reps, uw.fsrs_lapses, uw.fsrs_state,
+    w.normalized_word, w.display_word, w.ipa_us, w.ipa_uk,
+    coalesce(w.senses, '[]'::jsonb)
+  from public.user_words as uw
+  join public.words as w on w.id = uw.word_id
+  where uw.user_id = p_user_id
+    and (coalesce(p_query, '') = '' or strpos(lower(w.normalized_word), lower(p_query)) > 0)
+    and (not ('not_started' = any(coalesce(p_filters, '{}'::text[]))) or uw.status = 'new')
+    and (not ('in_memory' = any(coalesce(p_filters, '{}'::text[]))) or uw.fsrs_reps > 0)
+    and (not ('active_error' = any(coalesce(p_filters, '{}'::text[]))) or (
+      uw.meaning_error or uw.collocation_error or uw.grammar_error
+      or uw.pronunciation_error or uw.spelling_error
+    ))
+    and (not ('due' = any(coalesce(p_filters, '{}'::text[]))) or (
+      uw.fsrs_reps > 0 and uw.next_review_at <= p_as_of
+    ))
+    and (p_before_first_seen is null or p_before_id is null
+      or (uw.first_seen_at, uw.id) < (p_before_first_seen, p_before_id))
+  order by uw.first_seen_at desc, uw.id desc
+  limit least(greatest(coalesce(p_limit, 50), 1), 101);
+$$;
+
+create or replace function public.get_analytics_review_days_v1(
+  p_user_id uuid,
+  p_as_of timestamptz,
+  p_timezone text,
+  p_days integer
+) returns table(
+  local_date date,
+  first_review_count bigint,
+  eligible_count bigint,
+  successes bigint,
+  failures bigint,
+  invalid_rating_count bigint,
+  below_interval_count bigint
+)
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  with params as (
+    select
+      p_user_id as user_id,
+      p_as_of as as_of,
+      p_timezone as timezone,
+      p_days as days,
+      (p_as_of at time zone p_timezone)::date as today,
+      ((p_as_of at time zone p_timezone)::date - (p_days + 28)) as history_start
+  ), first_formal_review as (
+    select distinct on (logs.word_id, (logs.reviewed_at at time zone params.timezone)::date)
+      logs.word_id,
+      (logs.reviewed_at at time zone params.timezone)::date as local_date,
+      logs.rating,
+      logs.scheduled_days
+    from public.fsrs_review_logs as logs
+    cross join params
+    where logs.user_id = params.user_id
+      and logs.review_source = 'review'
+      and logs.reviewed_at <= params.as_of
+      and (logs.reviewed_at at time zone params.timezone)::date >= params.history_start
+    order by logs.word_id,
+      (logs.reviewed_at at time zone params.timezone)::date,
+      logs.reviewed_at,
+      logs.id
+  ), daily as (
+    select
+      first_formal_review.local_date,
+      count(*) as first_review_count,
+      count(*) filter (
+        where first_formal_review.scheduled_days >= 1
+          and first_formal_review.rating between 1 and 4
+      ) as eligible_count,
+      count(*) filter (
+        where first_formal_review.scheduled_days >= 1
+          and first_formal_review.rating in (2, 3, 4)
+      ) as successes,
+      count(*) filter (
+        where first_formal_review.scheduled_days >= 1
+          and first_formal_review.rating = 1
+      ) as failures,
+      count(*) filter (
+        where first_formal_review.rating is null
+          or first_formal_review.rating not between 1 and 4
+      ) as invalid_rating_count,
+      count(*) filter (where first_formal_review.scheduled_days < 1) as below_interval_count
+    from first_formal_review
+    group by first_formal_review.local_date
+  ), calendar as (
+    select (series.day)::date as local_date
+    from params
+    cross join lateral generate_series(
+      params.history_start::timestamp,
+      params.today::timestamp,
+      interval '1 day'
+    ) as series(day)
+  )
+  select
+    calendar.local_date,
+    coalesce(daily.first_review_count, 0),
+    coalesce(daily.eligible_count, 0),
+    coalesce(daily.successes, 0),
+    coalesce(daily.failures, 0),
+    coalesce(daily.invalid_rating_count, 0),
+    coalesce(daily.below_interval_count, 0)
+  from calendar
+  left join daily using (local_date)
+  order by calendar.local_date;
+$$;
+
+create or replace function public.get_analytics_due_distribution_v1(
+  p_user_id uuid,
+  p_as_of timestamptz,
+  p_timezone text
+) returns jsonb
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  with params as (
+    select
+      p_user_id as user_id,
+      p_as_of as as_of,
+      p_timezone as timezone,
+      (p_as_of at time zone p_timezone)::date as today
+  ), scheduled as (
+    select
+      words.next_review_at,
+      (words.next_review_at at time zone params.timezone)::date as due_date,
+      params.today,
+      params.as_of
+    from public.user_words as words
+    cross join params
+    where words.user_id = params.user_id
+      and words.fsrs_reps > 0
+      and words.next_review_at is not null
+  ), future_counts as (
+    select scheduled.due_date, count(*) as due_count
+    from scheduled
+    cross join params
+    where scheduled.due_date between params.today + 1 and params.today + 30
+    group by scheduled.due_date
+  ), future_calendar as (
+    select (series.day)::date as due_date
+    from params
+    cross join lateral generate_series(
+      (params.today + 1)::timestamp,
+      (params.today + 30)::timestamp,
+      interval '1 day'
+    ) as series(day)
+  )
+  select jsonb_build_object(
+    'overdue_previous_days', coalesce(count(*) filter (where scheduled.due_date < scheduled.today), 0),
+    'due_today_elapsed', coalesce(count(*) filter (
+      where scheduled.due_date = scheduled.today and scheduled.next_review_at <= scheduled.as_of
+    ), 0),
+    'due_today_later', coalesce(count(*) filter (
+      where scheduled.due_date = scheduled.today and scheduled.next_review_at > scheduled.as_of
+    ), 0),
+    'future_days', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'date', future_calendar.due_date,
+        'count', coalesce(future_counts.due_count, 0)
+      ) order by future_calendar.due_date)
+      from future_calendar
+      left join future_counts using (due_date)
+    ), '[]'::jsonb),
+    'future_next_7_days', coalesce((
+      select sum(future_counts.due_count)
+      from future_counts cross join params
+      where future_counts.due_date <= params.today + 7
+    ), 0),
+    'future_next_30_days', coalesce((select sum(due_count) from future_counts), 0)
+  )
+  from scheduled;
+$$;
+
+create or replace function public.get_analytics_error_matrix_v1(
+  p_user_id uuid,
+  p_as_of timestamptz,
+  p_timezone text,
+  p_days integer
+) returns table(
+  activity_type text,
+  error_layer text,
+  error_events bigint,
+  distinct_words bigint,
+  activity_attempts bigint,
+  determinable_attempts bigint
+)
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  with params as (
+    select
+      p_user_id as user_id,
+      p_as_of as as_of,
+      p_timezone as timezone,
+      ((p_as_of at time zone p_timezone)::date - (p_days - 1)) as first_day
+  ), selected_attempts as (
+    select
+      attempt.activity_type,
+      case
+        when attempt.error_layer in ('meaning', 'collocation', 'grammar', 'pronunciation', 'spelling') then attempt.error_layer
+        else 'unclassified'
+      end as normalized_error_layer,
+      attempt.word_id,
+      attempt.is_correct
+    from public.attempts as attempt
+    cross join params
+    where attempt.user_id = params.user_id
+      and attempt.created_at <= params.as_of
+      and (attempt.created_at at time zone params.timezone)::date >= params.first_day
+  ), activities as (
+    select distinct activity_type from selected_attempts
+  ), layers as (
+    select unnest(array['meaning', 'collocation', 'grammar', 'pronunciation', 'spelling', 'unclassified']::text[]) as error_layer
+  ), totals as (
+    select
+      selected_attempts.activity_type,
+      count(*) as activity_attempts,
+      count(*) filter (where normalized_error_layer <> 'unclassified') as determinable_attempts
+    from selected_attempts
+    group by selected_attempts.activity_type
+  ), errors as (
+    select
+      selected_attempts.activity_type,
+      selected_attempts.normalized_error_layer as error_layer,
+      count(*) as error_events,
+      count(distinct selected_attempts.word_id) as distinct_words
+    from selected_attempts
+    where selected_attempts.is_correct = false
+    group by selected_attempts.activity_type, selected_attempts.normalized_error_layer
+  )
+  select
+    activities.activity_type,
+    layers.error_layer,
+    coalesce(errors.error_events, 0),
+    coalesce(errors.distinct_words, 0),
+    totals.activity_attempts,
+    totals.determinable_attempts
+  from activities
+  cross join layers
+  join totals using (activity_type)
+  left join errors on errors.activity_type = activities.activity_type and errors.error_layer = layers.error_layer
+  order by activities.activity_type, layers.error_layer;
+$$;
+
+create or replace function public.get_analytics_activity_v1(
+  p_user_id uuid,
+  p_as_of timestamptz,
+  p_timezone text,
+  p_days integer
+) returns table(
+  local_date date,
+  formal_review_count bigint,
+  distinct_review_words bigint,
+  pretest_count bigint,
+  first_introductions bigint,
+  capture_count bigint,
+  ordinary_attempt_count bigint,
+  distinct_attempt_words bigint,
+  first_formal_learning_completion bigint
+)
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  with params as (
+    select
+      p_user_id as user_id,
+      p_as_of as as_of,
+      p_timezone as timezone,
+      (p_as_of at time zone p_timezone)::date as today,
+      ((p_as_of at time zone p_timezone)::date - (p_days - 1)) as first_day
+  ), calendar as (
+    select (series.day)::date as local_date
+    from params
+    cross join lateral generate_series(
+      params.first_day::timestamp,
+      params.today::timestamp,
+      interval '1 day'
+    ) as series(day)
+  ), daily_reviews as (
+    select
+      (logs.reviewed_at at time zone params.timezone)::date as local_date,
+      count(*) filter (where logs.review_source = 'review') as formal_review_count,
+      count(distinct logs.word_id) filter (where logs.review_source = 'review') as distinct_review_words,
+      count(*) filter (where logs.review_source = 'pretest') as pretest_count
+    from public.fsrs_review_logs as logs
+    cross join params
+    where logs.user_id = params.user_id
+      and logs.review_source in ('review', 'pretest')
+      and logs.reviewed_at <= params.as_of
+      and (logs.reviewed_at at time zone params.timezone)::date >= params.first_day
+    group by (logs.reviewed_at at time zone params.timezone)::date
+  ), first_pretest as (
+    select distinct on (logs.word_id)
+      logs.word_id,
+      (logs.reviewed_at at time zone params.timezone)::date as local_date
+    from public.fsrs_review_logs as logs
+    cross join params
+    where logs.user_id = params.user_id
+      and logs.review_source = 'pretest'
+      and logs.reviewed_at <= params.as_of
+    order by logs.word_id, logs.reviewed_at, logs.id
+  ), daily_introductions as (
+    select first_pretest.local_date, count(*) as first_introductions
+    from first_pretest cross join params
+    where first_pretest.local_date between params.first_day and params.today
+    group by first_pretest.local_date
+  ), daily_attempts as (
+    select
+      (attempt.created_at at time zone params.timezone)::date as local_date,
+      count(*) as ordinary_attempt_count,
+      count(distinct attempt.word_id) as distinct_attempt_words
+    from public.attempts as attempt
+    cross join params
+    where attempt.user_id = params.user_id
+      and attempt.created_at <= params.as_of
+      and (attempt.created_at at time zone params.timezone)::date between params.first_day and params.today
+    group by (attempt.created_at at time zone params.timezone)::date
+  ), daily_captures as (
+    select
+      (occurrence.captured_at at time zone params.timezone)::date as local_date,
+      count(*) as capture_count
+    from public.captured_note_occurrences as occurrence
+    cross join params
+    where occurrence.user_id = params.user_id
+      and occurrence.captured_at <= params.as_of
+      and (occurrence.captured_at at time zone params.timezone)::date between params.first_day and params.today
+    group by (occurrence.captured_at at time zone params.timezone)::date
+  )
+  select
+    calendar.local_date,
+    coalesce(daily_reviews.formal_review_count, 0),
+    coalesce(daily_reviews.distinct_review_words, 0),
+    coalesce(daily_reviews.pretest_count, 0),
+    coalesce(daily_introductions.first_introductions, 0),
+    coalesce(daily_captures.capture_count, 0),
+    coalesce(daily_attempts.ordinary_attempt_count, 0),
+    coalesce(daily_attempts.distinct_attempt_words, 0),
+    null::bigint as first_formal_learning_completion
+  from calendar
+  left join daily_reviews using (local_date)
+  left join daily_introductions using (local_date)
+  left join daily_attempts using (local_date)
+  left join daily_captures using (local_date)
+  order by calendar.local_date;
+$$;
+
+revoke all on function public.get_analytics_review_days_v1(uuid, timestamptz, text, integer) from public, anon, authenticated;
+revoke all on function public.list_user_vocabulary_v1(uuid, text, text[], timestamptz, uuid, integer, timestamptz) from public, anon, authenticated;
+revoke all on function public.get_analytics_due_distribution_v1(uuid, timestamptz, text) from public, anon, authenticated;
+revoke all on function public.get_analytics_error_matrix_v1(uuid, timestamptz, text, integer) from public, anon, authenticated;
+revoke all on function public.get_analytics_activity_v1(uuid, timestamptz, text, integer) from public, anon, authenticated;
+grant execute on function public.get_analytics_review_days_v1(uuid, timestamptz, text, integer) to service_role;
+grant execute on function public.list_user_vocabulary_v1(uuid, text, text[], timestamptz, uuid, integer, timestamptz) to service_role;
+grant execute on function public.get_analytics_due_distribution_v1(uuid, timestamptz, text) to service_role;
+grant execute on function public.get_analytics_error_matrix_v1(uuid, timestamptz, text, integer) to service_role;
+grant execute on function public.get_analytics_activity_v1(uuid, timestamptz, text, integer) to service_role;
+
+
+-- ===== supabase/migrations/20260929184221_progress_scheduled_stability_mean.sql =====
+-- Keep the legacy progress response shape, but calculate stability only from
+-- cards that have entered FSRS. The new Insights API provides null for an
+-- empty/invalid sample; this compatibility field remains numeric for clients.
+create or replace function public.get_progress_snapshot_v1(
+  p_user_id uuid,
+  p_now timestamptz
+)
+returns jsonb
+language sql stable
+set search_path = public, pg_temp
+as $$
+  with user_settings as (
+    select
+      coalesce(max(u.timezone), 'Asia/Shanghai') as time_zone,
+      coalesce(max(u.daily_new_word_limit), 50)::integer as daily_new_word_limit
+    from public.users as u
+    where u.id = p_user_id
+  ),
+  calendar as (
+    select
+      time_zone,
+      daily_new_word_limit,
+      (p_now at time zone time_zone)::date as today_date
+    from user_settings
+  ),
+  today_words as (
+    select distinct on (diw.word_id)
+      uw.status
+    from public.daily_imports as di
+    join public.daily_import_words as diw on diw.import_id = di.id
+    join public.user_words as uw
+      on uw.user_id = p_user_id
+     and uw.word_id = diw.word_id
+    cross join calendar as c
+    where di.user_id = p_user_id
+      and di.import_date = c.today_date
+    order by diw.word_id, di.created_at, di.id, diw.position, diw.word_id
+  ),
+  today_counts as (
+    select
+      count(*)::integer as total,
+      count(*) filter (where status = 'known')::integer as known,
+      count(*) filter (where status = 'uncertain')::integer as uncertain,
+      count(*) filter (where status = 'unknown')::integer as unknown,
+      count(*) filter (where status <> 'new')::integer as completed
+    from today_words
+  ),
+  all_counts as (
+    select
+      count(*)::integer as total_words,
+      count(*) filter (where mastered)::integer as mastered,
+      (
+        count(*)
+        - count(*) filter (where mastered)
+        - count(*) filter (where (
+          meaning_error or collocation_error or grammar_error
+          or pronunciation_error or spelling_error
+        ))
+      )::integer as learning,
+      count(*) filter (where (
+        meaning_error or collocation_error or grammar_error
+        or pronunciation_error or spelling_error
+      ))::integer as error_book
+    from public.user_words
+    where user_id = p_user_id
+  ),
+  fsrs_counts as (
+    select
+      count(*) filter (where uw.next_review_at <= p_now)::integer as due_now,
+      count(*) filter (where uw.next_review_at is not null
+        and (uw.next_review_at at time zone c.time_zone)::date <= c.today_date)::integer as due_today,
+      count(*) filter (where uw.next_review_at is not null
+        and (uw.next_review_at at time zone c.time_zone)::date = (c.today_date + 1))::integer as tomorrow,
+      count(*) filter (where uw.next_review_at is not null
+        and (uw.next_review_at at time zone c.time_zone)::date <= (c.today_date + 7))::integer as due_next_7_days,
+      coalesce(round((avg(uw.fsrs_stability) filter (
+        where uw.fsrs_reps > 0
+          and uw.fsrs_stability > 0
+          and uw.fsrs_stability < 'Infinity'::double precision
+      ))::numeric, 2), 0)::double precision as average_stability
+    from public.user_words as uw
+    cross join calendar as c
+    where uw.user_id = p_user_id
+      and uw.fsrs_reps > 0
+  )
+  select jsonb_build_object(
+    'today', jsonb_build_object(
+      'total', tc.total, 'known', tc.known, 'uncertain', tc.uncertain,
+      'unknown', tc.unknown, 'completed', tc.completed
+    ),
+    'all_time', jsonb_build_object(
+      'total_words', ac.total_words, 'mastered', ac.mastered,
+      'learning', ac.learning, 'error_book', ac.error_book
+    ),
+    'fsrs', jsonb_build_object(
+      'due_now', fc.due_now, 'due_today', fc.due_today,
+      'tomorrow', fc.tomorrow, 'due_next_7_days', fc.due_next_7_days,
+      'average_stability', fc.average_stability
+    ),
+    'settings', jsonb_build_object('daily_new_word_limit', c.daily_new_word_limit)
+  )
+  from today_counts as tc
+  cross join all_counts as ac
+  cross join fsrs_counts as fc
+  cross join calendar as c;
+$$;
+
+revoke all on function public.get_progress_snapshot_v1(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.get_progress_snapshot_v1(uuid, timestamptz) to service_role;

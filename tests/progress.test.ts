@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { calculateProgress, calculateReviewTodayProgress, getProgress } from "../server/services/progress.js";
+import { calculateProgress, calculateReviewTodayProgress, fsrsForecast, getProgress } from "../server/services/progress.js";
 import { makeStudyState } from "../server/services/studySessions.js";
 import type { StudyState, VocabularyItem, WordStatus } from "../server/types.js";
 
@@ -43,8 +43,9 @@ function tableQuery(result: unknown) {
 function item(word: string, status: WordStatus, options: Partial<VocabularyItem> = {}): VocabularyItem {
   return {
     word, display_word: word, status, source: "test", consecutive_correct: 0,
-    wrong_count: 0, mastered: status === "mastered", next_review_at: null, error_layers: [], ...options,
-    fsrs_stability: 0, fsrs_difficulty: 0, fsrs_scheduled_days: 0, fsrs_state: 0,
+    wrong_count: 0, mastered: status === "mastered", next_review_at: null, error_layers: [],
+    fsrs_stability: 0, fsrs_difficulty: 0, fsrs_scheduled_days: 0, fsrs_reps: 0, fsrs_state: 0,
+    ...options,
   };
 }
 
@@ -67,6 +68,17 @@ function reviewState(phase: "review" | "review_complete", currentIndex: number):
 }
 
 describe("progress calculation", () => {
+  it("calculates the compatibility stability average over scheduled cards only", () => {
+    const scheduled = Array.from({ length: 203 }, (_, index) => item(`scheduled-${index}`, "review", {
+      fsrs_reps: 1, fsrs_stability: 5.2408,
+    }));
+    const unscheduled = Array.from({ length: 6390 }, (_, index) => item(`new-${index}`, "new", {
+      fsrs_reps: 0, fsrs_stability: 0.1614,
+    }));
+    expect(fsrsForecast([...scheduled, ...unscheduled]).average_stability).toBe(5.24);
+    expect(fsrsForecast(unscheduled).average_stability).toBe(0);
+  });
+
   it("calculates daily classifications and all-time error book", () => {
     const all = [
       item("a", "known"), item("b", "uncertain"), item("c", "unknown"),

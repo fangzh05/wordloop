@@ -70,4 +70,22 @@ describe("FSRS v6 scheduler", () => {
     expect(card.difficulty).toBe(0);
     expect(cardToDatabase(card).next_review_at).toBe("2026-10-01T00:00:00.000Z");
   });
+
+  it("stores the pre-review scheduled interval on the review log", () => {
+    const before = row({
+      status: "review",
+      next_review_at: "2026-09-20T00:00:00.000Z",
+      last_reviewed_at: "2026-09-13T00:00:00.000Z",
+      fsrs_stability: 9,
+      fsrs_difficulty: 5,
+      fsrs_elapsed_days: 7,
+      fsrs_scheduled_days: 7,
+      fsrs_reps: 3,
+      fsrs_state: State.Review,
+    });
+    const result = scheduleReview(before, "good", new Date("2026-09-20T00:00:00.000Z"), false);
+
+    expect(result.log.scheduled_days).toBe(7);
+    expect(result.card.scheduled_days).not.toBe(result.log.scheduled_days);
+  });
 });

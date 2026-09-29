@@ -21,10 +21,10 @@ const checks: SchemaCheck[] = [
   { table: "study_sessions", column: "updated_at", migration: "202609150004" },
   { table: "word_sources", column: "user_id", migration: "202609130002" },
   { table: "fsrs_review_logs", column: "user_id", migration: "202609130002" },
-  { table: "captured_notes", column: "normalized_text", migration: "20260929120641" },
-  { table: "captured_notes", column: "converted_user_word_id", migration: "20260929120641" },
-  { table: "captured_note_occurrences", column: "idempotency_key", migration: "20260929120641" },
-  { table: "captured_note_occurrences", column: "context_text", migration: "20260929120641" },
+  { table: "captured_notes", column: "normalized_text", migration: "20260929172617" },
+  { table: "captured_notes", column: "converted_user_word_id", migration: "20260929172617" },
+  { table: "captured_note_occurrences", column: "idempotency_key", migration: "20260929172617" },
+  { table: "captured_note_occurrences", column: "context_text", migration: "20260929172617" },
 ];
 
 const rpcChecks: RpcCheck[] = [
@@ -41,7 +41,7 @@ const rpcChecks: RpcCheck[] = [
   {
     name: "get_progress_snapshot_v1",
     args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_now: new Date(0).toISOString() },
-    migration: "202609160006",
+    migration: "20260929184221",
   },
   {
     name: "get_due_review_candidates_v1",
@@ -56,7 +56,7 @@ const rpcChecks: RpcCheck[] = [
   {
     name: "captured_notes_schema_v1",
     args: {},
-    migration: "20260929120641",
+    migration: "20260929172617",
     expectTrue: true,
   },
 ];

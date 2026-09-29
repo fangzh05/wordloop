@@ -34,10 +34,22 @@ describe("captured Notes migration contract", () => {
   });
 
   it("includes the migration in setup.sql and the Sites worker bundle", () => {
-    const setup = readFileSync(new URL("../setup.sql", import.meta.url), "utf8").trimEnd();
+    const setup = readFileSync(new URL("../setup.sql", import.meta.url), "utf8").replace(/\r\n/gu, "\n").trimEnd();
     const builder = readFileSync(new URL("../scripts/build-sites-worker.ts", import.meta.url), "utf8");
     const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
-    expect(setup.endsWith(migration.trim())).toBe(true);
+    expect(setup).toContain("create table public.captured_notes (");
+    expect(setup).toContain("create or replace function public.captured_notes_schema_v1");
+    for (const name of [
+      "202609290001_capture_notes.sql",
+      "20260929172617_captured_notes_canonical_adapter.sql",
+      "20260929172621_analytics_read_models.sql",
+      "20260929184221_progress_scheduled_stability_mean.sql",
+    ]) {
+      const currentMigration = readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/\r\n/gu, "\n").trim();
+      expect(setup).toContain(currentMigration);
+      expect(builder).toContain(name);
+      expect(readme).toContain(name);
+    }
     expect(builder).toContain("20260929120641_captured_notes.sql");
     expect(readme).toContain("20260929120641_captured_notes.sql");
   });

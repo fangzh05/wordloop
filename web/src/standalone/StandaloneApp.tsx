@@ -1,20 +1,27 @@
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../components/Button.js";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
+import { CaptureNotesPage } from "./CaptureNotesPage.js";
+import { SelectionCapture } from "./SelectionCapture.js";
+import { AppNavigation, SettingsSheet, type AppSection, type Appearance } from "./AppShell.js";
+import { TodayPage } from "./pages/TodayPage.js";
+import { InsightsPage } from "./pages/InsightsPage.js";
+import { VocabularyPage } from "./pages/VocabularyPage.js";
+import { WordDetailPanel } from "./components/WordDetailPanel.js";
+import { shouldSubmitMultiline, shouldSubmitSingleLine } from "./studyInput.js";
 import {
   ApiError,
   StaleStudyStateError,
   UnauthorizedError,
   clearToken,
   getBootstrap,
+  getCaptureNotes,
   postAction,
   saveToken,
-  createCapturedNote,
+  type CaptureListResponse,
   type WebAction,
   type WebApiResponse,
 } from "./apiClient.js";
-import { CaptureInboxPage } from "./CaptureInboxPage.js";
-import { CaptureSelectionToolbar } from "./CaptureSelectionToolbar.js";
 
 type PageStatus = "loading" | "auth" | "ready";
 type StandalonePage = "dashboard" | "study" | "notes";
@@ -24,7 +31,7 @@ export function visibleStandalonePage(
   page: StandalonePage,
   screen: WebApiResponse["screen"] | null,
 ): StandalonePage {
-  return screen === "done" && page === "study" ? "dashboard" : page;
+  return page === "study" && screen === "done" ? "dashboard" : page;
 }
 
 function initialToken(): string | null {
@@ -33,6 +40,19 @@ function initialToken(): string | null {
   } catch {
     return null;
   }
+}
+
+function initialAppearance(): Appearance {
+  try {
+    const value = localStorage.getItem("wordloop_appearance");
+    return value === "light" || value === "dark" ? value : "system";
+  } catch { return "system"; }
+}
+
+function sectionFromHash(): AppSection | null {
+  if (typeof window === "undefined") return null;
+  const value = window.location.hash.slice(1);
+  return ["today", "study", "capture", "insights", "vocabulary"].includes(value) ? value as AppSection : null;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -331,13 +351,14 @@ export function StandaloneProgressBlock({ title, completed, total, emptyText, de
   </div>;
 }
 
-export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes, isStudying = false }: {
+export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, isStudying = false, onOpenNotes = () => undefined, captureInboxCount = null }: {
   view: WebApiResponse;
   busy: boolean;
   onContinue: () => void;
   onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
-  onOpenNotes?: () => void;
   isStudying?: boolean;
+  onOpenNotes?: () => void;
+  captureInboxCount?: number | null;
 }): React.JSX.Element {
   const [dailyLimitExpanded, setDailyLimitExpanded] = useState(false);
   const dailyLimitEditorId = useId();
@@ -433,19 +454,32 @@ export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWord
         <div><dt>未来 7 天</dt><dd>{numberValue(fsrs.due_next_7_days)}</dd></div>
       </dl>
     </section>}
+
+    <section className="widget-card standalone-card capture-dashboard-card" aria-label="划词笔记">
+      <div className="capture-dashboard-heading">
+        <div><span className="eyebrow">Capture</span><strong>划词笔记</strong></div>
+        <span className="capture-dashboard-count">{captureInboxCount ?? "—"}</span>
+      </div>
+      <p>先捕获，后整理；只有你明确加入学习的项目才会进入 WordLoop 学习队列。</p>
+      <Button className="secondary" type="button" disabled={busy} onClick={onOpenNotes}>打开待整理</Button>
+    </section>
   </>;
 }
 
-export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes, hasMainContent, children }: {
+export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes = () => undefined, captureInboxCount = null, hasMainContent, children }: {
   page: StandalonePage;
   view: WebApiResponse | null;
   busy: boolean;
   onContinue: () => void;
   onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
   onOpenNotes?: () => void;
+  captureInboxCount?: number | null;
   hasMainContent: boolean;
   children?: ReactNode;
 }): React.JSX.Element {
+  if (page === "study") return <div className="standalone-layout standalone-study-layout" data-page={page}>
+    <section className="standalone-main" aria-label="沉浸式学习区">{children}</section>
+  </div>;
   return <div
     className="standalone-layout"
     data-page={page}
@@ -453,7 +487,7 @@ export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSav
     data-main-content={hasMainContent ? "true" : "false"}
   >
     <aside className="standalone-sidebar" aria-label="Dashboard" aria-hidden={!view}>
-      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onSaveDailyNewWordLimit={onSaveDailyNewWordLimit} onOpenNotes={onOpenNotes} isStudying={page === "study"} />}
+      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onSaveDailyNewWordLimit={onSaveDailyNewWordLimit} onOpenNotes={onOpenNotes} captureInboxCount={captureInboxCount} />}
     </aside>
     <section className="standalone-main" aria-label="学习区">
       {children}
@@ -491,7 +525,11 @@ export function StandaloneLessonHeader({ title, progressLabel, onBack }: {
 }
 
 export default function StandaloneApp(): React.JSX.Element {
-  const [page, setPage] = useState<StandalonePage>("dashboard");
+  const [page, setPage] = useState<StandalonePage>(() => sectionFromHash() === "capture" ? "notes" : "dashboard");
+  const [appSection, setAppSection] = useState<AppSection>(() => sectionFromHash() ?? "today");
+  const [appearance, setAppearance] = useState<Appearance>(initialAppearance);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedVocabularyWordId, setSelectedVocabularyWordId] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(initialToken);
   const [tokenInput, setTokenInput] = useState("");
   const [view, setView] = useState<WebApiResponse | null>(null);
@@ -503,6 +541,7 @@ export default function StandaloneApp(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState("");
   const [authError, setAuthError] = useState("");
   const [retryFields, setRetryFields] = useState<RetryFields>(null);
+  const [captureCounts, setCaptureCounts] = useState<CaptureListResponse["counts"] | null>(null);
   const requestInFlightRef = useRef(false);
   const refreshPendingRef = useRef(false);
   const refreshProgressPendingRef = useRef(false);
@@ -511,6 +550,58 @@ export default function StandaloneApp(): React.JSX.Element {
   const loadBootstrapRef = useRef<() => Promise<void>>(async () => undefined);
   const loadDashboardProgressRef = useRef<() => Promise<void>>(async () => undefined);
   tokenRef.current = token;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = appearance;
+    try { localStorage.setItem("wordloop_appearance", appearance); } catch { /* storage is optional */ }
+  }, [appearance]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.getPropertyValue("--visual-viewport-height");
+    if (page !== "study") return () => undefined;
+    const viewport = window.visualViewport;
+    const updateViewportHeight = () => {
+      root.style.setProperty("--visual-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
+    };
+    updateViewportHeight();
+    window.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("scroll", updateViewportHeight);
+    return () => {
+      window.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("scroll", updateViewportHeight);
+      if (previous) root.style.setProperty("--visual-viewport-height", previous);
+      else root.style.removeProperty("--visual-viewport-height");
+    };
+  }, [page]);
+
+  useEffect(() => {
+    const restoreSection = () => {
+      const section = sectionFromHash();
+      if (!section) return;
+      setAppSection(section);
+      setPage(section === "study" && view?.screen !== "done" ? "study" : section === "capture" ? "notes" : "dashboard");
+      setSelectedVocabularyWordId(null);
+    };
+    window.addEventListener("popstate", restoreSection);
+    return () => window.removeEventListener("popstate", restoreSection);
+  }, [view?.screen]);
+
+  const navigateSection = useCallback((section: AppSection) => {
+    if (section === "study") {
+      setAppSection("study");
+      if (view) continueFromDashboard();
+      else { setAppSection("today"); setPage("dashboard"); }
+      return;
+    }
+    setAppSection(section);
+    setPage(section === "capture" ? "notes" : "dashboard");
+    if (section !== "vocabulary") setSelectedVocabularyWordId(null);
+    if (typeof window !== "undefined") window.history.pushState({ wordloopSection: section }, "", `#${section}`);
+  }, [view]);
 
   const flushPendingRefresh = useCallback(() => {
     const needsBootstrap = refreshPendingRef.current;
@@ -536,6 +627,7 @@ export default function StandaloneApp(): React.JSX.Element {
     setBusy(null);
     setRetryFields(null);
     setPage("dashboard");
+    setAppSection("today");
     setPageStatus("auth");
     setAuthError(wrongToken ? "访问密钥错误" : "");
   }, []);
@@ -572,6 +664,7 @@ export default function StandaloneApp(): React.JSX.Element {
         const next = await getBootstrap(overrideToken ?? activeToken);
         sessionRevisionRef.current = next.session_revision ?? null;
         setView(next);
+        if (appSection === "study" && next.screen !== "done") setPage("study");
         setPageStatus("ready");
         setNotice("");
         setNoticeIndex(null);
@@ -608,17 +701,35 @@ export default function StandaloneApp(): React.JSX.Element {
       }
     }, flushPendingRefresh);
     if (!run.started) refreshPendingRef.current = true;
-  }, [enterAuth, flushPendingRefresh, loadDashboardProgress, view?.progress]);
+  }, [appSection, enterAuth, flushPendingRefresh, loadDashboardProgress, view?.progress]);
 
   loadBootstrapRef.current = () => loadBootstrap(false, tokenRef.current ?? undefined);
   loadDashboardProgressRef.current = loadDashboardProgress;
+
+  const refreshCaptureCounts = useCallback(async () => {
+    if (!tokenRef.current) return;
+    try {
+      const response = await getCaptureNotes("inbox", 1);
+      setCaptureCounts(response.counts);
+    } catch {
+      // Capture notes are optional to the study flow; do not block learning if this side panel fails.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (token) void refreshCaptureCounts();
+  }, [token, refreshCaptureCounts]);
 
   useEffect(() => {
     if (token) void loadBootstrap();
   }, []);
 
   useEffect(() => {
-    if (view?.screen === "done") setPage((current) => current === "study" ? "dashboard" : current);
+    if (view?.screen === "done") setPage((currentPage) => {
+      if (currentPage !== "study") return currentPage;
+      setAppSection("today");
+      return "dashboard";
+    });
   }, [view?.screen]);
 
   useEffect(() => {
@@ -677,6 +788,7 @@ export default function StandaloneApp(): React.JSX.Element {
         setToken(candidate);
         setView(next);
         setPage("dashboard");
+        setAppSection("today");
         setPageStatus("ready");
         setTokenInput("");
         setErrorMessage("");
@@ -784,12 +896,26 @@ export default function StandaloneApp(): React.JSX.Element {
 
   const continueFromDashboard = () => {
     if (!view) return;
+    setAppSection("study");
+    if (typeof window !== "undefined") window.history.pushState({ wordloopSection: "study" }, "", "#study");
     if (dashboardContinueBehavior(view) === "study") {
       setPage("study");
       return;
     }
     void dispatch({ action: "continue" });
   };
+
+  const backToToday = () => {
+    setPage("dashboard");
+    setAppSection("today");
+    if (typeof window !== "undefined") window.history.pushState({ wordloopSection: "today" }, "", "#today");
+  };
+
+  const openVocabularyWord = (userWordId: string) => {
+    setSelectedVocabularyWordId(userWordId);
+  };
+
+  const saveAppearance = (value: Appearance) => setAppearance(value);
 
   const state = view?.state ?? {};
   const payload = record(state.payload);
@@ -821,36 +947,52 @@ export default function StandaloneApp(): React.JSX.Element {
     </main>;
   }
 
-  const hasMainContent = Boolean(errorMessage)
-    || pageStatus === "loading"
-    || (pageStatus === "ready" && !view && !errorMessage)
-    || visiblePage === "study"
-    || visiblePage === "notes";
+  const hasMainContent = true;
+  const captureSelectionEnabled = pageStatus === "ready" && visiblePage === "study"
+    && view?.screen === "lesson"
+    && (["lesson_explain", "lesson_feedback"].includes(String(state.phase))
+      || (state.phase === "lesson_complete" && record(state.payload).mode === "feedback"));
 
-  return <main className="standalone-shell">
-    <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
+  return <main className="standalone-shell wordloop-shell" data-study-open={visiblePage === "study" ? "true" : "false"}>
+    <div className={`wordloop-app-grid${visiblePage === "study" ? " is-immersive" : ""}`} data-section={appSection}>
+    {visiblePage !== "study" && <AppNavigation section={appSection} onNavigate={navigateSection} />}
     <StandaloneResponsiveLayout
       page={visiblePage}
-      view={view}
+      view={null}
       busy={busy !== null}
       onContinue={continueFromDashboard}
-      onOpenNotes={() => setPage("notes")}
       onSaveDailyNewWordLimit={saveDailyNewWordLimit}
+      onOpenNotes={() => navigateSection("capture")}
+      captureInboxCount={captureCounts?.inbox ?? null}
       hasMainContent={hasMainContent}
     >
 
-    {visiblePage === "notes" && <CaptureInboxPage onBack={() => setPage("dashboard")} onUnauthorized={enterAuth} />}
-    <CaptureSelectionToolbar enabled={visiblePage === "study"} onCapture={async (input) => {
-      try {
-        return await createCapturedNote(input);
-      } catch (captureError) {
-        if (captureError instanceof UnauthorizedError) {
-          enterAuth();
-          throw new Error("访问密钥已失效，请重新输入。");
-        }
-        throw captureError;
-      }
-    }} />
+    {visiblePage !== "study" && <header className="wordloop-topbar">
+      <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
+      <button type="button" className="settings-open-button" aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>设置</button>
+    </header>}
+
+    {visiblePage === "dashboard" && appSection === "today" && <TodayPage
+      view={view}
+      busy={busy !== null}
+      tokenKey={token}
+      onContinue={continueFromDashboard}
+      onOpenCapture={() => navigateSection("capture")}
+      onOpenVocabulary={() => navigateSection("vocabulary")}
+    />}
+
+    {appSection === "capture" && visiblePage === "notes" && <CaptureNotesPage
+      onBack={backToToday}
+      onCountsChange={setCaptureCounts}
+    />}
+
+    {appSection === "insights" && visiblePage === "dashboard" && <InsightsPage tokenKey={token} onOpenWord={openVocabularyWord} />}
+
+    {appSection === "vocabulary" && visiblePage === "dashboard" && <VocabularyPage
+      tokenKey={token}
+      initialUserWordId={selectedVocabularyWordId}
+      onDetailChange={setSelectedVocabularyWordId}
+    />}
 
     {errorMessage && <section className="widget-card standalone-card" role="alert">
       <p className="standalone-status error">{errorMessage}</p>
@@ -867,11 +1009,11 @@ export default function StandaloneApp(): React.JSX.Element {
       const complete = state.phase === "review_complete";
       const direction = item.direction === "en_definition" ? "en_definition" : "cn_to_en";
       return <section className="widget-card standalone-card" aria-labelledby="study-title">
-        <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={() => setPage("dashboard")} />
-        {complete ? <div className="standalone-content"><p>本轮复习完成。</p><div className="standalone-actions"><Button type="button" onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
+        <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={backToToday} />
+        {complete ? <div className="standalone-content"><p>本轮复习完成。</p><div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
           <StandaloneReviewQuestion item={item} direction={direction} />
           <label className="answer-label" htmlFor="study-answer">{direction === "cn_to_en" ? "写出英文单词" : "英文释义"}</label>
-          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (!answer.trim()) return; void dispatch({ action: "review_submit", answer }); } }} />
+          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "review_submit", answer }); } }} />
           <StandaloneReviewFeedback notice={notice} noticeIndex={noticeIndex} currentIndex={currentIndex} />
           <div className="standalone-actions standalone-two-actions">
             <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "review_submit", answer: "", mark_unknown: true })}>不会</Button>
@@ -891,7 +1033,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const result = { ...record(view.pretest_result), ...record(view.result) };
       const audioStage = ["listen_repeat", "listen_recall"].includes(String(state.phase));
       return <section className="widget-card standalone-card" aria-labelledby="study-title">
-        <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={() => setPage("dashboard")} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
+        <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={backToToday} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
         {complete ? <div className="standalone-content">
           <p>预测试完成</p>
           <div className="standalone-result-grid">
@@ -899,7 +1041,7 @@ export default function StandaloneApp(): React.JSX.Element {
             <div><strong>{summary.uncertain}</strong><span>不确定</span></div>
             <div><strong>{summary.unknown}</strong><span>不会</span></div>
           </div>
-          <div className="standalone-actions"><Button type="button" onClick={() => void dispatch({ action: "continue" })}>开始正式学习</Button></div>
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>开始正式学习</Button></div>
         </div> : resultStage ? <div className="standalone-content">
           <StandalonePretestAnswerReveal
             source={String(payload.source ?? "")}
@@ -919,7 +1061,7 @@ export default function StandaloneApp(): React.JSX.Element {
             {typeof item.part_of_speech === "string" && <p className="answer-hint">{item.part_of_speech}</p>}
           </div>
           <label className="answer-label" htmlFor="study-answer">写出英文单词</label>
-          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (!answer.trim()) return; void dispatch({ action: "pretest_submit", answer }); } }} />
+          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "pretest_submit", answer }); } }} />
           {notice && <p className="standalone-status" role="status">{notice}</p>}
           <div className="standalone-actions standalone-two-actions">
             <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "pretest_submit", answer: "", mark_unknown: true })}>不会</Button>
@@ -946,17 +1088,17 @@ export default function StandaloneApp(): React.JSX.Element {
       const displayTitle = standaloneLessonDisplayTitle(title, exerciseMode, consolidationKind);
       const progressLabel = standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, consolidationKind);
       return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
-        <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={() => setPage("dashboard")} />
+        <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />
 
-        {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content">
+        {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content" data-capture-root="true">
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>词性与核心义</h2><p>{String(payload.part_of_speech ?? "")} · {String(payload.meaning_zh ?? "")}</p></section>
           <div className="lesson-detail-grid">
-          <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).map((value) => <li key={value} data-capture-text="true" data-capture-source="lesson_example" data-capture-type="collocation">{value}</li>)}</ul></section>
-            <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value} data-capture-text="true" data-capture-source="lesson_example" data-capture-type="word">{value}</li>)}</ul></section>
+          <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).slice(0, 3).map((value) => <li key={value}>{value}</li>)}</ul></section>
+            <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
           </div>
-          <section className="lesson-section"><h2>例句</h2><p className="lesson-example standalone-reading-width" data-capture-text="true" data-capture-source="lesson_example" data-capture-type="sentence">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <p className="lesson-example-translation standalone-reading-width" data-capture-text="true" data-capture-source="lesson_example" data-capture-type="sentence">{payload.example_zh}</p>}</section>
-          <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width" data-capture-text="true" data-capture-source="lesson_example" data-capture-type="phrase">{String(payload.note ?? "")}</p></section>
+          <section className="lesson-section" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
+          <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width">{String(payload.note ?? "")}</p></section>
           <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
         </div>}
 
@@ -964,13 +1106,13 @@ export default function StandaloneApp(): React.JSX.Element {
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
           <div className="lesson-prompt standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase">{String(exercise.prompt ?? "")}</div>
           {exercise.multiline === true
-            ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} />
-            : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (!answer.trim()) return; void dispatch({ action: "lesson_submit", answer }); } }} />}
+            ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "lesson_submit", answer }); } }} />
+            : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "lesson_submit", answer }); } }} />}
           <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "lesson_submit", answer })}>提交</Button></div>
         </div>}
 
         {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
-          <div className="standalone-feedback standalone-reading-width"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
+          <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           {notice && <p className="standalone-status" role="status">{notice}</p>}
           <div className="standalone-actions">
             {feedback.is_correct !== true && feedback.reveal_answer !== true
@@ -983,13 +1125,13 @@ export default function StandaloneApp(): React.JSX.Element {
 
         {phase === "lesson_complete" && exerciseMode && consolidationKind && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
-          <div className="lesson-prompt standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase">{String(exercise.prompt ?? "")}</div>
-          <textarea className={`standalone-input consolidation-input ${consolidationKind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={consolidationKind === "sentence" ? 2 : 5} aria-label={consolidationKind === "translation" ? "长难句翻译与结构分析" : "造句练习答案"} value={answer} onChange={(event) => saveAnswer(event.target.value)} />
+          <div className="lesson-prompt standalone-reading-width">{String(exercise.prompt ?? "")}</div>
+          <textarea className={`standalone-input consolidation-input ${consolidationKind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={consolidationKind === "sentence" ? 2 : 5} aria-label={consolidationKind === "translation" ? "长难句翻译与结构分析" : "造句练习答案"} value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "consolidation_submit", answer }); } }} />
           <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "translation" ? "提交翻译" : "提交句子"}</Button></div>
         </div>}
 
         {phase === "lesson_complete" && feedbackMode && consolidationKind && <div className="standalone-content">
-          <div className="standalone-feedback standalone-reading-width"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
+          <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           <div className="standalone-actions">
             {feedback.is_correct === true || feedback.reveal_answer === true
               ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "consolidation_finish" })}>继续学习</Button>
@@ -1008,6 +1150,29 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {pageStatus === "loading" && view && <p className="standalone-status" role="status">{busyLabel ?? "正在同步学习状态…"}</p>}
     </StandaloneResponsiveLayout>
+    </div>
+    <SettingsSheet
+      open={settingsOpen}
+      onClose={() => setSettingsOpen(false)}
+      appearance={appearance}
+      onAppearanceChange={saveAppearance}
+      dailyLimit={numberValue(record(record(view?.progress).settings).daily_new_word_limit) || null}
+      busy={busy !== null}
+      onSaveDailyNewWordLimit={saveDailyNewWordLimit}
+    />
+    {selectedVocabularyWordId && appSection !== "vocabulary" && <WordDetailPanel
+      userWordId={selectedVocabularyWordId}
+      tokenKey={token}
+      onClose={() => setSelectedVocabularyWordId(null)}
+    />}
+    <SelectionCapture
+      enabled={captureSelectionEnabled}
+      sourceType={visiblePage === "study"
+        ? view?.screen === "lesson" ? "lesson" : view?.screen === "review" ? "review" : view?.screen === "pretest" ? "pretest" : "manual"
+        : "lesson"}
+      sourceRef={visiblePage === "study" ? `${view?.screen ?? "study"}:${String(state.current_word ?? currentIndex)}` : null}
+      onCaptured={() => void refreshCaptureCounts()}
+    />
   </main>;
 }
 

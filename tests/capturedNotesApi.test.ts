@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   token: "capture-test-token" as string | undefined,
   userId: "00000000-0000-4000-8000-000000000001",
-  listCapturedNotes: vi.fn(),
-  createCapturedNote: vi.fn(),
-  updateCapturedNote: vi.fn(),
-  promoteCapturedNote: vi.fn(),
+  listCaptureNotes: vi.fn(),
+  createCaptureNote: vi.fn(),
+  updateCaptureNote: vi.fn(),
+  addCaptureNoteToLearning: vi.fn(),
   assertActiveStudySessionRevision: vi.fn(),
   getActiveStudySession: vi.fn(),
 }));
@@ -20,14 +20,14 @@ vi.mock("../server/db.js", async () => {
   };
 });
 
-vi.mock("../server/services/capturedNotes.js", () => ({
-  CapturedNotesError: class CapturedNotesError extends Error {
+vi.mock("../server/services/captureNotes.js", () => ({
+  CaptureServiceError: class CaptureServiceError extends Error {
     constructor(readonly status: number, readonly code: string, message: string) { super(message); }
   },
-  listCapturedNotes: mocks.listCapturedNotes,
-  createCapturedNote: mocks.createCapturedNote,
-  updateCapturedNote: mocks.updateCapturedNote,
-  promoteCapturedNote: mocks.promoteCapturedNote,
+  listCaptureNotes: mocks.listCaptureNotes,
+  createCaptureNote: mocks.createCaptureNote,
+  updateCaptureNote: mocks.updateCaptureNote,
+  addCaptureNoteToLearning: mocks.addCaptureNoteToLearning,
 }));
 
 vi.mock("../server/services/studySessions.js", async () => {
@@ -56,32 +56,55 @@ async function payload(response: Response): Promise<any> {
   return response.json();
 }
 
+const note = {
+  id: "00000000-0000-4000-8000-000000000002",
+  selected_text: "recur",
+  normalized_text: "recur",
+  selection_type: "word",
+  note: "",
+  status: "inbox",
+  occurrence_count: 1,
+  user_word_id: null,
+  word_id: null,
+  created_at: "2026-09-30T00:00:00.000Z",
+  updated_at: "2026-09-30T00:00:00.000Z",
+  first_seen_at: "2026-09-30T00:00:00.000Z",
+  last_seen_at: "2026-09-30T00:00:00.000Z",
+  latest_occurrence: null,
+  occurrences: [],
+  new_occurrence: true,
+};
+
 describe("Capture Web API routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.token = "capture-test-token";
-    mocks.listCapturedNotes.mockResolvedValue({ items: [], next_cursor: null });
-    mocks.createCapturedNote.mockResolvedValue({ note_id: "capture-1", occurrence_count: 1, new_occurrence: true });
-    mocks.updateCapturedNote.mockResolvedValue({ id: "capture-1" });
-    mocks.promoteCapturedNote.mockResolvedValue({ note_id: "capture-1", normalized_word: "recur", is_new: true });
+    mocks.listCaptureNotes.mockResolvedValue({
+      items: [],
+      counts: { inbox: 0, saved: 0, learning: 0, archived: 0 },
+      next_cursor: null,
+    });
+    mocks.createCaptureNote.mockResolvedValue(note);
+    mocks.updateCaptureNote.mockResolvedValue(note);
+    mocks.addCaptureNoteToLearning.mockResolvedValue({ note, scheduled_today: true, existing_status: null });
   });
 
   it("lists captures with no-store responses and does not load or revise the study session", async () => {
     const response = await handleWebApiRequest(request("/api/web/captures?status=inbox&q=example&cursor=25"));
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await payload(response)).toEqual({ items: [], next_cursor: null });
-    expect(mocks.listCapturedNotes).toHaveBeenCalledWith({ status: "inbox", q: "example", cursor: "25" });
+    expect(await payload(response)).toMatchObject({ items: [], next_cursor: null, counts: { inbox: 0 } });
+    expect(mocks.listCaptureNotes).toHaveBeenCalledWith({ status: "inbox", q: "example", cursor: "25", limit: 50 });
     expect(mocks.getActiveStudySession).not.toHaveBeenCalled();
     expect(mocks.assertActiveStudySessionRevision).not.toHaveBeenCalled();
   });
 
   it("creates a capture on its own route without study revision fields", async () => {
-    const input = { selected_text: "recur", selection_type: "word", idempotency_key: "key" };
+    const input = { selected_text: "recur", selection_type: "word", idempotency_key: "00000000-0000-4000-8000-000000000003" };
     const response = await handleWebApiRequest(request("/api/web/captures", "POST", input));
     expect(response.status).toBe(201);
-    expect(await payload(response)).toMatchObject({ note_id: "capture-1" });
-    expect(mocks.createCapturedNote).toHaveBeenCalledWith(input);
+    expect(await payload(response)).toMatchObject({ note_id: note.id, item: { id: note.id }, new_occurrence: true });
+    expect(mocks.createCaptureNote).toHaveBeenCalledWith(input);
     expect(mocks.assertActiveStudySessionRevision).not.toHaveBeenCalled();
   });
 
@@ -90,14 +113,14 @@ describe("Capture Web API routes", () => {
     const promotion = await handleWebApiRequest(request("/api/web/captures/00000000-0000-4000-8000-000000000002/promote", "POST"));
     expect(update.status).toBe(200);
     expect(promotion.status).toBe(200);
-    expect(mocks.updateCapturedNote).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000002", { status: "saved" });
-    expect(mocks.promoteCapturedNote).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000002");
+    expect(mocks.updateCaptureNote).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000002", { status: "saved" });
+    expect(mocks.addCaptureNoteToLearning).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000002");
     expect(mocks.assertActiveStudySessionRevision).not.toHaveBeenCalled();
   });
 
   it("requires the configured bearer token for Capture routes", async () => {
     const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/captures"));
     expect(response.status).toBe(401);
-    expect(mocks.listCapturedNotes).not.toHaveBeenCalled();
+    expect(mocks.listCaptureNotes).not.toHaveBeenCalled();
   });
 });

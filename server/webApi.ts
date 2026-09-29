@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase, getWordloopWebToken } from "./db.js";
 import { getStudyBootstrap } from "./services/studyBootstrap.js";
 import { getProgress } from "./services/progress.js";
+import { AnalyticsServiceError, getAnalytics, getTodayOverview } from "./services/analytics.js";
 import {
   advanceStudySessionIfRevision,
   assertActiveStudySessionRevision,
@@ -64,12 +65,23 @@ import {
 import { normalizeWord } from "./services/wordNormalization.js";
 import { deriveLessonProfile } from "./services/lessonProfile.js";
 import {
-  CapturedNotesError,
-  createCapturedNote,
-  listCapturedNotes,
-  promoteCapturedNote,
-  updateCapturedNote,
-} from "./services/capturedNotes.js";
+  addCaptureNoteToLearning,
+  createCaptureNote,
+  getCaptureNoteById,
+  listCaptureNoteOccurrences,
+  listCaptureNotes,
+  updateCaptureNote,
+  CaptureServiceError,
+  type CaptureNote,
+} from "./services/captureNotes.js";
+import {
+  captureCreateRequestSchema,
+  captureListRequestSchema,
+  captureUpdateRequestSchema,
+} from "../shared/captureContracts.js";
+import { analyticsQuerySchema } from "../shared/analyticsContracts.js";
+import { vocabularyQuerySchema } from "../shared/analyticsContracts.js";
+import { VocabularyServiceError, getVocabularyDetail, listVocabulary } from "./services/vocabulary.js";
 
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
@@ -117,6 +129,15 @@ export function jsonApiResponse(body: unknown, status = 200): Response {
   });
 }
 
+function legacyCaptureResponse(note: CaptureNote) {
+  return {
+    ...note,
+    status: note.status === "learning" ? "converted" : note.status === "archived" ? "dismissed" : note.status,
+    converted_user_word_id: note.user_word_id,
+    occurrences: note.occurrences.map((occurrence) => ({ ...occurrence, captured_at: occurrence.created_at })),
+  };
+}
+
 function bearerToken(request: Request): string | null {
   const value = request.headers.get("authorization");
   if (!value) return null;
@@ -144,7 +165,9 @@ function authenticate(request: Request): void {
 
 function toApiError(error: unknown): WebApiError {
   if (error instanceof WebApiError) return error;
-  if (error instanceof CapturedNotesError) return new WebApiError(error.status, error.code, error.message.trim());
+  if (error instanceof CaptureServiceError) return new WebApiError(error.status, error.code, error.message);
+  if (error instanceof AnalyticsServiceError) return new WebApiError(error.status, error.code, error.message);
+  if (error instanceof VocabularyServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof DeepSeekError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof StaleStudyStateError || (error instanceof Error && ["STALE_STUDY_STATE", "STUDY_SESSION_REVISION_MISMATCH"].includes(error.message))) {
     return new WebApiError(409, "STALE_STUDY_STATE", "Study state changed in another client.");
@@ -168,6 +191,12 @@ function toApiError(error: unknown): WebApiError {
   }
   if (message === "LESSON_WORD_NOT_FOUND" || message === "LESSON_WORD_MISMATCH") {
     return new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson queue no longer matches the active word.");
+  }
+  if (message === "CAPTURE_NOT_FOUND") {
+    return new WebApiError(404, "CAPTURE_NOT_FOUND", "这条划词笔记不存在或已被移除。");
+  }
+  if (message === "CAPTURE_NOT_LEARNABLE") {
+    return new WebApiError(409, "CAPTURE_NOT_LEARNABLE", "当前只把单词或两词短语加入现有 WordLoop 学习队列；更长表达先保留在笔记库。");
   }
   console.error("WordLoop Web API request failed", {
     code: "INTERNAL_SERVER_ERROR",
@@ -1178,8 +1207,51 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
     if (request.method === "GET" && url.pathname === "/api/web/bootstrap") {
       return jsonApiResponse(await resolveBootstrap());
     }
+    if (request.method === "GET" && url.pathname === "/api/web/today") {
+      return jsonApiResponse(await getTodayOverview());
+    }
+    if (request.method === "GET" && url.pathname === "/api/web/analytics") {
+      const parsed = analyticsQuerySchema.safeParse({
+        section: url.searchParams.get("section"),
+        range: url.searchParams.get("range") ?? "30d",
+        cursor: url.searchParams.get("cursor") ?? "",
+        limit: url.searchParams.get("limit") ?? 50,
+      });
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "洞察查询仅支持 overview、memory、weakness、activity 与 7d、30d、90d。");
+      return jsonApiResponse(await getAnalytics(parsed.data.section, parsed.data.range, parsed.data.cursor, parsed.data.limit));
+    }
+    if (request.method === "GET" && url.pathname === "/api/web/vocabulary") {
+      const parsed = vocabularyQuerySchema.safeParse({
+        q: url.searchParams.get("q") ?? "",
+        filters: url.searchParams.getAll("filter"),
+        cursor: url.searchParams.get("cursor") ?? "",
+        limit: url.searchParams.get("limit") ?? 50,
+      });
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "词库搜索与筛选条件无效。");
+      return jsonApiResponse(await listVocabulary(parsed.data));
+    }
+    const vocabularyMatch = /^\/api\/web\/vocabulary\/([0-9a-f-]{36})$/i.exec(url.pathname);
+    if (request.method === "GET" && vocabularyMatch) {
+      return jsonApiResponse(await getVocabularyDetail(vocabularyMatch[1]!));
+    }
     if (request.method === "GET" && url.pathname === "/api/web/captures") {
-      return jsonApiResponse(await listCapturedNotes(Object.fromEntries(url.searchParams.entries())));
+      const requestedStatus = url.searchParams.get("status");
+      const status = requestedStatus === "converted" ? "learning"
+        : requestedStatus === "dismissed" ? "archived"
+          : requestedStatus === "all" ? undefined
+            : requestedStatus ?? undefined;
+      const parsed = captureListRequestSchema.safeParse({
+        status,
+        q: url.searchParams.get("q") ?? "",
+        cursor: url.searchParams.get("cursor") ?? "",
+        limit: url.searchParams.get("limit") ?? 50,
+      });
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "划词笔记查询条件无效。");
+      const result = await listCaptureNotes(parsed.data);
+      const legacyStatus = requestedStatus === "converted" || requestedStatus === "dismissed" || requestedStatus === "all";
+      return jsonApiResponse(legacyStatus
+        ? { ...result, items: result.items.map(legacyCaptureResponse) }
+        : result);
     }
     if (request.method === "POST" && url.pathname === "/api/web/captures") {
       let body: unknown;
@@ -1188,20 +1260,64 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
       } catch {
         throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
       }
-      return jsonApiResponse(await createCapturedNote(body), 201);
+      const parsed = captureCreateRequestSchema.safeParse(body);
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The capture payload is invalid.");
+      const item = await createCaptureNote(parsed.data);
+      return jsonApiResponse({
+        item,
+        note_id: item.id,
+        occurrence_count: item.occurrence_count,
+        new_occurrence: item.new_occurrence,
+      }, 201);
     }
-    const capturePath = /^\/api\/web\/captures\/([^/]+)(\/promote)?$/.exec(url.pathname);
-    if (capturePath && request.method === "PATCH" && !capturePath[2]) {
+    const occurrenceMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/occurrences$/i.exec(url.pathname);
+    if (request.method === "GET" && occurrenceMatch) {
+      const parsed = z.object({
+        cursor: z.string().max(100).default(""),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      }).strict().safeParse({
+        cursor: url.searchParams.get("cursor") ?? "",
+        limit: url.searchParams.get("limit") ?? 50,
+      });
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "出现记录分页条件无效。");
+      return jsonApiResponse(await listCaptureNoteOccurrences(occurrenceMatch[1]!, parsed.data));
+    }
+    const captureMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})$/i.exec(url.pathname);
+    if (request.method === "GET" && captureMatch) {
+      return jsonApiResponse({ item: await getCaptureNoteById(captureMatch[1]!) });
+    }
+    if (request.method === "PATCH" && captureMatch) {
       let body: unknown;
       try {
         body = await request.json();
       } catch {
         throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
       }
-      return jsonApiResponse(await updateCapturedNote(capturePath[1] ?? "", body));
+      const parsed = captureUpdateRequestSchema.safeParse(body);
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The capture update is invalid.");
+      const item = await updateCaptureNote(captureMatch[1]!, parsed.data);
+      return jsonApiResponse({ id: item.id, item });
     }
-    if (capturePath && request.method === "POST" && capturePath[2]) {
-      return jsonApiResponse(await promoteCapturedNote(capturePath[1] ?? ""));
+    const learnMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/learn$/i.exec(url.pathname);
+    const promoteMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/promote$/i.exec(url.pathname);
+    if (request.method === "POST" && (learnMatch || promoteMatch)) {
+      const captureId = (learnMatch ?? promoteMatch)![1]!;
+      const result = await addCaptureNoteToLearning(captureId);
+      if (promoteMatch) {
+        return jsonApiResponse({
+          item: result.note,
+          note_id: result.note.id,
+          normalized_word: result.note.normalized_text,
+          is_new: result.scheduled_today,
+        });
+      }
+      return jsonApiResponse({
+        item: result.note,
+        learning_update: {
+          scheduled_today: result.scheduled_today,
+          existing_status: result.existing_status,
+        },
+      });
     }
     if (request.method === "POST" && url.pathname === "/api/web/action") {
       let body: unknown;
