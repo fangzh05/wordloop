@@ -599,7 +599,7 @@ export default function StandaloneApp(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (view?.screen === "done") setPage("dashboard");
+    if (view?.screen === "done") setPage((currentPage) => currentPage === "study" ? "dashboard" : currentPage);
   }, [view?.screen]);
 
   useEffect(() => {
