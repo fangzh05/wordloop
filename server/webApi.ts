@@ -1144,7 +1144,10 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
       const result = await addCaptureNoteToLearning(learnMatch[1]!);
       return jsonApiResponse({
         item: result.note,
-        learning_update: { prepared: result.prepared, added: result.added },
+        learning_update: {
+          scheduled_today: result.scheduled_today,
+          existing_status: result.existing_status,
+        },
       });
     }
     if (request.method === "POST" && url.pathname === "/api/web/action") {
