@@ -1,5 +1,5 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import { getTodayCompletedLessonWords } from "./attempts.js";
+import { getCompletedLessonWords } from "./attempts.js";
 import type { StudyPhase, StudySessionRow, VocabularyItem } from "../types.js";
 import { ensureTodayQueue } from "./dailyQueue.js";
 import {
@@ -14,7 +14,12 @@ import {
   StaleStudyStateError,
 } from "./studySessions.js";
 import { getTodayWords, getVocabularyItemsByWords } from "./words.js";
-import { buildLessonWords, lessonWordsFromFlow } from "./lessonQueue.js";
+import {
+  buildLessonWords,
+  filterNewWordsWithoutLessonHistory,
+  filterPreviouslyCompletedLessonWords,
+  lessonWordsFromFlow,
+} from "./lessonQueue.js";
 import { perf } from "./perf.js";
 import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 
@@ -84,22 +89,33 @@ async function continueCompletedReview(
     return { action: "review", count: eligibleDue.length };
   }
 
-  const todayWords = await getTodayWords(date, db, userId);
-  const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
+  const [todayWords, completedLessonWords] = await Promise.all([
+    getTodayWords(date, db, userId),
+    getCompletedLessonWords(db, userId),
+  ]);
+  const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
   if (newWords.length > 0) return { action: "pretest", words: newWords.slice(0, 6) };
 
   const existingLessonWords = lessonWordsFromFlow(active.state?.flow ?? { relearn_words: [] });
   if (existingLessonWords !== undefined) {
-    return lessonAction(existingLessonWords, db, userId, deferLessonQueueFreeze);
+    const pendingLessonWords = filterPreviouslyCompletedLessonWords(
+      existingLessonWords,
+      completedLessonWords,
+      active.state?.flow?.relearn_words ?? [],
+    );
+    if (pendingLessonWords.length > 0) {
+      if (deferLessonQueueFreeze) return lessonAction(pendingLessonWords, db, userId, true);
+      const frozen = await freezeAndReadFirstLessonWord(active, todayWords);
+      return frozen.word ? { action: "lesson", word: frozen.word } : { action: "done" };
+    }
   }
 
   if (deferLessonQueueFreeze) {
-    const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
     const lessonWords = buildLessonWords(
       active.state?.flow?.relearn_words ?? [],
       todayWords,
-      completedTodayLessonWords,
-      active.state?.flow?.pretest_familiar_words,
+      completedLessonWords,
+      active.state?.flow?.pretest_familiar_words ?? [],
     );
     return lessonAction(lessonWords, db, userId, true);
   }
@@ -117,29 +133,39 @@ export async function continueCompletedPretest(
   const date = active.state?.date;
   if (!date) return { action: "done" };
 
+  const [todayWords, completedLessonWords] = await Promise.all([
+    getTodayWords(date, db, userId),
+    getCompletedLessonWords(db, userId),
+  ]);
   const existingLessonWords = lessonWordsFromFlow(active.state?.flow ?? { relearn_words: [] });
   if (existingLessonWords !== undefined) {
-    return lessonAction(existingLessonWords, db, userId, deferLessonQueueFreeze);
+    const pendingLessonWords = filterPreviouslyCompletedLessonWords(
+      existingLessonWords,
+      completedLessonWords,
+      active.state?.flow?.relearn_words ?? [],
+    );
+    if (pendingLessonWords.length > 0) {
+      if (deferLessonQueueFreeze) return lessonAction(pendingLessonWords, db, userId, true);
+      const frozen = await freezeAndReadFirstLessonWord(active, todayWords);
+      return frozen.word ? { action: "lesson", word: frozen.word } : { action: "done" };
+    }
   }
-
-  const todayWords = await getTodayWords(date, db, userId);
   if (deferLessonQueueFreeze) {
-    const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
     const lessonWords = buildLessonWords(
       active.state?.flow?.relearn_words ?? [],
       todayWords,
-      completedTodayLessonWords,
-      active.state?.flow?.pretest_familiar_words,
+      completedLessonWords,
+      active.state?.flow?.pretest_familiar_words ?? [],
     );
     const planned = await lessonAction(lessonWords, db, userId, true);
     if (planned.action === "lesson") return planned;
-    const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
+    const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
     return newWords.length > 0 ? { action: "pretest", words: newWords.slice(0, 6) } : planned;
   }
   const frozen = await freezeAndReadFirstLessonWord(active, todayWords);
   if (frozen.word) return { action: "lesson", word: frozen.word };
 
-  const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
+  const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
   return newWords.length > 0
     ? { action: "pretest", words: newWords.slice(0, 6) }
     : { action: "done" };
@@ -157,14 +183,16 @@ async function bootstrapFreshFlow(
     return { action: "review", count: review.rollingReview.length };
   }
 
-  const todayWords = await getTodayWords(queue.date, db, userId);
-  const newWords = todayWords.filter((word) => word.status === "new" && !word.mastered);
+  const [todayWords, completedLessonWords] = await Promise.all([
+    getTodayWords(queue.date, db, userId),
+    getCompletedLessonWords(db, userId),
+  ]);
+  const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
   if (newWords.length > 0) {
     return { action: "pretest", words: newWords.slice(0, 6) };
   }
 
-  const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
-  const lessonWords = buildLessonWords([], todayWords, completedTodayLessonWords);
+  const lessonWords = buildLessonWords([], todayWords, completedLessonWords);
   return lessonAction(lessonWords, db, userId, deferLessonQueueFreeze);
 }
 

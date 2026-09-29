@@ -43,6 +43,11 @@ const rpcChecks: RpcCheck[] = [
     args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_now: new Date(0).toISOString(), p_limit: 1 },
     migration: "202609160007",
   },
+  {
+    name: "get_formal_lesson_attempt_words_v1",
+    args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_before: null },
+    migration: "20260929021548",
+  },
 ];
 
 function isSchemaMismatch(message: string): boolean {

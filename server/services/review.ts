@@ -1,4 +1,5 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
+import { getCompletedLessonWords } from "./attempts.js";
 import type { ActiveErrorLayer, ReviewKind, ReviewVocabularyItem, UserWordRow, VocabularyItem } from "../types.js";
 import {
   REVIEW_SESSION_MAX,
@@ -11,6 +12,7 @@ import { normalizeWord } from "./wordNormalization.js";
 import { getProgress } from "./progress.js";
 import { getActiveStudySession, normalizeLegacyLessonSession } from "./studySessions.js";
 import {
+  filterNewWordsWithoutLessonHistory,
   isLessonCursorAtCurrentWord,
   lessonWordAt,
   nextLessonWordIndex,
@@ -236,9 +238,11 @@ export async function getNextRound(limit: number): Promise<{ words: VocabularyIt
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
   const date = dateInTimeZone(await getUserTimeZone(db, userId));
-  const words = (await getTodayWords(date, db, userId))
-    .filter((word) => !word.mastered && word.status === "new")
-    .slice(0, limit);
+  const [todayWords, completedLessonWords] = await Promise.all([
+    getTodayWords(date, db, userId),
+    getCompletedLessonWords(db, userId),
+  ]);
+  const words = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords).slice(0, limit);
   return { words };
 }
 

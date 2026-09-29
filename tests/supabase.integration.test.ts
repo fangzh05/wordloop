@@ -4,7 +4,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { getDatabase, resetDatabaseForTests } from "../server/db.js";
 import { persistShanbayBook } from "../server/integrations/shanbay/importer.js";
 import type { ShanbayWord } from "../server/integrations/shanbay/types.js";
-import { recordAttempt } from "../server/services/attempts.js";
+import { getCompletedLessonWords, recordAttempt } from "../server/services/attempts.js";
 import { recordReviewSubmission } from "../server/services/fsrsReviews.js";
 import { getLearningContext } from "../server/services/review.js";
 import { finishStudySession, getActiveStudySession, makeStudyState, persistStudyState, studySessionSummary } from "../server/services/studySessions.js";
@@ -13,7 +13,7 @@ import { getDailyNewWordLimit, prepareDailyNewWords, recordPretestResult, setDai
 const canRun = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 const integrationUser = randomUUID();
 const book = { id: `wordloop-integration-${integrationUser}`, name: "WordLoop 集成测试词书", is_current: false };
-const days = { one: "2030-01-01", two: "2030-01-02", three: "2030-01-03" };
+const days = { one: "2030-01-01", two: "2030-01-02", three: "2030-01-03", four: "2030-01-04" };
 
 function sourceWords(prefix: string, count: number): ShanbayWord[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -115,11 +115,34 @@ describe.runIf(canRun)("Supabase persistence", () => {
       .eq("user_id", integrationUser).eq("word.normalized_word", target).single();
     expect(beforeError).toBeNull();
     await recordAttempt({ word: target, activity_type: "sentence", user_answer: "bad answer", is_correct: false, error_layer: "collocation" });
+    await expect(getCompletedLessonWords(db, integrationUser)).resolves.toEqual(new Set([target]));
+    await expect(getCompletedLessonWords(db, integrationUser, "2020-01-01T00:00:00.000Z")).resolves.toEqual(new Set());
     const { data: afterAttempt, error: afterError } = await db.from("user_words")
       .select("word_id,status,fsrs_reps,fsrs_stability,next_review_at,last_reviewed_at,collocation_error,word:words!inner(normalized_word)")
       .eq("user_id", integrationUser).eq("word.normalized_word", target).single();
     expect(afterError).toBeNull();
     expect(afterAttempt).toMatchObject({ ...(beforeAttempt as Record<string, unknown>), status: "review", collocation_error: true });
+
+    const { error: resetTargetError } = await db.from("user_words")
+      .update({ status: "new", mastered: false })
+      .eq("user_id", integrationUser)
+      .eq("word_id", (afterAttempt as { word_id?: string }).word_id ?? "");
+    expect(resetTargetError).toBeNull();
+    await setDailyNewWordLimit(7);
+    const nextPool = await prepareDailyNewWords(undefined, undefined, days.four);
+    expect(nextPool).toMatchObject({ prepared: 6, added: 6, limit: 7 });
+    const { data: poolImport, error: poolError } = await db.from("daily_imports")
+      .select("id")
+      .eq("user_id", integrationUser)
+      .eq("import_date", days.four)
+      .eq("source", "wordloop_pool")
+      .single();
+    expect(poolError).toBeNull();
+    const { data: poolWords, error: poolWordsError } = await db.from("daily_import_words")
+      .select("word:words!inner(normalized_word)")
+      .eq("import_id", (poolImport as { id: string }).id);
+    expect(poolWordsError).toBeNull();
+    expect((poolWords ?? []).map((row: any) => row.word.normalized_word)).not.toContain(target);
 
     const { error: forceDueError } = await db.from("user_words")
       .update({ next_review_at: "2020-01-01T00:00:00Z" })

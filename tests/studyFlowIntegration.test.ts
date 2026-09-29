@@ -18,7 +18,7 @@ import { lessonPayloadSchema } from "../web/src/lesson/LessonWidget.js";
 
 const bootstrapMocks = vi.hoisted(() => ({
   getAuthenticatedUserId: vi.fn(() => "00000000-0000-0000-0000-000000000001"),
-  getTodayCompletedLessonWords: vi.fn(async () => new Set<string>()),
+  getCompletedLessonWords: vi.fn(async () => new Set<string>()),
   getDatabase: vi.fn(() => ({})),
   getActiveStudySession: vi.fn(),
   freezeLessonQueueForSession: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock("../server/db.js", () => ({
   getDatabase: bootstrapMocks.getDatabase,
 }));
 vi.mock("../server/services/attempts.js", () => ({
-  getTodayCompletedLessonWords: bootstrapMocks.getTodayCompletedLessonWords,
+  getCompletedLessonWords: bootstrapMocks.getCompletedLessonWords,
 }));
 vi.mock("../server/services/studySessions.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/studySessions.js")>("../server/services/studySessions.js");

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VocabularyItem } from "../server/types.js";
 
 const completedLessonMocks = vi.hoisted(() => ({
-  getTodayCompletedLessonWords: vi.fn(async () => new Set<string>()),
+  getCompletedLessonWords: vi.fn(async () => new Set<string>()),
 }));
 vi.mock("../server/services/attempts.js", () => completedLessonMocks);
 

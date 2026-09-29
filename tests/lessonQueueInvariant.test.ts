@@ -8,10 +8,13 @@ import type { VocabularyItem } from "../server/types.js";
 import {
   buildLessonWords,
   buildLessonNavigation,
+  filterNewWordsWithoutLessonHistory,
+  filterPreviouslyCompletedLessonWords,
   isLessonCursorAtCurrentWord,
   lessonWordAt,
   lessonWordIndex,
   nextLessonWordIndex,
+  reconcileLessonQueueAfterCursor,
   recoverLegacyLessonWords,
 } from "../server/services/lessonQueue.js";
 
@@ -69,27 +72,86 @@ describe("durable Lesson queue invariant", () => {
     )).toEqual(["expression", "planet", "shrink", "marine", "thermometer"]);
   });
 
-  it("excludes electrical and embark after a formal Lesson today while status stays unknown", () => {
-    const completedToday = new Set(["electrical", "embark"]);
+  it("excludes words with a prior formal Lesson even when they remain unknown", () => {
+    const completed = new Set(["electrical", "embark"]);
     expect(buildLessonWords([], [
       item("electrical", "unknown"),
       item("embark", "uncertain"),
       item("shallow", "unknown"),
-    ], completedToday)).toEqual(["shallow"]);
+    ], completed)).toEqual(["shallow"]);
   });
 
-  it("keeps a word eligible when today's only activity was Pretest", () => {
+  it("keeps a word eligible when its only history is Pretest", () => {
     expect(buildLessonWords([], [item("electrical", "unknown")], new Set())).toEqual(["electrical"]);
   });
 
+  it("keeps a status-new card with prior Lesson history out of the Pretest queue", () => {
+    expect(filterNewWordsWithoutLessonHistory([
+      item("already-taught", "new"),
+      item("untouched", "new"),
+      item("already-known", "known"),
+    ], new Set(["already-taught"])).map((word) => word.word)).toEqual(["untouched"]);
+  });
+
+  it("filters a stored pre-Lesson queue while retaining explicit relearn words", () => {
+    expect(filterPreviouslyCompletedLessonWords(
+      ["old", "review-failed", "pending"],
+      new Set(["old", "review-failed"]),
+      ["REVIEW-FAILED"],
+    )).toEqual(["review-failed", "pending"]);
+  });
+
   it("keeps a normally completed word excluded after a correct Review", () => {
-    const completedToday = new Set(["embark"]);
-    expect(buildLessonWords([], [item("embark", "unknown")], completedToday)).toEqual([]);
+    const completed = new Set(["embark"]);
+    expect(buildLessonWords([], [item("embark", "unknown")], completed)).toEqual([]);
   });
 
   it("allows one explicit failed-Review relearn despite its completed normal Lesson", () => {
-    const completedToday = new Set(["embark"]);
-    expect(buildLessonWords(["EMBARK", "embark"], [item("embark", "unknown")], completedToday)).toEqual(["embark"]);
+    const completed = new Set(["embark"]);
+    expect(buildLessonWords(["EMBARK", "embark"], [item("embark", "unknown")], completed)).toEqual(["embark"]);
+  });
+
+  it("prunes previously completed words after the active Lesson cursor", () => {
+    expect(reconcileLessonQueueAfterCursor({
+      lessonWords: ["done-before", "current", "old-a", "pending", "old-b"],
+      currentIndex: 1,
+      completedLessonWords: new Set(["done-before", "old-a", "old-b"]),
+      relearnWords: [],
+    })).toEqual({
+      lessonWords: ["done-before", "current", "pending"],
+      currentIndex: 1,
+      currentWord: "current",
+      skippedCurrent: false,
+      changed: true,
+    });
+  });
+
+  it("skips a previously completed explain card when there is a new pending word", () => {
+    expect(reconcileLessonQueueAfterCursor({
+      lessonWords: ["already-seen", "pending", "also-seen"],
+      currentIndex: 0,
+      completedLessonWords: new Set(["already-seen", "also-seen"]),
+      relearnWords: [],
+      skipCompletedCurrent: true,
+    })).toEqual({
+      lessonWords: ["pending"],
+      currentIndex: 0,
+      currentWord: "pending",
+      skippedCurrent: true,
+      changed: true,
+    });
+  });
+
+  it("preserves explicit relearn words while pruning other completed words", () => {
+    expect(reconcileLessonQueueAfterCursor({
+      lessonWords: ["current", "failed-review", "normally-seen", "pending"],
+      currentIndex: 0,
+      completedLessonWords: new Set(["failed-review", "normally-seen"]),
+      relearnWords: ["FAILED-REVIEW"],
+    })).toMatchObject({
+      lessonWords: ["current", "failed-review", "pending"],
+      skippedCurrent: false,
+    });
   });
 
   it("lets a current-session familiar override suppress relearn and uncertain new-word routing", () => {

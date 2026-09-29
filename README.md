@@ -164,7 +164,7 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001–007 followed by `20260927143358_exact_cloze_activity_type.sql`. If a real database already ran the older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes, migration 007 adds the due-only review snapshot RPC, and the latest migration adds the fixed-answer and semantic-expression activity types.
+3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001–007 followed by `20260927143358_exact_cloze_activity_type.sql` and `20260929021548_formal_lesson_history.sql`. If a real database already ran the older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes, migration 007 adds the due-only review snapshot RPC, the activity-type migration adds fixed-answer and semantic-expression activities, and the latest migration excludes formal Lesson history from future new-word queues.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 
@@ -288,7 +288,7 @@ Shanbay is an optional, removable one-time migration adapter under `server/integ
 
 No reliable public user-bookshelf endpoint was found, so V1 deliberately does not guess one. The import card supports the current book, refresh-after-switching, and an advanced materialbook ID field. It never switches the user's Shanbay current book. After migration, Shanbay state is metadata only and cannot reset Wordloop state, attempts, errors, or the single FSRS card.
 
-Importing thousands of words fills the vocabulary pool, not today's list. Call `prepare_daily_new_words` to allocate the user's `daily_new_word_limit` (default 50, range 1–200) into the existing pretest workflow. A word that is still `new` remains eligible on the following day; only a word already scheduled **today** is excluded. The daily limit counts all of today's existing queues, so a legacy/manual 30-word queue is supplemented only up to the current limit rather than becoming 30 + 50.
+Importing thousands of words fills the vocabulary pool, not today's list. Call `prepare_daily_new_words` to allocate the user's `daily_new_word_limit` (default 50, range 1–200) into the existing pretest workflow. A word remains eligible on the following day only while it is still `new`, not mastered, and has no formal Lesson attempt; today's existing queues are also excluded. The daily limit counts all of today's existing queues, so a legacy/manual 30-word queue is supplemented only up to the current limit rather than becoming 30 + 50.
 
 Validated against a real Shanbay account on 2026-09-14. No Shanbay credentials, user identifiers, or source payloads are stored in this repository.
 

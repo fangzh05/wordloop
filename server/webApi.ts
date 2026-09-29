@@ -24,11 +24,13 @@ import {
   isLessonCursorAtCurrentWord,
   lessonWordAt,
   lessonWordIndex,
+  lessonProgressLabel,
+  reconcileLessonQueueAfterCursor,
 } from "./services/lessonQueue.js";
 import { getTodayWords, getVocabularyItemsByWords, recordPretestResult, setDailyNewWordLimit } from "./services/words.js";
 import { buildReviewWidgetPayload } from "./tools/renderWidgets.js";
 import { getPronunciationAudio } from "./tools/getPronunciationAudio.js";
-import { getTodayCompletedLessonWords, recordAttempt } from "./services/attempts.js";
+import { getCompletedLessonWords, recordAttempt } from "./services/attempts.js";
 import { recordReviewSubmission } from "./services/fsrsReviews.js";
 import {
   assertGradeInvariants,
@@ -296,6 +298,46 @@ async function prepareBootstrap(expectedRevision?: string | null): Promise<{
     if (state.widget === "lesson" && state.flow.lesson_words === undefined) {
       active = await normalizeLegacyLessonSession(active, db, userId, revision);
       revision = active.updated_at;
+      state = normalizeStudyStateForRead(active.state!);
+    }
+    if (state.widget === "lesson" && state.flow.lesson_words !== undefined && state.phase !== "lesson_complete") {
+      const completedBeforeSession = await getCompletedLessonWords(db, userId, active.started_at);
+      const reconciled = reconcileLessonQueueAfterCursor({
+        lessonWords: state.flow.lesson_words,
+        currentIndex: state.current_index,
+        completedLessonWords: completedBeforeSession,
+        relearnWords: state.flow.relearn_words,
+        skipCompletedCurrent: state.phase === "lesson_explain",
+      });
+      if (reconciled?.changed) {
+        const nextFlow = { ...state.flow, lesson_words: reconciled.lessonWords };
+        const nextState = {
+          ...state,
+          current_word: reconciled.currentWord,
+          current_index: reconciled.currentIndex,
+          flow: nextFlow,
+        };
+        if (reconciled.skippedCurrent) {
+          const regenerated = await generateAndPersistLesson({
+            word: reconciled.currentWord,
+            date: state.date,
+            flow: nextFlow,
+            index: reconciled.currentIndex,
+            expectedRevision: revision,
+            sessionId: active.id,
+          });
+          active = regenerated.session;
+        } else {
+          const currentWord = reconciled.currentWord;
+          nextState.payload = {
+            ...state.payload,
+            progress: lessonProgressLabel(state.flow.relearn_words, reconciled.lessonWords, reconciled.currentIndex),
+            navigation: buildLessonNavigation(reconciled.lessonWords, reconciled.currentIndex, currentWord),
+          };
+          active = await persistStudyStateIfRevision(nextState, revision, db, userId, active.id);
+        }
+        revision = active.updated_at;
+      }
     }
   } else if (active) {
     throw new WebApiError(409, "INVALID_STUDY_STATE", "The active study state is unavailable.");
@@ -423,16 +465,16 @@ async function createLessonFromBootstrap(
     if (state.widget !== "pretest" && state.widget !== "review") {
       throw new WebApiError(409, "INVALID_STUDY_STATE", "The active study session cannot start a Lesson.");
     }
-    let lessonWords = state.flow.lesson_words ?? bootstrap.lesson_words;
+    let lessonWords = bootstrap.lesson_words ?? state.flow.lesson_words;
     if (!lessonWords) {
-      const [todayWords, completedTodayLessonWords] = await Promise.all([
+      const [todayWords, completedLessonWords] = await Promise.all([
         getTodayWords(state.date, db, userId),
-        getTodayCompletedLessonWords(db, userId),
+        getCompletedLessonWords(db, userId),
       ]);
       lessonWords = buildLessonWords(
         state.flow.relearn_words,
         todayWords,
-        completedTodayLessonWords,
+        completedLessonWords,
         state.flow.pretest_familiar_words,
       );
     }
@@ -452,11 +494,11 @@ async function createLessonFromBootstrap(
   }
 
   const date = await getStudyDate(db, userId);
-  const [todayWords, completedTodayLessonWords] = await Promise.all([
+  const [todayWords, completedLessonWords] = await Promise.all([
     getTodayWords(date, db, userId),
-    getTodayCompletedLessonWords(db, userId),
+    getCompletedLessonWords(db, userId),
   ]);
-  const lessonWords = buildLessonWords([], todayWords, completedTodayLessonWords);
+  const lessonWords = buildLessonWords([], todayWords, completedLessonWords);
   const firstWord = lessonWordAt(lessonWords, 0);
   if (!firstWord || normalizeWord(firstWord) !== normalizeWord(requestedWord)) {
     throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson word does not match the daily queue.");
@@ -803,14 +845,6 @@ function lessonFeedbackState(
       navigation,
     },
   };
-}
-
-function lessonProgressLabel(relearnWords: readonly string[], queue: readonly string[], index: number): string {
-  const relearn = new Set(relearnWords.map(normalizeWord));
-  const reviewCount = queue.filter((word) => relearn.has(normalizeWord(word))).length;
-  if (index < reviewCount) return `复习补学 ${index + 1} / ${reviewCount}`;
-  const newCount = queue.length - reviewCount;
-  return `新词学习 ${Math.min(index - reviewCount + 1, newCount)} / ${newCount}`;
 }
 
 async function submitLesson(action: Extract<WebAction, { action: "lesson_submit" }>, active: StudySessionRow | null): Promise<Record<string, unknown>> {

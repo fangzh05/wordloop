@@ -62,6 +62,14 @@ describe("canonical queue boundaries", () => {
     expect(() => validatePretestItems([pretestItem("alpha")], [...today, vocabulary("gamma")])).toThrow("PRETEST_ROUND_SIZE_INVALID");
   });
 
+  it("does not admit a status-new word into Pretest after a formal Lesson attempt", () => {
+    const today = [vocabulary("already-taught"), vocabulary("untouched")];
+    expect(validatePretestItems([pretestItem("untouched")], today, new Set(["already-taught"])))
+      .toMatchObject([{ word: "untouched" }]);
+    expect(() => validatePretestItems([pretestItem("already-taught")], today, new Set(["already-taught"])))
+      .toThrow("PRETEST_WORD_NOT_ELIGIBLE");
+  });
+
   it("accepts the backend lesson word and rejects a GPT-selected replacement", () => {
     expect(() => assertLessonWordMatches("plantation", "plantation")).not.toThrow();
     expect(() => assertLessonWordMatches("plantation", "planet")).toThrow("LESSON_WORD_MISMATCH");

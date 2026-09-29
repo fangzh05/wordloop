@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import { getTodayCompletedLessonWords, LESSON_ACTIVITY_TYPES } from "./attempts.js";
+import { getCompletedLessonWords, LESSON_ACTIVITY_TYPES } from "./attempts.js";
 import {
   REVIEW_SESSION_MAX,
   activeErrorLayerSchema,
@@ -17,6 +17,7 @@ import { getTodayWords, getUserTimeZone, markPretestWordKnown } from "./words.js
 import { normalizeWord } from "./wordNormalization.js";
 import {
   buildLessonWords,
+  filterPreviouslyCompletedLessonWords,
   lessonWordIndex,
   recoverLegacyLessonWords,
 } from "./lessonQueue.js";
@@ -494,15 +495,26 @@ export async function freezeLessonQueueForSession(
   expectedRevision?: string | null,
 ): Promise<StudySessionRow> {
   const state = session.state;
-  if (!state || state.flow.lesson_words !== undefined) return session;
-  const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
-  const lessonWords = buildLessonWords(
-    state.flow.relearn_words,
-    todayWords,
-    completedTodayLessonWords,
-    state.flow.pretest_familiar_words,
-  );
-  if (lessonWords.length === 0) return session;
+  if (!state || (state.widget === "lesson" && state.flow.lesson_words !== undefined)) return session;
+  const completedLessonWords = await getCompletedLessonWords(db, userId);
+  const existingLessonWords = state.flow.lesson_words === undefined
+    ? []
+    : filterPreviouslyCompletedLessonWords(
+      state.flow.lesson_words,
+      completedLessonWords,
+      state.flow.relearn_words,
+    );
+  const lessonWords = existingLessonWords.length > 0
+    ? existingLessonWords
+    : buildLessonWords(
+      state.flow.relearn_words,
+      todayWords,
+      completedLessonWords,
+      state.flow.pretest_familiar_words,
+    );
+  if (lessonWords.length === 0 || (state.flow.lesson_words !== undefined
+    && lessonWords.length === state.flow.lesson_words.length
+    && lessonWords.every((word, index) => word === state.flow.lesson_words?.[index]))) return session;
   const nextState = {
     ...state,
     flow: { ...state.flow, lesson_words: lessonWords },
@@ -553,17 +565,17 @@ export async function normalizeLegacyLessonSession(
   const state = session.state;
   if (!state || state.widget !== "lesson" || state.flow.lesson_words !== undefined) return session;
 
-  const [todayWords, attemptWords, completedTodayLessonWords] = await Promise.all([
+  const [todayWords, attemptWords, completedLessonWords] = await Promise.all([
     getTodayWords(state.date, db, userId),
     getLegacyLessonAttemptWords(session, db, userId),
-    getTodayCompletedLessonWords(db, userId),
+    getCompletedLessonWords(db, userId),
   ]);
   const lessonWords = recoverLegacyLessonWords({
     relearnWords: state.flow.relearn_words,
     todayWords,
     attemptWords,
     currentWord: state.current_word,
-    completedTodayLessonWords,
+    completedLessonWords,
     excludedWords: state.flow.pretest_familiar_words,
   });
   if (lessonWords.length === 0) throw new Error("LESSON_QUEUE_EMPTY");

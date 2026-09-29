@@ -22,11 +22,32 @@ export function dedupeLessonWords(words: readonly string[]): string[] {
   return queue.slice(0, REVIEW_SESSION_MAX);
 }
 
+/** New-status cards with any formal Lesson history are stale queue leftovers, not fresh Pretest candidates. */
+export function filterNewWordsWithoutLessonHistory(
+  todayWords: readonly VocabularyItem[],
+  completedLessonWords: ReadonlySet<string> = new Set(),
+): VocabularyItem[] {
+  return todayWords.filter((word) => word.status === "new"
+    && !word.mastered
+    && !completedLessonWords.has(normalizeWord(word.word)));
+}
+
+export function filterPreviouslyCompletedLessonWords(
+  words: readonly string[],
+  completedLessonWords: ReadonlySet<string>,
+  relearnWords: readonly string[] = [],
+): string[] {
+  const relearn = new Set(relearnWords.map(normalizeWord));
+  const completed = new Set([...completedLessonWords].map(normalizeWord));
+  return dedupeLessonWords(words.filter((word) => !completed.has(normalizeWord(word))
+    || relearn.has(normalizeWord(word))));
+}
+
 /** Build the one-time Lesson snapshot from the session flow and daily order. */
 export function buildLessonWords(
   relearnWords: readonly string[],
   todayWords: readonly VocabularyItem[],
-  completedTodayLessonWords: ReadonlySet<string> = new Set(),
+  completedLessonWords: ReadonlySet<string> = new Set(),
   excludedWords: readonly string[] = [],
 ): string[] {
   const excluded = new Set(excludedWords.map(normalizeWord).filter(Boolean));
@@ -35,10 +56,71 @@ export function buildLessonWords(
     ...todayWords
       .filter((word) => lessonStatuses.has(word.status)
         && !word.mastered
-        && !completedTodayLessonWords.has(normalizeWord(word.word))
+        && !completedLessonWords.has(normalizeWord(word.word))
         && !excluded.has(normalizeWord(word.word)))
       .map((word) => word.word),
   ]);
+}
+
+export interface LessonQueueCursorReconciliation {
+  lessonWords: string[];
+  currentIndex: number;
+  currentWord: string;
+  skippedCurrent: boolean;
+  changed: boolean;
+}
+
+/**
+ * Remove old completed Lesson words from an active queue's unvisited suffix.
+ * The current card is kept unless the caller knows it has not been opened yet.
+ * Explicit failed-Review relearn words always remain eligible.
+ */
+export function reconcileLessonQueueAfterCursor(input: {
+  lessonWords: readonly string[];
+  currentIndex: number;
+  completedLessonWords: ReadonlySet<string>;
+  relearnWords: readonly string[];
+  skipCompletedCurrent?: boolean;
+}): LessonQueueCursorReconciliation | null {
+  const { lessonWords, currentIndex } = input;
+  const currentWord = lessonWords[currentIndex];
+  if (!currentWord || currentIndex < 0 || currentIndex >= lessonWords.length) return null;
+
+  const completed = new Set([...input.completedLessonWords].map(normalizeWord));
+  const relearn = new Set(input.relearnWords.map(normalizeWord));
+  const wasCompleted = (word: string) => completed.has(normalizeWord(word)) && !relearn.has(normalizeWord(word));
+  const skipCurrent = Boolean(input.skipCompletedCurrent && wasCompleted(currentWord));
+  const prefix = lessonWords.slice(0, currentIndex);
+  const suffix = lessonWords.slice(currentIndex + 1).filter((word) => !wasCompleted(word));
+
+  if (skipCurrent && suffix.length > 0) {
+    const nextWords = [...prefix, ...suffix];
+    return {
+      lessonWords: nextWords,
+      currentIndex: prefix.length,
+      currentWord: suffix[0]!,
+      skippedCurrent: true,
+      changed: true,
+    };
+  }
+
+  const nextWords = [...prefix, currentWord, ...suffix];
+  return {
+    lessonWords: nextWords,
+    currentIndex,
+    currentWord,
+    skippedCurrent: false,
+    changed: nextWords.length !== lessonWords.length
+      || nextWords.some((word, index) => word !== lessonWords[index]),
+  };
+}
+
+export function lessonProgressLabel(relearnWords: readonly string[], queue: readonly string[], index: number): string {
+  const relearn = new Set(relearnWords.map(normalizeWord));
+  const reviewCount = queue.filter((word) => relearn.has(normalizeWord(word))).length;
+  if (index < reviewCount) return `复习补学 ${index + 1} / ${reviewCount}`;
+  const newCount = queue.length - reviewCount;
+  return `新词学习 ${Math.min(index - reviewCount + 1, newCount)} / ${newCount}`;
 }
 
 /**
@@ -52,7 +134,7 @@ export function recoverLegacyLessonWords(input: {
   todayWords: readonly VocabularyItem[];
   attemptWords: readonly string[];
   currentWord?: string | null;
-  completedTodayLessonWords?: ReadonlySet<string>;
+  completedLessonWords?: ReadonlySet<string>;
   excludedWords?: readonly string[];
 }): string[] {
   const current = input.currentWord ? normalizeWord(input.currentWord) : "";
@@ -64,7 +146,7 @@ export function recoverLegacyLessonWords(input: {
   const pending = buildLessonWords(
     input.relearnWords,
     input.todayWords,
-    input.completedTodayLessonWords,
+    input.completedLessonWords,
     input.excludedWords,
   )
     .filter((word) => !seen.has(normalizeWord(word)));

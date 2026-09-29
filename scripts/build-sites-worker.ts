@@ -20,6 +20,7 @@ const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, ...migratio
   readFile(path.join(root, "supabase", "migrations", "202609160006_performance_queries.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609160007_review_session.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20260927143358_exact_cloze_activity_type.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "20260929021548_formal_lesson_history.sql"), "utf8"),
 ]);
 
 await rm(outputRoot, { recursive: true, force: true });

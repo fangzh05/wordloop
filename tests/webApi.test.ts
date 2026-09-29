@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   getPronunciationAudio: vi.fn(),
   buildReviewWidgetPayload: vi.fn(),
   recordAttempt: vi.fn(),
-  getTodayCompletedLessonWords: vi.fn(async () => new Set<string>()),
+  getCompletedLessonWords: vi.fn(async () => new Set<string>()),
   getDueReviewSelection: vi.fn(),
   recordReviewSubmission: vi.fn(),
   finishStudySession: vi.fn(),
@@ -114,7 +114,7 @@ vi.mock("../server/tools/renderWidgets.js", async () => {
 vi.mock("../server/tools/getPronunciationAudio.js", () => ({ getPronunciationAudio: mocks.getPronunciationAudio }));
 vi.mock("../server/services/attempts.js", () => ({
   recordAttempt: mocks.recordAttempt,
-  getTodayCompletedLessonWords: mocks.getTodayCompletedLessonWords,
+  getCompletedLessonWords: mocks.getCompletedLessonWords,
 }));
 vi.mock("../server/services/review.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../server/services/review.js")>();
@@ -668,6 +668,65 @@ describe("Standalone Web API shared-state boundaries", () => {
       },
     });
     expect(mocks.generateLesson).not.toHaveBeenCalled();
+  });
+
+  it("prunes previously completed words from the unvisited active Lesson queue", async () => {
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_exercise", current_word: "current", current_index: 1, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["done-before", "current", "old-a", "pending"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode: "exercise", word: "current",
+        activity_type: "exact_cloze", instruction: "填入目标词形。",
+        prompt: "The current entry is an example sentence.", multiline: false,
+        navigation: buildLessonNavigation(["done-before", "current", "old-a", "pending"], 1, "current"),
+      },
+    });
+    mocks.active = row(state);
+    mocks.getCompletedLessonWords.mockResolvedValueOnce(new Set(["done-before", "old-a"]));
+    mocks.bootstrap.mockResolvedValue({ action: "resume", widget: "lesson", phase: "lesson_exercise" });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(mocks.getCompletedLessonWords).toHaveBeenCalledWith({}, userId, mocks.active.started_at);
+    expect(payload.state).toMatchObject({
+      current_index: 1,
+      current_word: "current",
+      flow: { lesson_words: ["done-before", "current", "pending"] },
+      payload: { navigation: { action: "next_word", next_word: "pending", next_index: 2, total_count: 3 } },
+    });
+  });
+
+  it("skips a previously completed active explain card and renders the next pending word", async () => {
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_explain", current_word: "already-done", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["already-done", "pending", "old-later"] },
+      payload: { widget: "lesson", widget_version: 3, mode: "explain", word: "already-done" },
+    });
+    mocks.active = row(state);
+    mocks.getCompletedLessonWords.mockResolvedValueOnce(new Set(["already-done", "old-later"]));
+    mocks.getVocabularyItemsByWords.mockResolvedValueOnce([{
+      word: "pending", display_word: "pending", status: "unknown", error_layers: [], ipa_us: "/ˈpɛndɪŋ/",
+      senses: [{ pos: "adj.", definition_cn: "待处理的" }],
+    }]);
+    mocks.bootstrap.mockResolvedValue({ action: "resume", widget: "lesson", phase: "lesson_explain" });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(mocks.generateLesson).toHaveBeenCalledTimes(1);
+    expect(payload.state).toMatchObject({
+      current_index: 0,
+      current_word: "pending",
+      flow: { lesson_words: ["pending"] },
+      payload: { word: "pending", navigation: { action: "round_complete", total_count: 1 } },
+    });
   });
 
   it("persists fixed answers in the server Lesson state but omits them from the Web response", async () => {

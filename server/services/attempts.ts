@@ -1,9 +1,8 @@
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { RecordAttemptInput as SharedRecordAttemptInput } from "../../shared/toolContracts.js";
 import { assertGradeInvariants, gradingRouteForDirection } from "../../web/src/grading/deterministic.js";
-import { assertDatabaseResult, dateInTimeZone, localDateRange } from "./shared.js";
+import { assertDatabaseResult } from "./shared.js";
 import { normalizeWord } from "./wordNormalization.js";
-import { getUserTimeZone } from "./words.js";
 
 export type RecordAttemptInput = SharedRecordAttemptInput;
 
@@ -22,30 +21,24 @@ export const LESSON_ACTIVITY_TYPES = [
 ] as const;
 
 interface LessonAttemptWordRow {
-  word: { normalized_word: string } | Array<{ normalized_word: string }>;
+  normalized_word: string;
 }
 
-/** Return normalized words with a formal Lesson attempt during the user's local day. */
-export async function getTodayCompletedLessonWords(
+/** Return normalized words with a formal Lesson attempt, optionally before a session began. */
+export async function getCompletedLessonWords(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  before?: string,
 ): Promise<Set<string>> {
-  const timeZone = await getUserTimeZone(db, userId);
-  const date = dateInTimeZone(timeZone);
-  const { start, end } = localDateRange(date, timeZone);
-  const { data, error } = await db
-    .from("attempts")
-    .select("word:words!inner(normalized_word)")
-    .eq("user_id", userId)
-    .gte("created_at", start)
-    .lt("created_at", end)
-    .in("activity_type", [...LESSON_ACTIVITY_TYPES]);
+  const { data, error } = await db.rpc("get_formal_lesson_attempt_words_v1", {
+    p_user_id: userId,
+    p_before: before ?? null,
+  });
   assertDatabaseResult(error);
 
   const words = new Set<string>();
-  for (const row of (data ?? []) as unknown as LessonAttemptWordRow[]) {
-    const relation = Array.isArray(row.word) ? row.word[0] : row.word;
-    const normalized = relation?.normalized_word ? normalizeWord(relation.normalized_word) : "";
+  for (const row of (data ?? []) as LessonAttemptWordRow[]) {
+    const normalized = row.normalized_word ? normalizeWord(row.normalized_word) : "";
     if (normalized) words.add(normalized);
   }
   return words;

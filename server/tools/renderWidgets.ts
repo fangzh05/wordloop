@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import { getTodayCompletedLessonWords } from "../services/attempts.js";
+import { getCompletedLessonWords } from "../services/attempts.js";
 import { ensureTodayQueue } from "../services/dailyQueue.js";
 import { getProgress } from "../services/progress.js";
 import {
@@ -23,8 +23,11 @@ import { getTodayWords } from "../services/words.js";
 import {
   buildLessonWords,
   buildLessonNavigation,
+  filterNewWordsWithoutLessonHistory,
   isLessonCursorAtCurrentWord,
+  lessonProgressLabel,
   lessonWordAt,
+  reconcileLessonQueueAfterCursor,
 } from "../services/lessonQueue.js";
 import { normalizeWord } from "../services/wordNormalization.js";
 import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
@@ -367,11 +370,36 @@ export async function resumableLessonPayload(session: StudySessionRow | null): P
     throw new Error("LESSON_QUEUE_MISSING");
   }
 
-  const navigation = buildLessonNavigation(
-    resolved.flow.lesson_words,
-    resolved.current_index,
-    resolved.current_word,
-  );
+  if (resolvedSession && resolved.phase !== "lesson_complete") {
+    const completedBeforeSession = await getCompletedLessonWords(db, userId, resolvedSession.started_at);
+    const reconciled = reconcileLessonQueueAfterCursor({
+      lessonWords: resolved.flow.lesson_words,
+      currentIndex: resolved.current_index,
+      completedLessonWords: completedBeforeSession,
+      relearnWords: resolved.flow.relearn_words,
+    });
+    if (reconciled?.changed) {
+      resolved = {
+        ...resolved,
+        current_index: reconciled.currentIndex,
+        flow: { ...resolved.flow, lesson_words: reconciled.lessonWords },
+      };
+      resolvedSession = await persistStudyState({
+        ...resolved,
+        payload: {
+          ...resolved.payload,
+          progress: lessonProgressLabel(resolved.flow.relearn_words, reconciled.lessonWords, reconciled.currentIndex),
+          navigation: buildLessonNavigation(reconciled.lessonWords, reconciled.currentIndex, reconciled.currentWord),
+        },
+      }, db, userId, resolvedSession);
+      resolved = resolvedSession.state ? normalizeStudyStateForRead(resolvedSession.state) : resolved;
+    }
+  }
+
+  const resolvedQueue = resolved.flow.lesson_words;
+  const resolvedCurrentWord = resolved.current_word;
+  if (!resolvedQueue || !resolvedCurrentWord) throw new Error("LESSON_QUEUE_MISSING");
+  const navigation = buildLessonNavigation(resolvedQueue, resolved.current_index, resolvedCurrentWord);
   // Persisted Lesson payloads from older versions may contain extra keys in
   // nested exercise/feedback objects. The Widget keeps those nested schemas
   // strict, so project only their canonical fields on resume while retaining
@@ -455,8 +483,9 @@ function persistedPartOfSpeech(item: VocabularyItem): string | undefined {
 export function validatePretestItems(
   items: PretestRenderItem[],
   todayWords: VocabularyItem[],
+  completedLessonWords: ReadonlySet<string> = new Set(),
 ): PretestRenderItem[] {
-  const eligible = todayWords.filter((word) => word.status === "new" && !word.mastered);
+  const eligible = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
   const eligibleIndex = new Map(eligible.map((word, index) => [normalizeWord(word.word), index]));
   const seen = new Set<string>();
   for (const [index, item] of items.entries()) {
@@ -641,12 +670,12 @@ async function validateLessonWord(
   }
   const date = await getStudyDate();
   const todayWords = await getTodayWords(date);
-  const completedTodayLessonWords = await getTodayCompletedLessonWords(db, userId);
+  const completedLessonWords = await getCompletedLessonWords(db, userId);
   const lessonWords = buildLessonWords(
     [],
     todayWords,
-    completedTodayLessonWords,
-    active?.state?.flow.pretest_familiar_words,
+    completedLessonWords,
+    active?.state?.flow.pretest_familiar_words ?? [],
   );
   assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
   return { date, active: null, flow: { relearn_words: [], pretest_familiar_words: [], lesson_words: lessonWords } };
@@ -755,8 +784,11 @@ export function registerRenderTools(server: McpServer): void {
     if ("resume" in parsedInput) return resumablePayload(await getActiveStudySession(), "pretest");
     const date = await getStudyDate();
     const active = await getActiveStudySession();
-    const todayWords = await getTodayWords(date);
-    const items = validatePretestItems(parsedInput.items, todayWords);
+    const [todayWords, completedLessonWords] = await Promise.all([
+      getTodayWords(date),
+      getCompletedLessonWords(),
+    ]);
+    const items = validatePretestItems(parsedInput.items, todayWords, completedLessonWords);
     const payload = { widget: "pretest", ...parsedInput, source: "new_word", items };
     return saveWidgetState({
       date,
