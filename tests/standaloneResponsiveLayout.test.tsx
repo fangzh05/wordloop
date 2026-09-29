@@ -37,7 +37,7 @@ function reviewView(): WebApiResponse {
 }
 
 describe("Standalone responsive layout", () => {
-  it("keeps a single Dashboard sidebar before one Study region and defines the desktop grid", () => {
+  it("keeps Study focused without the Dashboard sidebar", () => {
     const markup = renderToStaticMarkup(
       <StandaloneResponsiveLayout
         page="study"
@@ -50,18 +50,13 @@ describe("Standalone responsive layout", () => {
       </StandaloneResponsiveLayout>,
     );
 
-    expect(markup).toContain('class="standalone-layout"');
-    expect(markup).toContain('class="standalone-sidebar"');
+    expect(markup).toContain('class="standalone-layout standalone-study-layout"');
+    expect(markup).not.toContain('class="standalone-sidebar"');
     expect(markup).toContain('class="standalone-main"');
-    expect((markup.match(/aria-label="今日学习进度"/g) ?? [])).toHaveLength(1);
+    expect(markup).not.toContain('aria-label="今日学习进度"');
     expect((markup.match(/id="study-title"/g) ?? [])).toHaveLength(1);
-    expect(markup).toContain("正在学习");
+    expect(markup).toContain('data-page="study"');
     expect(markup).not.toContain(">继续学习</button>");
-
-    expect(styles).toMatch(/@media \(min-width: 900px\)[\s\S]*?\.standalone-layout\s*\{\s*display: grid;/);
-    expect(styles).toContain("grid-template-columns: minmax(260px, 280px) minmax(0, 820px);");
-    expect(styles).toContain("@media (min-width: 1200px)");
-    expect(styles).toContain("grid-template-columns: minmax(300px, 320px) minmax(0, 820px);");
   });
 
   it("keeps the mobile back control in the DOM and hides it at the desktop breakpoint", () => {

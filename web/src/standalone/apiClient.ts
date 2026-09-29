@@ -1,4 +1,9 @@
 const TOKEN_KEY = "wordloop_web_token";
+const readModelCache = new Map<string, { stored_at: number; value: unknown }>();
+
+export function clearReadModelCache(): void {
+  readModelCache.clear();
+}
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -54,10 +59,12 @@ function storedToken(): string | null {
 }
 
 export function saveToken(token: string): void {
+  clearReadModelCache();
   localStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearToken(): void {
+  clearReadModelCache();
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {
@@ -95,6 +102,7 @@ export function getBootstrap(tokenOverride?: string): Promise<WebApiResponse> {
 }
 
 export function postAction(action: WebAction): Promise<WebApiResponse> {
+  clearReadModelCache();
   return request("/api/web/action", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -104,32 +112,68 @@ export function postAction(action: WebAction): Promise<WebApiResponse> {
 
 
 export type CaptureStatus = "inbox" | "saved" | "learning" | "archived";
-export type CaptureSelectionType = "word" | "phrase" | "sentence";
-export type CaptureSourceType = "lesson" | "review" | "pretest" | "dashboard" | "manual";
+export type CaptureSelectionType = "word" | "phrase" | "collocation" | "sentence" | "grammar";
+export type CaptureSourceType = "lesson_example" | "lesson_prompt" | "review_question" | "manual" | "lesson" | "review" | "pretest" | "dashboard";
+
+export interface CaptureOccurrence {
+  context_text: string;
+  source_type: string;
+  source_ref: string | null;
+  source_title: string | null;
+  source_url: string | null;
+  created_at: string;
+}
+
+export interface ReadModelEnvelope<T> {
+  data: T;
+  as_of: string;
+  timezone: string;
+  definition_version: "wordloop-analytics-v1";
+  coverage: Record<string, unknown>;
+  next_cursor?: string | null;
+}
+
+export interface TodayOverview {
+  as_of: string;
+  timezone: string;
+  target_retention: number;
+  active_session: { active: boolean; phase: string; phase_detail: string | null; started_at: string | null; updated_at: string | null };
+  progress: {
+    review: { completed: number; total: number; remaining: number; scope: "active_session" | "today_recorded_sessions" };
+    pretest: { total: number; completed: number; known: number; uncertain: number; unknown: number };
+    formal_learning: { completed_words: number; completed_distinct_words: number; new_words: number; relearn_words: number };
+  };
+  captures: { inbox_count: number };
+}
 
 export interface CaptureNote {
   id: string;
   selected_text: string;
   normalized_text: string;
-  selection_type: CaptureSelectionType;
+  selection_type: string;
   note: string;
   status: CaptureStatus;
   occurrence_count: number;
-  linked_word_id: string | null;
+  user_word_id: string | null;
+  word_id: string | null;
+  created_at: string;
+  updated_at: string;
   first_seen_at: string;
   last_seen_at: string;
-  updated_at: string;
-  latest_occurrence: {
-    context_text: string;
-    source_type: CaptureSourceType;
-    source_ref: string | null;
-    created_at: string;
-  } | null;
+  latest_occurrence: CaptureOccurrence | null;
+  occurrences: CaptureOccurrence[];
 }
 
 export interface CaptureListResponse {
   items: CaptureNote[];
   counts: Record<CaptureStatus, number>;
+  next_cursor: string | null;
+}
+
+export interface CaptureOccurrencePage {
+  items: CaptureOccurrence[];
+  total: number;
+  next_cursor: string | null;
 }
 
 export interface CaptureMutationResponse {
@@ -138,6 +182,7 @@ export interface CaptureMutationResponse {
 }
 
 async function captureRequest<T>(path: string, init: RequestInit): Promise<T> {
+  if ((init.method ?? "GET").toUpperCase() !== "GET") clearReadModelCache();
   const token = storedToken();
   if (!token) throw new UnauthorizedError();
   const headers = new Headers(init.headers);
@@ -160,11 +205,75 @@ async function captureRequest<T>(path: string, init: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export function getCaptureNotes(status?: CaptureStatus, limit = 80): Promise<CaptureListResponse> {
+async function readModel<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const cached = readModelCache.get(path);
+  if (cached && Date.now() - cached.stored_at < 60_000) return cached.value as T;
+  const value = await captureRequest<T>(path, { method: "GET", signal });
+  if (!signal?.aborted) readModelCache.set(path, { stored_at: Date.now(), value });
+  return value;
+}
+
+export function getTodayOverview(signal?: AbortSignal): Promise<TodayOverview> {
+  return readModel<TodayOverview>("/api/web/today", signal);
+}
+
+export function getAnalytics<T = Record<string, unknown>>(
+  section: "overview" | "memory" | "weakness" | "activity",
+  range: "7d" | "30d" | "90d" = "30d",
+  cursor = "",
+  limit = 50,
+  signal?: AbortSignal,
+): Promise<ReadModelEnvelope<T>> {
+  const params = new URLSearchParams({ section, range, limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return readModel<ReadModelEnvelope<T>>(`/api/web/analytics?${params.toString()}`, signal);
+}
+
+export interface VocabularyListItem {
+  user_word_id: string;
+  word_id: string;
+  word: string;
+  display_word: string;
+  ipa_us: string | null;
+  ipa_uk: string | null;
+  status: string;
+  source: string | null;
+  fsrs_reps: number;
+  fsrs_difficulty: number | null;
+  fsrs_stability: number | null;
+  next_review_at: string | null;
+  active_error_layers: string[];
+}
+
+export function getVocabularyPage(
+  q: string,
+  filters: readonly string[],
+  cursor = "",
+  limit = 50,
+  signal?: AbortSignal,
+): Promise<ReadModelEnvelope<{ items: VocabularyListItem[] }>> {
+  const params = new URLSearchParams({ q, cursor, limit: String(limit) });
+  for (const filter of filters) params.append("filter", filter);
+  return readModel(`/api/web/vocabulary?${params.toString()}`, signal);
+}
+
+export function getVocabularyDetail<T = Record<string, unknown>>(userWordId: string, signal?: AbortSignal): Promise<ReadModelEnvelope<T>> {
+  return readModel(`/api/web/vocabulary/${encodeURIComponent(userWordId)}`, signal);
+}
+
+export function getCaptureNotes(
+  status?: CaptureStatus,
+  limit = 50,
+  q = "",
+  cursor = "",
+  signal?: AbortSignal,
+): Promise<CaptureListResponse> {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
+  if (q) params.set("q", q);
+  if (cursor) params.set("cursor", cursor);
   params.set("limit", String(limit));
-  return captureRequest<CaptureListResponse>(`/api/web/captures?${params.toString()}`, { method: "GET" });
+  return captureRequest<CaptureListResponse>(`/api/web/captures?${params.toString()}`, { method: "GET", signal });
 }
 
 export function createCaptureNote(input: {
@@ -173,6 +282,9 @@ export function createCaptureNote(input: {
   selection_type?: CaptureSelectionType;
   source_type?: CaptureSourceType;
   source_ref?: string | null;
+  source_title?: string | null;
+  source_url?: string | null;
+  idempotency_key: string;
 }): Promise<CaptureMutationResponse> {
   return captureRequest<CaptureMutationResponse>("/api/web/captures", {
     method: "POST",
@@ -181,9 +293,24 @@ export function createCaptureNote(input: {
   });
 }
 
+export function getCaptureNote(id: string): Promise<{ item: CaptureNote }> {
+  return captureRequest<{ item: CaptureNote }>(`/api/web/captures/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export function getCaptureNoteOccurrences(
+  id: string,
+  limit = 50,
+  cursor = "",
+  signal?: AbortSignal,
+): Promise<CaptureOccurrencePage> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return captureRequest<CaptureOccurrencePage>(`/api/web/captures/${encodeURIComponent(id)}/occurrences?${params}`, { method: "GET", signal });
+}
+
 export function updateCaptureNote(
   id: string,
-  input: { note?: string; status?: CaptureStatus },
+  input: { note?: string; status?: "inbox" | "saved" | "archived" },
 ): Promise<CaptureMutationResponse> {
   return captureRequest<CaptureMutationResponse>(`/api/web/captures/${encodeURIComponent(id)}`, {
     method: "PATCH",

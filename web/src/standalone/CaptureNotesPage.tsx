@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button.js";
+import { CaptureDetail } from "./components/CaptureDetail.js";
 import {
   ApiError,
-  addCaptureNoteToLearning,
   getCaptureNotes,
-  updateCaptureNote,
   type CaptureListResponse,
   type CaptureNote,
   type CaptureStatus,
@@ -17,16 +16,18 @@ const tabs: Array<{ status: CaptureStatus; label: string }> = [
   { status: "archived", label: "归档" },
 ];
 
-function canJoinLearning(item: CaptureNote): boolean {
-  return /^[\p{L}][\p{L}'’-]*(?:\s+[\p{L}][\p{L}'’-]*)?$/u.test(item.selected_text.trim());
+function sourceLabel(value: string, title: string | null): string {
+  if (value === "lesson_example" || value === "lesson_prompt") return "Lesson";
+  if (value === "review_question") return "复习";
+  return title || "手动记录";
 }
 
-function sourceLabel(value: string): string {
-  if (value === "lesson") return "Lesson";
-  if (value === "review") return "复习";
-  if (value === "pretest") return "预测试";
-  if (value === "dashboard") return "Dashboard";
-  return "手动";
+function selectionLabel(value: string): string {
+  if (value === "word") return "单词";
+  if (value === "phrase" || value === "collocation") return "短语 / 搭配";
+  if (value === "sentence") return "句子";
+  if (value === "grammar") return "语法笔记";
+  return "笔记";
 }
 
 export function CaptureNotesPage({ onBack, onCountsChange }: {
@@ -35,90 +36,78 @@ export function CaptureNotesPage({ onBack, onCountsChange }: {
 }): React.JSX.Element {
   const [status, setStatus] = useState<CaptureStatus>("inbox");
   const [items, setItems] = useState<CaptureNote[]>([]);
+  const [selectedNote, setSelectedNote] = useState<CaptureNote | null>(null);
   const [counts, setCounts] = useState<CaptureListResponse["counts"]>({ inbox: 0, saved: 0, learning: 0, archived: 0 });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const requestId = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(async (nextStatus = status) => {
-    setLoading(true);
+  const load = useCallback(async (nextStatus: CaptureStatus, nextQuery: string, cursor = "", append = false) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const currentRequest = ++requestId.current;
     setError("");
+    setLoading(!append);
+    setLoadingMore(append);
+    if (!append) {
+      setItems([]);
+      setNextCursor(null);
+    }
     try {
-      const response = await getCaptureNotes(nextStatus, 120);
-      setItems(response.items);
+      const response = await getCaptureNotes(nextStatus, 50, nextQuery, cursor, controller.signal);
+      if (currentRequest !== requestId.current) return;
+      setItems((current) => {
+        const merged = append ? [...current, ...response.items] : response.items;
+        return [...new Map(merged.map((item) => [item.id, item])).values()];
+      });
       setCounts(response.counts);
+      setNextCursor(response.next_cursor);
       onCountsChange?.(response.counts);
-      setDrafts(Object.fromEntries(response.items.map((item) => [item.id, item.note])));
+      setDrafts((current) => {
+        const next = { ...current };
+        for (const item of response.items) next[item.id] ??= item.note;
+        return next;
+      });
     } catch (caught) {
+      if (controller.signal.aborted || currentRequest !== requestId.current) return;
       setError(caught instanceof ApiError ? caught.message : "划词笔记加载失败，请重试。");
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
-  }, [onCountsChange, status]);
+  }, [onCountsChange]);
 
   useEffect(() => {
-    void load(status);
-  }, [load, status]);
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
-  const visibleItems = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase();
-    if (!needle) return items;
-    return items.filter((item) => [
-      item.selected_text,
-      item.note,
-      item.latest_occurrence?.context_text ?? "",
-    ].some((value) => value.toLocaleLowerCase().includes(needle)));
-  }, [items, query]);
+  useEffect(() => {
+    void load(status, debouncedQuery);
+    return () => abortRef.current?.abort();
+  }, [debouncedQuery, load, status]);
 
-  const mutateStatus = async (item: CaptureNote, nextStatus: CaptureStatus) => {
-    setBusyId(item.id);
-    setMessage("");
-    setError("");
-    try {
-      await updateCaptureNote(item.id, { status: nextStatus, note: drafts[item.id] ?? item.note });
-      await load(status);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "更新失败，请重试。");
-    } finally {
-      setBusyId(null);
-    }
-  };
+  useEffect(() => () => abortRef.current?.abort(), []);
 
-  const saveNote = async (item: CaptureNote) => {
-    setBusyId(item.id);
-    setMessage("");
-    setError("");
-    try {
-      const response = await updateCaptureNote(item.id, { note: drafts[item.id] ?? "" });
-      setItems((current) => current.map((value) => value.id === item.id ? response.item : value));
-      setMessage("笔记已保存。");
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "笔记保存失败，请重试。");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const joinLearning = async (item: CaptureNote) => {
-    setBusyId(item.id);
-    setMessage("");
-    setError("");
-    try {
-      await updateCaptureNote(item.id, { note: drafts[item.id] ?? item.note });
-      const response = await addCaptureNoteToLearning(item.id);
-      setMessage(response.learning_update?.scheduled_today
-        ? "已加入 WordLoop，今天会作为新词出现。"
-        : "已连接到已有 WordLoop 词条，不会重置现有 FSRS 进度。");
-      await load(status);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "加入学习失败，请重试。");
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const reload = useCallback(() => load(status, debouncedQuery), [debouncedQuery, load, status]);
+  const onNoteChange = useCallback((note: CaptureNote) => {
+    setSelectedNote(note);
+    setItems((current) => current.map((item) => item.id === note.id ? note : item));
+  }, []);
+  const onMutation = useCallback((nextMessage: string) => {
+    setMessage(nextMessage);
+    void reload();
+  }, [reload]);
 
   return <section className="widget-card standalone-card capture-notes-page" aria-labelledby="capture-notes-title">
     <header className="widget-header compact-header">
@@ -143,10 +132,12 @@ export function CaptureNotesPage({ onBack, onCountsChange }: {
     </div>
 
     <div className="capture-toolbar">
+      <label className="sr-only" htmlFor="capture-search">搜索划词笔记</label>
       <input
+        id="capture-search"
         className="answer-input standalone-input"
         type="search"
-        placeholder="搜索单词、笔记或原句"
+        placeholder="搜索文本、笔记或原句"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
@@ -154,64 +145,50 @@ export function CaptureNotesPage({ onBack, onCountsChange }: {
 
     {message && <p className="standalone-status" role="status">{message}</p>}
     {error && <p className="standalone-status error" role="alert">{error}</p>}
-    {loading && <p className="standalone-status" role="status">正在加载划词笔记…</p>}
 
-    {!loading && visibleItems.length === 0 && <div className="capture-empty">
-      <strong>{query ? "没有匹配项" : status === "inbox" ? "待整理箱是空的" : "这里还没有内容"}</strong>
-      <p>{status === "inbox" && !query ? "在 WordLoop 里长按或拖选文本，然后点“记录”。捕获不会自动进入 FSRS。" : "可以切换其他状态继续查看。"}</p>
-    </div>}
-
-    <div className="capture-note-list">
-      {visibleItems.map((item) => {
-        const busy = busyId === item.id;
-        const learnable = canJoinLearning(item);
-        return <article key={item.id} className="capture-note-card">
-          <div className="capture-note-heading">
-            <div>
-              <strong>{item.selected_text}</strong>
-              <div className="capture-meta">
-                <span>{item.selection_type === "word" ? "单词" : item.selection_type === "phrase" ? "短语" : "句子"}</span>
-                <span>遇到 {item.occurrence_count} 次</span>
-                {item.latest_occurrence && <span>{sourceLabel(item.latest_occurrence.source_type)}</span>}
-              </div>
-            </div>
-            {item.status === "learning" && <span className="capture-state-badge">已加入</span>}
-          </div>
-
-          {item.latest_occurrence?.context_text && <blockquote className="capture-context" data-capture-context="true">
-            {item.latest_occurrence.context_text}
-          </blockquote>}
-
-          <label className="answer-label" htmlFor={`capture-note-${item.id}`}>我的一句话理解</label>
-          <textarea
-            id={`capture-note-${item.id}`}
-            className="standalone-input capture-note-input"
-            rows={2}
-            maxLength={2000}
-            value={drafts[item.id] ?? ""}
-            placeholder="可选。只记你以后需要想起的那一点。"
-            onChange={(event) => setDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
-          />
-
-          <div className="capture-note-actions">
-            <Button className="secondary" type="button" disabled={busy || (drafts[item.id] ?? "") === item.note} onClick={() => void saveNote(item)}>
-              保存笔记
-            </Button>
-
-            {item.status === "inbox" && <Button className="secondary" type="button" disabled={busy} onClick={() => void mutateStatus(item, "saved")}>仅收藏</Button>}
-            {item.status === "archived" && <Button className="secondary" type="button" disabled={busy} onClick={() => void mutateStatus(item, "inbox")}>移回待整理</Button>}
-            {item.status !== "archived" && item.status !== "learning" && <Button
-              type="button"
-              disabled={busy || !learnable}
-              title={learnable ? "显式加入 WordLoop 学习池" : "现有学习队列暂只支持单词或两词短语"}
-              onClick={() => void joinLearning(item)}
-            >加入学习</Button>}
-            {(item.status === "saved" || item.status === "learning") && <Button className="secondary" type="button" disabled={busy} onClick={() => void mutateStatus(item, "archived")}>归档</Button>}
-          </div>
-
-          {!learnable && item.status !== "learning" && <p className="capture-note-hint">更长的搭配或整句先作为笔记保留，不会被硬塞进现有单词 FSRS。</p>}
-        </article>;
-      })}
+    <div className={`capture-content-grid${selectedNote ? " capture-detail-open" : ""}`}>
+      <div className="capture-list-pane">
+        {loading && <p className="standalone-status" role="status">正在加载划词笔记…</p>}
+        {!loading && items.length === 0 && <div className="capture-empty">
+          <strong>{debouncedQuery ? "没有匹配项" : status === "inbox" ? "待整理箱是空的" : "这里还没有内容"}</strong>
+          <p>{status === "inbox" && !debouncedQuery ? "在 WordLoop 里长按或拖选文本，然后点“记录”。捕获不会自动进入 FSRS。" : "可以切换其他状态继续查看。"}</p>
+        </div>}
+        <div className="capture-note-list">
+          {items.map((item) => <button
+            key={item.id}
+            type="button"
+            className={`capture-note-card capture-note-open${selectedNote?.id === item.id ? " active" : ""}`}
+            aria-current={selectedNote?.id === item.id ? "true" : undefined}
+            onClick={() => setSelectedNote(item)}
+          >
+            <span className="capture-note-heading">
+              <span className="capture-note-list-copy">
+                <strong>{item.selected_text}</strong>
+                <span className="capture-meta">
+                  <span>{selectionLabel(item.selection_type)}</span>
+                  <span>遇到 {item.occurrence_count} 次</span>
+                  {item.latest_occurrence && <span>{sourceLabel(item.latest_occurrence.source_type, item.latest_occurrence.source_title)}</span>}
+                </span>
+                {item.latest_occurrence?.context_text && <span className="capture-context capture-context-preview">{item.latest_occurrence.context_text}</span>}
+              </span>
+              {item.user_word_id && <span className="capture-state-badge">{item.status === "archived" ? "已加入 · 已归档" : "已加入"}</span>}
+            </span>
+          </button>)}
+        </div>
+        {nextCursor && <div className="capture-load-more">
+          <Button className="secondary" type="button" disabled={loadingMore} onClick={() => void load(status, debouncedQuery, nextCursor, true)}>
+            {loadingMore ? "正在加载…" : "加载更多"}
+          </Button>
+        </div>}
+      </div>
+      {selectedNote && <CaptureDetail
+        note={selectedNote}
+        draft={drafts[selectedNote.id] ?? selectedNote.note}
+        onDraftChange={(id, value) => setDrafts((current) => ({ ...current, [id]: value }))}
+        onBack={() => setSelectedNote(null)}
+        onNoteChange={onNoteChange}
+        onMutation={onMutation}
+      />}
     </div>
   </section>;
 }
