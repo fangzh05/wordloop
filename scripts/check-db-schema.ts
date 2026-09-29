@@ -20,6 +20,8 @@ const checks: SchemaCheck[] = [
   { table: "study_sessions", column: "updated_at", migration: "202609150004" },
   { table: "word_sources", column: "user_id", migration: "202609130002" },
   { table: "fsrs_review_logs", column: "user_id", migration: "202609130002" },
+  { table: "capture_notes", column: "normalized_text", migration: "202609290001" },
+  { table: "capture_note_occurrences", column: "note_id", migration: "202609290001" },
 ];
 
 const rpcChecks: RpcCheck[] = [
