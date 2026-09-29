@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { assertDatabaseResult } from "./shared.js";
-import { importWords, prepareDailyNewWords } from "./words.js";
+import { importWords } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
 
 export type CaptureSelectionType = "word" | "phrase" | "sentence";
@@ -231,28 +231,54 @@ export async function addCaptureNoteToLearning(
   id: string,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
-): Promise<{ note: CaptureNote; prepared: number; added: number }> {
+): Promise<{ note: CaptureNote; scheduled_today: boolean; existing_status: string | null }> {
   const capture = await ownedNote(id, db, userId);
   const text = capture.selected_text.replace(/\s+/gu, " ").trim();
   if (!learnableWordPattern.test(text)) throw new Error("CAPTURE_NOT_LEARNABLE");
 
-  await importWords({ words: [text], source: "capture_notes" }, db, userId);
-  const prepared = await prepareDailyNewWords(db, userId);
   const normalized = normalizeWord(text);
+  const { data: wordBefore, error: wordLookupError } = await db
+    .from("words")
+    .select("id")
+    .eq("normalized_word", normalized)
+    .maybeSingle();
+  assertDatabaseResult(wordLookupError);
+
+  let existingStatus: string | null = null;
+  if (wordBefore?.id) {
+    const { data: userWord, error: userWordError } = await db
+      .from("user_words")
+      .select("status")
+      .eq("user_id", userId)
+      .eq("word_id", wordBefore.id)
+      .maybeSingle();
+    assertDatabaseResult(userWordError);
+    existingStatus = typeof userWord?.status === "string" ? userWord.status : null;
+  }
+
+  // Capturing is read-only with respect to study scheduling. This explicit action
+  // may put a genuinely new/unstarted word into today's import, but it never
+  // resets an existing learned/review/mastered card or changes its FSRS state.
+  const scheduledToday = existingStatus === null || existingStatus === "new";
+  if (scheduledToday) {
+    await importWords({ words: [text], source: "capture_notes" }, db, userId);
+  }
+
   const { data: word, error: wordError } = await db
     .from("words")
     .select("id")
     .eq("normalized_word", normalized)
     .maybeSingle();
   assertDatabaseResult(wordError);
+  if (!word?.id) throw new Error("CAPTURE_NOT_FOUND");
 
   const { error } = await db
     .from("capture_notes")
-    .update({ status: "learning", linked_word_id: word?.id ?? null })
+    .update({ status: "learning", linked_word_id: word.id })
     .eq("id", id)
     .eq("user_id", userId);
   assertDatabaseResult(error);
 
   const note = await updateCaptureNote(id, {}, db, userId);
-  return { note, prepared: prepared.prepared, added: prepared.added };
+  return { note, scheduled_today: scheduledToday, existing_status: existingStatus };
 }
