@@ -334,7 +334,8 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .standalone-sidebar, .standalone-main { min-width: 0; }
 .standalone-desktop-prompt { display: none; }
 @media (max-width: 899.98px) {
-  .standalone-layout[data-page="study"] .standalone-sidebar { display: none; }
+  .standalone-layout[data-page="study"] .standalone-sidebar,
+  .standalone-layout[data-page="notes"] .standalone-sidebar { display: none; }
   .standalone-layout[data-page="dashboard"][data-main-content="false"] .standalone-main { display: none; }
 }
 @media (prefers-color-scheme: dark) {
@@ -628,6 +629,10 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
   width: 100%;
   min-height: 4.5rem;
   resize: vertical;
+}
+
+.standalone-main textarea.capture-note-input {
+  min-height: 4.5rem;
 }
 
 .capture-note-actions {
