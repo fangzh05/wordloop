@@ -63,6 +63,13 @@ import {
 } from "./services/deepseek.js";
 import { normalizeWord } from "./services/wordNormalization.js";
 import { deriveLessonProfile } from "./services/lessonProfile.js";
+import {
+  CapturedNotesError,
+  createCapturedNote,
+  listCapturedNotes,
+  promoteCapturedNote,
+  updateCapturedNote,
+} from "./services/capturedNotes.js";
 
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
@@ -137,6 +144,7 @@ function authenticate(request: Request): void {
 
 function toApiError(error: unknown): WebApiError {
   if (error instanceof WebApiError) return error;
+  if (error instanceof CapturedNotesError) return new WebApiError(error.status, error.code, error.message.trim());
   if (error instanceof DeepSeekError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof StaleStudyStateError || (error instanceof Error && ["STALE_STUDY_STATE", "STUDY_SESSION_REVISION_MISMATCH"].includes(error.message))) {
     return new WebApiError(409, "STALE_STUDY_STATE", "Study state changed in another client.");
@@ -1169,6 +1177,31 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/api/web/bootstrap") {
       return jsonApiResponse(await resolveBootstrap());
+    }
+    if (request.method === "GET" && url.pathname === "/api/web/captures") {
+      return jsonApiResponse(await listCapturedNotes(Object.fromEntries(url.searchParams.entries())));
+    }
+    if (request.method === "POST" && url.pathname === "/api/web/captures") {
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
+      }
+      return jsonApiResponse(await createCapturedNote(body), 201);
+    }
+    const capturePath = /^\/api\/web\/captures\/([^/]+)(\/promote)?$/.exec(url.pathname);
+    if (capturePath && request.method === "PATCH" && !capturePath[2]) {
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
+      }
+      return jsonApiResponse(await updateCapturedNote(capturePath[1] ?? "", body));
+    }
+    if (capturePath && request.method === "POST" && capturePath[2]) {
+      return jsonApiResponse(await promoteCapturedNote(capturePath[1] ?? ""));
     }
     if (request.method === "POST" && url.pathname === "/api/web/action") {
       let body: unknown;

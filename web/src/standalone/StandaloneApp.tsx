@@ -9,19 +9,22 @@ import {
   getBootstrap,
   postAction,
   saveToken,
+  createCapturedNote,
   type WebAction,
   type WebApiResponse,
 } from "./apiClient.js";
+import { CaptureInboxPage } from "./CaptureInboxPage.js";
+import { CaptureSelectionToolbar } from "./CaptureSelectionToolbar.js";
 
 type PageStatus = "loading" | "auth" | "ready";
-type StandalonePage = "dashboard" | "study";
+type StandalonePage = "dashboard" | "study" | "notes";
 type RetryFields = Record<string, unknown> | null;
 
 export function visibleStandalonePage(
   page: StandalonePage,
   screen: WebApiResponse["screen"] | null,
 ): StandalonePage {
-  return screen === "done" ? "dashboard" : page;
+  return screen === "done" && page === "study" ? "dashboard" : page;
 }
 
 function initialToken(): string | null {
@@ -245,9 +248,9 @@ export function StandaloneReviewQuestion({ item, direction }: {
     <span className="question-label">{direction === "cn_to_en" ? "中 → 英" : "请用简单英文解释"}</span>
     {direction === "cn_to_en" ? <>
       {partOfSpeech && <span className="part-of-speech">{partOfSpeech}</span>}
-      <p className="question-prompt">{String(item.meaning_zh ?? "")}</p>
+      <p className="question-prompt" data-capture-text="true" data-capture-source="review_question" data-capture-type="word">{String(item.meaning_zh ?? "")}</p>
     </> : <>
-      <p className="question-word">{String(item.word ?? "")}</p>
+      <p className="question-word" data-capture-text="true" data-capture-source="review_question" data-capture-type="word">{String(item.word ?? "")}</p>
       {partOfSpeech && <span className="part-of-speech">{partOfSpeech}</span>}
     </>}
   </div>;
@@ -328,11 +331,12 @@ export function StandaloneProgressBlock({ title, completed, total, emptyText, de
   </div>;
 }
 
-export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, isStudying = false }: {
+export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes, isStudying = false }: {
   view: WebApiResponse;
   busy: boolean;
   onContinue: () => void;
   onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
+  onOpenNotes?: () => void;
   isStudying?: boolean;
 }): React.JSX.Element {
   const [dailyLimitExpanded, setDailyLimitExpanded] = useState(false);
@@ -412,6 +416,7 @@ export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWord
       </div>
       {!isStudying && <div className="standalone-actions">
         <Button className="primary" type="button" disabled={busy} onClick={onContinue}>继续学习</Button>
+        {onOpenNotes && <Button className="secondary" type="button" disabled={busy} onClick={onOpenNotes}>划词笔记</Button>}
       </div>}
     </section>
 
@@ -431,12 +436,13 @@ export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWord
   </>;
 }
 
-export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, hasMainContent, children }: {
+export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes, hasMainContent, children }: {
   page: StandalonePage;
   view: WebApiResponse | null;
   busy: boolean;
   onContinue: () => void;
   onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
+  onOpenNotes?: () => void;
   hasMainContent: boolean;
   children?: ReactNode;
 }): React.JSX.Element {
@@ -447,7 +453,7 @@ export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSav
     data-main-content={hasMainContent ? "true" : "false"}
   >
     <aside className="standalone-sidebar" aria-label="Dashboard" aria-hidden={!view}>
-      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onSaveDailyNewWordLimit={onSaveDailyNewWordLimit} isStudying={page === "study"} />}
+      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onSaveDailyNewWordLimit={onSaveDailyNewWordLimit} onOpenNotes={onOpenNotes} isStudying={page === "study"} />}
     </aside>
     <section className="standalone-main" aria-label="学习区">
       {children}
@@ -612,7 +618,7 @@ export default function StandaloneApp(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (view?.screen === "done") setPage("dashboard");
+    if (view?.screen === "done") setPage((current) => current === "study" ? "dashboard" : current);
   }, [view?.screen]);
 
   useEffect(() => {
@@ -818,7 +824,8 @@ export default function StandaloneApp(): React.JSX.Element {
   const hasMainContent = Boolean(errorMessage)
     || pageStatus === "loading"
     || (pageStatus === "ready" && !view && !errorMessage)
-    || visiblePage === "study";
+    || visiblePage === "study"
+    || visiblePage === "notes";
 
   return <main className="standalone-shell">
     <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
@@ -827,9 +834,23 @@ export default function StandaloneApp(): React.JSX.Element {
       view={view}
       busy={busy !== null}
       onContinue={continueFromDashboard}
+      onOpenNotes={() => setPage("notes")}
       onSaveDailyNewWordLimit={saveDailyNewWordLimit}
       hasMainContent={hasMainContent}
     >
+
+    {visiblePage === "notes" && <CaptureInboxPage onBack={() => setPage("dashboard")} onUnauthorized={enterAuth} />}
+    <CaptureSelectionToolbar enabled={visiblePage === "study"} onCapture={async (input) => {
+      try {
+        return await createCapturedNote(input);
+      } catch (captureError) {
+        if (captureError instanceof UnauthorizedError) {
+          enterAuth();
+          throw new Error("访问密钥已失效，请重新输入。");
+        }
+        throw captureError;
+      }
+    }} />
 
     {errorMessage && <section className="widget-card standalone-card" role="alert">
       <p className="standalone-status error">{errorMessage}</p>
@@ -931,17 +952,17 @@ export default function StandaloneApp(): React.JSX.Element {
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>词性与核心义</h2><p>{String(payload.part_of_speech ?? "")} · {String(payload.meaning_zh ?? "")}</p></section>
           <div className="lesson-detail-grid">
-            <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).map((value) => <li key={value}>{value}</li>)}</ul></section>
+          <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).map((value) => <li key={value} data-capture-text="true" data-capture-source="lesson_example" data-capture-type="collocation">{value}</li>)}</ul></section>
             <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
           </div>
-          <section className="lesson-section"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p>}</section>
+          <section className="lesson-section"><h2>例句</h2><p className="lesson-example standalone-reading-width" data-capture-text="true" data-capture-source="lesson_example" data-capture-type="sentence">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <p className="lesson-example-translation standalone-reading-width" data-capture-text="true" data-capture-source="lesson_example" data-capture-type="sentence">{payload.example_zh}</p>}</section>
           <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width">{String(payload.note ?? "")}</p></section>
           <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
         </div>}
 
         {phase === "lesson_exercise" && exerciseMode && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
-          <div className="lesson-prompt standalone-reading-width">{String(exercise.prompt ?? "")}</div>
+          <div className="lesson-prompt standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase">{String(exercise.prompt ?? "")}</div>
           {exercise.multiline === true
             ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} />
             : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (!answer.trim()) return; void dispatch({ action: "lesson_submit", answer }); } }} />}
@@ -962,7 +983,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
         {phase === "lesson_complete" && exerciseMode && consolidationKind && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
-          <div className="lesson-prompt standalone-reading-width">{String(exercise.prompt ?? "")}</div>
+          <div className="lesson-prompt standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase">{String(exercise.prompt ?? "")}</div>
           <textarea className={`standalone-input consolidation-input ${consolidationKind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={consolidationKind === "sentence" ? 2 : 5} aria-label={consolidationKind === "translation" ? "长难句翻译与结构分析" : "造句练习答案"} value={answer} onChange={(event) => saveAnswer(event.target.value)} />
           <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "translation" ? "提交翻译" : "提交句子"}</Button></div>
         </div>}

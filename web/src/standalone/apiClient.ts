@@ -42,6 +42,65 @@ export interface WebApiResponse {
   error?: { code: string; message: string };
 }
 
+export type CaptureSelectionType = "word" | "phrase" | "collocation" | "sentence" | "grammar";
+export type CaptureStatus = "inbox" | "saved" | "dismissed" | "converted";
+export type CaptureSourceType = "lesson_example" | "lesson_prompt" | "review_question" | "manual";
+
+export interface CapturedNoteOccurrence {
+  context_text: string;
+  source_type: CaptureSourceType;
+  source_title: string | null;
+  source_url: string | null;
+  captured_at: string;
+}
+
+export interface CapturedNote {
+  id: string;
+  selected_text: string;
+  normalized_text: string;
+  selection_type: CaptureSelectionType;
+  note: string;
+  status: CaptureStatus;
+  converted_user_word_id: string | null;
+  created_at: string;
+  updated_at: string;
+  occurrence_count: number;
+  occurrences: CapturedNoteOccurrence[];
+}
+
+export interface CapturedNotePage {
+  items: CapturedNote[];
+  next_cursor: string | null;
+}
+
+export interface CaptureCreateInput {
+  selected_text: string;
+  selection_type: CaptureSelectionType;
+  note?: string;
+  context_text?: string;
+  source_type?: CaptureSourceType;
+  source_ref?: string;
+  source_title?: string;
+  source_url?: string;
+  idempotency_key: string;
+}
+
+export interface CapturedNotePatch {
+  note?: string;
+  selection_type?: CaptureSelectionType;
+  status?: "inbox" | "saved" | "dismissed";
+}
+
+export interface CapturedNotePromotion {
+  note_id: string;
+  normalized_word: string;
+  is_new: boolean;
+}
+
+export function newCaptureIdempotencyKey(): string {
+  return globalThis.crypto.randomUUID();
+}
+
 export type WebAction =
   | { action: "set_daily_new_word_limit"; limit: number; expected_revision: string | null }
   | { action: string; expected_revision: string | null; [key: string]: unknown };
@@ -66,16 +125,16 @@ export function clearToken(): void {
   }
 }
 
-async function request(path: string, init: RequestInit, tokenOverride?: string): Promise<WebApiResponse> {
+async function request<T = WebApiResponse>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
   const token = tokenOverride ?? storedToken();
   if (!token) throw new UnauthorizedError();
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
   headers.set("accept", "application/json");
   const response = await fetch(path, { ...init, headers, cache: "no-store" });
-  let payload: WebApiResponse;
+  let payload: T & { error?: { code: string; message: string } };
   try {
-    payload = await response.json() as WebApiResponse;
+    payload = await response.json() as T & { error?: { code: string; message: string } };
   } catch {
     throw new ApiError("INVALID_RESPONSE", "服务器返回了无法读取的响应。", response.status);
   }
@@ -101,4 +160,39 @@ export function postAction(action: WebAction): Promise<WebApiResponse> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(action),
   });
+}
+
+export function getCapturedNotes(input: {
+  status: CaptureStatus | "all";
+  q?: string;
+  cursor?: string | null;
+}): Promise<CapturedNotePage> {
+  const query = new URLSearchParams({ status: input.status });
+  if (input.q) query.set("q", input.q);
+  if (input.cursor !== undefined && input.cursor !== null) query.set("cursor", input.cursor);
+  return request<CapturedNotePage>(`/api/web/captures?${query.toString()}`, { method: "GET" });
+}
+
+export function createCapturedNote(input: CaptureCreateInput): Promise<{
+  note_id: string;
+  occurrence_count: number;
+  new_occurrence: boolean;
+}> {
+  return request("/api/web/captures", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCapturedNote(id: string, patch: CapturedNotePatch): Promise<{ id: string }> {
+  return request(`/api/web/captures/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
+export function promoteCapturedNote(id: string): Promise<CapturedNotePromotion> {
+  return request(`/api/web/captures/${encodeURIComponent(id)}/promote`, { method: "POST" });
 }

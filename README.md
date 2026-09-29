@@ -102,7 +102,13 @@ wordloop/
 │   ├── 202609130001_initial_wordloop.sql
 │   ├── 202609130002_fsrs_shanbay.sql
 │   ├── 202609140003_daily_queue_ui_fix.sql
-│   └── 202609150004_study_session_state.sql
+│   ├── 202609150004_study_session_state.sql
+│   ├── 202609150005_integrity_guards.sql
+│   ├── 202609160006_performance_queries.sql
+│   ├── 202609160007_review_session.sql
+│   ├── 20260927143358_exact_cloze_activity_type.sql
+│   ├── 20260929021548_formal_lesson_history.sql
+│   └── 20260929112246_captured_notes.sql
 ├── tests/
 │   ├── mcpHttp.test.ts
 │   ├── fsrsReview.test.ts
@@ -164,11 +170,11 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains migrations 001–007 followed by `20260927143358_exact_cloze_activity_type.sql` and `20260929021548_formal_lesson_history.sql`. If a real database already ran the older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes, migration 007 adds the due-only review snapshot RPC, the activity-type migration adds fixed-answer and semantic-expression activities, and the latest migration excludes formal Lesson history from future new-word queues.
+3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains the migrations listed above. If a real database already ran an older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes, migration 007 adds the due-only review snapshot RPC, the activity-type migration adds fixed-answer and semantic-expression activities, formal Lesson history excludes previously studied words from future new-word queues, and the Capture migration adds private Notes without changing study or FSRS state.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 
-The migration creates the required tables, supporting indexes, per-error-layer repair counters, row-level security, and transactional Postgres functions for imports, attempts, pretests, and sentence capture. RPC execution is revoked from `public`, `anon`, and `authenticated`, then granted only to `service_role` in V1.
+The migrations create the required tables, supporting indexes, per-error-layer repair counters, row-level security, and transactional Postgres functions for imports, attempts, pretests, sentence capture, and private Notes. Notes promotion only adds a daily queue entry when it inserts a new `user_words` row; linking an existing card leaves its learning schedule unchanged. RPC execution is revoked from `public`, `anon`, and `authenticated`, then granted only to `service_role` in V1.
 
 ## Install and run
 

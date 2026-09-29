@@ -11,6 +11,7 @@ type RpcCheck = {
   name: string;
   args: Record<string, unknown>;
   migration: string;
+  expectTrue?: boolean;
 };
 
 const checks: SchemaCheck[] = [
@@ -20,6 +21,10 @@ const checks: SchemaCheck[] = [
   { table: "study_sessions", column: "updated_at", migration: "202609150004" },
   { table: "word_sources", column: "user_id", migration: "202609130002" },
   { table: "fsrs_review_logs", column: "user_id", migration: "202609130002" },
+  { table: "captured_notes", column: "normalized_text", migration: "20260929112246" },
+  { table: "captured_notes", column: "converted_user_word_id", migration: "20260929112246" },
+  { table: "captured_note_occurrences", column: "idempotency_key", migration: "20260929112246" },
+  { table: "captured_note_occurrences", column: "context_text", migration: "20260929112246" },
 ];
 
 const rpcChecks: RpcCheck[] = [
@@ -48,6 +53,12 @@ const rpcChecks: RpcCheck[] = [
     args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_before: null },
     migration: "20260929021548",
   },
+  {
+    name: "captured_notes_schema_v1",
+    args: {},
+    migration: "20260929112246",
+    expectTrue: true,
+  },
 ];
 
 function isSchemaMismatch(message: string): boolean {
@@ -69,11 +80,11 @@ async function main(): Promise<void> {
     return { check, error };
   }));
   const rpcResults = await Promise.all(rpcChecks.map(async (check) => {
-    const { error } = await db.rpc(check.name, check.args);
-    return { check, error };
+    const { data, error } = await db.rpc(check.name, check.args);
+    return { check, data, error };
   }));
   const failures = results.filter((result) => result.error);
-  const rpcFailures = rpcResults.filter((result) => result.error);
+  const rpcFailures = rpcResults.filter((result) => result.error || (result.check.expectTrue && result.data !== true));
   if (failures.length === 0 && rpcFailures.length === 0) {
     console.log("WordLoop database schema OK");
     return;
@@ -88,7 +99,11 @@ async function main(): Promise<void> {
     }
   }
   for (const failure of rpcFailures) {
-    const message = failure.error?.message ?? "unknown database error";
+    const message = failure.error?.message ?? (failure.check.expectTrue ? "schema function reported missing objects" : "unknown database error");
+    if (!failure.error && failure.check.expectTrue && failure.data !== true) {
+      console.error(`Capture Notes schema is incomplete; deploy migration ${failure.check.migration}.`);
+      continue;
+    }
     if (isSchemaMismatch(message) || /function .* does not exist|schema cache/i.test(message)) {
       console.error(`Missing RPC ${failure.check.name}; deploy migration ${failure.check.migration}.`);
     } else {
