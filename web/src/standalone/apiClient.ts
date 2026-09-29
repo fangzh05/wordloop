@@ -134,7 +134,7 @@ export interface CaptureListResponse {
 
 export interface CaptureMutationResponse {
   item: CaptureNote;
-  learning_update?: { prepared: number; added: number };
+  learning_update?: { scheduled_today: boolean; existing_status: string | null };
 }
 
 async function captureRequest<T>(path: string, init: RequestInit): Promise<T> {
