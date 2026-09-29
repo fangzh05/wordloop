@@ -287,14 +287,14 @@ export function StandaloneProgressBlock({ title, completed, total, emptyText, de
   </div>;
 }
 
-export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, isStudying = false, onOpenNotes, captureInboxCount }: {
+export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, isStudying = false, onOpenNotes = () => undefined, captureInboxCount = null }: {
   view: WebApiResponse;
   busy: boolean;
   onContinue: () => void;
   onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
   isStudying?: boolean;
-  onOpenNotes: () => void;
-  captureInboxCount: number | null;
+  onOpenNotes?: () => void;
+  captureInboxCount?: number | null;
 }): React.JSX.Element {
   const [dailyLimitExpanded, setDailyLimitExpanded] = useState(false);
   const dailyLimitEditorId = useId();
@@ -401,14 +401,14 @@ export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWord
   </>;
 }
 
-export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes, captureInboxCount, hasMainContent, children }: {
+export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes = () => undefined, captureInboxCount = null, hasMainContent, children }: {
   page: StandalonePage;
   view: WebApiResponse | null;
   busy: boolean;
   onContinue: () => void;
   onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
-  onOpenNotes: () => void;
-  captureInboxCount: number | null;
+  onOpenNotes?: () => void;
+  captureInboxCount?: number | null;
   hasMainContent: boolean;
   children?: ReactNode;
 }): React.JSX.Element {
