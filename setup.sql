@@ -2907,7 +2907,7 @@ $$;
 
 revoke all on function public.get_progress_snapshot_v1(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function public.get_progress_snapshot_v1(uuid, timestamptz) to service_role;
--- ===== supabase/migrations/202609300001_balanced_exercise_plans.sql =====
+-- ===== supabase/migrations/20260930043404_balanced_exercise_plans.sql =====
 -- Server-owned exercise plans, evidence events, and durable consolidation cadence.
 -- Skill evidence is an event log; it is deliberately separate from FSRS cards.
 
@@ -3217,3 +3217,15 @@ $$;
 
 revoke all on function public.record_planned_submission_v1(uuid,uuid,timestamptz,uuid,uuid,uuid,text,text,text,text,boolean,text,text[],jsonb,boolean,boolean,boolean,integer,integer,jsonb,integer,integer,date,jsonb) from public,anon,authenticated;
 grant execute on function public.record_planned_submission_v1(uuid,uuid,timestamptz,uuid,uuid,uuid,text,text,text,text,boolean,text,text[],jsonb,boolean,boolean,boolean,integer,integer,jsonb,integer,integer,date,jsonb) to service_role;
+
+-- Cover the new foreign keys reported by the post-migration Supabase advisor.
+create index if not exists exercise_skill_evidence_word_idx
+  on public.exercise_skill_evidence(word_id);
+create index if not exists exercise_submission_events_session_idx
+  on public.exercise_submission_events(session_id);
+create index if not exists exercise_submission_events_word_idx
+  on public.exercise_submission_events(word_id);
+create index if not exists lesson_word_completion_credits_session_idx
+  on public.lesson_word_completion_credits(session_id);
+create index if not exists lesson_word_completion_credits_word_idx
+  on public.lesson_word_completion_credits(word_id);
