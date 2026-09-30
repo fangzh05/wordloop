@@ -971,9 +971,6 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
     transform: translateX(-50%);
   }
 
-  .capture-selection-action { display: none; }
-  .capture-toast { bottom: calc(4.3rem + env(safe-area-inset-bottom)); }
-
   .capture-content-grid {
     grid-template-columns: minmax(0, 1fr);
   }

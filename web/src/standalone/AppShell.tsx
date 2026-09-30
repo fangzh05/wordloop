@@ -5,7 +5,7 @@ import { getTodayOverview } from "./apiClient.js";
 export type AppSection = "today" | "study" | "capture" | "insights" | "vocabulary";
 const navItems: Array<{ section: AppSection; label: string; glyph: string }> = [
   { section: "today", label: "今日", glyph: "◷" }, { section: "study", label: "学习", glyph: "→" },
-  { section: "capture", label: "划词", glyph: "⌁" }, { section: "insights", label: "洞察", glyph: "⌁" },
+  { section: "capture", label: "划词", glyph: "⌁" }, { section: "insights", label: "洞察", glyph: "↗" },
   { section: "vocabulary", label: "词库", glyph: "Aa" },
 ];
 

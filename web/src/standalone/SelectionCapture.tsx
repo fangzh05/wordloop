@@ -165,12 +165,6 @@ export function SelectionCapture({ enabled, sourceType, sourceRef, onCaptured }:
 
   if (!enabled && !toast) return null;
   return <>
-    {enabled && <button
-      type="button"
-      className="capture-selection-toolbar"
-      onPointerDown={(event) => event.preventDefault()}
-      onClick={() => void capture(selectionCandidate())}
-    >记录当前选文</button>}
     {candidate && <button
       type="button"
       className="capture-selection-action"
