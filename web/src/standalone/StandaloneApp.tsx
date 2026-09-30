@@ -1014,7 +1014,7 @@ export default function StandaloneApp(): React.JSX.Element {
       <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={retry}>重试</Button></div>
     </section>}
 
-    {pageStatus === "loading" && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>{busyLabel ?? "正在加载今日学习…"}</p></div></section>}
+    {pageStatus === "loading" && !view && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>{busyLabel ?? "正在加载今日学习…"}</p></div></section>}
 
     {pageStatus === "ready" && !view && !errorMessage && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>正在加载今日学习…</p></div></section>}
 
@@ -1023,7 +1023,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const item = items[currentIndex] ?? {};
       const complete = state.phase === "review_complete";
       const direction = item.direction === "en_definition" ? "en_definition" : "cn_to_en";
-      return <section className="widget-card standalone-card" aria-labelledby="study-title">
+      return <section className="widget-card standalone-card study-task-card" aria-labelledby="study-title">
         <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={backToToday} />
         {complete ? <div className="standalone-content"><p>本轮复习完成。</p><div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
           <StandaloneReviewQuestion item={item} direction={direction} />
@@ -1047,7 +1047,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const resultStage = state.phase === "pretest_result";
       const result = { ...record(view.pretest_result), ...record(view.result) };
       const audioStage = ["listen_repeat", "listen_recall"].includes(String(state.phase));
-      return <section className="widget-card standalone-card" aria-labelledby="study-title">
+      return <section className="widget-card standalone-card study-task-card" aria-labelledby="study-title">
         <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={backToToday} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
         {complete ? <div className="standalone-content">
           <p>预测试完成</p>
@@ -1102,19 +1102,25 @@ export default function StandaloneApp(): React.JSX.Element {
       const phase = String(state.phase ?? "");
       const displayTitle = standaloneLessonDisplayTitle(title, exerciseMode, consolidationKind);
       const progressLabel = String(payload.progress ?? standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, consolidationKind));
-      return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
-        <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />
+      const explaining = phase === "lesson_explain" && payload.mode === "explain";
+      return <section className={`widget-card standalone-card lesson-card ${explaining ? "study-explain-card" : "study-task-card"}`} aria-labelledby="study-title">
+        {!explaining && <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />}
 
-        {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content standalone-explain-content" data-capture-root="true">
+        {explaining && <div className="standalone-content standalone-explain-content" data-capture-root="true">
+          <div className="lesson-overview">
+          <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>核心义</h2><p>{meaningIncludesPartOfSpeech(String(payload.meaning_zh ?? ""), String(payload.part_of_speech ?? "")) ? String(payload.meaning_zh ?? "") : `${String(payload.part_of_speech ?? "")} · ${String(payload.meaning_zh ?? "")}`}</p></section>
-          <section className="lesson-section" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
+          <div className="standalone-actions lesson-start-action"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
+          </div>
+          <div className="lesson-reading-pane">
+          <section className="lesson-section lesson-example-panel" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
           <div className="lesson-detail-grid">
           <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).slice(0, 3).map((value) => <li key={value}>{value}</li>)}</ul></section>
             <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
           </div>
           <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width">{String(payload.note ?? "")}</p></section>
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
+          </div>
         </div>}
 
         {phase === "lesson_exercise" && exerciseMode && <div className="standalone-content">
