@@ -1,188 +1,317 @@
-# Wordloop
+# WordLoop
 
-Wordloop is a persistent vocabulary-state MCP App for ChatGPT-led English learning. It is deliberately not a chatbot and never calls an LLM from the backend. ChatGPT teaches, explains, asks questions, evaluates answers, and analyzes difficult sentences; Wordloop stores the durable state and renders focused interactive views.
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-## What V1 does
+WordLoop is a personal English-learning system built around durable study state rather than chat history. It currently exposes the same learning state through two clients:
 
-- Migrates an entire Shanbay book once (unlearned, learning, and simple-learned), while retaining manual import as a fallback.
-- Keeps one user-specific learning record per normalized word without lemmatization.
-- Records pretest classifications and every scored vocabulary attempt.
-- Tracks meaning, collocation, grammar, pronunciation, and spelling error layers.
-- Clears an individual error layer only after two consecutive correct repairs.
-- Uses `ts-fsrs` FSRS v6 as the only long-term scheduling engine.
-- Returns the next 5–7 unfinished words in `unknown → uncertain → new` order.
-- Returns up to five active-error or FSRS-due candidates without pulling future cards.
-- Persists difficult sentences plus ChatGPT-extracted words.
-- Renders a Shanbay import card, learning dashboard, pretest/review cards, pronunciation cards, dictation, and one guided lesson card.
-- Uses an Apple-inspired visual system: platform typography, translucent functional layers, immediate press feedback, and light/dark/reduced-motion/reduced-transparency modes.
-- Uses standard MCP Apps `ui/initialize`, tool-input/tool-result notifications, `tools/call`, `ui/message`, and `ui/update-model-context` through `@modelcontextprotocol/ext-apps`.
+- a ChatGPT MCP App with interactive widgets;
+- a standalone responsive Web App served by the same backend.
+
+Supabase is the source of truth for vocabulary, study sessions, attempts, FSRS state, captured notes, and analytics. WordLoop owns queueing and learning-state transitions; model calls are constrained to content generation and semantic grading.
+
+> Current package version: `0.1.0`  
+> Runtime: Node.js 20+, TypeScript, React 19, Supabase/Postgres, MCP Apps, `ts-fsrs`.
+
+## Design principles
+
+WordLoop separates memory scheduling, exercise planning, model generation, and UI rendering.
+
+- **FSRS chooses when a learned word is due.** `ts-fsrs` is the only long-term scheduling engine.
+- **WordLoop chooses what comes next.** Daily queues, frozen Lesson rounds, Review snapshots, and study-session cursors are backend-owned.
+- **`exercisePlanner` chooses the exercise type.** It freezes `planned_activity_type`, target, skill IDs, hint level, expected duration, and the reason for the choice before content generation.
+- **DeepSeek does not choose the queue or exercise type.** It generates Lesson/consolidation content and performs semantic grading under saved schemas and plans.
+- **Ordinary exercises do not advance FSRS.** Only genuine formal Review retrievals update the FSRS card.
+- **The browser never receives Supabase service-role credentials.**
+
+This boundary is intentionally compatible with future skill-state systems such as OATutor/BKT: a future adapter may supply skill signals to the planner, but it must not become a second scheduler or bypass FSRS.
+
+## Current learning flow
+
+A normal study session is driven by `get_study_bootstrap` and persisted in `study_sessions`.
+
+1. **Formal Review** — only cards in the backend due snapshot are reviewed.
+2. **Pretest** — today's new words are classified without exposing the answer first.
+3. **Lesson** — a frozen 5–7 word round is taught and exercised one word at a time.
+4. **Application / consolidation** — after enough completed formal Lesson words, WordLoop may create one pending long-form task that can be done now or deferred.
+5. **Continue** — the backend decides the next durable state; the client does not infer the next word from chat history.
+
+Closing ChatGPT or the standalone page does not reset the active flow. The backend session stores the current phase, word, retry state, generated payload, and navigation cursor.
+
+## Exercise planning
+
+Ordinary Lesson questions are selected by `server/services/exercisePlanner.ts`.
+
+Supported short-task families include:
+
+- word recall / exact cloze;
+- short Chinese-to-English translation;
+- collocation;
+- derivation / word-family tasks.
+
+The planner uses the target sense, part of speech, active error layer, Lesson profile, recent task history, and optional skill signals. Specialized errors and content applicability take precedence over artificial variety.
+
+The current rolling coverage target for ordinary short tasks is:
+
+- at least 3 task families in the latest 20 planned tasks;
+- at least 2 short Chinese-to-English tasks;
+- extraction-style tasks no more than 75% when the content supports alternatives.
+
+These are planning defaults, not validated psychometric thresholds.
+
+Longer application tasks are recorded separately from ordinary Lesson/Review and may include long-sentence translation, full Chinese-to-English translation, and contextual sentence production. They never update FSRS directly.
+
+## Long-term scheduling
+
+WordLoop uses FSRS v6 through `ts-fsrs`.
+
+Current scheduler configuration:
+
+- target retention: `0.90`;
+- maximum interval: `36500` days;
+- `enable_short_term: false`.
+
+Short-term acquisition and relearning are handled by WordLoop Lesson flows instead of minute-level FSRS learning steps. Review remains the only flow that advances the long-term card.
+
+## Standalone Web App
+
+The root site is a responsive standalone study client. It shares the same Supabase state and backend rules as the MCP App.
+
+Main sections:
+
+- **Today** — today's Review/New-word progress and next action;
+- **Study** — Review, Pretest, Lesson, feedback, and pending consolidation;
+- **Capture / Notes** — collect words, phrases, collocations, sentences, or grammar snippets with context;
+- **Insights** — memory, weakness, due-distribution, and activity analytics;
+- **Vocabulary** — searchable/filterable vocabulary with per-word details and FSRS state.
+
+The standalone API is protected by a server-configured Bearer token (`WORDLOOP_WEB_TOKEN`). The user enters the access token in the client; Supabase credentials are never shipped to the browser bundle.
+
+Key endpoints:
+
+```text
+GET   /api/web/bootstrap
+GET   /api/web/today
+GET   /api/web/analytics
+GET   /api/web/vocabulary
+GET   /api/web/vocabulary/:userWordId
+GET   /api/web/captures
+POST  /api/web/captures
+GET   /api/web/captures/:id
+PATCH /api/web/captures/:id
+GET   /api/web/captures/:id/occurrences
+POST  /api/web/captures/:id/promote
+POST  /api/web/action
+```
+
+All `/api/web/*` requests require:
+
+```http
+Authorization: Bearer <WORDLOOP_WEB_TOKEN>
+```
+
+## Capture / Notes
+
+Capture is a first-class part of the standalone app.
+
+A capture can store:
+
+- selected text;
+- type: word, phrase, collocation, sentence, or grammar;
+- surrounding context;
+- source metadata;
+- personal notes;
+- repeated occurrence history.
+
+The canonical store is `captured_notes` plus `captured_note_occurrences`. Repeated encounters are recorded as occurrences instead of creating uncontrolled duplicates.
+
+Promotion into learning is explicit:
+
+- if the word already exists, WordLoop links it without resetting its status or FSRS state;
+- if it is genuinely new, WordLoop may add it to the daily learning flow without modifying the currently frozen round.
+
+## Insights and vocabulary analytics
+
+The standalone Insights surface currently includes:
+
+- long-term first-recall success rate;
+- current memory-set size;
+- FSRS Stability (S), Difficulty (D), and Retrievability (R);
+- due / overdue distribution;
+- current active error layers;
+- historical error matrix by activity type;
+- focus-word ranking;
+- formal Review activity, first introductions, and capture activity.
+
+The metric definitions and their limits are documented in:
+
+[`docs/WORDLOOP_INSIGHTS_METRICS.md`](docs/WORDLOOP_INSIGHTS_METRICS.md)
+
+Historical metrics are only shown when the stored events can support them; unavailable history is reported as unavailable rather than fabricated.
+
+## Pronunciation
+
+WordLoop can use Merriam-Webster Learner's Dictionary audio when `MERRIAM_WEBSTER_API_KEY` is configured.
+
+If dictionary audio is unavailable, widgets fall back to local English `speechSynthesis`.
+
+The primary MCP tool is:
+
+```text
+get_pronunciation_audio
+```
+
+## Shanbay migration
+
+Shanbay is an optional one-time migration adapter under `server/integrations/shanbay/`.
+
+It can import the current book or a specified `materialbookId`, including:
+
+- unlearned items;
+- learning items;
+- simple-learned items;
+- IPA and structured Chinese senses;
+- source-book provenance.
+
+Imports are resumable and idempotent. Shanbay state is treated as migration metadata only; re-importing must not reset WordLoop attempts, errors, or FSRS state.
+
+The integration depends on an undocumented Shanbay API and should not be treated as continuous sync.
+
+## ChatGPT MCP App
+
+Local Node development exposes MCP at:
+
+```text
+http://127.0.0.1:3000/mcp
+```
+
+The GPT Sites / Worker build exposes it at:
+
+```text
+https://<your-site>/api/mcp
+```
+
+Primary widget resources currently include:
+
+| Surface | Resource |
+| --- | --- |
+| Import | `ui://wordloop/import.html` |
+| Pretest | `ui://wordloop/pretest.html` |
+| Review | `ui://wordloop/review.html` |
+| Dashboard | `ui://wordloop/dashboard.html` |
+| Pronunciation | `ui://wordloop/pronunciation.html` |
+| Dictation | `ui://wordloop/dictation-v2.html` |
+| Lesson | `ui://wordloop/lesson-v9.html` |
+
+Older Lesson and Dictation URIs remain registered as compatibility aliases for existing conversations.
+
+Important runtime rule: for “start/continue learning”, the first MCP call is `get_study_bootstrap`. The model must follow its returned action and must not reconstruct the queue from chat history.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  H[ChatGPT host model] -->|MCP tools| S[Wordloop server]
-  S -->|user-scoped queries / RPC| D[(Supabase Postgres)]
-  S -->|ui:// resources| W[React widgets]
-  W -->|tools/call + ui/message| H
+  C[ChatGPT MCP App] --> R[WordLoop runtime]
+  B[Standalone Web App] --> R
+
+  R --> O[Study orchestration]
+  O --> F[FSRS v6]
+  O --> P[exercisePlanner]
+  O --> S[(Supabase Postgres)]
+
+  P --> D[DeepSeek Flash]
+  R --> M[Merriam-Webster audio]
+  R --> H[Optional Shanbay migration]
+
+  S --> C
+  S --> B
 ```
 
-The server and UI are separate. Pure data tools do not attach a UI resource. Seven render tools attach `_meta.ui.resourceUri` and serve a self-contained HTML resource whose JavaScript and CSS are generated by esbuild. The service-role key exists only in the Node server environment and is never bundled into the widget.
+The Cloudflare Worker-compatible entrypoint is `server/worker.ts`. Local Node/Express development remains available through `server/index.ts`.
 
-The repository also contains a GPT Sites surface in `build/` and a Cloudflare Worker-compatible MCP entrypoint in `server/worker.ts`. One Sites origin serves the product page and `/api/mcp`; Supabase credentials remain server-side runtime variables and never enter the page or widget bundle. Local Node development continues to use `/mcp`.
-
-The project uses `@modelcontextprotocol/sdk` 1.30.x with `@modelcontextprotocol/ext-apps` 1.7.x, the official compatible package line that supports the stable 2026-01-26 MCP Apps wire methods requested here. Upgrading ext-apps to 2.x requires migrating the MCP server to the new split `@modelcontextprotocol/server`, `node`, and `express` packages.
-
-## Project tree
+## Project structure
 
 ```text
 wordloop/
-├── .codex-plugin/plugin.json
-├── .openai/hosting.json
-├── .app.json
-├── .mcp.json
-├── build/                     # GPT Sites static surface
-│   ├── app.js
-│   ├── index.html
-│   └── styles.css
+├── build/                         # standalone/GPT Sites shell + manifest
 ├── docs/
 │   ├── TEACHING_POLICY.md
-│   ├── TEST_REPORT.md
-│   └── design/wordloop-concept.png
-├── scripts/
-│   ├── build-sites-worker.ts
-│   ├── build-widgets.ts
-│   ├── check-shanbay.ts
-│   └── inspect-mcp.mjs
+│   ├── WORDLOOP_INSIGHTS_METRICS.md
+│   └── migrations/
 ├── server/
-│   ├── index.ts
-│   ├── mcp.ts
-│   ├── mcpCore.ts
-│   ├── worker.ts
-│   ├── db.ts
-│   ├── types.ts
 │   ├── integrations/shanbay/
-│   │   ├── client.ts
-│   │   ├── decode.ts
-│   │   ├── importer.ts
-│   │   ├── mapper.ts
-│   │   └── types.ts
 │   ├── services/
-│   │   ├── attempts.ts
-│   │   ├── fsrsReviews.ts
+│   │   ├── analytics.ts
+│   │   ├── capturedNotes.ts
+│   │   ├── captureNotes.ts
+│   │   ├── deepseek.ts
+│   │   ├── exercisePlanner.ts
 │   │   ├── fsrsScheduler.ts
-│   │   ├── progress.ts
-│   │   ├── review.ts
-│   │   ├── reviewScheduler.ts
-│   │   ├── sentences.ts
-│   │   ├── shared.ts
-│   │   ├── studySessions.ts
-│   │   ├── wordNormalization.ts
-│   │   └── words.ts
-│   └── tools/
-│       ├── getErrorBook.ts
-│       ├── getActiveStudySession.ts
-│       ├── getLearningContext.ts
-│       ├── getNextLearningWord.ts
-│       ├── getNextRound.ts
-│       ├── getProgress.ts
-│       ├── helpers.ts
-│       ├── importWords.ts
-│       ├── prepareDailyNewWords.ts
-│       ├── recordAttempt.ts
-│       ├── recordPretestResult.ts
-│       ├── recordReviewResult.ts
-│       ├── advanceStudySession.ts
-│       ├── finishStudySession.ts
-│       ├── renderWidgets.ts
-│       ├── setDailyNewWordLimit.ts
-│       ├── shanbay.ts
-│       └── saveSentence.ts
+│   │   ├── lessonConsolidation.ts
+│   │   ├── studyBootstrap.ts
+│   │   └── studySessions.ts
+│   ├── tools/
+│   ├── mcpCore.ts
+│   ├── webApi.ts
+│   └── worker.ts
+├── shared/
 ├── supabase/migrations/
-│   ├── 202609130001_initial_wordloop.sql
-│   ├── 202609130002_fsrs_shanbay.sql
-│   ├── 202609140003_daily_queue_ui_fix.sql
-│   ├── 202609150004_study_session_state.sql
-│   ├── 202609150005_integrity_guards.sql
-│   ├── 202609160006_performance_queries.sql
-│   ├── 202609160007_review_session.sql
-│   ├── 20260927143358_exact_cloze_activity_type.sql
-│   ├── 202609290001_capture_notes.sql
-│   ├── 20260929021548_formal_lesson_history.sql
-│   ├── 20260929120641_captured_notes.sql
-│   ├── 20260929172617_captured_notes_canonical_adapter.sql
-│   ├── 20260929172621_analytics_read_models.sql
-│   └── 20260929184221_progress_scheduled_stability_mean.sql
 ├── tests/
-│   ├── mcpHttp.test.ts
-│   ├── fsrsReview.test.ts
-│   ├── fsrsScheduler.test.ts
-│   ├── progress.test.ts
-│   ├── reviewScheduler.test.ts
-│   ├── site.test.ts
-│   ├── learningQueue.test.ts
-│   ├── reviewQueue.test.ts
-│   ├── studySessions.test.ts
-│   ├── supabase.integration.test.ts
-│   ├── worker.test.ts
-│   ├── shanbayClient.test.ts
-│   ├── shanbayDecode.test.ts
-│   ├── shanbayImport.test.ts
-│   ├── shanbayMapper.test.ts
-│   └── wordNormalization.test.ts
-├── web/src/
-│   ├── components/Button.tsx
-│   ├── components/FocusButton.tsx
-│   ├── dashboard/LearningDashboard.tsx
-│   ├── dictation/DictationWidget.tsx
-│   ├── import/WordImport.tsx
-│   ├── lesson/LessonWidget.tsx
-│   ├── pretest/PretestWidget.tsx
-│   ├── pronunciation/PronunciationCards.tsx
-│   ├── main.tsx
-│   ├── mcpBridge.ts
-│   └── styles.css
-├── .env.example
-├── package.json
-├── tsconfig.json
-└── tsconfig.build.json
+└── web/src/
+    ├── dashboard/
+    ├── lesson/
+    ├── pretest/
+    ├── review/
+    └── standalone/
+        ├── pages/
+        └── components/
 ```
 
-Generated `dist/`, `node-dist/`, `web/dist/`, and `node_modules/` directories are intentionally excluded from the tree above.
+Generated build outputs and `node_modules/` are omitted here.
 
 ## Environment variables
 
-Copy `.env.example` to `.env` and set:
+Copy `.env.example` to `.env`, then configure the server runtime.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `SUPABASE_URL` | Yes | Supabase project URL used only by the server runtime. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only database credential. Never expose it to widgets or commit it. |
-| `DEV_USER_ID` | V1 | UUID used as the authenticated identity until OAuth is added. Every query still scopes by this ID. |
-| `SHANBAY_AUTH_TOKEN` | For Shanbay migration | Server-only `auth_token`; never sent to React, ChatGPT, Supabase, logs, or tool arguments. |
-| `SHANBAY_COOKIE` | Optional fallback | Full server-only cookie only when `auth_token` is insufficient. |
-| `PORT` | No | HTTP port; defaults to `3000`. |
-| `HOST` | No | Bind address; defaults to `127.0.0.1`. Use `0.0.0.0` on a hosted platform. |
-| `ALLOWED_HOSTS` | Recommended in production | Comma-separated hostnames for DNS-rebinding protection when binding publicly. |
-| `PUBLIC_BASE_URL` | Documentation/deploy | Public HTTPS origin used when configuring ChatGPT. |
-| `WORDLOOP_ROOT` | Only for unusual launches | Absolute project root if the process is started from another working directory. |
-| `ENABLE_WIDGET_PREVIEW` | Development only | Enables `/preview/import`, `/preview/pretest`, `/preview/dashboard`, `/preview/pronunciation`, `/preview/dictation`, `/preview/review`, and `/preview/lesson`. |
+| `SUPABASE_URL` | Yes | Supabase project URL. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only database credential. |
+| `DEV_USER_ID` | Current single-user build | Trusted server-side user UUID. |
+| `DEEPSEEK_API_KEY` | For standalone/model-generated Lesson content | Server-only DeepSeek credential. |
+| `WORDLOOP_WEB_TOKEN` | For standalone Web | Bearer token used by `/api/web/*`. |
+| `MERRIAM_WEBSTER_API_KEY` | Optional | Learner's Dictionary pronunciation audio. |
+| `SHANBAY_AUTH_TOKEN` | Optional | One-time Shanbay import. |
+| `SHANBAY_COOKIE` | Optional fallback | Server-only Shanbay cookie when required. |
+| `PORT` | No | Local HTTP port, default `3000`. |
+| `HOST` | No | Bind address, default `127.0.0.1`. |
+| `PUBLIC_BASE_URL` | Deployment | Public origin used by deployment/configuration. |
+| `ALLOWED_HOSTS` | Recommended when public | DNS-rebinding protection. |
+| `WORDLOOP_ROOT` | Rare | Explicit project root. |
+| `ENABLE_WIDGET_PREVIEW` | Development only | Enables local widget preview routes. |
 
-The client never accepts a `user_id`. The current identity comes only from trusted server configuration. Production OAuth should replace `DEV_USER_ID`, not add it as a tool argument.
+DeepSeek is currently called with model `deepseek-flash` and thinking disabled. Generated output is validated by Zod before it is accepted into the study flow.
 
-## Supabase initialization
+## Database setup
 
-1. Create a Supabase project.
-2. Open SQL Editor.
-3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains the migrations listed above. If a real database already ran an older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes, migration 007 adds the due-only review snapshot RPC, the activity-type migration adds fixed-answer and semantic-expression activities, formal Lesson history excludes previously studied words from future new-word queues, and the Capture migrations preserve legacy Notes while routing new writes to the canonical store. The analytics read models are read-only and report historical metrics as unavailable when the source events cannot support them.
-4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
-5. Put the project URL and service-role key in `.env` on the server only.
+For a fresh database, apply the current `setup.sql`.
 
-The migrations create the required tables, supporting indexes, per-error-layer repair counters, row-level security, and transactional Postgres functions for imports, attempts, pretests, sentence capture, and private Notes. Notes promotion only adds a daily queue entry when it inserts a new `user_words` row; linking an existing card leaves its learning schedule unchanged. RPC execution is revoked from `public`, `anon`, and `authenticated`, then granted only to `service_role` in V1.
+For an existing database, apply only the missing migrations in order. Recent migrations add:
+
+- exact-cloze / semantic activity support;
+- formal Lesson completion history;
+- canonical captured notes and occurrence history;
+- analytics read models;
+- scheduled Stability metrics;
+- durable balanced exercise plans and supporting indexes.
+
+Do not run an old `setup.sql` over a live database that already contains user data.
 
 ## Install and run
 
-Requirements: Node.js 20 or newer and a migrated Supabase project.
+Requirements:
+
+- Node.js 20+;
+- a migrated Supabase project.
 
 ```bash
 npm install
@@ -190,181 +319,54 @@ cp .env.example .env
 npm run dev
 ```
 
-Health check:
-
-```bash
-curl http://127.0.0.1:3000/
-```
-
-Expected response:
-
-```json
-{"name":"wordloop","status":"ok","mcp":"/mcp","version":"0.1.0"}
-```
-
-Production build and start:
+Production build:
 
 ```bash
 npm run build
 npm start
 ```
 
-## MCP tools
+Useful checks:
 
-### Data tools
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run check:db
+npm run predeploy:check
+```
 
-| Tool | Role |
-| --- | --- |
-| `import_words` | Normalize, deduplicate, and persist a daily ordered list. |
-| `get_study_bootstrap` | Start or resume study with one short-circuiting backend decision. |
-| `get_learning_context` | Legacy-compatible read of today's persisted statuses, recent answer history, review queue, stats, and session rules. |
-| `get_active_study_session` | Read only the active durable Widget cursor; the full payload stays server-side. |
-| `get_next_learning_word` | Return the first unfinished word after the current word in today's prepared queue. |
-| `get_next_round` | Select 5–7 unfinished words. |
-| `record_pretest_result` | Save `known`, `uncertain`, or `unknown` plus the answer in durable attempt history. |
-| `record_attempt` | Save an ordinary exercise and update counters/error repair only; never advance FSRS. |
-| `record_review_result` | Advance FSRS exactly once for a genuine independent retrieval. |
-| `advance_study_session` | Apply one backend-validated pretest or Lesson phase transition. |
-| `finish_study_session` | Clear the active durable study cursor after the real learning wrap-up. |
-| `prepare_daily_new_words` | Allocate the configured daily limit from the vocabulary pool. |
-| `set_daily_new_word_limit` | Configure the daily allocation limit from 1 to 200. |
-| `get_current_shanbay_book` | Read the current Shanbay book using server-only credentials. |
-| `preview_shanbay_book` | Count all three complete source states without importing. |
-| `import_shanbay_book` | Idempotently migrate one bounded chunk of a current or ID-selected book; repeat with `next_cursor` until `complete=true`. |
-| `get_error_book` | Return words that still have active error layers. |
-| `save_sentence` | Save a difficult sentence and extracted vocabulary. |
-| `get_progress` | Return daily and all-time totals. |
-
-### Render tools
-
-| Tool | UI resource |
-| --- | --- |
-| `render_word_import` | `ui://wordloop/import.html` |
-| `render_pretest_widget` | `ui://wordloop/pretest.html` |
-| `render_learning_dashboard` | `ui://wordloop/dashboard.html` |
-| `render_pronunciation_cards` | `ui://wordloop/pronunciation.html` |
-| `render_dictation_widget` | `ui://wordloop/dictation.html` |
-| `render_lesson_widget` | `ui://wordloop/lesson-v3.html` (aliases: `lesson-v2.html`, `lesson.html`) |
-
-The pretest, Lesson, and Dictation render tools persist their complete displayed payload before returning it and accept `resume: true`. Closing Chat or destroying a Widget therefore restores the exact saved card, phase, index, and retry cursor from the existing `study_sessions.state` JSONB. Review intentionally remains a live backend queue and is never copied into the session state.
-
-The pronunciation and dictation views call browser `speechSynthesis` only after a button click. If it is unavailable, the view displays `当前设备无法播放`. The dictation transcript is not inserted into the visible DOM until the user selects `Show transcript`.
-
-## MCP Inspector
-
-Start Wordloop, then launch the interactive inspector:
+MCP Inspector:
 
 ```bash
 npx @modelcontextprotocol/inspector --web http://127.0.0.1:3000/mcp
 ```
 
-Choose Streamable HTTP if the transport is not detected automatically. Initialize, run `tools/list`, then exercise data tools in the required order. Database-writing calls require valid Supabase configuration.
-
-The repository also includes a headless strict check:
+Headless MCP validation:
 
 ```bash
 npm run test:inspector
 ```
 
-This builds the project, starts a disposable local Wordloop server, runs Inspector `tools/list --strict`, and probes MCP App metadata/resources. The current result is 25 tools listed with no strict schema failures; all seven render tools resolve to `text/html;profile=mcp-app` resources with `prefersBorder: true`.
+## Security and current limitations
 
-Suggested database test sequence:
+- The current build is still primarily a **single-user / small private-test build**.
+- Identity is server-scoped through `DEV_USER_ID`; production multi-user OAuth is not implemented.
+- `WORDLOOP_WEB_TOKEN` protects the standalone API, but it is not a replacement for real per-user authentication.
+- Supabase service-role credentials, DeepSeek credentials, and Shanbay credentials must remain server-side.
+- Study state is durable in Supabase; active MCP transport sessions may still be process-local.
+- Shanbay migration relies on an undocumented API.
+- Some historical analytics are intentionally unavailable because older events do not contain enough evidence.
+- Recent migrations in a feature branch must be applied before the corresponding Capture/Insights/exercise-plan features are used against a database.
 
-1. `import_words` with the seven acceptance words.
-2. `get_learning_context`.
-3. `record_pretest_result` for each word.
-4. `get_next_round` with `limit: 6`.
-5. One incorrect `record_attempt` with a concrete error layer.
-6. `get_error_book`.
-7. Two correct repair attempts using the same concrete error layer.
-8. `get_error_book` again; that layer should be gone.
-9. `get_progress`.
+## Teaching policy
 
-For correct repair attempts, pass the layer being tested instead of `none`; this is how Wordloop distinguishes a repaired collocation error from an unrelated correct meaning answer.
+The human-readable teaching contract is:
 
-## Tests
+[`docs/TEACHING_POLICY.md`](docs/TEACHING_POLICY.md)
 
-```bash
-npm run typecheck
-npm run build
-npm test
-```
+The runtime version is maintained in:
 
-The default suite covers FSRS v6 rating transitions and persistence mapping, exercise/FSRS isolation, due mastered cards, no future-card filler, deterministic next-word ordering, resumable study-session transitions and strict Lesson payloads, Shanbay decoding/mapping/pagination/error handling, idempotent multi-book deduplication, error repair, progress, Streamable HTTP initialization, and tool discovery.
+[`server/teachingPrompt.ts`](server/teachingPrompt.ts)
 
-## Shanbay migration
-
-Shanbay is an optional, removable one-time migration adapter under `server/integrations/shanbay/`. Wordloop reads the current book through `/wordsapp/user_material_books/current` and can fetch a specified `materialbookId` directly. It imports complete `unlearned_items`, `learning_items`, and `simple_learned_items` pages in small resumable chunks (the widget checkpoints `next_cursor` locally), stores IPA and structured Chinese senses, and records many-to-many book provenance in `word_sources`. A cancelled request therefore leaves already-written batches available for an idempotent resume instead of waiting for the entire book before the first write.
-
-No reliable public user-bookshelf endpoint was found, so V1 deliberately does not guess one. The import card supports the current book, refresh-after-switching, and an advanced materialbook ID field. It never switches the user's Shanbay current book. After migration, Shanbay state is metadata only and cannot reset Wordloop state, attempts, errors, or the single FSRS card.
-
-Importing thousands of words fills the vocabulary pool, not today's list. Call `prepare_daily_new_words` to allocate the user's `daily_new_word_limit` (default 50, range 1–200) into the existing pretest workflow. A word remains eligible on the following day only while it is still `new`, not mastered, and has no formal Lesson attempt; today's existing queues are also excluded. The daily limit counts all of today's existing queues, so a legacy/manual 30-word queue is supplemented only up to the current limit rather than becoming 30 + 50.
-
-Validated against a real Shanbay account on 2026-09-14. No Shanbay credentials, user identifiers, or source payloads are stored in this repository.
-
-`tests/supabase.integration.test.ts` runs automatically when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are present. It creates an isolated temporary user, verifies the 1–200 setting, incomplete-new-word carryover to the next day, same-day idempotency, legacy-queue capacity, lowering/raising limits, FSRS/attempt isolation, review logs, idempotent Shanbay re-import, and a second independent learning-context read. It then deletes the temporary user.
-
-## ChatGPT Developer Mode connection
-
-ChatGPT cannot connect to localhost directly. Deploy the server behind a stable public HTTPS URL first; its MCP endpoint must be:
-
-```text
-https://your-wordloop-host.example/mcp
-```
-
-Then:
-
-1. In ChatGPT, open **Settings → Apps & Connectors → Advanced settings** and enable **Developer mode**.
-2. Create a new developer app/connector.
-3. Enter the public `/mcp` URL and select no authentication for this DEV_USER_ID build.
-4. Save it, start a new conversation, enable Wordloop, and ask: `导入今天的扇贝单词`.
-5. Put the contents of [`docs/TEACHING_POLICY.md`](docs/TEACHING_POLICY.md) into the ChatGPT English Learning Project instructions.
-6. Run the acceptance flow from the product brief, close the conversation, start another conversation, and ask `开始英语` to verify database-backed continuity.
-
-## GPT Sites
-
-GPT Sites hosts both Wordloop's product page and its Worker-compatible Streamable HTTP endpoint. The original Node/Express entrypoint remains available for local development, while `server/worker.ts` is bundled for Sites. GPT Sites reserves `/mcp` before it reaches the Worker, so configure ChatGPT with `https://wordloop-study.zehaoo.chatgpt.site/api/mcp` after the Site runtime variables are set.
-
-The page source is tracked in `build/`; `npm run build:sites` embeds it and the MCP App widget assets into `dist/server/index.js`. The page contains no Supabase URL, service-role key, access token, or user-specific data.
-
-Before exposing Wordloop to more than one real user, implement OAuth/authenticated identity. A public unauthenticated endpoint with one `DEV_USER_ID` intentionally behaves as one shared development account.
-
-## Security notes
-
-- Every user-owned database read and write is scoped with the trusted server-side user UUID.
-- Tool schemas use Zod and reject invalid dates, enum values, UUIDs, oversized content, and empty required content.
-- Transactional SQL functions prevent partial attempt/import updates.
-- Tool errors return short messages and do not include stack traces, keys, or access tokens.
-- Widgets validate tool results before rendering.
-- MCP App HTML declares no external connect or resource domains.
-- `.env` and build outputs are ignored by Git.
-- The service-role key must never be embedded in deployment client variables, logs, or the widget bundle.
-
-## V1 limitations
-
-- Identity is a server-configured `DEV_USER_ID`; OAuth is not implemented.
-- Shanbay has no verified bookshelf-list endpoint in this integration; use current-book refresh or a materialbook ID.
-- Shanbay migration depends on an undocumented API and may require refreshing the server-only credential when Shanbay changes it.
-- Browser speech synthesis voice and exact pronunciation quality vary by host/device.
-- No third-party dictionary or TTS endpoint is included.
-- Study-session state is intentionally a small JSONB cursor in the existing `study_sessions` table; it does not snapshot review queues or FSRS fields.
-- The server keeps active MCP transport sessions in process memory; vocabulary state itself is durable in Supabase.
-- A full Supabase integration test cannot pass until credentials and the migration are available.
-
-## Roadmap
-
-1. Replace `DEV_USER_ID` with OAuth-derived identity and add production policies.
-2. Add a 20-new-word quiz counter.
-3. Add import history inspection and reversible import management.
-4. Replace browser speech synthesis with a real American-English TTS endpoint if needed.
-5. Add FSRS parameter optimization and historical replay tooling after enough real review logs exist.
-6. Replace the Shanbay adapter if an official export/API becomes available; do not turn it into continuous sync.
-
-## Teaching boundary
-
-The full runtime teaching behavior lives in [`server/teachingPrompt.ts`](server/teachingPrompt.ts); [`docs/TEACHING_POLICY.md`](docs/TEACHING_POLICY.md) is the human-readable copy. Wordloop stores resumable study state and renders interaction; it does not generate lessons, score answers with a hidden model, or develop a second conversational personality.
-
-
-## 正式学习卡片
-
-正式学习使用唯一的 `render_lesson_widget`，通过 `explain`、`exercise`、`feedback` 三种模式在同一张卡片内完成讲解、练习和批改。预测试后的听音跟读与听音还原由预测试卡片内完成；`render_pronunciation_cards` 仅用于独立发音查询。
+These two files should remain synchronized when teaching behavior changes.
