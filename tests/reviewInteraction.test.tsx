@@ -22,6 +22,28 @@ describe("ReviewQuestion", () => {
     expect(markup).not.toContain("recur");
   });
 
+  it("renders every supplied part of speech", () => {
+    const markup = renderToStaticMarkup(<ReviewQuestion item={{
+      ...base,
+      word: "record",
+      part_of_speech: "n./v.",
+      is_due: true,
+    }} />);
+    expect(markup).toContain("n./v.");
+  });
+
+  it("shows POS-prefixed review meanings without repeating a separate POS label", () => {
+    const markup = renderToStaticMarkup(<ReviewQuestion item={{
+      ...base,
+      word: "record",
+      part_of_speech: "n./v.",
+      meaning_zh: "n. 记录；档案　v. 记录；录制",
+      is_due: true,
+    }} />);
+    expect(markup).toContain("n. 记录；档案　v. 记录；录制");
+    expect(markup).not.toContain('class="part-of-speech"');
+  });
+
   it("supports English definition review without exposing the Chinese meaning", () => {
     const markup = renderToStaticMarkup(<ReviewQuestion item={{ ...base, word: "recur", direction: "en_definition", error_layers: [], is_due: false, review_kind: "fsrs_due", next_review_at: "2026-09-20T00:00:00Z" }} />);
     expect(markup).toContain("英 → 英");

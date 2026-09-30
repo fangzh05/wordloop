@@ -47,13 +47,16 @@ describe("canonical queue boundaries", () => {
 
   it("accepts only the canonical new-word prefix and overlays persisted lexical data", () => {
     const today = [
-      vocabulary("alpha", { ipa_us: "/ˈælfə/", senses: [{ pos: "n.", definition_cn: "数据库释义" }] }),
+      vocabulary("alpha", { ipa_us: "/ˈælfə/", senses: [
+        { pos: "n.", definition_cn: "数据库记录" },
+        { pos: "v.", definition_cn: "记录下来" },
+      ] }),
       vocabulary("beta"),
       vocabulary("done", { status: "known" }),
     ];
     const result = validatePretestItems([pretestItem("alpha"), pretestItem("beta")], today);
     expect(result).toMatchObject([
-      { word: "alpha", ipa: "/ˈælfə/", part_of_speech: "n.", meaning_zh: "数据库释义" },
+      { word: "alpha", ipa: "/ˈælfə/", part_of_speech: "n./v.", meaning_zh: "n. 数据库记录　v. 记录下来" },
       { word: "beta" },
     ]);
     expect(() => validatePretestItems([pretestItem("beta")], today)).toThrow("PRETEST_QUEUE_ORDER_INVALID");

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { TEACHING_PROMPT } from "../server/teachingPrompt.js";
+import { LESSON_GENERATION_PROMPT } from "../server/services/deepseekPrompts.js";
 
 describe("exam-focused teaching policy", () => {
   it("sets the requested exam goals, concise examples and round sentence length", () => {
@@ -20,5 +21,12 @@ describe("exam-focused teaching policy", () => {
     expect(source).toMatch(/example_en:\s*z\.string/);
     expect(source).toMatch(/note:\s*z\.string/);
     expect(TEACHING_PROMPT).toContain("2–3 个常见同根派生词");
+  });
+
+  it("requests every dictionary part of speech and Chinese translations for lexical entries", () => {
+    expect(TEACHING_PROMPT).toContain("输入中列出的全部词性");
+    expect(TEACHING_PROMPT).toContain("collocations 和 derivations 中的每个条目都要同时包含英文表达与简体中文释义");
+    expect(LESSON_GENERATION_PROMPT).toContain("词性覆盖输入给出的全部词性");
+    expect(LESSON_GENERATION_PROMPT).toContain("每个搭配和派生都要在同一字符串中同时给出英文和简体中文释义");
   });
 });

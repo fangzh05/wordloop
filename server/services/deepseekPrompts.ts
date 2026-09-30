@@ -1,6 +1,6 @@
 export const LESSON_GENERATION_PROMPT = `为考研英语一与 IELTS Academic 生成一张自然、简洁的英语单词 Lesson 卡。输入中的 plan 是唯一练习计划：必须逐字采用 plan.planned_activity_type、目标词义、skill_goal 和目标词，不得自行挑词、换题型、改变顺序或决定推进。lesson_profile 表示训练强度，不能据此覆盖计划。V1 由服务端规则规划；不要调用工具重新选择题型。
 
-围绕词条给核心义、一个高价值搭配、最多两个常见派生、一条易混提醒、一条例句及中文译文。熟悉词只给核心义、一个搭配和音频需要的信息，note 与额外内容保持简短；未知词保留必要讲解。除词条、example_en 和 exercise.prompt 外使用简体中文。example_en 使用一般教育、科技、社会、工作、环境或公共服务语境，通常 15–25 词；不要默认写医学专业语境。练习语境必须不同于例句，不直接翻译、复述或微改例句。
+围绕词条给核心义、一个高价值搭配、最多两个常见派生、一条易混提醒、一条例句及中文译文。每个搭配和派生都要在同一字符串中同时给出英文和简体中文释义，例如“allocate resources（分配资源）”和“allocation n.（分配；拨款）”；不能只给英文词组或词形。词性覆盖输入给出的全部词性，不能只选一个。熟悉词只给核心义、一个搭配和音频需要的信息，note 与额外内容保持简短；未知词保留必要讲解。除词条、example_en 和 exercise.prompt 外使用简体中文。example_en 使用一般教育、科技、社会、工作、环境或公共服务语境，通常 15–25 词；不要默认写医学专业语境。练习语境必须不同于例句，不直接翻译、复述或微改例句。
 
 严格按计划生成恰好一道短题：
 - exact_cloze：短英语新语境，只有一个 ___；目标词不出现在空格外；accepted_answers 非空。
@@ -14,8 +14,8 @@ export const LESSON_GENERATION_PROMPT = `为考研英语一与 IELTS Academic �
   "ipa": "...",
   "part_of_speech": "...",
   "meaning_zh": "...",
-  "collocations": ["..."],
-  "derivations": ["..."],
+  "collocations": ["English collocation（中文释义）"],
+  "derivations": ["English derivative + part of speech（中文释义）"],
   "example_en": "...",
   "example_zh": "...",
   "note": "...",

@@ -9,6 +9,7 @@ import { InsightsPage } from "./pages/InsightsPage.js";
 import { VocabularyPage } from "./pages/VocabularyPage.js";
 import { WordDetailPanel } from "./components/WordDetailPanel.js";
 import { shouldSubmitMultiline, shouldSubmitSingleLine } from "./studyInput.js";
+import { meaningIncludesPartOfSpeech } from "../../../shared/lexicalDisplay.js";
 import {
   ApiError,
   StaleStudyStateError,
@@ -269,7 +270,7 @@ export function StandaloneReviewQuestion({ item, direction }: {
   return <div className="question-block">
     <span className="question-label">{direction === "cn_to_en" ? "中 → 英" : "请用简单英文解释"}</span>
     {direction === "cn_to_en" ? <>
-      {partOfSpeech && <span className="part-of-speech">{partOfSpeech}</span>}
+      {partOfSpeech && !meaningIncludesPartOfSpeech(String(item.meaning_zh ?? ""), partOfSpeech) && <span className="part-of-speech">{partOfSpeech}</span>}
       <p className="question-prompt" data-capture-text="true" data-capture-source="review_question" data-capture-type="word">{String(item.meaning_zh ?? "")}</p>
     </> : <>
       <p className="question-word" data-capture-text="true" data-capture-source="review_question" data-capture-type="word">{String(item.word ?? "")}</p>
@@ -1066,7 +1067,7 @@ export default function StandaloneApp(): React.JSX.Element {
           <div className="question-block">
             <span className="question-label">中文核心义</span>
             <p className="question-prompt">{String(item.meaning_zh ?? "")}</p>
-            {typeof item.part_of_speech === "string" && <p className="answer-hint">{item.part_of_speech}</p>}
+            {typeof item.part_of_speech === "string" && !meaningIncludesPartOfSpeech(String(item.meaning_zh ?? ""), item.part_of_speech) && <p className="answer-hint">{item.part_of_speech}</p>}
           </div>
           <label className="answer-label" htmlFor="study-answer">写出英文单词</label>
           <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "pretest_submit", answer }); } }} />
@@ -1100,7 +1101,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
         {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content" data-capture-root="true">
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
-          <section className="lesson-section"><h2>词性与核心义</h2><p>{String(payload.part_of_speech ?? "")} · {String(payload.meaning_zh ?? "")}</p></section>
+          <section className="lesson-section"><h2>核心义</h2><p>{meaningIncludesPartOfSpeech(String(payload.meaning_zh ?? ""), String(payload.part_of_speech ?? "")) ? String(payload.meaning_zh ?? "") : `${String(payload.part_of_speech ?? "")} · ${String(payload.meaning_zh ?? "")}`}</p></section>
           <div className="lesson-detail-grid">
           <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).slice(0, 3).map((value) => <li key={value}>{value}</li>)}</ul></section>
             <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>

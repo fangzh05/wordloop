@@ -30,6 +30,7 @@ import {
   reconcileLessonQueueAfterCursor,
 } from "./services/lessonQueue.js";
 import { getTodayWords, getVocabularyItemsByWords, recordPretestResult, setDailyNewWordLimit } from "./services/words.js";
+import { formatMeaningByPartOfSpeech, formatPartOfSpeech } from "../shared/lexicalDisplay.js";
 import { buildReviewWidgetPayload } from "./tools/renderWidgets.js";
 import { getPronunciationAudio } from "./tools/getPronunciationAudio.js";
 import { getCompletedLessonWords, recordAttempt } from "./services/attempts.js";
@@ -223,14 +224,10 @@ function ensureState(session: StudySessionRow | null): StudyState {
 }
 
 function persistedMeaning(item: VocabularyItem): string {
-  return (item.senses ?? []).map((sense) => sense.definition_cn.trim()).filter(Boolean).join("；");
+  return formatMeaningByPartOfSpeech(item.senses);
 }
 
-function persistedPartOfSpeech(item: VocabularyItem): string | undefined {
-  return item.senses?.find((sense) => sense.pos.trim())?.pos.trim();
-}
-
-function pretestItems(words: VocabularyItem[]): Array<Record<string, unknown>> {
+export function buildPretestItems(words: VocabularyItem[]): Array<Record<string, unknown>> {
   if (words.length === 0) throw new WebApiError(409, "INVALID_STUDY_STATE", "The pretest queue is empty.");
   return words.map((item) => {
     const meaning = persistedMeaning(item);
@@ -238,9 +235,9 @@ function pretestItems(words: VocabularyItem[]): Array<Record<string, unknown>> {
     return {
       word: item.word,
       ipa: item.ipa_us?.trim() || "—",
-      part_of_speech: persistedPartOfSpeech(item) ?? "词性未标注",
-      meaning_zh: meaning.slice(0, 240),
-      prompt: meaning.slice(0, 240),
+      part_of_speech: formatPartOfSpeech(item.senses) ?? "词性未标注",
+      meaning_zh: meaning,
+      prompt: meaning,
       direction: "cn_to_en",
     };
   });
@@ -468,7 +465,7 @@ async function persistPretest(
   active: StudySessionRow | null,
   expectedRevision: string | null,
 ): Promise<StudySessionRow> {
-  const items = pretestItems(words);
+  const items = buildPretestItems(words);
   const firstWord = String(items[0]?.word ?? "");
   const prior = active?.state ? normalizeStudyStateForRead(active.state) : null;
   const flow = prior?.flow ?? { relearn_words: [] };
@@ -503,7 +500,8 @@ async function generateAndPersistLesson(input: {
   if (!item) throw new WebApiError(409, "LESSON_WORD_NOT_FOUND", "The queued Lesson word is unavailable.");
   const meaning = persistedMeaning(item);
   if (!meaning) throw new WebApiError(409, "INVALID_STUDY_STATE", "The queued Lesson word has no saved Chinese meaning.");
-  const pos = persistedPartOfSpeech(item) ?? "未标注词性";
+  const persistedPos = formatPartOfSpeech(item.senses);
+  const pos = persistedPos ?? "未标注词性";
   const savedProfile = input.flow.lesson_profile_history?.find((entry) => normalizeWord(entry.word) === normalizeWord(item.word));
   const lessonProfile = savedProfile
     ? { lesson_profile: savedProfile.lesson_profile, error_focus: savedProfile.error_focus }
@@ -582,8 +580,8 @@ async function generateAndPersistLesson(input: {
       word: item.word,
       progress: lessonProgressLabel(input.flow.relearn_words, queue, input.index),
       ipa: generated.ipa,
-      part_of_speech: generated.part_of_speech,
-      meaning_zh: generated.meaning_zh,
+      part_of_speech: persistedPos ?? generated.part_of_speech,
+      meaning_zh: meaning,
       collocations: generated.collocations,
       derivations: generated.derivations,
       example_en: generated.example_en,

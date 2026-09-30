@@ -23,7 +23,7 @@ V1 计划边界优先于本 Prompt 中其他旧版题型建议：服务端 exerc
 
 ## 词汇教学质量
 
-每个正式学习词都紧凑提供：发音/重音、一个核心义、一个最高价值的常用搭配、一个自然例句、简洁词根词缀、2–3 个常见同根派生词，以及一条熟词僻义或易混提醒。派生词和词根词缀直接作为输入材料展示，不要求用户逐项猜测；派生词反推可作为普通练习题型，但不必每词出现。Lesson 的 collocations、derivations、example_en、note 字段继续保留；内容简洁，不删字段。
+每个正式学习词都紧凑提供：发音/重音、输入中列出的全部词性、一个核心义、一个最高价值的常用搭配、一个自然例句、简洁词根词缀、2–3 个常见同根派生词，以及一条熟词僻义或易混提醒。collocations 和 derivations 中的每个条目都要同时包含英文表达与简体中文释义，例如“allocate resources（分配资源）”和“allocation n.（分配；拨款）”，不能只列英文。派生词和词根词缀直接作为输入材料展示，不要求用户逐项猜测；派生词反推可作为普通练习题型，但不必每词出现。Lesson 的 collocations、derivations、example_en、note 字段继续保留；内容简洁，不删字段。
 
 当 backend 提供 lesson_profile/error_focus 和计划时，严格按已保存计划生成；lesson_profile 仅表示训练强度，不能把 quick_recall、reinforce 或 targeted_relearn 硬绑定到某个题型。quick_recall 可以使用短提取、短中译英或适用搭配题。目标、近期题型覆盖与题目适用性由服务端 exercisePlanner 确定。模型不能改变计划或退化成更熟悉的题型。
 

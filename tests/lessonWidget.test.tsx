@@ -259,7 +259,7 @@ describe("guided lesson widget", () => {
       phase: "lesson_explain" as const,
       word: "shrink",
       ipa: "/ʃrɪŋk/",
-      part_of_speech: "v.",
+      part_of_speech: "n./v.",
       meaning_zh: "收缩；缩小",
       collocations: [],
       derivations: [],
@@ -270,6 +270,7 @@ describe("guided lesson widget", () => {
     const first = routeLessonAppEvent({ type: "toolresult", value: { structuredContent: explain } }, false);
     expect(first.kind).toBe("render");
     if (first.kind !== "render") throw new Error("expected a valid Lesson render");
+    expect(first.payload.part_of_speech).toBe("n./v.");
 
     const startInput = routeLessonAppEvent({ type: "toolinput", value: { event: "lesson_start_exercise" } }, true, first.signature);
     const startResult = routeLessonAppEvent({

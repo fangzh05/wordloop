@@ -36,6 +36,7 @@ import {
   reconcileLessonQueueAfterCursor,
 } from "../services/lessonQueue.js";
 import { normalizeWord } from "../services/wordNormalization.js";
+import { formatMeaningByPartOfSpeech, formatPartOfSpeech } from "../../shared/lexicalDisplay.js";
 import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
 import {
   REVIEW_SESSION_MAX,
@@ -79,14 +80,14 @@ export const LEGACY_WIDGET_URIS = {
 const pronunciationWord = z.object({
   word: z.string().trim().min(1).max(100),
   ipa: z.string().trim().min(1).max(120),
-  part_of_speech: z.string().trim().min(1).max(40).optional(),
-  meaning_zh: z.string().trim().min(1).max(240).optional(),
+  part_of_speech: z.string().trim().min(1).max(120).optional(),
+  meaning_zh: z.string().trim().min(1).max(1000).optional(),
 }).strict();
 const pretestItem = z.object({
   word: z.string().trim().min(1).max(100),
   ipa: z.string().trim().min(1).max(120).describe("American English IPA, including stress marks"),
-  part_of_speech: z.string().trim().min(1).max(40).describe("Concise part of speech, such as adj. or v."),
-  meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
+  part_of_speech: z.string().trim().min(1).max(120).describe("All dictionary parts of speech, joined with / when there are several."),
+  meaning_zh: z.string().trim().min(1).max(1000).describe("Chinese meanings, with each part of speech prefixed to its meanings when available."),
   prompt: z.string().trim().max(1000).optional(),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
 }).strict();
@@ -144,6 +145,10 @@ const lessonFeedback = z.object({
 }).strict();
 const lessonProfile = z.enum(["quick_recall", "reinforce", "targeted_relearn"]);
 const lessonErrorFocus = z.enum(["meaning", "collocation", "grammar", "spelling", "pronunciation"]).nullable();
+const translatedLessonEntry = z.string().trim().min(1).max(200).refine(
+  (value) => /[A-Za-z]/.test(value) && /\p{Script=Han}/u.test(value),
+  "Lesson collocations and derivatives must include an English form and Chinese translation.",
+);
 const lessonCommon = {
   title: z.string().trim().max(120).optional(),
   progress: z.string().trim().max(40).optional(),
@@ -160,10 +165,10 @@ const explainPayload = z.object({
   mode: z.literal("explain"),
   word: z.string().trim().min(1).max(100),
   ipa: z.string().trim().min(1).max(120),
-  part_of_speech: z.string().trim().min(1).max(40),
-  meaning_zh: z.string().trim().min(1).max(240),
-  collocations: z.array(z.string().trim().min(1).max(200)).max(8),
-  derivations: z.array(z.string().trim().min(1).max(200)).max(8),
+  part_of_speech: z.string().trim().min(1).max(120),
+  meaning_zh: z.string().trim().min(1).max(1000),
+  collocations: z.array(translatedLessonEntry).max(8),
+  derivations: z.array(translatedLessonEntry).max(8),
   example_en: z.string().trim().min(1).max(1000),
   example_zh: z.string().trim().min(1).max(1000).optional(),
   note: z.string().trim().min(1).max(1000),
@@ -255,8 +260,8 @@ const dictationToolInputSchema = z.union([
 ]);
 const legacyReviewItem = z.object({
   word: z.string().trim().min(1).max(100),
-  meaning_zh: z.string().trim().min(1).max(240).describe("Concise Chinese core meaning"),
-  part_of_speech: z.string().trim().max(40).optional(),
+  meaning_zh: z.string().trim().min(1).max(1000).describe("Chinese meanings, with each part of speech prefixed to its meanings when available."),
+  part_of_speech: z.string().trim().max(120).optional(),
   direction: z.enum(["cn_to_en", "en_definition"]).default("cn_to_en"),
   error_layers: z.array(z.enum(["meaning", "collocation", "grammar", "pronunciation", "spelling"])).max(5).default([]),
 });
@@ -630,15 +635,11 @@ function lessonRetryCount(active: StudySessionRow | null, input: Extract<LessonI
 }
 
 function persistedMeaning(item: VocabularyItem): string {
-  return (Array.isArray(item.senses) ? item.senses : [])
-    .map((sense) => (typeof sense?.definition_cn === "string" ? sense.definition_cn.trim() : ""))
-    .filter(Boolean)
-    .join("；");
+  return formatMeaningByPartOfSpeech(item.senses);
 }
 
 function persistedPartOfSpeech(item: VocabularyItem): string | undefined {
-  const value = (Array.isArray(item.senses) ? item.senses : []).find((sense) => typeof sense?.pos === "string" && sense.pos.trim())?.pos.trim();
-  return value || undefined;
+  return formatPartOfSpeech(item.senses);
 }
 
 export function validatePretestItems(
@@ -926,9 +927,9 @@ async function validateLessonWord(
 
 export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): ReviewWidgetItem {
   const senses = Array.isArray(item.senses) ? item.senses : [];
-  const meaning = senses.map((sense) => typeof sense?.definition_cn === "string" ? sense.definition_cn.trim() : "").filter(Boolean).join("；");
+  const meaning = formatMeaningByPartOfSpeech(senses);
   if (!meaning) throw new Error(`Review word ${item.word} has no persisted meaning.`);
-  const partOfSpeech = senses.find((sense) => typeof sense?.pos === "string" && sense.pos.trim())?.pos.trim();
+  const partOfSpeech = formatPartOfSpeech(senses);
   return reviewWidgetItemSchema.parse({
     word: item.word,
     meaning_zh: meaning,

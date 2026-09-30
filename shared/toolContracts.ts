@@ -209,8 +209,8 @@ export type ReviewAnswerInput = z.output<typeof reviewAnswerSchema>;
 
 export const reviewWidgetItemSchema = z.object({
   word: z.string().trim().min(1).max(100),
-  meaning_zh: z.string().trim().min(1).max(240),
-  part_of_speech: z.string().trim().max(40).optional(),
+  meaning_zh: z.string().trim().min(1).max(1000),
+  part_of_speech: z.string().trim().max(120).optional(),
   direction: directionSchema.default("cn_to_en"),
   error_layers: z.array(activeErrorLayerSchema).max(5).default([]),
   is_due: z.boolean(),

@@ -240,8 +240,8 @@ describe("DeepSeek stateless JSON client", () => {
     const cosmeticDeviation = {
       ...validLesson,
       part_of_speech: "noun",
-      collocations: ["a permanent fixture"],
-      derivations: ["fix", "fixed"],
+      collocations: ["a permanent fixture（永久固定装置）"],
+      derivations: ["fix v.（固定；安装）", "fixed adj.（固定的）"],
       example_en: "Although the committee postponed its decision, evidence continued to influence public debate about reform.",
       note: "A fixture can be a fixed feature.",
       exercise: { ...validLesson.exercise, instruction: "Translate the sentence." },
@@ -429,6 +429,61 @@ describe("DeepSeek stateless JSON client", () => {
     expect(logs).not.toContain(privateAnswer);
     expect(logs).not.toContain(privateProviderText);
     expect(logs).not.toContain("test-key");
+  });
+
+  it("repairs a wrong activity type to the exact planned value and never substitutes it silently", async () => {
+    const wrongType = {
+      ...validLesson,
+      exercise: {
+        ...validLesson.exercise,
+        activity_type: "recall",
+        accepted_answers: ["fixture"],
+      },
+    };
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify(wrongType)))
+      .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
+
+    await expect(generateLesson(lessonInput)).resolves.toMatchObject({
+      exercise: { activity_type: "exact_cloze" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstRequest = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    const repairRequest = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(firstRequest.messages[0].content).toContain('唯一合法值是 "exact_cloze"');
+    expect(repairRequest.messages[1].content).toContain('服务端已锁定唯一题型为 "exact_cloze"');
+    expect(repairRequest.messages[1].content).toContain('不得改成 cloze、exact_cloze 或其他题型');
+
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify(wrongType)))
+      .mockResolvedValueOnce(response(JSON.stringify(wrongType)));
+    await expect(generateLesson(lessonInput)).rejects.toMatchObject({
+      code: "DEEPSEEK_INVALID_OUTPUT",
+      details: { issuePaths: ["exercise.activity_type"] },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("repairs missing Chinese translations for collocations and derivations", async () => {
+    const untranslated = {
+      ...validLesson,
+      collocations: ["a permanent fixture"],
+      derivations: ["fixed adj."],
+    };
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify(untranslated)))
+      .mockResolvedValueOnce(response(JSON.stringify(validLesson)));
+
+    await expect(generateLesson(lessonInput)).resolves.toMatchObject({
+      collocations: ["a permanent fixture（固定设施）"],
+      derivations: expect.arrayContaining(["fix（动词：固定）"]),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const repairRequest = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(repairRequest.messages[1].content).toContain("collocations.0");
+    expect(repairRequest.messages[1].content).toContain("derivations.0");
   });
 
   it("accepts nullable evidence fields and normalizes target_word_id to the saved word_id contract", async () => {

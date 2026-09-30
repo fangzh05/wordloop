@@ -49,8 +49,8 @@ describe("server-owned review widget payload", () => {
 
     expect(reviewWidgetItemFromVocabulary(item)).toEqual({
       word: "recur",
-      meaning_zh: "再次发生；复发；复发",
-      part_of_speech: "v.",
+      meaning_zh: "v. 再次发生；复发　n. 复发",
+      part_of_speech: "v./n.",
       error_layers: ["meaning"],
       is_due: true,
       review_kind: "both",
