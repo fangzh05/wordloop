@@ -53,7 +53,7 @@ export const ENGLISH_DEFINITION_GRADING_PROMPT = `判断用户给出的简短英
   "feedback": "..."
 }`;
 
-export const WRAPUP_GENERATION_PROMPT = `生成一道考研英语一或 IELTS Academic 难度的长难句英译中任务。若输入包含 plan.skill_goal，句子主要结构必须自然体现这个训练点；不得擅自替换为其他技能目标。句子通常 25–40 个英文词，只有一个主要结构训练点，如修饰范围、让步、指代、非谓语或名词性从句；优先自然使用一个适配目标词，第二个可选，不要硬塞两个词。提供完整英文原句和简洁指令，不返回中文译文、解析或答案。只返回 JSON：
+export const WRAPUP_GENERATION_PROMPT = `生成一道考研英语一或 IELTS Academic 难度的长难句英译中任务。若输入包含 plan.skill_goal，句子主要结构必须自然体现这个训练点；不得擅自替换为其他技能目标。prompt 只能包含完整英文原句，不得包含编号、中文提示、译文或解析；必须为 25–40 个英文词（生成后先核对词数），只有一个主要结构训练点，如修饰范围、让步、指代、非谓语或名词性从句；优先自然使用一个适配目标词，第二个可选，不要硬塞两个词。提供完整英文原句和简洁指令，不返回中文译文、解析或答案。只返回 JSON：
 {
   "activity_type": "translation_en_to_cn",
   "instruction": "请翻译成自然中文；主干分析可选。",
@@ -77,7 +77,7 @@ export const SENTENCE_CONSOLIDATION_GENERATION_PROMPT = `生成一道情境造�
   "multiline": true
 }`;
 
-export const WRAPUP_GRADING_PROMPT = `批改用户对英文长难句的中文翻译，主干分析为可选提示。判断整体命题、关键修饰与逻辑关系；自然准确的不同译法均可通过。小冠词或标点建议不能判作目标词遗忘。第一次核心错误给一个具体片段与短提示，不显示译文；第二次才提供参考译文。只返回 JSON：
+export const WRAPUP_GRADING_PROMPT = `批改用户对英文长难句的中文翻译，主干分析为可选提示。判断整体命题、关键修饰与逻辑关系；自然准确的不同译法均可通过。小冠词或标点建议不能判作目标词遗忘。第一次核心错误给一个具体片段与短提示，不显示译文；第二次才提供参考译文。error_layer 只允许 none、meaning、collocation、grammar、spelling、pronunciation；正确时用 none，错误时不能用 none。主干、从句与修饰范围错误用 grammar，原意、指代或逻辑误译用 meaning；不要输出 structure、logic、translation 或 naturalness 等其他分类。message 和 explanation 必须使用简体中文。不适用的可选字段省略。只返回 JSON：
 {
   "is_correct": false,
   "task_fulfillment": false,
