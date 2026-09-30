@@ -1,4 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { build } from "esbuild";
 
@@ -28,6 +29,14 @@ const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, ...migratio
   readFile(path.join(root, "supabase", "migrations", "20260929184221_progress_scheduled_stability_mean.sql"), "utf8"),
 ]);
 
+const assetHash = (asset: string): string => createHash("sha256").update(asset).digest("hex").slice(0, 12);
+if (!siteHtml.includes('href="/styles.css"') || !siteHtml.includes('src="/app.js"')) {
+  throw new Error("Site HTML is missing the expected stylesheet or app script reference.");
+}
+const versionedSiteHtml = siteHtml
+  .replace('href="/styles.css"', `href="/styles.css?v=${assetHash(siteCss)}"`)
+  .replace('src="/app.js"', `src="/app.js?v=${assetHash(siteJs)}"`);
+
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(path.join(outputRoot, "server"), { recursive: true });
 await mkdir(path.join(outputRoot, ".openai"), { recursive: true });
@@ -44,7 +53,7 @@ await build({
   conditions: ["worker", "browser", "import"],
   legalComments: "none",
   define: {
-    __SITE_HTML__: JSON.stringify(siteHtml),
+    __SITE_HTML__: JSON.stringify(versionedSiteHtml),
     __SITE_CSS__: JSON.stringify(siteCss),
     __SITE_JS__: JSON.stringify(siteJs),
     __SITE_MANIFEST__: JSON.stringify(siteManifest),
