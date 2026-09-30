@@ -84,10 +84,24 @@ const payloadCommon = {
   // Old persisted payloads may omit this once; the server fills it on resume.
   navigation: lessonNavigationSchema.optional(),
   consolidation: z.literal(true).optional(),
-  consolidation_kind: z.enum(["translation", "sentence"]).optional(),
+  consolidation_kind: z.enum(["translation", "translation_cn_to_en", "sentence"]).optional(),
   consolidation_trigger_round: z.number().int().positive().optional(),
   consolidation_target_words: z.array(z.string().trim().min(1).max(100)).max(3).optional(),
   consolidation_status: z.enum(["pending", "exercise", "feedback", "completed"]).optional(),
+  plan: z.object({
+    plan_version: z.literal(1),
+    plan_id: z.string().uuid(),
+    exercise_id: z.string().uuid(),
+    scope: z.enum(["lesson", "review", "consolidation"]),
+    planned_activity_type: z.string().trim().min(1).max(80),
+    skill_ids: z.array(z.string().trim().min(1).max(120)).max(8),
+    skill_goal: z.string().trim().max(300).optional(),
+    error_focus: z.string().trim().max(80).nullable().optional(),
+    hint_level: z.enum(["none", "meaning", "context", "guided"]),
+    estimated_seconds: z.number().int().min(10).max(300),
+    selection_reason: z.string().trim().min(1).max(500).optional(),
+    coverage_exception_reason: z.string().trim().max(500).optional(),
+  }).strict().optional(),
 };
 
 const explainPayloadSchema = z.object({
@@ -242,31 +256,49 @@ export function buildLessonSubmissionMessage(input: {
   activityType: string;
   prompt: string;
   answer: string;
+  submissionId?: string;
+  exerciseId?: string;
+  planId?: string;
+  hintUsed?: boolean;
 }): string {
   const submission = lessonSubmissionSchema.parse({
     word: input.word,
     activity_type: input.activityType,
     prompt: input.prompt,
     answer: input.answer,
+    ...(input.submissionId ? { submission_id: input.submissionId } : {}),
+    ...(input.exerciseId ? { exercise_id: input.exerciseId } : {}),
+    ...(input.planId ? { plan_id: input.planId } : {}),
+    hint_used: input.hintUsed ?? false,
   });
-  return `提交 WordLoop 正式学习答案。\n\n目标词：${submission.word}\n练习类型：${submission.activity_type}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n判定规则：若练习类型属于确定性题型（pretest_cn_to_en、listen_recall、spelling、word_recall），用确定性判分得到 is_correct 与 error_layer（不要凭语感判断；错误层只允许 none/spelling/meaning）；其余题型按 Teaching Prompt 做语义批改。然后调用 record_attempt 记录本次作答（record_attempt 只负责持久化，不会替你判分）。最后调用 render_lesson_widget mode=feedback，批改用词与解释由你负责。\n\n错误反馈必须帮助用户自纠：第一次答错时，message 要指出用户答案中的至少一个具体错误片段或位置，不能只写“有几处错误”或只报错误层；explanation 要说明为什么错以及下一步改哪里/怎么改，但不能给出完整改后句。第一次答错时设 reveal_answer=false 并省略 reference_answer。只有连续第二次仍错时，才可以提供 reference_answer 和完整 explanation，并设 reveal_answer=true。\n\nThe current submitted answer is authoritative: the 用户答案 field in THIS submission is the only answer to grade. Grade only this submitted answer; do not substitute or reuse an answer from an earlier chat turn.\n\nAfter grading, your response to this submission must complete BOTH tool actions:\n1. call record_attempt exactly once\n2. call render_lesson_widget exactly once with mode="feedback". Reuse this submission's word, current exercise (activity_type and prompt), and user_answer; do not generate another exercise, switch questions, or change words.\n\nDo not output the grading as ordinary chat text. The feedback is not complete until render_lesson_widget succeeds. After the feedback Widget renders successfully, remain silent in chat.`;
+  return `提交 WordLoop 正式学习答案。\n\n目标词：${submission.word}\n题型：${submission.activity_type}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\nsubmission_id：${submission.submission_id ?? "由服务端兼容生成"}\nexercise_id：${submission.exercise_id ?? "兼容旧题"}\nplan_id：${submission.plan_id ?? "兼容旧题"}\nscope：${submission.scope}\n用户主动查看提示：${submission.hint_used}\n\n程序计划已确定题型、目标、顺序与提示程度；不得替换问题或词。固定答案题由服务端确定性判分，accepted_answers 不可补充到工具参数或聊天文本；开放题按 Teaching Prompt 语义批改。技能按计划提供的 skill_ids 单独判断，skill_results 只包含确有证据的技能，不要把总体对错复制给所有技能；多词技能结果按 word_id 关联。\n\n核心正确只取决于目标词义、核心搭配和主要命题；无关的小冠词或标点可以通过并作为建议。第一次核心错误指出一个具体错误片段并给短提示，不泄漏完整答案；第二次仍错才给参考表达。\n\nThe current answer and submission_id are authoritative. Grade only this answer. Do not change or replace the current question, target word, or activity type. Call render_lesson_widget exactly once with mode=feedback and the same submission_id, exercise_id, and plan_id. Do not call record_attempt for this planned exercise: render_lesson_widget atomically records the attempt, skill evidence, cadence, and session transition. Do not output feedback in ordinary chat.`;
 }
 
 export function buildLessonConsolidationSubmissionMessage(input: {
   word: string;
-  activityType: "translation_en_to_cn" | "sentence";
-  kind: "translation" | "sentence";
+  activityType: "translation_en_to_cn" | "translation_cn_to_en" | "sentence";
+  kind: "translation" | "translation_cn_to_en" | "sentence";
   prompt: string;
   answer: string;
+  submissionId?: string;
+  exerciseId?: string;
+  planId?: string;
+  hintUsed?: boolean;
 }): string {
   const submission = lessonSubmissionSchema.parse({
     word: input.word,
     activity_type: input.activityType,
     prompt: input.prompt,
     answer: input.answer,
+    ...(input.submissionId ? { submission_id: input.submissionId } : {}),
+    ...(input.exerciseId ? { exercise_id: input.exerciseId } : {}),
+    ...(input.planId ? { plan_id: input.planId } : {}),
+    scope: "consolidation",
+    hint_used: input.hintUsed ?? false,
   });
   const translation = input.kind === "translation";
-  return `提交 WordLoop 周期巩固答案。\n\n最后一个 Lesson 词（仅作 attempts 记录锚点）：${submission.word}\n练习类型：${submission.activity_type}\n巩固类型：${input.kind}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\n\n这是一个 one task / one answer / one feedback 的 consolidation。${translation ? "批改重点：句子主干、从句和修饰关系、逻辑关系、目标词义和中文自然度；允许自然且准确的不同译法，不要因措辞不同于参考译文判错。用户可以在同一答案中写“主干：… 翻译：…”，也可以只提交翻译。" : "批改重点：目标词义、搭配、词性、句法位置和自然表达；接受合理的简单句或复合句，不要求学术风格。"} 使用 semantic grading 后，调用 record_attempt exactly once，activity_type=${submission.activity_type}，word 必须使用上面的精确锚点；record_attempt 只记录练习，不推进 FSRS。然后调用 render_lesson_widget mode=feedback、consolidation=true、consolidation_kind=${input.kind}，沿用同一个 word、原题和这次反馈。第一次答错时指出具体错误并给自纠方向，不给完整答案（reveal_answer=false，省略 reference_answer）；允许用户修改同一道题一次。第二次仍错时给参考表达并解释（reveal_answer=true），不要生成新题。\n\nThe current submitted answer is authoritative: grade only the 用户答案 field in THIS submission. After grading, call record_attempt exactly once and render_lesson_widget exactly once. Do not output feedback as ordinary chat text. After the feedback Widget succeeds, remain silent in chat.`;
+  const shortTranslation = input.kind === "translation_cn_to_en";
+  return `提交 WordLoop 应用巩固答案。\n\n目标词（仅作服务端记录锚点）：${submission.word}\n练习类型：${submission.activity_type}\n巩固类型：${input.kind}\n题目：${submission.prompt}\n用户答案：${submission.answer.trim()}\nsubmission_id：${submission.submission_id ?? "由服务端兼容生成"}\nexercise_id：${submission.exercise_id ?? "兼容旧题"}\nplan_id：${submission.plan_id ?? "兼容旧题"}\nscope：${submission.scope}\n用户主动查看提示：${submission.hint_used}\n\n这是一个 one task / one answer / one feedback 的周期巩固。${translation ? "批改重点：句子主干、从句和修饰关系、逻辑关系、目标词义和中文自然度；接受自然且准确的不同译法。" : shortTranslation ? "只围绕题面指定的一个核心词义或搭配批改，接受不同正确句式与自然表达。" : "批改重点：目标词义、搭配、词性、句法位置和自然表达；接受合理句式，不要求学术风格。"} 技能逐项提供有证据的结果，不要把总体正确复制给全部技能。\n\n第一次答错时指出具体错误并给自纠方向，不给完整答案；允许修改同一道题一次。第二次仍错时给参考表达并解释。\n\nThe current answer and submission_id are authoritative. Grade only this answer. Call render_lesson_widget exactly once with mode=feedback, consolidation=true, and the same submission_id, exercise_id, and plan_id. Do not call record_attempt: the server commits the attempt, evidence, and session state in one transaction. Do not output feedback in ordinary chat.`;
 }
 
 export function buildLessonWrapupSubmissionMessage(input: { word: string; prompt: string; answer: string }): string {
@@ -289,7 +321,17 @@ export function buildNextLessonMessage(nextWord: string): string {
 
 export function buildRoundCompleteMessage(
   finalWord?: string,
-  consolidation?: { kind: "translation" | "sentence"; trigger_round: number; target_words: string[] } | null,
+  consolidation?: {
+    kind: "translation" | "translation_cn_to_en" | "sentence";
+    trigger_round: number;
+    target_words: string[];
+    activity_type?: string;
+    plan_id?: string;
+    exercise_id?: string;
+    skill_goal?: string;
+    target_sense?: string;
+    estimated_seconds?: number;
+  } | null,
 ): string {
   const anchor = finalWord?.trim();
   if (!consolidation) {
@@ -301,23 +343,49 @@ export function buildRoundCompleteMessage(
       "Do not generate any round-end exercise or infer cadence from chat history.",
     ].join("\n");
   }
-  const translation = consolidation.kind === "translation";
+  const activity = consolidation.activity_type ?? (consolidation.kind === "translation" ? "translation_en_to_cn" : consolidation.kind);
+  const translation = activity === "translation_en_to_cn";
+  const shortTranslation = activity === "translation_cn_to_en";
   return [
     "WORDLOOP_ROUND_COMPLETE",
     "",
     "The current Lesson round is complete.",
     `Server cadence: ${consolidation.kind}, trigger round ${consolidation.trigger_round}.`,
     `Use exactly these server-selected target words: ${consolidation.target_words.join(", ")}.`,
+    `Persisted plan: plan_id=${consolidation.plan_id ?? "use saved plan"}, exercise_id=${consolidation.exercise_id ?? "use saved exercise id"}, activity_type=${activity}, skill_goal=${consolidation.skill_goal ?? "follow saved plan"}, target_sense=${consolidation.target_sense ?? "follow saved plan"}, estimated_seconds=${consolidation.estimated_seconds ?? 120}.`,
     translation
-      ? "Create one natural 25–40-word formal English sentence using at least two target words; ask the user to find its main clause and translate the whole sentence into natural Chinese."
-      : "Create one short task asking the user to write one natural 15–30-word English sentence using these target words.",
+      ? "Create one natural 25–40-word sentence with one primary structure point; use one suitable target word if natural (a second is optional). Ask for a Chinese translation; main-clause analysis is optional."
+      : shortTranslation
+        ? "Create one complete, concrete Chinese-to-English translation task for one core word sense or collocation; the Chinese sentence must be clear and expected English output about 12–25 words."
+        : "Create one concrete contextual application goal using the displayed target word; ask for one natural English sentence, usually 10–25 words. Mark it as prompted application.",
     "Render exactly one task in the existing LessonWidget; do not add another exercise.",
     `Call render_lesson_widget with mode=exercise, consolidation=true, consolidation_kind=${consolidation.kind},`,
     ...(anchor ? [`word=${anchor} (the exact final Lesson word; bookkeeping anchor only),`] : ["word set to the exact final Lesson word from the completed card,"]),
-    `activity_type=${translation ? "translation_en_to_cn" : "sentence"}, multiline=true.`,
+    `activity_type=${activity}, multiline=true.`,
     "",
     "The server, not this model or the client, controls cadence. Keep the complete task in the Widget.",
   ].join("\n");
+}
+
+function consolidationPlanForPayload(payload: Payload): {
+  planned_activity_type: string;
+  plan_id?: string;
+  exercise_id?: string;
+  skill_goal?: string;
+  target_sense?: string;
+  estimated_seconds?: number;
+} | undefined {
+  const extra = payload as Record<string, unknown>;
+  const candidate = extra.consolidation_plan ?? payload.plan;
+  const parsed = z.object({
+    planned_activity_type: z.string(),
+    plan_id: z.string().uuid().optional(),
+    exercise_id: z.string().uuid().optional(),
+    skill_goal: z.string().optional(),
+    target_sense: z.string().optional(),
+    estimated_seconds: z.number().int().optional(),
+  }).passthrough().safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function canStartNextLesson(status: NextLessonStatus): boolean {
@@ -344,6 +412,7 @@ export function LessonWidget(): React.JSX.Element {
   const [playing, setPlaying] = useState(false);
   const [dictionaryAudio, setDictionaryAudio] = useState<Record<string, string>>({});
   const [dictionaryReady, setDictionaryReady] = useState(false);
+  const submissionIdRef = useRef<string | null>(null);
   const [englishVoiceAvailable, setEnglishVoiceAvailable] = useState(false);
   const [widgetLoadError, setWidgetLoadError] = useState("");
   const signatureRef = useRef("");
@@ -497,6 +566,7 @@ export function LessonWidget(): React.JSX.Element {
     setError("");
     setAnswer("");
     setSubmitStatus("idle");
+    submissionIdRef.current = null;
     try {
       if (!window.__WORDLOOP_PREVIEW__) {
         const result = await callServerTool("advance_study_session", buildLessonSessionAdvance("lesson_start_exercise"));
@@ -516,10 +586,14 @@ export function LessonWidget(): React.JSX.Element {
       const message = payload.mode !== "explain" && payload.consolidation === true
         ? buildLessonConsolidationSubmissionMessage({
           word: currentWord,
-          activityType: activityType as "translation_en_to_cn" | "sentence",
-          kind: payload.consolidation_kind === "sentence" ? "sentence" : "translation",
+          activityType: activityType as "translation_en_to_cn" | "translation_cn_to_en" | "sentence",
+          kind: payload.consolidation_kind === "sentence" ? "sentence" : payload.consolidation_kind === "translation_cn_to_en" ? "translation_cn_to_en" : "translation",
           prompt: exercisePrompt,
           answer,
+          submissionId: submissionIdRef.current ??= crypto.randomUUID(),
+          exerciseId: payload.plan?.exercise_id,
+          planId: payload.plan?.plan_id,
+          hintUsed: payload.hint_used === true,
         })
         : payload.mode !== "explain" && payload.wrapup === true
           ? buildLessonWrapupSubmissionMessage({ word: currentWord, prompt: exercisePrompt, answer })
@@ -528,6 +602,10 @@ export function LessonWidget(): React.JSX.Element {
           activityType,
           prompt: exercisePrompt,
           answer,
+          submissionId: submissionIdRef.current ??= crypto.randomUUID(),
+          exerciseId: payload.plan?.exercise_id,
+          planId: payload.plan?.plan_id,
+          hintUsed: false,
         });
       await sendUserMessage(message);
       setSubmitStatus("sent");
@@ -553,10 +631,17 @@ export function LessonWidget(): React.JSX.Element {
       if (payload.mode !== "explain" && payload.consolidation === true
         && payload.consolidation_status === "pending") {
         const targetWords = payload.consolidation_target_words ?? [];
+        const savedPlan = consolidationPlanForPayload(payload);
         await sendUserMessage(buildRoundCompleteMessage(currentWord, {
-          kind: payload.consolidation_kind === "sentence" ? "sentence" : "translation",
+          kind: payload.consolidation_kind === "sentence" ? "sentence" : payload.consolidation_kind === "translation_cn_to_en" ? "translation_cn_to_en" : "translation",
           trigger_round: payload.consolidation_trigger_round ?? 0,
           target_words: targetWords,
+          activity_type: savedPlan?.planned_activity_type,
+          plan_id: savedPlan?.plan_id,
+          exercise_id: savedPlan?.exercise_id,
+          skill_goal: savedPlan?.skill_goal,
+          target_sense: savedPlan?.target_sense,
+          estimated_seconds: savedPlan?.estimated_seconds,
         }));
         nextStatusRef.current = "sent";
         setNextStatus("sent");
@@ -567,29 +652,52 @@ export function LessonWidget(): React.JSX.Element {
       if (navigation.action === "next_word") {
         await sendUserMessage(buildNextLessonMessage(navigation.next_word));
       } else {
-        let consolidation: { kind: "translation" | "sentence"; trigger_round: number; target_words: string[] } | null = null;
+        let consolidation: {
+          kind: "translation" | "translation_cn_to_en" | "sentence";
+          trigger_round: number;
+          target_words: string[];
+          activity_type?: string;
+          plan_id?: string;
+          exercise_id?: string;
+          skill_goal?: string;
+          target_sense?: string;
+          estimated_seconds?: number;
+        } | null = null;
         if (payload.phase !== "lesson_complete" && !window.__WORDLOOP_PREVIEW__) {
           const result = await callServerTool("advance_study_session", buildLessonSessionAdvance("lesson_complete"));
           if (result.isError) throw new Error("无法保存本轮完成状态，请重试。");
           const resultValue = toolResultData(result);
           if (typeof resultValue === "object" && resultValue !== null && !Array.isArray(resultValue)) {
             const parsed = z.object({
-              kind: z.enum(["translation", "sentence"]),
+              kind: z.enum(["translation", "translation_cn_to_en", "sentence"]),
               trigger_round: z.number().int().positive(),
               target_words: z.array(z.string().trim().min(1).max(100)).min(1).max(3),
+              activity_type: z.string().optional(),
+              plan_id: z.string().uuid().optional(),
+              exercise_id: z.string().uuid().optional(),
+              skill_goal: z.string().optional(),
+              target_sense: z.string().optional(),
+              estimated_seconds: z.number().int().optional(),
             }).safeParse((resultValue as Record<string, unknown>).consolidation);
             if (parsed.success) consolidation = parsed.data;
           }
         } else if (payload.consolidation === true) {
+          const savedPlan = consolidationPlanForPayload(payload);
           const parsed = z.object({
-            kind: z.enum(["translation", "sentence"]),
+            kind: z.enum(["translation", "translation_cn_to_en", "sentence"]),
             trigger_round: z.number().int().positive(),
             target_words: z.array(z.string().trim().min(1).max(100)).min(1).max(3),
           }).safeParse({
             kind: payload.consolidation_kind,
-            trigger_round: payload.consolidation_trigger_round,
-            target_words: payload.consolidation_target_words,
-          });
+          trigger_round: payload.consolidation_trigger_round,
+          target_words: payload.consolidation_target_words,
+          activity_type: savedPlan?.planned_activity_type,
+          plan_id: savedPlan?.plan_id,
+          exercise_id: savedPlan?.exercise_id,
+          skill_goal: savedPlan?.skill_goal,
+          target_sense: savedPlan?.target_sense,
+          estimated_seconds: savedPlan?.estimated_seconds,
+        });
           if (parsed.success) consolidation = parsed.data;
         }
         await sendUserMessage(buildRoundCompleteMessage(currentWord, consolidation));
@@ -603,6 +711,22 @@ export function LessonWidget(): React.JSX.Element {
     }
   }
 
+  async function deferPendingConsolidation(): Promise<void> {
+    if (!payload || payload.consolidation_status !== "pending" || nextStatusRef.current === "sending") return;
+    nextStatusRef.current = "sending";
+    setNextStatus("sending");
+    setError("");
+    try {
+      await sendUserMessage("我选择稍后做这道应用巩固。请对当前持久化的 pending 任务调用 advance_study_session，event=lesson_consolidation_defer；随后 finish_study_session exactly once 结束本轮。不要生成或批改巩固题，不推进 rotation cursor，不增加词汇完成数。最后调用 render_learning_dashboard 显示保留的待做任务，并保持聊天区安静。");
+      nextStatusRef.current = "sent";
+      setNextStatus("sent");
+    } catch (caught) {
+      nextStatusRef.current = "error";
+      setNextStatus("error");
+      setError(caught instanceof Error ? caught.message : "稍后处理没有保存，请重试。");
+    }
+  }
+
   async function retryExercise(): Promise<void> {
     if (!payload || payload.mode !== "feedback") return;
     setSubmitStatus("sending");
@@ -612,6 +736,7 @@ export function LessonWidget(): React.JSX.Element {
         const result = await callServerTool("advance_study_session", buildLessonSessionAdvance("lesson_retry"));
         if (result.isError) throw new Error("无法保存重试阶段，请重试。");
       }
+      submissionIdRef.current = null;
       setLocalMode("exercise");
       setAnswer("");
       setSubmitStatus("idle");
@@ -628,14 +753,17 @@ export function LessonWidget(): React.JSX.Element {
     return <section className="widget-card skeleton" aria-busy="true"><span>正在加载学习内容…</span></section>;
   }
 
+  const pendingConsolidation = payload.consolidation === true && payload.consolidation_status === "pending";
+
   if (mode === "exercise") {
     const consolidation = payload.consolidation === true;
-    const consolidationTitle = payload.consolidation_kind === "sentence" ? "造句练习" : "长难句翻译";
+    const consolidationTitle = payload.consolidation_kind === "sentence" ? "情境造句"
+      : payload.consolidation_kind === "translation_cn_to_en" ? "完整中译英" : "长难句英译中";
     return <section className="widget-card lesson-card" aria-labelledby="lesson-exercise-title">
       <header className="widget-header compact-header">
         <div>
           <span className="eyebrow">{consolidation ? consolidationTitle : payload.title ?? "练习"}</span>
-          <h1 id="lesson-exercise-title">{consolidation ? payload.progress ?? (payload.consolidation_kind === "sentence" ? "周期巩固 · 主动表达" : "周期巩固 · 英译中") : payload.progress ?? "当前练习"}</h1>
+          <h1 id="lesson-exercise-title">{consolidation ? payload.progress ?? (payload.consolidation_kind === "sentence" ? "应用巩固 · 情境造句" : payload.consolidation_kind === "translation_cn_to_en" ? "应用巩固 · 中译英" : "应用巩固 · 长难句英译中") : payload.progress ?? "当前练习"}</h1>
         </div>
         <FocusButton />
       </header>
@@ -697,8 +825,8 @@ export function LessonWidget(): React.JSX.Element {
     return <section className="widget-card lesson-card" aria-labelledby="lesson-feedback-title">
       <header className="widget-header compact-header">
         <div>
-          <span className="eyebrow">{consolidation ? payload.consolidation_kind === "sentence" ? "造句练习" : "长难句翻译" : "批改"}</span>
-          <h1 id="lesson-feedback-title">{consolidation ? (correct ? "巩固完成" : "需要修改") : completed ? "本轮词汇已完成" : correct ? "✓ 通过" : "需要修改"}</h1>
+          <span className="eyebrow">{consolidation ? payload.consolidation_kind === "sentence" ? "情境造句" : payload.consolidation_kind === "translation_cn_to_en" ? "完整中译英" : "长难句英译中" : "批改"}</span>
+          <h1 id="lesson-feedback-title">{pendingConsolidation ? "词汇轮完成" : consolidation ? (correct ? "巩固完成" : "需要修改") : completed ? "本轮词汇已完成" : correct ? "✓ 通过" : "需要修改"}</h1>
         </div>
         <FocusButton />
       </header>
@@ -710,8 +838,14 @@ export function LessonWidget(): React.JSX.Element {
         {feedback?.explanation ? <p><strong>{feedbackGuidanceLabel(reveal)}：</strong>{feedback.explanation}</p> : null}
       </div> : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
-      {!consolidation && payload.wrapup !== true ? <LessonFeedbackNextStep canContinue={canContinue} navigation={navigation} /> : null}
-      {canContinue
+      {pendingConsolidation ? <div className="lesson-feedback">
+        <p>应用巩固待做：{payload.consolidation_kind === "sentence" ? "情境造句" : payload.consolidation_kind === "translation_cn_to_en" ? "完整中译英" : "长难句英译中"}。可以现在做（约 2 分钟），也可以稍后从 Dashboard 开始。</p>
+      </div> : null}
+      {!pendingConsolidation && !consolidation && payload.wrapup !== true ? <LessonFeedbackNextStep canContinue={canContinue} navigation={navigation} /> : null}
+      {pendingConsolidation ? <>
+        <Button onClick={() => void nextLesson()} disabled={nextDisabled}>{nextStatus === "sending" ? "正在打开…" : "做一道，约 2 分钟"}</Button>
+        <Button className="secondary" onClick={() => void deferPendingConsolidation()} disabled={nextDisabled}>{nextStatus === "sending" ? "正在保存…" : "稍后做"}</Button>
+      </> : canContinue
         ? <Button onClick={() => void nextLesson()} disabled={nextDisabled}>
           {nextStatus === "sending" ? "正在进入下一步…" : nextStatus === "sent" ? "已进入下一步" : consolidation || payload.wrapup === true ? "继续学习" : roundComplete || completed ? "完成本轮并继续" : "下一词"}
           {nextStatus === "idle" || nextStatus === "error" ? <ArrowIcon className="button-icon trailing" /> : null}

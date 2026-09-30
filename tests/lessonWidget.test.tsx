@@ -339,12 +339,12 @@ describe("guided lesson widget", () => {
   it("sends the minimum exercise data directly in the follow-up message", () => {
     const message = buildLessonSubmissionMessage({ word: "planet", activityType: "sentence", prompt: "Use planet in a new scene.", answer: "  My answer  " });
     expect(message).toContain("目标词：planet");
-    expect(message).toContain("练习类型：sentence");
+    expect(message).toContain("题型：sentence");
     expect(message).toContain("题目：Use planet in a new scene.");
     expect(message).toContain("用户答案：My answer");
-    expect(message).toContain("具体错误片段或位置");
-    expect(message).toContain("下一步改哪里/怎么改");
-    expect(message).toContain("省略 reference_answer");
+    expect(message).toContain("第一次核心错误指出一个具体错误片段并给短提示");
+    expect(message).toContain("不泄漏完整答案");
+    expect(message).toContain("第二次仍错才给参考表达");
   });
 
   it("makes the current submission authoritative and requires terminal Widget feedback", () => {
@@ -355,14 +355,12 @@ describe("guided lesson widget", () => {
       answer: "air-conditioned",
     });
     expect(message).toContain("用户答案：air-conditioned");
-    expect(message).toContain("current submitted answer is authoritative");
-    expect(message).toContain("Grade only this submitted answer");
-    expect(message).toContain("do not substitute or reuse an answer from an earlier chat turn");
-    expect(message).toContain("record_attempt exactly once");
-    expect(message).toContain('render_lesson_widget exactly once with mode="feedback"');
-    expect(message).toContain("Do not output the grading as ordinary chat text");
-    expect(message).toContain("The feedback is not complete until render_lesson_widget succeeds");
-    expect(message).toContain("do not generate another exercise, switch questions, or change words");
+    expect(message).toContain("The current answer and submission_id are authoritative");
+    expect(message).toContain("Grade only this answer");
+    expect(message).toContain("不得替换问题或词");
+    expect(message).toContain("Do not call record_attempt");
+    expect(message).toContain("render_lesson_widget exactly once with mode=feedback");
+    expect(message).toContain("Do not output feedback in ordinary chat");
   });
 
   it("sends consolidation answers back through the same Lesson Widget without FSRS", () => {
@@ -374,17 +372,15 @@ describe("guided lesson widget", () => {
       answer: "主干：researchers continued monitoring; 尽管样本开始缩小，研究人员仍继续监测。",
     });
     expect(message).toContain("周期巩固");
-    expect(message).toContain("word 必须使用上面的精确锚点");
-    expect(message).toContain("mode=feedback、consolidation=true");
-    expect(message).toContain("record_attempt");
-    expect(message).toContain("不推进 FSRS");
-    expect(message).toContain("current submitted answer is authoritative");
-    expect(message).toContain("record_attempt exactly once");
+    expect(message).toContain("目标词（仅作服务端记录锚点）：shrink");
+    expect(message).toContain("mode=feedback, consolidation=true");
+    expect(message).toContain("Do not call record_attempt");
+    expect(message).toContain("server commits the attempt, evidence, and session state in one transaction");
+    expect(message).toContain("The current answer and submission_id are authoritative");
     expect(message).toContain("render_lesson_widget exactly once");
-    expect(message).toContain("mode=feedback、consolidation=true");
-    expect(message).toContain("Do not output feedback as ordinary chat text");
-    expect(message).toContain("After the feedback Widget succeeds, remain silent in chat");
-    expect(message).toContain("不要生成新题");
+    expect(message).toContain("mode=feedback, consolidation=true");
+    expect(message).toContain("Do not output feedback in ordinary chat");
+    expect(message).toContain("Do not output feedback in ordinary chat");
   });
 
   it("shows the backend next word, round wrap-up, or retry as the feedback next step", () => {
@@ -466,10 +462,18 @@ describe("guided lesson widget", () => {
     const translation = buildRoundCompleteMessage("shrink", { kind: "translation", trigger_round: 2, target_words: ["policy", "pressure"] });
     expect(translation).toContain("consolidation_kind=translation");
     expect(translation).toContain("activity_type=translation_en_to_cn");
-    expect(translation).toContain("25–40-word formal English sentence");
+    expect(translation).toContain("25–40-word sentence with one primary structure point");
+    const fullTranslation = buildRoundCompleteMessage("allocate", {
+      kind: "translation_cn_to_en", trigger_round: 10, target_words: ["allocate"],
+      activity_type: "translation_cn_to_en", plan_id: "00000000-0000-4000-9000-000000000201",
+      exercise_id: "00000000-0000-4000-9000-000000000301", skill_goal: "核心搭配输出", estimated_seconds: 120,
+    });
+    expect(fullTranslation).toContain("activity_type=translation_cn_to_en");
+    expect(fullTranslation).toContain("complete, concrete Chinese-to-English translation task");
+    expect(fullTranslation).toContain("plan_id=00000000-0000-4000-9000-000000000201");
     const sentence = buildRoundCompleteMessage("shrink", { kind: "sentence", trigger_round: 3, target_words: ["alleviate"] });
     expect(sentence).toContain("consolidation_kind=sentence");
     expect(sentence).toContain("activity_type=sentence");
-    expect(sentence).toContain("15–30-word English sentence");
+    expect(sentence).toContain("usually 10–25 words");
   });
 });

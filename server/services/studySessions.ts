@@ -8,7 +8,11 @@ import {
   pretestMarkFamiliarSchema,
   reviewAnswerSchema,
   reviewWidgetItemSchema,
+  lessonExercisePlanSchema,
   type PretestMarkFamiliarInput,
+  type ExerciseScope,
+  type LessonExercisePlan,
+  type SkillEvidence,
   type ReviewAnswerInput,
 } from "../../shared/toolContracts.js";
 import type { StudyFlow, StudyPhase, StudySessionEvent, StudySessionRow, StudyState, StudyWidget, VocabularyItem } from "../types.js";
@@ -41,6 +45,7 @@ const studyFlowSchema = z.object({
     lesson_profile: z.enum(["quick_recall", "reinforce", "targeted_relearn"]),
     error_focus: activeErrorLayerSchema.nullable(),
   }).strict()).max(REVIEW_SESSION_MAX).optional(),
+  exercise_plans: z.array(lessonExercisePlanSchema).max(REVIEW_SESSION_MAX).optional(),
 }).strict().default({ relearn_words: [], pretest_familiar_words: [] });
 const reviewSessionPayloadSchema = z.object({
   widget: z.literal("review"),
@@ -322,6 +327,7 @@ export async function hasCompletedLessonRelearnToday(
       .select("session_id,activity_type,is_correct,created_at,word:words!inner(normalized_word)")
       .eq("user_id", userId)
       .eq("word.normalized_word", normalizedWord)
+      .in("scope", ["review", "lesson"])
       .gte("created_at", start)
       .lt("created_at", end)
       .in("session_id", sessionIds)
@@ -486,6 +492,64 @@ export async function persistStudyStateIfRevision(
   return parseSession(data);
 }
 
+/** Commit one plan-bound answer, evidence event, cadence settlement, and session CAS together. */
+export async function recordPlannedSubmission(input: {
+  active: StudySessionRow;
+  expected_revision: string | null;
+  submission_id: string;
+  plan: LessonExercisePlan;
+  scope: ExerciseScope;
+  word: string;
+  activity_type: string;
+  user_answer: string;
+  is_correct: boolean;
+  error_layer: string;
+  skill_evidence: SkillEvidence[];
+  first_attempt: boolean;
+  hint_used: boolean;
+  answer_revealed: boolean;
+  active_ms: number | null;
+  grading_ms: number | null;
+  next_state: StudyState;
+  completion_date: string;
+  cadence_candidates?: Record<string, unknown>;
+}, db: StudySessionDb = getDatabase(), userId = getAuthenticatedUserId()): Promise<StudySessionRow> {
+  if (!input.expected_revision) throw new StaleStudyStateError();
+  const { data, error } = await db.rpc("record_planned_submission_v1", {
+    p_user_id: userId,
+    p_session_id: input.active.id,
+    p_expected_revision: input.expected_revision,
+    p_submission_id: input.submission_id,
+    p_plan_id: input.plan.plan_id,
+    p_exercise_id: input.plan.exercise_id,
+    p_scope: input.scope,
+    p_normalized_word: normalizeWord(input.word),
+    p_activity_type: input.activity_type,
+    p_user_answer: input.user_answer,
+    p_is_correct: input.is_correct,
+    p_error_layer: input.error_layer,
+    p_skill_ids: input.plan.skill_ids,
+    p_skill_evidence: input.skill_evidence,
+    p_first_attempt: input.first_attempt,
+    p_hint_used: input.hint_used,
+    p_answer_revealed: input.answer_revealed,
+    p_active_ms: input.active_ms,
+    p_grading_ms: input.grading_ms,
+    p_next_state: input.next_state,
+    p_new_words_count: input.active.new_words_count,
+    p_review_words_count: input.active.review_words_count,
+    p_completion_date: input.completion_date,
+    p_cadence_candidates: input.cadence_candidates ?? {},
+  });
+  if (error) {
+    const message = typeof error.message === "string" ? error.message : "";
+    if (/STALE_STUDY_STATE|PLANNED_EXERCISE_MISMATCH|PLANNED_WORD_MISMATCH/.test(message)) throw new StaleStudyStateError();
+    assertDatabaseResult(error);
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("PLANNED_SUBMISSION_RESULT_MISSING");
+  return parseSession(data);
+}
+
 /** Freeze the first Lesson queue for an existing study flow. */
 export async function freezeLessonQueueForSession(
   session: StudySessionRow,
@@ -526,6 +590,7 @@ export async function freezeLessonQueueForSession(
 
 interface SessionAttemptRow {
   activity_type: string;
+  scope: string;
   created_at: string;
   word: { normalized_word: string } | Array<{ normalized_word: string }>;
 }
@@ -537,7 +602,7 @@ async function getLegacyLessonAttemptWords(
 ): Promise<string[]> {
   const { data, error } = await db
     .from("attempts")
-    .select("activity_type,created_at,word:words!inner(normalized_word)")
+    .select("activity_type,scope,created_at,word:words!inner(normalized_word)")
     .eq("user_id", userId)
     .gte("created_at", session.started_at)
     .order("created_at", { ascending: true });
@@ -546,7 +611,8 @@ async function getLegacyLessonAttemptWords(
     // Pretest and Review attempts prove those stages, not that the word was
     // visited by the formal Lesson widget. Keep relearn words from the old
     // flow pending unless a Lesson-side attempt actually visited them.
-    .filter((row) => !row.activity_type.startsWith("pretest_") && row.activity_type !== "review")
+    .filter((row) => row.scope === "lesson"
+      && !row.activity_type.startsWith("pretest_") && row.activity_type !== "review")
     .map((row) => Array.isArray(row.word) ? row.word[0]?.normalized_word : row.word.normalized_word)
     .filter((word): word is string => Boolean(word));
 }
@@ -999,6 +1065,14 @@ export function advanceStudyState(
       }
       return { ...state, phase: "lesson_complete" };
     }
+    if (event === "lesson_consolidation_defer") {
+      if (state.phase !== "lesson_complete" || state.payload.mode !== "feedback"
+        || state.payload.consolidation !== true || state.payload.consolidation_status !== "pending") {
+        throw stateError(event, state.phase);
+      }
+      if (state.payload.consolidation_deferred === true) return state;
+      return { ...state, payload: { ...state.payload, consolidation_deferred: true } };
+    }
     throw new Error(`Event ${event} is not valid for a lesson session.`);
   }
 
@@ -1149,16 +1223,16 @@ export function studySessionSummary(session: StudySessionRow | null, pretestResu
   current_word?: string | null;
   current_index?: number;
   revision?: string;
-  consolidation?: { kind: "translation" | "sentence"; trigger_round: number; target_words: string[] };
+  consolidation?: { kind: "translation" | "translation_cn_to_en" | "sentence"; trigger_round: number; target_words: string[]; activity_type?: string; plan_id?: string; exercise_id?: string; skill_goal?: string; target_sense?: string; estimated_seconds?: number };
   pretest_results?: Array<{ word: string; status: string; user_answer?: string; is_correct?: boolean; error_layer?: string }>;
 } {
   if (!session || session.ended_at || !session.state) return { active: false };
   const rawConsolidation = session.state.payload.consolidation === true
-    && (session.state.payload.consolidation_kind === "translation" || session.state.payload.consolidation_kind === "sentence")
+    && (session.state.payload.consolidation_kind === "translation" || session.state.payload.consolidation_kind === "translation_cn_to_en" || session.state.payload.consolidation_kind === "sentence")
     && typeof session.state.payload.consolidation_trigger_round === "number"
     && Array.isArray(session.state.payload.consolidation_target_words)
     ? {
-      kind: session.state.payload.consolidation_kind as "translation" | "sentence",
+      kind: session.state.payload.consolidation_kind as "translation" | "translation_cn_to_en" | "sentence",
       trigger_round: session.state.payload.consolidation_trigger_round,
       target_words: session.state.payload.consolidation_target_words.filter((word): word is string => typeof word === "string"),
     }
@@ -1171,6 +1245,21 @@ export function studySessionSummary(session: StudySessionRow | null, pretestResu
     current_index: session.state.current_index,
     ...(rawConsolidation ? { consolidation: rawConsolidation } : {}),
   };
+  const plan = lessonExercisePlanSchema.safeParse(session.state.payload.consolidation_plan ?? session.state.payload.plan);
+  if (rawConsolidation && plan.success) {
+    return {
+      ...summary,
+      consolidation: {
+        ...rawConsolidation,
+        activity_type: plan.data.planned_activity_type,
+        plan_id: plan.data.plan_id,
+        exercise_id: plan.data.exercise_id,
+        skill_goal: plan.data.skill_goal,
+        target_sense: plan.data.target_sense,
+        estimated_seconds: plan.data.estimated_seconds,
+      },
+    };
+  }
   if (session.state.widget === "pretest" && pretestResults) {
     return { ...summary, revision: session.updated_at, pretest_results: pretestResults };
   }
@@ -1198,11 +1287,14 @@ export function isCompletedLessonRound(state: StudyState | null): boolean {
   if (!lessonWords || lessonWords.length === 0 || state.current_index !== lastIndex
     || !state.current_word || normalizeWord(state.current_word) !== normalizeWord(lessonWords[lastIndex] ?? "")) return false;
   if (state.payload.mode !== "feedback") return false;
-  if (state.payload.consolidation === true && state.payload.consolidation_status !== "feedback") return false;
+  const deferredPending = state.payload.consolidation === true
+    && state.payload.consolidation_status === "pending"
+    && state.payload.consolidation_deferred === true;
+  if (state.payload.consolidation === true && state.payload.consolidation_status !== "feedback" && !deferredPending) return false;
   if (state.payload.consolidation !== true && state.payload.wrapup === true) return false;
   if (typeof state.payload.feedback !== "object" || state.payload.feedback === null || Array.isArray(state.payload.feedback)) return false;
   const feedback = state.payload.feedback as Record<string, unknown>;
-  return feedback.is_correct === true || feedback.reveal_answer === true;
+  return feedback.is_correct === true || feedback.reveal_answer === true || deferredPending;
 }
 
 export async function finishStudySession(
@@ -1242,7 +1334,8 @@ export async function finishStudySession(
           consolidation_kind: active.state.payload.consolidation_kind,
           consolidation_trigger_round: active.state.payload.consolidation_trigger_round,
           consolidation_target_words: active.state.payload.consolidation_target_words,
-          consolidation_status: "completed",
+          consolidation_status: active.state.payload.consolidation_deferred === true ? "pending" : "completed",
+          ...(active.state.payload.consolidation_deferred === true ? { consolidation_deferred: true } : {}),
         } : {}),
       },
     }

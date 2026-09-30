@@ -22,10 +22,14 @@ const mocks = vi.hoisted(() => ({
   buildReviewWidgetPayload: vi.fn(),
   recordAttempt: vi.fn(),
   getCompletedLessonWords: vi.fn(async () => new Set<string>()),
+  getLessonCadence: vi.fn(async () => ({ completion_credit: 0, rotation_cursor: 0, pending_task: null })),
+  planLessonQueue: vi.fn(),
+  recordPlannedSubmission: vi.fn(),
   getDueReviewSelection: vi.fn(),
   recordReviewSubmission: vi.fn(),
   finishStudySession: vi.fn(),
   generateLesson: vi.fn(),
+  generatePlannedConsolidation: vi.fn(),
   generateWrapup: vi.fn(),
   generateSentenceConsolidation: vi.fn(),
   gradeEnglishDefinition: vi.fn(),
@@ -50,6 +54,7 @@ vi.mock("../server/services/lessonConsolidation.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/lessonConsolidation.js")>("../server/services/lessonConsolidation.js");
   return {
     ...actual,
+    getLessonCadence: mocks.getLessonCadence,
     decideLessonConsolidation: vi.fn(async (state: any) => mocks.consolidationDecision
       ? { ...state, payload: { ...state.payload, ...mocks.consolidationDecision } }
       : state),
@@ -89,6 +94,7 @@ vi.mock("../server/services/studySessions.js", async () => {
       return mocks.active;
     }),
     persistStudyStateIfRevision: vi.fn(persist),
+    recordPlannedSubmission: mocks.recordPlannedSubmission,
     advanceStudySessionIfRevision: vi.fn(async (event: string, index: number, expectedRevision: string, expectedSessionId: string) => {
       mocks.advanceEvents.push(event);
       const active = mocks.active;
@@ -138,12 +144,17 @@ vi.mock("../server/services/deepseek.js", async () => {
   return {
     ...actual,
     generateLesson: mocks.generateLesson,
+    generatePlannedConsolidation: mocks.generatePlannedConsolidation,
     generateWrapup: mocks.generateWrapup,
     generateSentenceConsolidation: mocks.generateSentenceConsolidation,
     gradeEnglishDefinition: mocks.gradeEnglishDefinition,
     gradeSemanticAnswer: mocks.gradeSemanticAnswer,
     gradeWrapupAnswer: mocks.gradeWrapupAnswer,
   };
+});
+vi.mock("../server/services/exercisePlanner.js", async () => {
+  const actual = await vi.importActual<typeof import("../server/services/exercisePlanner.js")>("../server/services/exercisePlanner.js");
+  return { ...actual, planLessonQueue: mocks.planLessonQueue };
 });
 
 import { handleWebApiRequest } from "../server/webApi.js";
@@ -168,6 +179,25 @@ function row(state: any, revision = "rev-a") {
   };
 }
 
+function lessonPlan(activityType: string, scope: "lesson" | "consolidation" = "lesson") {
+  return {
+    plan_version: 1,
+    plan_id: "00000000-0000-4000-9000-000000000101",
+    exercise_id: "00000000-0000-4000-9000-000000000102",
+    scope,
+    word_id: "00000000-0000-4000-9000-000000000103",
+    target_word_ids: ["00000000-0000-4000-9000-000000000103"],
+    target_sense: "设施；固定的事物",
+    planned_activity_type: activityType,
+    skill_goal: "回忆目标词核心义",
+    error_focus: null,
+    skill_ids: ["target_sense_retrieval"],
+    hint_level: "none",
+    estimated_seconds: 20,
+    selection_reason: "测试固定计划",
+  };
+}
+
 function lessonState(activityType = "sentence", phase = "lesson_exercise", retryCount = 0) {
   return makeStudyState({
     date,
@@ -182,6 +212,7 @@ function lessonState(activityType = "sentence", phase = "lesson_exercise", retry
       widget_version: 3,
       mode: "exercise",
       word: "fixture",
+      plan: lessonPlan(activityType),
       activity_type: activityType,
       instruction: "Translate or explain the sentence.",
       prompt: "A fresh prompt in a separate context.",
@@ -230,9 +261,30 @@ describe("Standalone Web API shared-state boundaries", () => {
       return finished;
     });
     mocks.getVocabularyItemsByWords.mockResolvedValue([{
+      word_id: "00000000-0000-4000-9000-000000000103",
       word: "fixture", display_word: "fixture", status: "unknown", error_layers: [], ipa_us: "/ˈfɪks.tʃər/",
       senses: [{ pos: "n.", definition_cn: "设施；固定的事物" }],
     }]);
+    mocks.planLessonQueue.mockImplementation(async (queue: string[]) => queue.map((word, index) => ({
+      ...lessonPlan("exact_cloze"),
+      plan_id: `00000000-0000-4000-9000-${String(201 + index).padStart(12, "0")}`,
+      exercise_id: `00000000-0000-4000-9000-${String(301 + index).padStart(12, "0")}`,
+      selection_reason: `测试计划 ${word}`,
+    })));
+    mocks.recordPlannedSubmission.mockImplementation(async (input: any) => {
+      if (mocks.active?.updated_at !== input.expected_revision || mocks.active?.id !== input.active.id) throw new Error("STALE_STUDY_STATE");
+      if (input.scope === "lesson") mocks.recordAttempt({
+          word: input.word,
+          session_id: input.active.id,
+          activity_type: input.activity_type,
+          user_answer: input.user_answer,
+          is_correct: input.is_correct,
+          error_layer: input.error_layer,
+        });
+      const saved = { ...mocks.active, state: input.next_state, updated_at: `rev-${++mocks.revisionNumber}` };
+      mocks.active = saved;
+      return saved;
+    });
     mocks.generateLesson.mockResolvedValue({
       ipa: "/ˈfɪks.tʃər/", part_of_speech: "n.", meaning_zh: "设施",
       collocations: ["a permanent fixture"], derivations: ["fix v."],
@@ -241,6 +293,16 @@ describe("Standalone Web API shared-state boundaries", () => {
       exercise: { activity_type: "exact_cloze", instruction: "根据语境回忆目标词并填空。", prompt: "The school added a ___ for families to use during evening events.", multiline: false, accepted_answers: ["fixture"] },
       next_word: "hostile", current_index: 99, navigation: { action: "next_word", next_word: "hostile", next_index: 100 },
     });
+    mocks.generatePlannedConsolidation.mockImplementation(async ({ plan }: any) => ({
+      activity_type: plan.planned_activity_type,
+      instruction: "按题面完成这道应用任务。",
+      prompt: plan.planned_activity_type === "translation_en_to_cn"
+        ? "Although the new policy reduced pressure on clinics, residents still needed clear information and timely support from public services when unexpected changes disrupted daily routines."
+        : plan.planned_activity_type === "translation_cn_to_en"
+          ? "学校需要把有限资源分配给最需要支持的学生。"
+          : "用 fixture 说明学校如何安排晚间活动。",
+      multiline: true,
+    }));
   });
 
   it("requires a bearer token, returns no-store headers, and rejects client-owned cursor fields", async () => {
@@ -346,10 +408,16 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(payload).toMatchObject({
       screen: "lesson",
       session_revision: "rev-a",
-      state: activeState,
+      state: {
+        current_index: 0,
+        current_word: null,
+        flow: { lesson_words: ["__hidden_lesson_word__"] },
+        payload: { mode: "exercise" },
+      },
       settings_update: { daily_new_word_limit: 50, prepared: 70, added: 0 },
       progress: { today: { completed: 50, total: 70 }, settings: { daily_new_word_limit: 50 } },
     });
+    expect(payload.state.payload).not.toHaveProperty("word");
     expect(mocks.active.state.flow.lesson_words).toEqual(["fixture"]);
     expect(mocks.advanceEvents).toEqual([]);
   });
@@ -528,7 +596,14 @@ describe("Standalone Web API shared-state boundaries", () => {
     }));
     expect(response.status).toBe(409);
     expect(await body(response)).toMatchObject({ error: { code: "STALE_STUDY_STATE" } });
-    expect(mocks.active.state).toEqual(state);
+    expect(mocks.active.state).not.toEqual(state);
+    expect(mocks.active.state).toMatchObject({
+      phase: "lesson_explain",
+      current_index: 0,
+      current_word: "fixture",
+      flow: { lesson_words: ["fixture"], exercise_plans: [expect.objectContaining({ plan_id: expect.any(String), exercise_id: expect.any(String) })] },
+      payload: { mode: "generation_error", plan: { planned_activity_type: "exact_cloze" } },
+    });
     expect(mocks.active.updated_at).toBe("chatgpt-revision");
   });
 
@@ -624,6 +699,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     });
     mocks.active = row(start);
     mocks.getVocabularyItemsByWords.mockResolvedValueOnce([{
+      word_id: "00000000-0000-4000-9000-000000000103",
       word: "fixture", display_word: "fixture", status: "known", error_layers: [],
       senses: [{ pos: "n.", definition_cn: "设施" }],
     }]);
@@ -648,6 +724,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     });
     mocks.active = row(start);
     mocks.getVocabularyItemsByWords.mockResolvedValueOnce([{
+      word_id: "00000000-0000-4000-9000-000000000103",
       word: "fixture", display_word: "fixture", status: "uncertain", error_layers: ["spelling"],
       senses: [{ pos: "n.", definition_cn: "设施" }],
     }]);
@@ -672,6 +749,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     });
     mocks.active = row(start);
     mocks.getVocabularyItemsByWords.mockResolvedValueOnce([{
+      word_id: "00000000-0000-4000-9000-000000000103",
       word: "fixture", display_word: "fixture", status: "uncertain", error_layers: [],
       senses: [{ pos: "n.", definition_cn: "设施" }],
     }]);
@@ -710,12 +788,14 @@ describe("Standalone Web API shared-state boundaries", () => {
 
     expect(response.status).toBe(200);
     expect(payload.state).toMatchObject({
-      current_index: 1, current_word: "fixture",
+      current_index: 1, current_word: null,
       payload: {
         lesson_profile: "targeted_relearn", error_focus: "spelling",
         prompt: "The museum has one ___ that displays old local photographs.",
       },
     });
+    expect(payload.state.payload).not.toHaveProperty("word");
+    expect(payload.state.payload).not.toHaveProperty("accepted_answers");
     expect(mocks.generateLesson).not.toHaveBeenCalled();
   });
 
@@ -743,9 +823,9 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.getCompletedLessonWords).toHaveBeenCalledWith({}, userId, mocks.active.started_at);
     expect(payload.state).toMatchObject({
       current_index: 1,
-      current_word: "current",
-      flow: { lesson_words: ["done-before", "current", "pending"] },
-      payload: { navigation: { action: "next_word", next_word: "pending", next_index: 2, total_count: 3 } },
+      current_word: null,
+      flow: { lesson_words: ["__hidden_lesson_word__", "__hidden_lesson_word__", "__hidden_lesson_word__"] },
+      payload: { navigation: { action: "next_word", next_index: 2 } },
     });
   });
 
@@ -758,6 +838,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.active = row(state);
     mocks.getCompletedLessonWords.mockResolvedValueOnce(new Set(["already-done", "old-later"]));
     mocks.getVocabularyItemsByWords.mockResolvedValueOnce([{
+      word_id: "00000000-0000-4000-9000-000000000103",
       word: "pending", display_word: "pending", status: "unknown", error_layers: [], ipa_us: "/ˈpɛndɪŋ/",
       senses: [{ pos: "adj.", definition_cn: "待处理的" }],
     }]);
@@ -805,13 +886,13 @@ describe("Standalone Web API shared-state boundaries", () => {
       exercise: { activity_type: "exact_cloze", accepted_answers: ["electricians"] },
     });
     const sessions = await import("../server/services/studySessions.js");
-    expect(vi.mocked(sessions.persistStudyStateIfRevision)).toHaveBeenCalledOnce();
+    expect(vi.mocked(sessions.persistStudyStateIfRevision)).toHaveBeenCalledTimes(2);
     expect(payload.state.payload).not.toHaveProperty("accepted_answers");
     expect(payload.state.payload.exercise).not.toHaveProperty("accepted_answers");
 
     const persistResumableState = vi.spyOn(sessions, "persistStudyState").mockResolvedValueOnce(mocks.active);
     const widgetPayload = await resumableLessonPayload(mocks.active);
-    expect(persistResumableState).toHaveBeenCalledOnce();
+    expect(persistResumableState).not.toHaveBeenCalled();
     persistResumableState.mockRestore();
     expect(widgetPayload.exercise).not.toHaveProperty("accepted_answers");
     expect(mocks.active.state.payload.exercise.accepted_answers).toEqual(["electricians"]);
@@ -830,6 +911,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     });
     mocks.active = row(state);
     mocks.getVocabularyItemsByWords.mockImplementationOnce(async (words: string[]) => [{
+      word_id: "00000000-0000-4000-9000-000000000103",
       word: words[0]!, display_word: words[0]!, status: "unknown", error_layers: [], ipa_us: "/nekst/", senses: [{ pos: "n.", definition_cn: "下一个词" }],
     }]);
     const response = await handleWebApiRequest(post({ action: "lesson_next" }));
@@ -892,7 +974,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.generateWrapup).not.toHaveBeenCalled();
   });
 
-  it("leaves the current pretest-complete session untouched when Lesson generation fails", async () => {
+  it("keeps the frozen plan and exercise id when Lesson generation returns invalid output", async () => {
     const state = makeStudyState({
       date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
       flow: { relearn_words: [], lesson_words: ["fixture"] },
@@ -905,11 +987,15 @@ describe("Standalone Web API shared-state boundaries", () => {
       headers: { authorization: `Bearer ${mocks.token}` },
     }));
     expect(response.status).toBe(502);
-    expect(mocks.active.state).toEqual(state);
-    expect(mocks.active.updated_at).toBe("rev-a");
+    expect(mocks.active.state).toMatchObject({
+      phase: "lesson_explain", current_index: 0, current_word: "fixture",
+      flow: { lesson_words: ["fixture"], exercise_plans: [expect.objectContaining({ planned_activity_type: "exact_cloze" })] },
+      payload: { mode: "generation_error", plan: { exercise_id: expect.any(String) } },
+    });
+    expect(mocks.active.updated_at).toBe("rev-1");
   });
 
-  it("leaves the durable state and cursor untouched when Lesson generation times out", async () => {
+  it("keeps the same durable plan and cursor after Lesson generation times out", async () => {
     const state = makeStudyState({
       date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
       flow: { relearn_words: [], lesson_words: ["fixture"] },
@@ -925,13 +1011,17 @@ describe("Standalone Web API shared-state boundaries", () => {
 
     expect(response.status).toBe(504);
     expect(await body(response)).toMatchObject({ error: { code: "DEEPSEEK_TIMEOUT" } });
-    expect(mocks.active.state).toEqual(state);
-    expect(mocks.active.updated_at).toBe("rev-a");
+    expect(mocks.active.state).toMatchObject({
+      phase: "lesson_explain", current_index: 0, current_word: "fixture",
+      flow: { lesson_words: ["fixture"], exercise_plans: [expect.objectContaining({ planned_activity_type: "exact_cloze" })] },
+      payload: { mode: "generation_error", plan: { exercise_id: expect.any(String) } },
+    });
+    expect(mocks.active.updated_at).toBe("rev-1");
     expect(mocks.recordAttempt).not.toHaveBeenCalled();
     expect(mocks.advanceEvents).toEqual([]);
   });
 
-  it("does not freeze a new Lesson queue when real bootstrap reaches a generation timeout", async () => {
+  it("persists the real bootstrap Lesson plan before a generation timeout", async () => {
     const state = makeStudyState({
       date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
       flow: { relearn_words: [] },
@@ -943,6 +1033,7 @@ describe("Standalone Web API shared-state boundaries", () => {
       senses: [{ pos: "n.", definition_cn: "设施" }],
     }]);
     mocks.getVocabularyItemsByWords.mockImplementation(async (words: string[]) => words.map((word) => ({
+      word_id: "00000000-0000-4000-9000-000000000103",
       word, display_word: word, status: "unknown", error_layers: [], senses: [{ pos: "n.", definition_cn: "设施" }],
     })));
     const actualBootstrap = await vi.importActual<typeof import("../server/services/studyBootstrap.js")>("../server/services/studyBootstrap.js");
@@ -958,8 +1049,12 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(await body(response)).toMatchObject({ error: { code: "DEEPSEEK_TIMEOUT" } });
     expect(mocks.bootstrap).toHaveBeenCalledWith(expect.objectContaining({ deferLessonQueueFreeze: true }));
     expect(vi.mocked(sessions.freezeLessonQueueForSession)).not.toHaveBeenCalled();
-    expect(mocks.active.state).toEqual(state);
-    expect(mocks.active.updated_at).toBe("rev-a");
+    expect(mocks.active.state).toMatchObject({
+      phase: "lesson_explain", current_index: 0, current_word: "fixture",
+      flow: { lesson_words: ["fixture"], exercise_plans: [expect.objectContaining({ exercise_id: expect.any(String) })] },
+      payload: { mode: "generation_error", plan: { planned_activity_type: "exact_cloze" } },
+    });
+    expect(mocks.active.updated_at).toBe("rev-1");
     expect(mocks.recordAttempt).not.toHaveBeenCalled();
     expect(mocks.advanceEvents).toEqual([]);
   });
@@ -1327,10 +1422,18 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(payload.state).toMatchObject({
       phase: "lesson_complete",
       payload: {
-        mode: "exercise", consolidation: true, consolidation_kind: "translation",
+        mode: "feedback", consolidation: true, consolidation_kind: "translation",
         consolidation_trigger_round: 2, consolidation_target_words: ["policy", "pressure"],
-        activity_type: "translation_en_to_cn", multiline: true,
+        consolidation_status: "pending",
       },
+    });
+    expect(mocks.generateWrapup).not.toHaveBeenCalled();
+    response = await handleWebApiRequest(post({ action: "consolidation_start" }, mocks.active.updated_at));
+    payload = await body(response);
+    expect(response.status).toBe(200);
+    expect(payload.state).toMatchObject({
+      phase: "lesson_complete",
+      payload: { mode: "exercise", consolidation: true, consolidation_kind: "translation", activity_type: "translation_en_to_cn", multiline: true },
     });
     expect(mocks.generateWrapup).toHaveBeenCalledWith({ words: ["policy", "pressure"] });
     expect(mocks.generateSentenceConsolidation).not.toHaveBeenCalled();
@@ -1346,7 +1449,8 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.gradeWrapupAnswer.mockResolvedValueOnce({ is_correct: true, error_layer: "none", message: "译文准确。", explanation: "主干和逻辑关系清楚。" });
     response = await handleWebApiRequest(post({ action: "consolidation_submit", answer: "主干：residents needed information and support；尽管新政策降低了诊所压力，居民仍需要清晰信息和及时支持。" }, mocks.active.updated_at));
     expect(response.status).toBe(200);
-    expect(mocks.recordAttempt).toHaveBeenCalledWith(expect.objectContaining({ activity_type: "translation_en_to_cn", session_id: mocks.active.id }));
+    expect(mocks.recordPlannedSubmission).toHaveBeenCalledWith(expect.objectContaining({ scope: "consolidation", activity_type: "translation_en_to_cn" }));
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
     expect(mocks.recordReviewSubmission).not.toHaveBeenCalled();
     expect(mocks.active.state).toMatchObject({ payload: { mode: "feedback", consolidation: true, consolidation_status: "feedback" } });
 
@@ -1386,7 +1490,12 @@ describe("Standalone Web API shared-state boundaries", () => {
       prompt: "请用 fixture 写一个自然英文句子。", multiline: true,
     });
     let response = await handleWebApiRequest(post({ action: "lesson_next" }));
-    const payload = await body(response);
+    let payload = await body(response);
+    expect(response.status).toBe(200);
+    expect(payload.state.payload).toMatchObject({ consolidation: true, consolidation_kind: "sentence", consolidation_status: "pending" });
+    expect(mocks.generateSentenceConsolidation).not.toHaveBeenCalled();
+    response = await handleWebApiRequest(post({ action: "consolidation_start" }, mocks.active.updated_at));
+    payload = await body(response);
     expect(response.status).toBe(200);
     expect(mocks.generateSentenceConsolidation).toHaveBeenCalledWith({ words: ["fixture"] });
     expect(payload.state.payload).toMatchObject({ consolidation: true, consolidation_kind: "sentence", activity_type: "sentence", multiline: true });
@@ -1397,7 +1506,8 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.gradeSemanticAnswer).toHaveBeenCalledWith(expect.objectContaining({
       activity_type: "sentence", target_words: ["fixture"],
     }));
-    expect(mocks.recordAttempt).toHaveBeenCalledWith(expect.objectContaining({ activity_type: "sentence" }));
+    expect(mocks.recordPlannedSubmission).toHaveBeenCalledWith(expect.objectContaining({ scope: "consolidation", activity_type: "sentence" }));
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
     expect(mocks.recordReviewSubmission).not.toHaveBeenCalled();
   });
 
@@ -1424,8 +1534,9 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(response.status).toBe(200);
     expect(mocks.active.state).toMatchObject({ phase: "lesson_complete", current_word: "fixture", current_index: 0, retry_count: 1, payload: { mode: "exercise", consolidation: true, consolidation_status: "exercise", activity_type: "translation_en_to_cn", prompt: samePrompt } });
     expect(mocks.gradeWrapupAnswer).toHaveBeenCalledTimes(1);
-    expect(mocks.recordAttempt).toHaveBeenCalledTimes(1);
-    expect(mocks.recordAttempt).toHaveBeenCalledWith(expect.objectContaining({ activity_type: "translation_en_to_cn" }));
+    expect(mocks.recordPlannedSubmission).toHaveBeenCalledTimes(1);
+    expect(mocks.recordPlannedSubmission).toHaveBeenCalledWith(expect.objectContaining({ scope: "consolidation", activity_type: "translation_en_to_cn" }));
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
     expect(mocks.generateWrapup).not.toHaveBeenCalled();
 
     mocks.gradeWrapupAnswer.mockResolvedValueOnce({ is_correct: false, error_layer: "grammar", message: "仍需修改。", explanation: "请检查从句关系。", reference_answer: "revealed answer" });
@@ -1434,7 +1545,8 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(response.status).toBe(200);
     expect(mocks.active.state).toMatchObject({ phase: "lesson_complete", retry_count: 2, payload: { mode: "feedback", consolidation: true, consolidation_status: "feedback", exercise: { activity_type: "translation_en_to_cn" }, feedback: { reveal_answer: true, reference_answer: "revealed answer" } } });
     expect(mocks.gradeWrapupAnswer).toHaveBeenCalledTimes(2);
-    expect(mocks.recordAttempt).toHaveBeenCalledTimes(2);
+    expect(mocks.recordPlannedSubmission).toHaveBeenCalledTimes(2);
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
   });
 
   it("does not record a second incorrect consolidation grade without a reference expression", async () => {

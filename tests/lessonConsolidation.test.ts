@@ -1,146 +1,112 @@
 import { describe, expect, it, vi } from "vitest";
 import type { StudyState } from "../server/types.js";
 import {
-  consolidationKindForRound,
-  countCompletedLessonRoundsToday,
   decideLessonConsolidation,
-  selectConsolidationTargetWords,
+  getLessonCadence,
 } from "../server/services/lessonConsolidation.js";
+import { consolidationActivityForCursor } from "../server/services/exercisePlanner.js";
 
 function state(input: Partial<StudyState> = {}): StudyState {
   return {
     version: 1,
-    date: "2026-09-28",
+    date: "2026-09-30",
     widget: "lesson",
     phase: "lesson_complete",
     current_word: "pressure",
-    current_index: 2,
+    current_index: 1,
     retry_count: 0,
-    flow: {
-      relearn_words: [],
-      lesson_words: ["alleviate", "policy", "pressure"],
-      lesson_profile_history: [
-        { word: "alleviate", lesson_profile: "quick_recall", error_focus: null },
-        { word: "policy", lesson_profile: "reinforce", error_focus: "collocation" },
-        { word: "pressure", lesson_profile: "targeted_relearn", error_focus: "meaning" },
-      ],
-    },
+    flow: { relearn_words: [], lesson_words: ["policy", "pressure"] },
     payload: { widget: "lesson", mode: "feedback", feedback: { is_correct: true, reveal_answer: false } },
     ...input,
   };
 }
 
-describe("server-owned Lesson consolidation cadence", () => {
-  it("schedules no task after round 1, translation after round 2, and sentence after round 3", () => {
-    expect(consolidationKindForRound(1)).toBeNull();
-    expect(consolidationKindForRound(2)).toBe("translation");
-    expect(consolidationKindForRound(3)).toBe("sentence");
+function pendingTask() {
+  return {
+    kind: "sentence",
+    target_words: ["pressure"],
+    plan: {
+      plan_version: 1,
+      plan_id: "10000000-0000-4000-8000-000000000001",
+      exercise_id: "10000000-0000-4000-8000-000000000002",
+      scope: "consolidation",
+      word_id: "10000000-0000-4000-8000-000000000003",
+      target_word_ids: ["10000000-0000-4000-8000-000000000003"],
+      target_sense: "压力；影响",
+      planned_activity_type: "sentence",
+      skill_goal: "情境应用目标词",
+      error_focus: null,
+      skill_ids: ["target_word_application"],
+      hint_level: "context",
+      estimated_seconds: 120,
+      selection_reason: "达到累计完成阈值。",
+    },
+  };
+}
+
+describe("persistent consolidation cadence", () => {
+  it("uses the cross-day four-step rotation and always includes sentence practice", () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(consolidationActivityForCursor)).toEqual([
+      "translation_en_to_cn", "translation_cn_to_en", "translation_en_to_cn", "sentence",
+      "translation_en_to_cn", "translation_cn_to_en", "translation_en_to_cn", "sentence",
+    ]);
   });
 
-  it("gives round 6 one translation task and defers the colliding sentence task", () => {
-    expect(consolidationKindForRound(6)).toBe("translation");
-    expect(consolidationKindForRound(9)).toBe("sentence");
-  });
-
-  it("selects 2–3 translation words and prioritizes recent weak profiles", () => {
-    const selected = selectConsolidationTargetWords([], state(), "translation");
-    expect(selected).toHaveLength(3);
-    expect(selected[0]).toBe("pressure");
-    expect(selected).toEqual(expect.arrayContaining(["policy", "alleviate"]));
-  });
-
-  it("selects 1–2 sentence words and avoids the latest consolidation targets when possible", () => {
-    const recent = state({
-      current_word: null,
-      payload: {
-        widget: "lesson",
-        mode: "completed",
-        consolidation: true,
-        consolidation_target_words: ["pressure", "policy"],
-      },
-    });
-    const selected = selectConsolidationTargetWords([{ state: recent }], state(), "sentence");
-    expect(selected.length).toBeGreaterThanOrEqual(1);
-    expect(selected.length).toBeLessThanOrEqual(2);
-    expect(selected).not.toContain("pressure");
-    expect(selected).not.toContain("policy");
-  });
-
-  it("counts only completed Lesson summaries ended during the user's local day", async () => {
-    const rows = [
-      { state: { widget: "lesson", payload: { mode: "completed" } } },
-      { state: { widget: "lesson", payload: { mode: "completed", consolidation: true } } },
-      { state: { widget: "review", payload: { mode: "completed" } } },
-    ];
-    const userQuery: any = {};
-    userQuery.select = vi.fn(() => userQuery);
-    userQuery.eq = vi.fn(() => userQuery);
-    userQuery.maybeSingle = vi.fn(async () => ({ data: { timezone: "Asia/Shanghai" }, error: null }));
-    const sessionQuery: any = {};
-    sessionQuery.select = vi.fn(() => sessionQuery);
-    sessionQuery.eq = vi.fn(() => sessionQuery);
-    sessionQuery.contains = vi.fn(() => sessionQuery);
-    sessionQuery.gte = vi.fn(() => sessionQuery);
-    sessionQuery.lt = vi.fn(async () => ({ data: rows, error: null }));
-    const db = { from: vi.fn((table: string) => table === "users" ? userQuery : sessionQuery) };
-
-    await expect(countCompletedLessonRoundsToday(db as any, "user")).resolves.toBe(2);
-    expect(sessionQuery.contains).toHaveBeenCalledWith("state", { widget: "lesson", payload: { mode: "completed" } });
-    expect(sessionQuery.gte).toHaveBeenCalledWith("ended_at", expect.any(String));
-    expect(sessionQuery.lt).toHaveBeenCalledWith("ended_at", expect.any(String));
-  });
-
-  it.each([
-    { completedRounds: 0, expected: null },
-    { completedRounds: 1, expected: "translation" },
-    { completedRounds: 2, expected: "sentence" },
-    { completedRounds: 5, expected: "translation" },
-  ])("derives one server marker from $completedRounds completed rounds", async ({ completedRounds, expected }) => {
-    const completedRows = Array.from({ length: completedRounds }, () => ({
-      state: {
-        widget: "lesson", phase: "lesson_complete", current_word: null, current_index: 0, retry_count: 0,
-        flow: { relearn_words: [], lesson_words: ["policy", "pressure", "alleviate"] },
-        payload: { mode: "completed" },
-      },
+  it("reads one durable pending item and bounded scalar cadence state", async () => {
+    const query: any = {};
+    query.select = vi.fn(() => query);
+    query.eq = vi.fn(() => query);
+    query.maybeSingle = vi.fn(async () => ({
+      data: { completion_credit: 4, rotation_cursor: 3, pending_task: pendingTask() }, error: null,
     }));
-    const users: any = {};
-    users.select = vi.fn(() => users);
-    users.eq = vi.fn(() => users);
-    users.maybeSingle = vi.fn(async () => ({ data: { timezone: "Asia/Shanghai" }, error: null }));
-    const db = {
-      from: vi.fn((table: string) => {
-        if (table === "users") return users;
-        const query: any = {};
-        for (const method of ["select", "eq", "contains", "gte", "not", "order"]) query[method] = vi.fn(() => query);
-        query.lt = vi.fn(async () => ({ data: completedRows, error: null }));
-        query.limit = vi.fn(async () => ({ data: completedRows.slice(0, 8), error: null }));
-        return query;
-      }),
-    };
+    const db = { from: vi.fn(() => query) };
+    await expect(getLessonCadence(db as any, "user")).resolves.toMatchObject({
+      completion_credit: 4,
+      rotation_cursor: 3,
+      pending_task: { kind: "sentence", target_words: ["pressure"] },
+    });
+    expect(db.from).toHaveBeenCalledWith("user_lesson_cadence");
+  });
+
+  it("attaches the saved original plan once and does not recreate cadence from rounds", async () => {
+    const query: any = {};
+    query.select = vi.fn(() => query);
+    query.eq = vi.fn(() => query);
+    query.maybeSingle = vi.fn(async () => ({ data: { pending_task: pendingTask(), last_reminder_task_id: null }, error: null }));
+    query.update = vi.fn(() => query);
+    query.is = vi.fn(async () => ({ error: null }));
+    const db = { from: vi.fn(() => query) };
     const result = await decideLessonConsolidation(state(), db as any, "user");
-    if (!expected) {
-      expect(result).toBeDefined();
-      expect(result.payload).not.toHaveProperty("consolidation");
-      return;
-    }
     expect(result.payload).toMatchObject({
       consolidation: true,
-      consolidation_kind: expected,
-      consolidation_trigger_round: completedRounds + 1,
+      consolidation_kind: "sentence",
       consolidation_status: "pending",
+      consolidation_plan: { plan_id: pendingTask().plan.plan_id, exercise_id: pendingTask().plan.exercise_id },
     });
-    expect(result.payload.consolidation_target_words).toHaveLength(expected === "translation" ? 3 : 2);
+    expect(query.update).toHaveBeenCalledWith({
+      last_reminder_task_id: pendingTask().plan.exercise_id,
+      updated_at: expect.any(String),
+    });
+    expect(db.from).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps an already-consumed active cadence marker unchanged across repeated completion events", async () => {
-    const marked = state({
-      payload: {
-        widget: "lesson", mode: "feedback", consolidation: true,
-        consolidation_kind: "translation", consolidation_trigger_round: 2,
-        consolidation_target_words: ["policy", "pressure"], consolidation_status: "exercise",
-        feedback: { is_correct: true, reveal_answer: false },
-      },
-    });
-    await expect(decideLessonConsolidation(marked, {} as any, "user")).resolves.toBe(marked);
+  it("does not surface a task again after it was already offered", async () => {
+    const query: any = {};
+    query.select = vi.fn(() => query);
+    query.eq = vi.fn(() => query);
+    query.maybeSingle = vi.fn(async () => ({
+      data: { pending_task: pendingTask(), last_reminder_task_id: pendingTask().plan.exercise_id }, error: null,
+    }));
+    const db = { from: vi.fn(() => query) };
+    const input = state();
+    await expect(decideLessonConsolidation(input, db as any, "user")).resolves.toBe(input);
+    expect(db.from).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a not-yet-finished Lesson word", async () => {
+    const input = state({ phase: "lesson_feedback" });
+    const db = { from: vi.fn() };
+    await expect(decideLessonConsolidation(input, db as any, "user")).resolves.toBe(input);
+    expect(db.from).not.toHaveBeenCalled();
   });
 });

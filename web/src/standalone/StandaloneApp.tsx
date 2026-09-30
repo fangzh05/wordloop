@@ -239,7 +239,9 @@ function lessonDraftContext(state: Record<string, unknown> | undefined): { word:
   const payload = record(state.payload);
   const consolidationDraft = state.phase === "lesson_complete" && payload.mode === "exercise" && payload.consolidation === true;
   if (state.phase !== "lesson_exercise" && !consolidationDraft) return null;
-  const word = typeof state.current_word === "string" ? state.current_word : "";
+  const plan = record(payload.plan);
+  const word = typeof plan.exercise_id === "string" ? plan.exercise_id
+    : typeof state.current_word === "string" ? state.current_word : "";
   const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
   if (!word || !prompt) return null;
   return { word, phase: String(state.phase), prompt };
@@ -817,8 +819,11 @@ export default function StandaloneApp(): React.JSX.Element {
     if (answerActions.has(actionName) && fields.mark_unknown !== true
       && (typeof fields.answer !== "string" || !fields.answer.trim())) return null;
     if (requestInFlightRef.current) return null;
+    const stableFields = ["lesson_submit", "consolidation_submit", "wrapup_submit"].includes(actionName)
+      ? { ...fields, submission_id: typeof fields.submission_id === "string" ? fields.submission_id : crypto.randomUUID() }
+      : fields;
     const revision = view?.session_revision ?? null;
-    const action = { ...fields, expected_revision: revision } as WebAction;
+    const action = { ...stableFields, expected_revision: revision } as WebAction;
     const submittedIndex = typeof view?.state.current_index === "number" ? view.state.current_index : null;
     const previousDraftContext = lessonDraftContext(view?.state);
     let actionResponse: WebApiResponse | null = null;
@@ -827,16 +832,18 @@ export default function StandaloneApp(): React.JSX.Element {
       setErrorMessage("");
       setNotice("");
       setNoticeIndex(null);
-      setRetryFields(fields);
+      setRetryFields(stableFields);
       try {
         const next = await postAction(action);
         actionResponse = next;
         sessionRevisionRef.current = next.session_revision ?? sessionRevisionRef.current;
         if (actionName === "refresh_progress") {
           setView((previous) => previous ? { ...previous, progress: next.progress } : next);
-        } else {
-          setView(next);
-          if (actionName === "continue") setPage(next.screen === "done" ? "dashboard" : "study");
+    } else {
+      setView(next);
+      if (actionName === "continue") setPage(next.screen === "done" ? "dashboard" : "study");
+      if (actionName === "consolidation_start") { setAppSection("study"); setPage("study"); }
+      if (actionName === "consolidation_defer") { setAppSection("today"); setPage("dashboard"); }
           setRetryFields(null);
           const nextDraftContext = lessonDraftContext(next.state);
           if (lessonDraftTransitioned(previousDraftContext, nextDraftContext)) {
@@ -977,6 +984,7 @@ export default function StandaloneApp(): React.JSX.Element {
       busy={busy !== null}
       tokenKey={token}
       onContinue={continueFromDashboard}
+      onStartConsolidation={() => { setAppSection("study"); setPage("study"); void dispatch({ action: "consolidation_start" }); }}
       onOpenCapture={() => navigateSection("capture")}
       onOpenVocabulary={() => navigateSection("vocabulary")}
     />}
@@ -1086,7 +1094,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const exerciseMode = payload.mode === "exercise";
       const phase = String(state.phase ?? "");
       const displayTitle = standaloneLessonDisplayTitle(title, exerciseMode, consolidationKind);
-      const progressLabel = standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, consolidationKind);
+      const progressLabel = String(payload.progress ?? standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, consolidationKind));
       return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
         <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />
 
@@ -1136,6 +1144,14 @@ export default function StandaloneApp(): React.JSX.Element {
             {feedback.is_correct === true || feedback.reveal_answer === true
               ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "consolidation_finish" })}>继续学习</Button>
               : <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "consolidation_retry" })}>修改一次</Button>}
+          </div>
+        </div>}
+
+        {phase === "lesson_complete" && payload.consolidation === true && payload.consolidation_status === "pending" && <div className="standalone-content">
+          <p>本轮词汇已完成。应用巩固待做：{String(record(payload.consolidation_plan).planned_activity_type === "translation_en_to_cn" ? "长难句英译中" : record(payload.consolidation_plan).planned_activity_type === "translation_cn_to_en" ? "完整中译英" : record(payload.consolidation_plan).planned_activity_type === "sentence" ? "情境造句" : "应用任务")}。</p>
+          <div className="standalone-actions standalone-two-actions">
+            <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "consolidation_defer" })}>稍后做</Button>
+            <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "consolidation_start" })}>做一道，约 2 分钟</Button>
           </div>
         </div>}
 

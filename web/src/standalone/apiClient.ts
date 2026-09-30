@@ -38,6 +38,7 @@ export interface WebApiResponse {
     settings: { daily_new_word_limit: number };
   };
   settings_update?: { daily_new_word_limit: number; prepared: number; added: number };
+  pending_consolidation?: { activity_type: string; label: string; estimated_seconds: number } | null;
   pronunciation_audio_url?: string | null;
   result?: { status?: string; user_answer?: string; is_correct?: boolean; error_layer?: string; mark_familiar?: boolean; message?: string };
   pretest_summary?: { known: number; uncertain: number; unknown: number };

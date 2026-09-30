@@ -1,7 +1,7 @@
-import type { ActiveErrorLayer } from "../../shared/toolContracts.js";
+import type { ActiveErrorLayer, LessonProfile } from "../../shared/toolContracts.js";
 import type { WordStatus } from "../types.js";
 
-export type LessonProfile = "quick_recall" | "reinforce" | "targeted_relearn";
+export type { LessonProfile } from "../../shared/toolContracts.js";
 export type LessonErrorFocus = ActiveErrorLayer | null;
 
 export interface LessonProfileInput {

@@ -6,10 +6,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   ensureTodayQueue: vi.fn(),
   getProgress: vi.fn(),
+  getLessonCadence: vi.fn(),
 }));
 
 vi.mock("../server/services/dailyQueue.js", () => ({ ensureTodayQueue: mocks.ensureTodayQueue }));
 vi.mock("../server/services/progress.js", () => ({ getProgress: mocks.getProgress }));
+vi.mock("../server/services/lessonConsolidation.js", () => ({ getLessonCadence: mocks.getLessonCadence }));
 
 import { registerRenderTools } from "../server/tools/renderWidgets.js";
 
@@ -38,6 +40,7 @@ describe("learning dashboard daily queue guard", () => {
       fsrs: { due_now: 0, due_today: 0, tomorrow: 0, due_next_7_days: 0, average_stability: 0 },
       settings: { daily_new_word_limit: 50 },
     });
+    mocks.getLessonCadence.mockResolvedValue({ completion_credit: 0, rotation_cursor: 0, pending_task: null });
   });
 
   it("ensures today's queue before reading the progress snapshot", async () => {

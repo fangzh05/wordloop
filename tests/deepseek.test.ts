@@ -29,6 +29,22 @@ const lessonInput = {
   part_of_speech: "n.",
   lesson_profile: "quick_recall" as const,
   error_focus: null,
+  plan: {
+    plan_version: 1 as const,
+    plan_id: "00000000-0000-4000-8000-000000000001",
+    exercise_id: "00000000-0000-4000-8000-000000000002",
+    scope: "lesson" as const,
+    word_id: "00000000-0000-4000-8000-000000000003",
+    target_word_ids: ["00000000-0000-4000-8000-000000000003"],
+    target_sense: "设施",
+    planned_activity_type: "exact_cloze" as const,
+    skill_goal: "无提示提取设施义",
+    error_focus: null,
+    skill_ids: ["target_sense_retrieval"],
+    hint_level: "none" as const,
+    estimated_seconds: 20,
+    selection_reason: "覆盖轮次短题类型",
+  },
 };
 const validLesson: LessonGeneration = {
   ipa: "/ˈfɪks.tʃər/",
@@ -200,7 +216,7 @@ describe("DeepSeek stateless JSON client", () => {
     expect(LESSON_GENERATION_PROMPT).toContain("简体中文");
     expect(WRAPUP_GENERATION_PROMPT).toContain("\"multiline\": true");
     expect(WRAPUP_GENERATION_PROMPT).toContain("\"activity_type\": \"translation_en_to_cn\"");
-    expect(SENTENCE_CONSOLIDATION_GENERATION_PROMPT).toContain("15–30");
+    expect(SENTENCE_CONSOLIDATION_GENERATION_PROMPT).toContain("10–25");
   });
 
   it("retries schema-invalid JSON once, then accepts a valid result", async () => {
@@ -324,6 +340,7 @@ describe("DeepSeek stateless JSON client", () => {
       word: "alleviate",
       lesson_profile: "quick_recall" as const,
       error_focus: null,
+      plan: { ...lessonInput.plan, target_sense: "减轻", planned_activity_type: "exact_cloze" as const },
     };
     const leaked = validateGeneratedLessonExercise(lessonInput, {
       example_en: example,
@@ -348,7 +365,7 @@ describe("DeepSeek stateless JSON client", () => {
     expect(repeated.some((issue) => issue.path.join(".") === "exercise.prompt" && issue.message.includes("new context"))).toBe(true);
   });
 
-  it("requires one deterministic single-line exact cloze for quick_recall", () => {
+  it("validates the planned exact cloze without binding quick_recall to that type", () => {
     const invalid = validateGeneratedLessonExercise(lessonInput, {
       example_en: example,
       exercise: { ...validLesson.exercise, multiline: true },
@@ -371,7 +388,8 @@ describe("DeepSeek stateless JSON client", () => {
     const collocationExercise = {
       activity_type: "collocation" as const,
       instruction: "回忆目标搭配。",
-      prompt: "What phrase means a permanent installation?",
+      prompt: "The ___ near the school entrance serves visitors from nearby villages.",
+      accepted_answers: ["permanent fixture", "fixture"],
       multiline: false,
     };
     expect(validateGeneratedLessonExercise(lessonInput, { example_en: example, exercise: collocationExercise })
@@ -381,6 +399,7 @@ describe("DeepSeek stateless JSON client", () => {
       ...lessonInput,
       lesson_profile: "targeted_relearn",
       error_focus: "collocation",
+      plan: { ...lessonInput.plan, planned_activity_type: "collocation" as const, error_focus: "collocation" as const },
     }, { example_en: example, exercise: collocationExercise })).toEqual([]);
 
     const sentence = validateGeneratedLessonExercise(lessonInput, {

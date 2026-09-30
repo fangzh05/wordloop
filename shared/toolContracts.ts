@@ -28,6 +28,64 @@ export const ACTIVITY_TYPES = [
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 export const activityTypeSchema = z.enum(ACTIVITY_TYPES);
 
+export const LESSON_PROFILES = ["quick_recall", "reinforce", "targeted_relearn"] as const;
+export type LessonProfile = (typeof LESSON_PROFILES)[number];
+export const lessonProfileSchema = z.enum(LESSON_PROFILES);
+
+/** Planned question formats are separate from the skills an item can assess. */
+export const PLANNED_ACTIVITY_TYPES = ["exact_cloze", "word_recall", "recall", "cloze", "spelling", "translation_cn_to_en", "translation_en_to_cn", "collocation", "derivation", "sentence", "semantic_expression"] as const;
+export type PlannedActivityType = (typeof PLANNED_ACTIVITY_TYPES)[number];
+export const plannedActivityTypeSchema = z.enum(PLANNED_ACTIVITY_TYPES);
+export const EXERCISE_SCOPES = ["lesson", "review", "consolidation"] as const;
+export type ExerciseScope = (typeof EXERCISE_SCOPES)[number];
+export const exerciseScopeSchema = z.enum(EXERCISE_SCOPES);
+export const HINT_LEVELS = ["none", "meaning", "context", "guided"] as const;
+export type HintLevel = (typeof HINT_LEVELS)[number];
+export const hintLevelSchema = z.enum(HINT_LEVELS);
+export const SKILL_SIGNAL_STATES = ["unknown", "developing", "ready", "needs_practice"] as const;
+export type SkillSignalState = (typeof SKILL_SIGNAL_STATES)[number];
+export const skillSignalSchema = z.object({
+  skill_id: z.string().trim().min(1).max(120),
+  word_id: z.string().uuid().optional(),
+  state: z.enum(SKILL_SIGNAL_STATES),
+  source: z.enum(["rules", "adapter"]),
+  confidence: z.number().min(0).max(1).optional(),
+  reason: z.string().trim().min(1).max(300).optional(),
+}).strict();
+export type SkillSignal = z.output<typeof skillSignalSchema>;
+
+export const lessonExercisePlanSchema = z.object({
+  plan_version: z.literal(1),
+  plan_id: z.string().uuid(),
+  exercise_id: z.string().uuid(),
+  scope: exerciseScopeSchema,
+  word_id: z.string().uuid().optional(),
+  target_word_ids: z.array(z.string().uuid()).min(1).max(3),
+  target_sense: z.string().trim().min(1).max(240),
+  planned_activity_type: plannedActivityTypeSchema,
+  skill_goal: z.string().trim().min(1).max(300),
+  error_focus: activeErrorLayerSchema.nullable(),
+  skill_ids: z.array(z.string().trim().min(1).max(120)).min(1).max(8),
+  skill_signals: z.array(skillSignalSchema).max(16).optional(),
+  hint_level: hintLevelSchema,
+  estimated_seconds: z.number().int().min(10).max(300),
+  selection_reason: z.string().trim().min(1).max(500),
+  coverage_exception_reason: z.string().trim().min(1).max(500).optional(),
+}).strict();
+export type LessonExercisePlan = z.output<typeof lessonExercisePlanSchema>;
+
+export const skillEvidenceSchema = z.object({
+  skill_id: z.string().trim().min(1).max(120),
+  word_id: z.string().uuid().optional(),
+  outcome: z.enum(["correct", "incorrect", "partial", "not_assessed"]),
+  first_unprompted: z.boolean(),
+  hint_used: z.boolean(),
+  modified_correct: z.boolean(),
+  answer_revealed: z.boolean(),
+  evidence: z.string().trim().max(500).optional(),
+}).strict();
+export type SkillEvidence = z.output<typeof skillEvidenceSchema>;
+
 export const PRETEST_ACTIVITY_TYPES = ["pretest_cn_to_en", "pretest_en_definition"] as const;
 export type PretestActivityType = (typeof PRETEST_ACTIVITY_TYPES)[number];
 export const pretestActivityTypeSchema = z.enum(PRETEST_ACTIVITY_TYPES);
@@ -42,7 +100,7 @@ export const REVIEW_SESSION_MAX = 200;
 export const STUDY_SESSION_EVENTS = [
   "pretest_question", "pretest_result", "listen_repeat", "listen_recall",
   "pretest_complete",
-  "lesson_start_exercise", "lesson_retry", "lesson_complete", "review_answer",
+  "lesson_start_exercise", "lesson_retry", "lesson_complete", "lesson_consolidation_defer", "review_answer",
 ] as const;
 export type StudySessionEvent = (typeof STUDY_SESSION_EVENTS)[number];
 export const studySessionEventSchema = z.enum(STUDY_SESSION_EVENTS);
@@ -296,5 +354,10 @@ export const lessonSubmissionSchema = z.object({
   activity_type: z.string().min(1).max(80),
   prompt: z.string().min(1).max(4000),
   answer: z.string().max(4000),
+  submission_id: z.string().uuid().optional(),
+  exercise_id: z.string().uuid().optional(),
+  plan_id: z.string().uuid().optional(),
+  scope: exerciseScopeSchema.default("lesson"),
+  hint_used: z.boolean().default(false),
 });
 export type LessonSubmissionInput = z.output<typeof lessonSubmissionSchema>;

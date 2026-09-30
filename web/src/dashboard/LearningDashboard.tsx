@@ -13,7 +13,11 @@ const progressSchema = z.object({
   fsrs: z.object({ due_now: z.number(), due_today: z.number(), tomorrow: z.number(), due_next_7_days: z.number(), average_stability: z.number() }),
   settings: z.object({ daily_new_word_limit: z.number().int().min(1).max(200) }),
 });
-const payloadSchema = z.object({ widget: z.literal("dashboard"), progress: progressSchema });
+const payloadSchema = z.object({
+  widget: z.literal("dashboard"),
+  progress: progressSchema,
+  pending_consolidation: z.object({ activity_type: z.string(), label: z.string(), estimated_seconds: z.number().int().min(1) }).nullable().optional(),
+});
 type Progress = z.infer<typeof progressSchema>;
 
 export function DashboardProgressBlock({ title, completed, total, emptyText }: {
@@ -36,10 +40,11 @@ export function DashboardProgressBlock({ title, completed, total, emptyText }: {
 
 export function LearningDashboard(): React.JSX.Element {
   const [progress, setProgress] = useState<Progress | null>(null);
+  const [pendingTask, setPendingTask] = useState<z.infer<typeof payloadSchema>["pending_consolidation"]>(null);
   useEffect(() => subscribeToApp((event) => {
     if (event.type !== "toolresult") return;
     const parsed = payloadSchema.safeParse(event.value.structuredContent);
-    if (parsed.success) setProgress(parsed.data.progress);
+    if (parsed.success) { setProgress(parsed.data.progress); setPendingTask(parsed.data.pending_consolidation ?? null); }
   }), []);
 
   if (!progress) return <section className="widget-card skeleton" aria-busy="true"><span>正在读取进度…</span></section>;
@@ -65,6 +70,10 @@ export function LearningDashboard(): React.JSX.Element {
         emptyText="暂无新词"
       />
     </div>
+    {pendingTask && <section className="dashboard-progress-block" aria-label="待做应用巩固">
+      <div className="dashboard-progress-heading"><strong>应用巩固待做：{pendingTask.label}</strong><span>词汇完成与应用巩固分开记录</span></div>
+      <Button onClick={() => void followUp("请开始服务端保存的 pending 应用巩固。必须复用 exercisePlanner 已保存的 plan_id、exercise_id、activity_type、目标和提示程度，不得重选题型或词；按计划生成后只显示这一题。")}>做一道，约 {Math.max(1, Math.round(pendingTask.estimated_seconds / 60))} 分钟</Button>
+    </section>}
     <dl className="metrics">
       <div><dt>错词</dt><dd>{progress.all_time.error_book}</dd></div>
       <div><dt>已掌握</dt><dd>{progress.all_time.mastered}</dd></div>

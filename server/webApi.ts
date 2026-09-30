@@ -16,9 +16,10 @@ import {
   normalizeStudyStateForRead,
   markPretestFamiliar,
   persistStudyStateIfRevision,
+  recordPlannedSubmission,
   StaleStudyStateError,
 } from "./services/studySessions.js";
-import { decideLessonConsolidation, type ConsolidationKind } from "./services/lessonConsolidation.js";
+import { decideLessonConsolidation, getLessonCadence, type ConsolidationKind, type PendingLessonTask } from "./services/lessonConsolidation.js";
 import {
   buildLessonNavigation,
   buildLessonWords,
@@ -44,6 +45,7 @@ import {
 import {
   lessonNavigationSchema,
   pretestMarkFamiliarSchema,
+  lessonExercisePlanSchema,
   recordReviewSubmissionSchema,
   reviewWidgetItemSchema,
   setDailyNewWordLimitSchema,
@@ -53,6 +55,7 @@ import type { StudySessionRow, StudyState, VocabularyItem } from "./types.js";
 import {
   DeepSeekError,
   generateLesson,
+  generatePlannedConsolidation,
   generateSentenceConsolidation,
   generateWrapup,
   gradeEnglishDefinition,
@@ -64,6 +67,8 @@ import {
 } from "./services/deepseek.js";
 import { normalizeWord } from "./services/wordNormalization.js";
 import { deriveLessonProfile } from "./services/lessonProfile.js";
+import { cadenceCandidatePlans, planLessonQueue } from "./services/exercisePlanner.js";
+import { plannedSkillEvidence } from "./services/plannedSubmission.js";
 import {
   addCaptureNoteToLearning,
   createCaptureNote,
@@ -93,15 +98,17 @@ const webActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("pretest_continue"), current_index: z.number().int().min(0).max(6), expected_revision: z.string().trim().min(1).max(80) }).strict(),
   pretestMarkFamiliarSchema,
   z.object({ action: z.literal("lesson_start_exercise"), ...mutationBase }).strict(),
-  z.object({ action: z.literal("lesson_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
+  z.object({ action: z.literal("lesson_submit"), answer: z.string().trim().min(1).max(4000), submission_id: z.string().uuid().optional(), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_retry"), ...mutationBase }).strict(),
   z.object({ action: z.literal("lesson_next"), ...mutationBase }).strict(),
-  z.object({ action: z.literal("consolidation_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
+  z.object({ action: z.literal("consolidation_start"), ...mutationBase }).strict(),
+  z.object({ action: z.literal("consolidation_submit"), answer: z.string().trim().min(1).max(4000), submission_id: z.string().uuid().optional(), ...mutationBase }).strict(),
+  z.object({ action: z.literal("consolidation_defer"), ...mutationBase }).strict(),
   z.object({ action: z.literal("consolidation_retry"), ...mutationBase }).strict(),
   z.object({ action: z.literal("consolidation_finish"), ...mutationBase }).strict(),
   // Accept the previous standalone action names while clients update; state still
   // has to carry an explicit server-issued consolidation marker.
-  z.object({ action: z.literal("wrapup_submit"), answer: z.string().trim().min(1).max(4000), ...mutationBase }).strict(),
+  z.object({ action: z.literal("wrapup_submit"), answer: z.string().trim().min(1).max(4000), submission_id: z.string().uuid().optional(), ...mutationBase }).strict(),
   z.object({ action: z.literal("wrapup_retry"), ...mutationBase }).strict(),
   z.object({ action: z.literal("wrapup_finish"), ...mutationBase }).strict(),
   z.object({ action: z.literal("refresh_progress"), ...mutationBase }).strict(),
@@ -249,12 +256,61 @@ function resultForState(
   if (state.widget === "lesson") {
     const payload = { ...state.payload };
     delete payload.accepted_answers;
+    if (typeof payload.feedback === "object" && payload.feedback !== null && !Array.isArray(payload.feedback)) {
+      const feedback = { ...payload.feedback as Record<string, unknown> };
+      if (feedback.reveal_answer !== true) delete feedback.reference_answer;
+      if (Array.isArray(feedback.target_word_results)) {
+        feedback.target_word_results = feedback.target_word_results.map((result) => {
+          if (typeof result !== "object" || result === null || Array.isArray(result)) return result;
+          const safeResult = { ...result as Record<string, unknown> };
+          delete safeResult.reference_expression;
+          return safeResult;
+        });
+      }
+      payload.feedback = feedback;
+    }
+    if (typeof payload.plan === "object" && payload.plan !== null && !Array.isArray(payload.plan)) {
+      const plan = { ...payload.plan as Record<string, unknown> };
+      delete plan.target_sense;
+      delete plan.word_id;
+      delete plan.target_word_ids;
+      delete plan.skill_signals;
+      payload.plan = plan;
+    }
+    if (typeof payload.consolidation_plan === "object" && payload.consolidation_plan !== null && !Array.isArray(payload.consolidation_plan)) {
+      const plan = { ...payload.consolidation_plan as Record<string, unknown> };
+      delete plan.target_sense;
+      delete plan.word_id;
+      delete plan.target_word_ids;
+      delete plan.skill_signals;
+      payload.consolidation_plan = plan;
+    }
+    delete payload.resume_state;
     if (typeof payload.exercise === "object" && payload.exercise !== null && !Array.isArray(payload.exercise)) {
       const exercise = { ...payload.exercise as Record<string, unknown> };
       delete exercise.accepted_answers;
       payload.exercise = exercise;
     }
-    responseState = { ...state, payload };
+    const concealTarget = state.phase === "lesson_exercise" && state.payload.consolidation !== true;
+    let responseFlow = state.flow;
+    let currentWord = state.current_word;
+    if (concealTarget) {
+      delete payload.word;
+      delete payload.ipa;
+      delete payload.meaning_zh;
+      delete payload.example_en;
+      delete payload.example_zh;
+      if (typeof payload.navigation === "object" && payload.navigation !== null) {
+        const navigation = payload.navigation as Record<string, unknown>;
+        payload.navigation = { action: navigation.action, next_index: navigation.next_index };
+      }
+      responseFlow = {
+        relearn_words: [],
+        ...(state.flow.lesson_words ? { lesson_words: state.flow.lesson_words.map(() => "__hidden_lesson_word__") } : {}),
+      };
+      currentWord = null;
+    }
+    responseState = { ...state, current_word: currentWord, flow: responseFlow, payload };
   }
   return {
     screen,
@@ -291,7 +347,9 @@ async function successForSession(
 ): Promise<Record<string, unknown>> {
   const state = ensureState(session);
   const response = resultForState(session, state, extra);
-  if (state.widget === "lesson") response.pronunciation_audio_url = audioUrl === undefined ? await pronunciationUrl(state.current_word) : audioUrl;
+  if (state.widget === "lesson") response.pronunciation_audio_url = state.phase === "lesson_explain" && state.payload.mode === "explain"
+    ? audioUrl === undefined ? await pronunciationUrl(state.current_word) : audioUrl
+    : null;
   if (state.widget === "pretest" && (state.phase === "pretest_result" || state.phase === "pretest_complete")) {
     const results = await getPretestResults(session);
     response.pretest_results = results;
@@ -307,7 +365,20 @@ async function successForSession(
   }
   const progress = await progressIfAvailable();
   if (progress !== undefined) response.progress = progress;
+  response.pending_consolidation = await pendingConsolidationSummary();
   return response;
+}
+
+async function pendingConsolidationSummary(): Promise<Record<string, unknown> | null> {
+  const cadence = await getLessonCadence();
+  const pending = cadence.pending_task;
+  if (!pending) return null;
+  const activity = pending.plan.planned_activity_type;
+  const label = activity === "translation_en_to_cn" ? "长难句英译中"
+    : activity === "translation_cn_to_en" ? "完整中译英"
+      : activity === "sentence" ? "情境造句"
+        : activity === "collocation" ? "搭配练习" : "应用巩固";
+  return { activity_type: activity, label, estimated_seconds: pending.plan.estimated_seconds };
 }
 
 async function doneResponse(revision: string | null = null): Promise<Record<string, unknown>> {
@@ -316,6 +387,7 @@ async function doneResponse(revision: string | null = null): Promise<Record<stri
     session_revision: revision,
     state: {},
     progress: await getProgress(),
+    pending_consolidation: await pendingConsolidationSummary(),
   };
 }
 
@@ -432,15 +504,54 @@ async function generateAndPersistLesson(input: {
   const meaning = persistedMeaning(item);
   if (!meaning) throw new WebApiError(409, "INVALID_STUDY_STATE", "The queued Lesson word has no saved Chinese meaning.");
   const pos = persistedPartOfSpeech(item) ?? "未标注词性";
-  const lessonProfile = deriveLessonProfile({
-    status: item.status,
-    is_relearn: input.flow.relearn_words.some((word) => normalizeWord(word) === normalizeWord(item.word)),
-    error_layers: item.error_layers,
-  });
+  const savedProfile = input.flow.lesson_profile_history?.find((entry) => normalizeWord(entry.word) === normalizeWord(item.word));
+  const lessonProfile = savedProfile
+    ? { lesson_profile: savedProfile.lesson_profile, error_focus: savedProfile.error_focus }
+    : deriveLessonProfile({
+      status: item.status,
+      is_relearn: input.flow.relearn_words.some((word) => normalizeWord(word) === normalizeWord(item.word)),
+      error_layers: item.error_layers,
+    });
   const lessonProfileHistory = [
     ...(input.flow.lesson_profile_history ?? []).filter((entry) => normalizeWord(entry.word) !== normalizeWord(item.word)),
     { word: item.word, ...lessonProfile },
   ];
+  const queue = input.flow.lesson_words;
+  if (!queue || queue.length === 0 || !isLessonCursorAtCurrentWord(queue, item.word, input.index)) {
+    throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson queue no longer matches the active word.");
+  }
+  const plannedFlow = input.flow.exercise_plans?.length === queue.length
+    ? input.flow
+    : { ...input.flow, exercise_plans: await planLessonQueue(queue, input.flow.relearn_words, db, userId) };
+  const plan = plannedFlow.exercise_plans?.[input.index];
+  if (!plan || plan.scope !== "lesson" || plan.word_id !== item.word_id) {
+    throw new WebApiError(409, "LESSON_PLAN_MISMATCH", "The saved Lesson plan does not match the active word.");
+  }
+  let expectedRevision = input.expectedRevision;
+  let sessionId = input.sessionId;
+  const existing = await assertActiveStudySessionRevision(expectedRevision, sessionId, db, userId);
+  const generationState = makeStudyState({
+    date: input.date,
+    widget: "lesson",
+    phase: "lesson_explain",
+    current_word: item.word,
+    current_index: input.index,
+    retry_count: 0,
+    flow: { ...plannedFlow, lesson_profile_history: lessonProfileHistory },
+    payload: {
+      widget: "lesson",
+      widget_version: 3,
+      mode: "generation_error",
+      word: item.word,
+      lesson_profile: lessonProfile.lesson_profile,
+      error_focus: lessonProfile.error_focus,
+      plan,
+      progress: lessonProgressLabel(plannedFlow.relearn_words, queue, input.index),
+    },
+  });
+  const plannedSession = await persistStudyStateIfRevision(generationState, expectedRevision, db, userId, existing?.id ?? sessionId);
+  expectedRevision = plannedSession.updated_at;
+  sessionId = plannedSession.id;
   const [generated, audioUrl] = await Promise.all([
     generateLesson({
       word: item.word,
@@ -448,15 +559,12 @@ async function generateAndPersistLesson(input: {
       part_of_speech: pos,
       ...(item.ipa_us?.trim() ? { ipa: item.ipa_us.trim() } : {}),
       ...lessonProfile,
+      plan,
     }),
     pronunciationUrl(item.word),
   ]);
-  const queue = input.flow.lesson_words;
-  if (!queue || queue.length === 0 || !isLessonCursorAtCurrentWord(queue, item.word, input.index)) {
-    throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson queue no longer matches the active word.");
-  }
   const navigation = buildLessonNavigation(queue, input.index, item.word);
-  await assertActiveStudySessionRevision(input.expectedRevision, input.sessionId, db, userId);
+  await assertActiveStudySessionRevision(expectedRevision, sessionId, db, userId);
   const state = makeStudyState({
     date: input.date,
     widget: "lesson",
@@ -464,12 +572,13 @@ async function generateAndPersistLesson(input: {
     current_word: item.word,
     current_index: input.index,
     retry_count: 0,
-    flow: { ...input.flow, lesson_profile_history: lessonProfileHistory },
+    flow: { ...plannedFlow, lesson_profile_history: lessonProfileHistory },
     payload: {
       widget: "lesson",
       widget_version: 3,
       mode: "explain",
       ...lessonProfile,
+      plan,
       word: item.word,
       progress: lessonProgressLabel(input.flow.relearn_words, queue, input.index),
       ipa: generated.ipa,
@@ -485,7 +594,7 @@ async function generateAndPersistLesson(input: {
       navigation,
     },
   });
-  const session = await persistStudyStateIfRevision(state, input.expectedRevision, db, userId, input.sessionId);
+  const session = await persistStudyStateIfRevision(state, expectedRevision, db, userId, sessionId);
   return { session, audioUrl };
 }
 
@@ -554,9 +663,19 @@ async function resolveBootstrap(expectedRevision?: string | null): Promise<Recor
   const { bootstrap, active, revision } = prepared;
   if (bootstrap.action === "resume") {
     if (!active) throw new WebApiError(409, "NO_ACTIVE_SESSION", "There is no active study session to resume.");
+    if (active.state?.widget === "lesson" && active.state.payload.mode === "generation_error" && active.state.current_word) {
+      return successForSession((await generateAndPersistLesson({
+        word: active.state.current_word,
+        date: active.state.date,
+        flow: active.state.flow,
+        index: active.state.current_index,
+        expectedRevision: active.updated_at,
+        sessionId: active.id,
+      })).session);
+    }
     const consolidation = active.state?.widget === "lesson" ? lessonConsolidation(active.state) : null;
     if (active.state?.phase === "lesson_complete" && consolidation?.consolidation_status === "pending") {
-      return generateAndReturnConsolidation(active);
+      return successForSession(active);
     }
     return successForSession(active);
   }
@@ -715,15 +834,22 @@ const lessonExerciseSchema = z.object({
 });
 const lessonConsolidationSchema = z.object({
   consolidation: z.literal(true),
-  consolidation_kind: z.enum(["translation", "sentence"]),
+  consolidation_kind: z.enum(["translation", "translation_cn_to_en", "sentence"]),
   consolidation_trigger_round: z.number().int().positive(),
   consolidation_target_words: z.array(z.string().trim().min(1).max(100)).min(1).max(3),
+  consolidation_plan: lessonExercisePlanSchema.optional(),
   consolidation_status: z.enum(["pending", "exercise", "feedback", "completed"]),
 }).superRefine((value, context) => {
-  const validCount = value.consolidation_kind === "translation"
-    ? value.consolidation_target_words.length >= 2 && value.consolidation_target_words.length <= 3
-    : value.consolidation_target_words.length >= 1 && value.consolidation_target_words.length <= 2;
+  const validCount = value.consolidation_plan
+    ? value.consolidation_target_words.length >= 1 && value.consolidation_target_words.length <= 2
+    : value.consolidation_kind === "translation"
+      ? value.consolidation_target_words.length >= 2 && value.consolidation_target_words.length <= 3
+      : value.consolidation_target_words.length >= 1 && value.consolidation_target_words.length <= 2;
   if (!validCount) context.addIssue({ code: "custom", message: "LESSON_CONSOLIDATION_TARGET_COUNT_INVALID", path: ["consolidation_target_words"] });
+  if (value.consolidation_plan && (value.consolidation_plan.scope !== "consolidation"
+    || value.consolidation_plan.planned_activity_type !== (value.consolidation_kind === "translation" ? "translation_en_to_cn" : value.consolidation_kind === "translation_cn_to_en" ? "translation_cn_to_en" : "sentence"))) {
+    context.addIssue({ code: "custom", message: "LESSON_CONSOLIDATION_PLAN_MISMATCH", path: ["consolidation_plan"] });
+  }
 });
 
 function lessonConsolidation(state: StudyState) {
@@ -743,7 +869,54 @@ function lessonExercise(state: StudyState): z.infer<typeof lessonExerciseSchema>
   if (!parsed.success || !recordableLessonTypes.has(parsed.data.activity_type)) {
     throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved Lesson exercise is not supported.");
   }
+  const plan = lessonExercisePlanSchema.safeParse(state.payload.plan);
+  if (plan.success && parsed.data.activity_type !== plan.data.planned_activity_type) {
+    throw new WebApiError(409, "LESSON_PLAN_MISMATCH", "The saved exercise does not match its server plan.");
+  }
   return parsed.data;
+}
+
+async function savedOrLegacyPlan(
+  state: StudyState,
+  activityType: string,
+  scope: "lesson" | "consolidation",
+): Promise<z.infer<typeof lessonExercisePlanSchema>> {
+  const saved = lessonExercisePlanSchema.safeParse(state.payload.plan
+    ?? (scope === "consolidation" ? state.payload.consolidation_plan : undefined));
+  if (saved.success) {
+    if (saved.data.scope !== scope || saved.data.planned_activity_type !== activityType) {
+      throw new WebApiError(409, "LESSON_PLAN_MISMATCH", "The current exercise no longer matches its saved plan.");
+    }
+    return saved.data;
+  }
+  // Legacy active sessions keep their already-rendered prompt. Attach identity
+  // and evidence metadata in the same submission commit without regenerating it.
+  if (!state.current_word) throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved Lesson word is unavailable.");
+  const [item] = await getVocabularyItemsByWords([state.current_word]);
+  if (!item?.word_id) throw new WebApiError(409, "LESSON_PLAN_WORD_MISSING", "The saved Lesson word has no durable identity.");
+  const supported = lessonExercisePlanSchema.shape.planned_activity_type.safeParse(activityType);
+  if (!supported.success) throw new WebApiError(409, "LESSON_PLAN_ACTIVITY_UNSUPPORTED", "The saved exercise type is no longer supported.");
+  const skill = activityType === "spelling" ? "target_word_spelling"
+    : activityType === "collocation" ? "lexical_collocation"
+      : activityType === "derivation" ? "morphological_family"
+        : activityType === "sentence" || activityType === "semantic_expression" ? "target_word_application"
+          : activityType === "translation_en_to_cn" ? "relative_clause_attachment" : "target_sense_retrieval";
+  return lessonExercisePlanSchema.parse({
+    plan_version: 1,
+    plan_id: globalThis.crypto.randomUUID(),
+    exercise_id: globalThis.crypto.randomUUID(),
+    scope,
+    word_id: item.word_id,
+    target_word_ids: [item.word_id],
+    target_sense: persistedMeaning(item) || "已学词的核心义",
+    planned_activity_type: supported.data,
+    skill_goal: "保留旧会话当前题并补齐技能证据关联",
+    error_focus: null,
+    skill_ids: [skill],
+    hint_level: activityType === "sentence" ? "context" : "none",
+    estimated_seconds: 30,
+    selection_reason: "旧会话兼容：沿用已保存的原题，只补充计划标识。",
+  });
 }
 
 function savedAcceptedAnswers(state: StudyState): string[] {
@@ -793,9 +966,38 @@ async function gradeLesson(state: StudyState, exercise: z.infer<typeof lessonExe
   explanation: string;
   reference_answer?: string;
   graded_by: "deterministic" | "semantic";
+  task_fulfillment?: boolean;
+  meaning?: SemanticGrade["meaning"];
+  collocation?: SemanticGrade["collocation"];
+  grammar?: SemanticGrade["grammar"];
+  naturalness?: SemanticGrade["naturalness"];
+  target_word_results?: SemanticGrade["target_word_results"];
+  skill_results?: SemanticGrade["skill_results"];
+  error_excerpt?: string;
+  short_hint?: string;
 }> {
   const deterministic = deterministicLessonGrade(state, exercise, answer);
-  if (deterministic) return deterministic;
+  if (deterministic) {
+    const plan = lessonExercisePlanSchema.safeParse(state.payload.plan);
+    if (!plan.success || plan.data.skill_ids.length !== 1) return deterministic;
+    return {
+      ...deterministic,
+      task_fulfillment: deterministic.is_correct,
+      target_word_results: [{
+        word_id: plan.data.word_id,
+        word: state.current_word!,
+        outcome: deterministic.is_correct ? "correct" : "incorrect",
+        meaning: deterministic.is_correct ? "目标义正确。" : "目标义或词形未通过。",
+      }],
+      skill_results: [{
+        skill_id: plan.data.skill_ids[0]!,
+        outcome: deterministic.is_correct ? "correct" : "incorrect",
+        evidence: "确定性题型按服务端保存的答案逐字判定。",
+      }],
+      error_excerpt: deterministic.is_correct ? "" : answer.trim(),
+      short_hint: deterministic.explanation,
+    };
+  }
   if (![
     "translation_cn_to_en", "translation_en_to_cn", "collocation", "sentence", "semantic_expression", "pretest_en_definition",
   ].includes(exercise.activity_type)) {
@@ -804,6 +1006,9 @@ async function gradeLesson(state: StudyState, exercise: z.infer<typeof lessonExe
   if (!state.current_word) throw new WebApiError(409, "INVALID_STUDY_STATE", "The Lesson word is unavailable.");
   const semantic: SemanticGrade = await requestSemanticGrade({
     word: state.current_word,
+    plan: lessonExercisePlanSchema.safeParse(state.payload.plan).success
+      ? lessonExercisePlanSchema.parse(state.payload.plan)
+      : undefined,
     activity_type: exercise.activity_type,
     instruction: exercise.instruction,
     prompt: exercise.prompt,
@@ -824,7 +1029,16 @@ async function gradeLesson(state: StudyState, exercise: z.infer<typeof lessonExe
     ...grade,
     message: semantic.message,
     explanation: semantic.explanation,
-    ...(semantic.reference_answer ? { reference_answer: semantic.reference_answer } : {}),
+      ...(semantic.reference_answer ? { reference_answer: semantic.reference_answer } : {}),
+      task_fulfillment: semantic.task_fulfillment,
+      meaning: semantic.meaning,
+      collocation: semantic.collocation,
+      grammar: semantic.grammar,
+      naturalness: semantic.naturalness,
+      target_word_results: semantic.target_word_results,
+      skill_results: semantic.skill_results,
+      error_excerpt: semantic.error_excerpt,
+      short_hint: semantic.short_hint,
   };
 }
 
@@ -846,6 +1060,7 @@ function lessonFeedbackState(
   const navigation = buildLessonNavigation(queue, state.current_index, state.current_word!);
   const referenceAnswer = grade.reference_answer;
   const acceptedAnswers = savedAcceptedAnswers(state);
+  const plan = lessonExercisePlanSchema.safeParse(state.payload.plan);
   const consolidation = lessonConsolidation(state);
   return {
     ...state,
@@ -860,10 +1075,14 @@ function lessonFeedbackState(
         consolidation_kind: consolidation.consolidation_kind,
         consolidation_trigger_round: consolidation.consolidation_trigger_round,
         consolidation_target_words: consolidation.consolidation_target_words,
+        ...(consolidation.consolidation_plan ? { consolidation_plan: consolidation.consolidation_plan } : {}),
         consolidation_status: "feedback",
       } : {}),
+      ...(state.payload.consolidation_deferred === true ? { consolidation_deferred: true } : {}),
+      ...(state.payload.resume_state ? { resume_state: state.payload.resume_state } : {}),
       ...(Object.prototype.hasOwnProperty.call(state.payload, "lesson_profile") ? { lesson_profile: state.payload.lesson_profile } : {}),
       ...(Object.prototype.hasOwnProperty.call(state.payload, "error_focus") ? { error_focus: state.payload.error_focus } : {}),
+      ...(plan.success ? { plan: plan.data } : {}),
       word: state.current_word!,
       ...(acceptedAnswers.length > 0 ? { accepted_answers: acceptedAnswers } : {}),
       progress: consolidation
@@ -878,29 +1097,71 @@ function lessonFeedbackState(
         explanation: grade.explanation,
         reveal_answer: reveal,
         ...(reveal && referenceAnswer ? { reference_answer: referenceAnswer } : {}),
+        ...(grade.task_fulfillment !== undefined ? { task_fulfillment: grade.task_fulfillment } : {}),
+        ...(grade.meaning ? { meaning: grade.meaning } : {}),
+        ...(grade.collocation ? { collocation: grade.collocation } : {}),
+        ...(grade.grammar ? { grammar: grade.grammar } : {}),
+        ...(grade.naturalness ? { naturalness: grade.naturalness } : {}),
+        ...(grade.target_word_results ? { target_word_results: grade.target_word_results } : {}),
+        ...(grade.skill_results ? { skill_results: grade.skill_results } : {}),
+        ...(grade.error_excerpt ? { error_excerpt: grade.error_excerpt } : {}),
+        ...(grade.short_hint ? { short_hint: grade.short_hint } : {}),
       },
       navigation,
     },
   };
 }
 
+function lessonSkillEvidence(
+  plan: z.infer<typeof lessonExercisePlanSchema>,
+  grade: Awaited<ReturnType<typeof gradeLesson>>,
+  firstAttempt: boolean,
+  hintUsed: boolean,
+  answerRevealed: boolean,
+) {
+  return plannedSkillEvidence({
+    plan,
+    skill_results: grade.skill_results,
+    first_attempt: firstAttempt,
+    hint_used: hintUsed,
+    answer_revealed: answerRevealed,
+    modified_correct: !firstAttempt && grade.is_correct,
+    ...(grade.graded_by === "deterministic" ? { deterministic_outcome: grade.is_correct ? "correct" : "incorrect" } : {}),
+  });
+}
 async function submitLesson(action: Extract<WebAction, { action: "lesson_submit" }>, active: StudySessionRow | null): Promise<Record<string, unknown>> {
   const state = activeState(active, "lesson");
   if (!active || state.phase !== "lesson_exercise") throw new WebApiError(409, "INVALID_STUDY_STATE", "The Lesson is not accepting an answer.");
   assertLessonCursor(state);
   const exercise = lessonExercise(state);
-  const grade = await gradeLesson(state, exercise, action.answer);
-  await assertActiveStudySessionRevision(action.expected_revision, active.id);
-  const nextState = lessonFeedbackState(state, exercise, action.answer, grade);
-  await recordAttempt({
+  const plan = await savedOrLegacyPlan(state, exercise.activity_type, "lesson");
+  const plannedState = state.payload.plan ? state : { ...state, payload: { ...state.payload, plan } };
+  const grade = await gradeLesson(plannedState, exercise, action.answer);
+  const nextState = lessonFeedbackState(plannedState, exercise, action.answer, grade);
+  const feedback = nextState.payload.feedback as Record<string, unknown>;
+  const answerRevealed = feedback.reveal_answer === true;
+  const hintUsed = state.payload.hint_used === true;
+  const saved = await recordPlannedSubmission({
+    active,
+    expected_revision: action.expected_revision,
+    submission_id: action.submission_id ?? globalThis.crypto.randomUUID(),
+    plan,
+    scope: "lesson",
     word: state.current_word!,
-    session_id: active.id,
-    activity_type: exercise.activity_type as never,
+    activity_type: exercise.activity_type,
     user_answer: action.answer,
     is_correct: grade.is_correct,
     error_layer: grade.error_layer,
+    skill_evidence: lessonSkillEvidence(plan, grade, state.retry_count === 0, hintUsed, answerRevealed),
+    first_attempt: state.retry_count === 0,
+    hint_used: hintUsed,
+    answer_revealed: answerRevealed,
+    active_ms: null,
+    grading_ms: null,
+    next_state: nextState,
+    completion_date: await getStudyDate(),
+    cadence_candidates: cadenceCandidatePlans(plan, state.current_word!),
   });
-  const saved = await persistStudyStateIfRevision(nextState, action.expected_revision, getDatabase(), getAuthenticatedUserId(), active.id);
   return successForSession(saved, {
     result: { is_correct: grade.is_correct, error_layer: grade.error_layer, message: grade.message },
   });
@@ -912,7 +1173,7 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
   if (state.phase === "lesson_complete" && state.payload.mode === "feedback" && state.payload.consolidation !== true) {
     const scheduled = await ensureLessonConsolidationScheduled(active);
     const consolidation = scheduled.state ? lessonConsolidation(scheduled.state) : null;
-    if (consolidation?.consolidation_status === "pending") return generateAndReturnConsolidation(scheduled);
+    if (consolidation?.consolidation_status === "pending") return successForSession(scheduled);
     if (consolidation) throw new WebApiError(409, "INVALID_STUDY_STATE", "The scheduled consolidation must be completed before continuing.");
     await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
       revision: scheduled.updated_at,
@@ -951,7 +1212,7 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
   }
   const completed = await advanceStudySessionIfRevision("lesson_complete", state.current_index, action.expected_revision, active.id);
   const consolidation = completed.state ? lessonConsolidation(completed.state) : null;
-  if (consolidation?.consolidation_status === "pending") return generateAndReturnConsolidation(completed);
+  if (consolidation?.consolidation_status === "pending") return successForSession(completed);
   if (consolidation) throw new WebApiError(409, "INVALID_STUDY_STATE", "The scheduled consolidation must be completed before continuing.");
   await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
     revision: completed.updated_at,
@@ -984,14 +1245,19 @@ export async function generateAndReturnConsolidation(active: StudySessionRow): P
   const queue = assertLessonCursor(state);
   if (state.current_index !== queue.length - 1) throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "The Lesson round is not at its final word.");
   const words = consolidation.consolidation_target_words;
-  const exercise = consolidation.consolidation_kind === "translation"
-    ? await generateWrapup({ words })
-    : await generateSentenceConsolidation({ words });
-  const included = words.filter((word) => wordInText(exercise.prompt, word));
-  const requiredWords = consolidation.consolidation_kind === "translation" ? 2 : words.length;
-  if (included.length < requiredWords) {
-    throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "The consolidation exercise did not use enough target words.");
+  const plan = consolidation.consolidation_plan;
+  const exercise = plan
+    ? await generatePlannedConsolidation({ plan, words })
+    : consolidation.consolidation_kind === "translation"
+      ? await generateWrapup({ words })
+      : await generateSentenceConsolidation({ words });
+  if (plan && exercise.activity_type !== plan.planned_activity_type) {
+    throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "The consolidation exercise did not match its saved activity plan.");
   }
+  const included = words.filter((word) => wordInText(exercise.prompt, word));
+  const requiredWords = plan ? (plan.planned_activity_type === "sentence" ? words.length : 0)
+    : consolidation.consolidation_kind === "translation" ? 2 : words.length;
+  if (included.length < requiredWords) throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "The consolidation exercise did not use the planned target words.");
   const nextState: StudyState = {
     ...state,
     phase: "lesson_complete",
@@ -1003,9 +1269,13 @@ export async function generateAndReturnConsolidation(active: StudySessionRow): P
       consolidation_kind: consolidation.consolidation_kind,
       consolidation_trigger_round: consolidation.consolidation_trigger_round,
       consolidation_target_words: words,
+      ...(plan ? { consolidation_plan: plan, plan } : {}),
       consolidation_status: "exercise",
       word: state.current_word,
-      progress: consolidation.consolidation_kind === "translation" ? "周期巩固 · 英译中" : "周期巩固 · 主动表达",
+      progress: plan?.planned_activity_type === "translation_cn_to_en" || consolidation.consolidation_kind === "translation_cn_to_en"
+        ? "应用巩固 · 中译英"
+        : plan?.planned_activity_type === "sentence" || consolidation.consolidation_kind === "sentence"
+          ? "应用巩固 · 情境造句" : "应用巩固 · 长难句英译中",
       ...exercise,
       ...(consolidation.consolidation_kind === "translation" ? {
         instruction: "先找出句子主干，再把整句翻译成自然中文。",
@@ -1031,7 +1301,7 @@ export async function generateAndReturnConsolidation(active: StudySessionRow): P
   }
 }
 
-async function submitConsolidation(action: { answer: string; expected_revision: string | null }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
+async function submitConsolidation(action: { answer: string; expected_revision: string | null; submission_id?: string }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
   const state = activeState(active, "lesson");
   const consolidation = lessonConsolidation(state);
   if (!active || state.phase !== "lesson_complete" || state.payload.mode !== "exercise"
@@ -1039,30 +1309,36 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
     throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "The saved consolidation exercise is unavailable.");
   }
   const exercise = lessonExercise(state);
-  const expectedType = consolidation.consolidation_kind === "translation" ? "translation_en_to_cn" : "sentence";
+  const existingPlan = lessonExercisePlanSchema.safeParse(consolidation.consolidation_plan ?? state.payload.plan);
+  const expectedType = existingPlan.success ? existingPlan.data.planned_activity_type
+    : consolidation.consolidation_kind === "translation" ? "translation_en_to_cn"
+      : consolidation.consolidation_kind === "translation_cn_to_en" ? "translation_cn_to_en" : "sentence";
+  const plan = await savedOrLegacyPlan(state, expectedType, "consolidation");
+  const plannedState: StudyState = {
+    ...state,
+    payload: { ...state.payload, plan, consolidation_plan: plan },
+  };
   if (exercise.activity_type !== expectedType || !exercise.multiline) {
     throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved consolidation exercise is invalid.");
   }
-  let grade: WrapupGrade | SemanticGrade;
-  if (consolidation.consolidation_kind === "translation") {
-    grade = await gradeWrapupAnswer({
+  const grade: WrapupGrade | SemanticGrade = !existingPlan.success && consolidation.consolidation_kind === "translation"
+    ? await gradeWrapupAnswer({
       words: consolidation.consolidation_target_words,
       instruction: exercise.instruction,
       prompt: exercise.prompt,
       answer: action.answer,
       retry_count: state.retry_count,
-    });
-  } else {
-    grade = await requestSemanticGrade({
+    })
+    : await requestSemanticGrade({
       word: state.current_word!,
       target_words: consolidation.consolidation_target_words,
-      activity_type: "sentence",
+      activity_type: expectedType,
       instruction: exercise.instruction,
       prompt: exercise.prompt,
       answer: action.answer,
       retry_count: state.retry_count,
+      plan,
     });
-  }
   if (!grade.is_correct && grade.error_layer === "none") {
     throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "DeepSeek output did not satisfy the grading rules.");
   }
@@ -1076,22 +1352,49 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
     advancesFsrs: false,
   });
   assertGradeInvariants(canonicalGrade, { activity_type: expectedType, advancesFsrs: false });
-  await assertActiveStudySessionRevision(action.expected_revision, active.id);
-  const feedbackState = lessonFeedbackState(state, exercise, action.answer, {
+  const feedbackState = lessonFeedbackState(plannedState, exercise, action.answer, {
     ...canonicalGrade,
     message: grade.message,
     explanation: grade.explanation,
     ...(grade.reference_answer ? { reference_answer: grade.reference_answer } : {}),
   });
-  await recordAttempt({
+  const feedback = feedbackState.payload.feedback as Record<string, unknown>;
+  const answerRevealed = feedback.reveal_answer === true;
+  const saved = await recordPlannedSubmission({
+    active,
+    expected_revision: action.expected_revision,
+    submission_id: action.submission_id ?? globalThis.crypto.randomUUID(),
+    plan,
+    scope: "consolidation",
     word: state.current_word!,
-    session_id: active.id,
-    activity_type: expectedType as never,
+    activity_type: expectedType,
     user_answer: action.answer,
     is_correct: grade.is_correct,
     error_layer: canonicalGrade.error_layer,
+    skill_evidence: lessonSkillEvidence(plan, {
+      ...canonicalGrade,
+      message: grade.message,
+      explanation: grade.explanation,
+      ...(grade.skill_results ? { skill_results: grade.skill_results } : {}),
+      graded_by: "semantic",
+      ...(grade.target_word_results ? { target_word_results: grade.target_word_results } : {}),
+      ...(grade.task_fulfillment !== undefined ? { task_fulfillment: grade.task_fulfillment } : {}),
+      ...(grade.meaning ? { meaning: grade.meaning } : {}),
+      ...(grade.collocation ? { collocation: grade.collocation } : {}),
+      ...(grade.grammar ? { grammar: grade.grammar } : {}),
+      ...(grade.naturalness ? { naturalness: grade.naturalness } : {}),
+      ...(grade.error_excerpt ? { error_excerpt: grade.error_excerpt } : {}),
+      ...(grade.short_hint ? { short_hint: grade.short_hint } : {}),
+      ...(grade.reference_answer ? { reference_answer: grade.reference_answer } : {}),
+    }, state.retry_count === 0, state.payload.hint_used === true, answerRevealed),
+    first_attempt: state.retry_count === 0,
+    hint_used: state.payload.hint_used === true,
+    answer_revealed: answerRevealed,
+    active_ms: null,
+    grading_ms: null,
+    next_state: feedbackState,
+    completion_date: await getStudyDate(),
   });
-  const saved = await persistStudyStateIfRevision(feedbackState, action.expected_revision, getDatabase(), getAuthenticatedUserId(), active.id);
   return successForSession(saved);
 }
 
@@ -1144,6 +1447,71 @@ async function finishConsolidation(action: { expected_revision: string | null },
   return resolveBootstrap(null);
 }
 
+async function startPendingConsolidation(action: { expected_revision: string | null }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
+  if (active?.state) {
+    const state = normalizeStudyStateForRead(active.state);
+    const pending = state.widget === "lesson" ? lessonConsolidation(state) : null;
+    if (!pending || pending.consolidation_status !== "pending" || state.phase !== "lesson_complete") {
+      throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "There is no pending application task to start.");
+    }
+    return generateAndReturnConsolidation(active);
+  }
+
+  const cadence = await getLessonCadence();
+  const pending = cadence.pending_task;
+  if (!pending) throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "There is no pending application task to start.");
+  const word = pending.target_words[0];
+  if (!word || pending.plan.scope !== "consolidation") throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "The saved application task is invalid.");
+  const date = await getStudyDate();
+  const kind: ConsolidationKind = pending.plan.planned_activity_type === "translation_cn_to_en" ? "translation_cn_to_en"
+    : pending.plan.planned_activity_type === "sentence" ? "sentence" : "translation";
+  const initialState = makeStudyState({
+    date,
+    widget: "lesson",
+    phase: "lesson_complete",
+    current_word: word,
+    current_index: 0,
+    retry_count: 0,
+    flow: { relearn_words: [], lesson_words: [word] },
+    payload: {
+      widget: "lesson",
+      widget_version: 3,
+      mode: "pending",
+      consolidation: true,
+      consolidation_kind: kind,
+      consolidation_trigger_round: 10,
+      consolidation_target_words: pending.target_words,
+      consolidation_plan: pending.plan,
+      plan: pending.plan,
+      consolidation_status: "pending",
+      word,
+      progress: "应用巩固 · 待做",
+    },
+  });
+  const session = await persistStudyStateIfRevision(initialState, action.expected_revision);
+  return generateAndReturnConsolidation(session);
+}
+
+async function deferPendingConsolidation(action: { expected_revision: string | null }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
+  const state = activeState(active, "lesson");
+  const consolidation = lessonConsolidation(state);
+  if (!active || state.phase !== "lesson_complete" || consolidation?.consolidation_status !== "pending"
+    || state.payload.mode !== "feedback") {
+    throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "Only the round-end application choice can be deferred here.");
+  }
+  const deferred: StudyState = {
+    ...state,
+    payload: { ...state.payload, consolidation_deferred: true },
+  };
+  const saved = await persistStudyStateIfRevision(deferred, action.expected_revision, getDatabase(), getAuthenticatedUserId(), active.id);
+  await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
+    revision: saved.updated_at,
+    sessionId: saved.id,
+    allowLessonRoundCompletion: true,
+  });
+  return doneResponse(null);
+}
+
 async function setDailyNewWordLimitAction(
   action: Extract<WebAction, { action: "set_daily_new_word_limit" }>,
 ): Promise<Record<string, unknown>> {
@@ -1190,6 +1558,8 @@ async function performAction(action: WebAction): Promise<Record<string, unknown>
       return successForSession(saved);
     }
     case "lesson_next": return lessonNext(action, active);
+    case "consolidation_start": return startPendingConsolidation(action, active);
+    case "consolidation_defer": return deferPendingConsolidation(action, active);
     case "consolidation_submit":
     case "wrapup_submit": return submitConsolidation(action, active);
     case "consolidation_retry":

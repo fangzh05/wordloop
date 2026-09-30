@@ -62,7 +62,7 @@ describe("WordLoop hot-path query boundaries", () => {
     const renderer = source("server/tools/renderWidgets.ts");
     expect(renderer).toContain("await ensureTodayQueue();");
     expect(renderer.indexOf("await ensureTodayQueue();"))
-      .toBeLessThan(renderer.indexOf("await getProgress()"));
+      .toBeLessThan(renderer.indexOf("const [progress, cadence] = await Promise.all([getProgress(), getLessonCadence()])"));
   });
 
   it("passes known lesson sessions through the frozen queue cursor", () => {

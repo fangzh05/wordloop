@@ -92,11 +92,19 @@ describe("legacy Lesson queue recovery", () => {
     const { db, attemptsBuilder, sessionsBuilder } = makeDb([
       ...["planet", "shrink"].map((word) => ({
         activity_type: "review",
+        scope: "review",
         created_at: "2026-09-15T00:00:00.000Z",
         word: { normalized_word: word },
       })),
       ...["expression", "marine", "thermometer", "rectify", "reed", "via", "interpret"].map((word) => ({
         activity_type: "sentence",
+        scope: "lesson",
+        created_at: "2026-09-15T00:00:00.000Z",
+        word: { normalized_word: word },
+      })),
+      ...["excluded-consolidation", "ambiguous-legacy"].map((word, index) => ({
+        activity_type: "sentence",
+        scope: index === 0 ? "consolidation" : "legacy",
         created_at: "2026-09-15T00:00:00.000Z",
         word: { normalized_word: word },
       })),

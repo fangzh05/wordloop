@@ -15,6 +15,7 @@ const sessionMocks = vi.hoisted(() => ({
   normalizeStudyStateForRead: vi.fn((state: unknown) => state),
   persistStudyState: vi.fn(),
   persistStudyStateIfRevision: vi.fn(),
+  recordPlannedSubmission: vi.fn(),
 }));
 
 vi.mock("../server/db.js", () => ({
@@ -40,6 +41,8 @@ vi.mock("../server/services/review.js", async (importOriginal) => {
 });
 const wordMocks = vi.hoisted(() => ({ getTodayWords: vi.fn() }));
 vi.mock("../server/services/words.js", () => wordMocks);
+const plannerMocks = vi.hoisted(() => ({ planLessonQueue: vi.fn(), cadenceCandidatePlans: vi.fn(() => ({})) }));
+vi.mock("../server/services/exercisePlanner.js", () => plannerMocks);
 
 import { getDueReviewSelection } from "../server/services/review.js";
 
@@ -81,7 +84,7 @@ async function withReviewClient<T>(run: (client: Client) => Promise<T>): Promise
 }
 
 function payloadOf(result: Awaited<ReturnType<Client["callTool"]>>): Record<string, unknown> {
-  if (result.isError) throw new Error(String(result.content));
+  if (result.isError) throw new Error(JSON.stringify(result.content));
   return result.structuredContent as Record<string, unknown>;
 }
 
@@ -110,6 +113,30 @@ describe("Review render tool schema compatibility", () => {
     sessionMocks.persistStudyState.mockReset().mockImplementation(async (state: unknown) => ({ state }));
     sessionMocks.persistStudyStateIfRevision.mockReset().mockImplementation(async (state: unknown) => ({ state }));
     wordMocks.getTodayWords.mockReset().mockResolvedValue([]);
+    plannerMocks.planLessonQueue.mockReset().mockImplementation(async (words: string[], _relearn: string[], _db: unknown, _user: unknown,
+      options?: { preserve_existing_activity?: { index: number; activity_type: string } }) => words.map((word, index) => ({
+      plan_version: 1,
+      plan_id: `00000000-0000-4000-9000-${String(index + 1).padStart(12, "0")}`,
+      exercise_id: `00000000-0000-4000-9000-${String(index + 101).padStart(12, "0")}`,
+      scope: "lesson",
+      word_id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      target_word_ids: [`00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`],
+      target_sense: "测试含义",
+      planned_activity_type: options?.preserve_existing_activity?.index === index
+        ? options.preserve_existing_activity.activity_type : word === "failed-word" ? "sentence" : "word_recall",
+      skill_goal: "提取目标词",
+      error_focus: null,
+      skill_ids: ["target_sense_retrieval"],
+      hint_level: "none",
+      estimated_seconds: 20,
+      selection_reason: options?.preserve_existing_activity?.index === index
+        ? "旧会话兼容：保留当前已显示题目；新规划从下一轮生效。" : "test planner",
+    })));
+    sessionMocks.recordPlannedSubmission.mockReset().mockImplementation(async (input: any) => ({
+      ...input.active,
+      state: input.next_state,
+      updated_at: "2026-09-16T00:00:01.000Z",
+    }));
   });
 
   it("keeps an in-progress Review snapshot immutable when another card becomes due", async () => {
@@ -316,7 +343,12 @@ describe("Review render tool schema compatibility", () => {
       expect(resumed.mode).not.toBe("explain");
       expect(resumed.activity_type).toBe("cloze");
       expect(resumed.prompt).toBe(exercise.prompt);
-      expect(sessionMocks.persistStudyState).not.toHaveBeenCalled();
+      expect(sessionMocks.persistStudyState).toHaveBeenCalledOnce();
+      const restored = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as { flow: { exercise_plans?: Array<{ planned_activity_type: string; selection_reason: string }> } } | undefined;
+      expect(restored?.flow.exercise_plans?.[9]).toMatchObject({
+        planned_activity_type: "cloze",
+        selection_reason: expect.stringContaining("旧会话兼容"),
+      });
 
       const feedback = payloadOf(await client.callTool({
         name: "render_lesson_widget",
@@ -343,17 +375,20 @@ describe("Review render tool schema compatibility", () => {
         feedback: { is_correct: true, user_answer: "air-conditioned", error_layer: "none" },
         navigation,
       });
-      const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as {
-        phase: string;
-        current_word: string;
-        current_index: number;
-        payload: Record<string, any>;
+      const persisted = vi.mocked(sessionMocks.recordPlannedSubmission).mock.calls.at(-1)?.[0] as {
+        is_correct: boolean;
+        plan: { planned_activity_type: string; selection_reason: string };
+        next_state: { phase: string; current_word: string; current_index: number; payload: Record<string, any> };
       } | undefined;
       expect(persisted).toMatchObject({
-        phase: "lesson_feedback",
-        current_word: "air-conditioning",
-        current_index: 9,
-        payload: { mode: "feedback", word: "air-conditioning", exercise, navigation },
+        is_correct: true,
+        plan: { planned_activity_type: "cloze", selection_reason: expect.stringContaining("旧会话兼容") },
+        next_state: {
+          phase: "lesson_feedback",
+          current_word: "air-conditioning",
+          current_index: 9,
+          payload: { mode: "feedback", word: "air-conditioning", exercise, navigation },
+        },
       });
       expect(sessionMocks.persistStudyState).toHaveBeenCalledTimes(1);
     });
@@ -506,7 +541,7 @@ describe("Review render tool schema compatibility", () => {
             activity_type: "sentence",
             instruction: "造句",
             prompt: "Use the word in a new scene.",
-            multiline: true,
+            multiline: false,
           },
         },
       });
@@ -547,7 +582,7 @@ describe("Review render tool schema compatibility", () => {
             activity_type: "sentence",
             instruction: "造句",
             prompt: "Use the word in a new scene.",
-            multiline: true,
+            multiline: false,
           },
         },
       });
@@ -592,13 +627,13 @@ describe("Review render tool schema compatibility", () => {
             activity_type: "sentence",
             instruction: "造句",
             prompt: "Use the word in a new scene.",
-            multiline: true,
+            multiline: false,
           },
         },
       });
       expect(payloadOf(result)).toMatchObject({ widget: "lesson", phase: "lesson_explain", word: "failed-word" });
       const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as { flow?: { relearn_words: string[] } };
-      expect(persisted.flow).toEqual({ relearn_words: ["failed-word"], lesson_words: ["failed-word"] });
+      expect(persisted.flow).toMatchObject({ relearn_words: ["failed-word"], lesson_words: ["failed-word"] });
     });
   });
 
@@ -707,9 +742,9 @@ describe("Review render tool schema compatibility", () => {
         current_index: 8,
         navigation: { action: "round_complete", next_word: null, next_index: null, total_count: 9 },
       });
-      const persisted = vi.mocked(sessionMocks.persistStudyState).mock.calls.at(-1)?.[0] as { payload: Record<string, unknown> };
-      expect(persisted.payload.navigation).toEqual({ action: "round_complete", next_word: null, next_index: null, total_count: 9 });
-      expect(persisted.payload).toMatchObject({ lesson_profile: "targeted_relearn", error_focus: "grammar" });
+      const persisted = vi.mocked(sessionMocks.recordPlannedSubmission).mock.calls.at(-1)?.[0] as { next_state: { payload: Record<string, unknown> } };
+      expect(persisted.next_state.payload.navigation).toEqual({ action: "round_complete", next_word: null, next_index: null, total_count: 9 });
+      expect(persisted.next_state.payload).toMatchObject({ lesson_profile: "targeted_relearn", error_focus: "grammar" });
 
       const feedbackState = {
         ...exerciseState,
@@ -862,7 +897,7 @@ describe("Review render tool schema compatibility", () => {
       const feedback = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: feedbackInput }));
       expect(feedback).toMatchObject({ mode: "feedback", consolidation: true, consolidation_kind: "translation", phase: "lesson_complete" });
       expect(feedback.exercise).toEqual(consolidationExercise);
-      expect(feedback.progress).toBe("周期巩固 · 英译中");
+      expect(feedback.progress).toBe("应用巩固 · 长难句英译中");
 
       sessionMocks.getActiveStudySession.mockResolvedValue({
         ...activeBase,

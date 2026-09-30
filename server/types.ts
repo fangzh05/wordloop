@@ -1,4 +1,4 @@
-import type { ActiveErrorLayer, ReviewKind } from "../shared/toolContracts.js";
+import type { ActiveErrorLayer, LessonExercisePlan, LessonProfile, ReviewKind } from "../shared/toolContracts.js";
 
 export {
   ACTIVITY_TYPES,
@@ -72,6 +72,7 @@ export interface UserWordRow {
 }
 
 export interface VocabularyItem {
+  word_id?: string;
   word: string;
   display_word: string;
   status: WordStatus;
@@ -117,9 +118,11 @@ export interface StudyFlow {
   /** Server-owned profile used for each generated word, retained for session analytics. */
   lesson_profile_history?: Array<{
     word: string;
-    lesson_profile: "quick_recall" | "reinforce" | "targeted_relearn";
+    lesson_profile: LessonProfile;
     error_focus: ActiveErrorLayer | null;
   }>;
+  /** Plans are frozen for the entire Lesson round; the active plan also lives in the current payload. */
+  exercise_plans?: LessonExercisePlan[];
 }
 
 export interface StudySessionRow {

@@ -166,7 +166,7 @@ describe("Widget to tool contracts", () => {
 
   it("validates Lesson Widget submissions and backend-owned navigation", () => {
     const messageInput = { word: "planet", activity_type: "sentence", prompt: "Use planet in a new scene.", answer: "My answer" };
-    expect(lessonSubmissionSchema.parse(messageInput)).toEqual(messageInput);
+    expect(lessonSubmissionSchema.parse(messageInput)).toEqual({ ...messageInput, scope: "lesson", hint_used: false });
     expect(buildLessonSubmissionMessage({ word: "planet", activityType: "sentence", prompt: messageInput.prompt, answer: "  My answer  " })).toContain("用户答案：My answer");
 
     for (const event of ["lesson_start_exercise", "lesson_retry", "lesson_complete"] as const) {

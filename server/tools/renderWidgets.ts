@@ -18,8 +18,14 @@ import {
   normalizeStudyStateForRead,
   persistStudyState,
   persistStudyStateIfRevision,
+  recordPlannedSubmission,
 } from "../services/studySessions.js";
 import { getTodayWords } from "../services/words.js";
+import { cadenceCandidatePlans, planLessonQueue } from "../services/exercisePlanner.js";
+import { lessonGenerationSchema, validateGeneratedLessonExercise } from "../services/deepseek.js";
+import { plannedSkillEvidence } from "../services/plannedSubmission.js";
+import { getLessonCadence } from "../services/lessonConsolidation.js";
+import { gradeExactCloze, gradeExactRecall } from "../../web/src/grading/deterministic.js";
 import {
   buildLessonWords,
   buildLessonNavigation,
@@ -38,6 +44,9 @@ import {
   reviewWidgetPayloadSchema,
   type ReviewWidgetItem,
   type ReviewWidgetPayload,
+  type LessonExercisePlan,
+  type SkillEvidence,
+  lessonExercisePlanSchema,
 } from "../../shared/toolContracts.js";
 import { safeTool } from "./helpers.js";
 
@@ -123,6 +132,15 @@ const lessonFeedback = z.object({
   reference_answer: z.string().trim().max(4000).optional(),
   explanation: z.string().trim().max(4000).optional().describe("错误时说明错因和下一步改哪里/怎么改；第一次错误只能给自纠提示，不得给完整改后句。"),
   reveal_answer: z.boolean(),
+  task_fulfillment: z.boolean().optional(),
+  meaning: z.object({ passed: z.boolean(), note: z.string().max(1000) }).optional(),
+  collocation: z.object({ passed: z.boolean(), note: z.string().max(1000) }).optional(),
+  grammar: z.object({ passed: z.boolean(), note: z.string().max(1000) }).optional(),
+  naturalness: z.object({ passed: z.boolean(), note: z.string().max(1000) }).optional(),
+  target_word_results: z.array(z.object({ word_id: z.string().uuid().optional(), word: z.string().min(1).max(100), outcome: z.enum(["correct", "incorrect", "partial", "not_assessed"]), meaning: z.string().max(1000).optional(), collocation: z.string().max(1000).optional(), grammar: z.string().max(1000).optional(), naturalness: z.string().max(1000).optional(), error_excerpt: z.string().max(500).optional(), hint: z.string().max(500).optional(), reference_expression: z.string().max(1000).optional() }).strict()).max(3).optional(),
+  skill_results: z.array(z.object({ skill_id: z.string().min(1).max(120), word_id: z.string().uuid().optional(), outcome: z.enum(["correct", "incorrect", "partial", "not_assessed"]), evidence: z.string().max(500).optional() }).strict()).max(8).optional(),
+  error_excerpt: z.string().max(500).optional(),
+  short_hint: z.string().max(500).optional(),
 }).strict();
 const lessonProfile = z.enum(["quick_recall", "reinforce", "targeted_relearn"]);
 const lessonErrorFocus = z.enum(["meaning", "collocation", "grammar", "spelling", "pronunciation"]).nullable();
@@ -132,7 +150,7 @@ const lessonCommon = {
   lesson_profile: lessonProfile.optional(),
   error_focus: lessonErrorFocus.optional(),
   consolidation: z.literal(true).optional(),
-  consolidation_kind: z.enum(["translation", "sentence"]).optional(),
+  consolidation_kind: z.enum(["translation", "translation_cn_to_en", "sentence"]).optional(),
   consolidation_trigger_round: z.number().int().positive().optional(),
   consolidation_target_words: z.array(z.string().trim().min(1).max(100)).max(3).optional(),
   consolidation_status: z.enum(["pending", "exercise", "feedback", "completed"]).optional(),
@@ -185,10 +203,14 @@ const feedbackToolPayload = z.object({
   mode: z.literal("feedback"),
   wrapup: z.literal(true).optional(),
   consolidation: z.literal(true).optional(),
-  consolidation_kind: z.enum(["translation", "sentence"]).optional(),
+  consolidation_kind: z.enum(["translation", "translation_cn_to_en", "sentence"]).optional(),
   word: z.string().trim().min(1).max(100),
   lesson_profile: lessonProfile.optional(),
   error_focus: lessonErrorFocus.optional(),
+  submission_id: z.string().uuid().optional(),
+  exercise_id: z.string().uuid().optional(),
+  plan_id: z.string().uuid().optional(),
+  hint_used: z.boolean().default(false),
   feedback: lessonFeedback,
 }).strict();
 const lessonToolInputBranches = [
@@ -313,13 +335,36 @@ function normalizePersistedLessonPayload(payload: Record<string, unknown>): Reco
   throw new Error("Study session lesson payload has an unsupported mode.");
 }
 
-function lessonWidgetResponsePayload(payload: Record<string, unknown>): Record<string, unknown> {
+export function lessonWidgetResponsePayload(payload: Record<string, unknown>): Record<string, unknown> {
   const response = { ...payload };
   delete response.accepted_answers;
+  for (const key of ["plan", "consolidation_plan"]) {
+    if (typeof response[key] === "object" && response[key] !== null && !Array.isArray(response[key])) {
+      const plan = { ...response[key] as Record<string, unknown> };
+      delete plan.target_sense;
+      delete plan.word_id;
+      delete plan.target_word_ids;
+      delete plan.skill_signals;
+      response[key] = plan;
+    }
+  }
   if (typeof response.exercise === "object" && response.exercise !== null && !Array.isArray(response.exercise)) {
     const exercise = { ...response.exercise as Record<string, unknown> };
     delete exercise.accepted_answers;
     response.exercise = exercise;
+  }
+  if (typeof response.feedback === "object" && response.feedback !== null && !Array.isArray(response.feedback)) {
+    const feedback = { ...response.feedback as Record<string, unknown> };
+    if (feedback.reveal_answer !== true) delete feedback.reference_answer;
+    if (Array.isArray(feedback.target_word_results)) {
+      feedback.target_word_results = feedback.target_word_results.map((result) => {
+        if (typeof result !== "object" || result === null || Array.isArray(result)) return result;
+        const safeResult = { ...result as Record<string, unknown> };
+        delete safeResult.reference_expression;
+        return safeResult;
+      });
+    }
+    response.feedback = feedback;
   }
   return response;
 }
@@ -396,7 +441,21 @@ export async function resumableLessonPayload(session: StudySessionRow | null): P
     }
   }
 
-  const resolvedQueue = resolved.flow.lesson_words;
+  const queueForPlanning = resolved.flow.lesson_words;
+  if (!queueForPlanning || !resolved.current_word) throw new Error("LESSON_QUEUE_MISSING");
+  let restoredFlow = resolved.flow;
+  if (resolved.payload.consolidation !== true) {
+    const activity = persistedExerciseActivity(resolved);
+    restoredFlow = await ensurePlannedFlow(
+      resolved.flow,
+      queueForPlanning,
+      db,
+      userId,
+      activity ? { index: resolved.current_index, activity_type: activity } : undefined,
+    );
+  }
+  const currentPlan = restoredFlow.exercise_plans?.[resolved.current_index];
+  const resolvedQueue = restoredFlow.lesson_words;
   const resolvedCurrentWord = resolved.current_word;
   if (!resolvedQueue || !resolvedCurrentWord) throw new Error("LESSON_QUEUE_MISSING");
   const navigation = buildLessonNavigation(resolvedQueue, resolved.current_index, resolvedCurrentWord);
@@ -405,18 +464,26 @@ export async function resumableLessonPayload(session: StudySessionRow | null): P
   // strict, so project only their canonical fields on resume while retaining
   // unknown top-level fields for forward compatibility.
   const normalizedPayload = normalizePersistedLessonPayload(resolved.payload);
-  const persistedPayload = { ...normalizedPayload, navigation };
-  const responsePayload = lessonWidgetPayload(lessonWidgetResponsePayload({ ...normalizedPayload, navigation }));
-  const payloadChanged = JSON.stringify(resolved.payload) !== JSON.stringify(normalizedPayload);
+  const responseContent = {
+    ...normalizedPayload,
+    ...(!resolved.payload.consolidation && currentPlan ? { plan: currentPlan } : {}),
+  };
+  const persistedPayload = { ...responseContent, navigation };
+  const responseWithPlan = lessonWidgetPayload(lessonWidgetResponsePayload({ ...responseContent, navigation }));
+  const payloadChanged = JSON.stringify(resolved.payload) !== JSON.stringify(responseContent)
+    || JSON.stringify(resolved.flow) !== JSON.stringify(restoredFlow);
   const navigationChanged = JSON.stringify(resolved.payload.navigation) !== JSON.stringify(navigation);
   const versionChanged = resolved.payload.widget_version !== LESSON_WIDGET_VERSION;
   if ((payloadChanged || navigationChanged || versionChanged) && resolvedSession) {
-    resolvedSession = await persistStudyState({ ...resolved, payload: persistedPayload }, db, userId, resolvedSession);
+    const nextState = { ...resolved, flow: restoredFlow, payload: persistedPayload };
+    resolvedSession = resolvedSession.updated_at
+      ? await persistStudyStateIfRevision(nextState, resolvedSession.updated_at, db, userId, resolvedSession.id)
+      : await persistStudyState(nextState, db, userId, resolvedSession);
     resolved = resolvedSession.state ? normalizeStudyStateForRead(resolvedSession.state) : { ...resolved, payload: persistedPayload };
   } else {
-    resolved = { ...resolved, payload: persistedPayload };
+    resolved = { ...resolved, flow: restoredFlow, payload: persistedPayload };
   }
-  return widgetPayloadWithState(responsePayload, resolved);
+  return widgetPayloadWithState(responseWithPlan, resolved);
 }
 
 async function saveWidgetState(input: {
@@ -429,18 +496,111 @@ async function saveWidgetState(input: {
   retry_count: number;
   flow?: StudyState["flow"];
   payload: Record<string, unknown>;
+  atomicSubmission?: { submission_id: string; plan: LessonExercisePlan; hint_used: boolean };
 }): Promise<Record<string, unknown>> {
-  const { date, knownActive, flow, ...stateInput } = input;
-  const state = makeStudyState({
+  const { date, knownActive, flow, atomicSubmission, ...stateInput } = input;
+  let state = makeStudyState({
     date: date ?? await getStudyDate(),
     flow: flow ?? knownActive?.state?.flow,
     ...stateInput,
   });
+  if (atomicSubmission) {
+    if (!knownActive?.state || knownActive.state.widget !== "lesson" || state.widget !== "lesson") {
+      throw new Error("PLANNED_SUBMISSION_SESSION_MISSING");
+    }
+    const answerFeedback = state.payload.feedback as Record<string, unknown> | undefined;
+    const savedPayload = knownActive.state.payload;
+    const exercisePayload = savedPayload.mode === "feedback" ? savedPayload.exercise
+      : savedPayload.mode === "exercise" ? savedPayload : null;
+    const exercise = lessonExercise.safeParse(projectPersistedFields(exercisePayload, lessonExerciseKeys));
+    const answer = typeof answerFeedback?.user_answer === "string" ? answerFeedback.user_answer : "";
+    if (!exercise.success || exercise.data.activity_type !== atomicSubmission.plan.planned_activity_type || !answer.trim()) {
+      throw new Error("PLANNED_SUBMISSION_EXERCISE_MISMATCH");
+    }
+    let isCorrect = answerFeedback?.is_correct === true;
+    let errorLayer = typeof answerFeedback?.error_layer === "string" ? answerFeedback.error_layer : "meaning";
+    let message = typeof answerFeedback?.message === "string" ? answerFeedback.message : "答案需要调整。";
+    let explanation = typeof answerFeedback?.explanation === "string" ? answerFeedback.explanation : message;
+    const recallActivity = ["word_recall", "recall", "spelling"].includes(exercise.data.activity_type);
+    const accepted = Array.isArray(exercise.data.accepted_answers) ? exercise.data.accepted_answers : [];
+    const fixedActivity = ["exact_cloze", "cloze", "derivation"].includes(exercise.data.activity_type) && accepted.length > 0;
+    let deterministicOutcome: "correct" | "incorrect" | undefined;
+    if (fixedActivity || recallActivity) {
+      const result = recallActivity
+        ? gradeExactRecall(answer, knownActive.state.current_word ?? "")
+        : gradeExactCloze(answer, accepted);
+      isCorrect = result.is_correct;
+      errorLayer = result.error_layer;
+      message = result.feedback;
+      explanation = result.feedback;
+      deterministicOutcome = result.is_correct ? "correct" : "incorrect";
+    }
+    const nextRetry = isCorrect ? knownActive.state.retry_count : knownActive.state.retry_count + 1;
+    const revealAnswer = !isCorrect && nextRetry >= 2;
+    const referenceAnswer = typeof answerFeedback?.reference_answer === "string" ? answerFeedback.reference_answer.trim() : "";
+    if (revealAnswer && !referenceAnswer && exercise.data.accepted_answers?.length) {
+      answerFeedback!.reference_answer = exercise.data.accepted_answers[0];
+    }
+    const finalReference = revealAnswer ? (typeof answerFeedback?.reference_answer === "string" ? answerFeedback.reference_answer : undefined) : undefined;
+    if (revealAnswer && !finalReference?.trim()) throw new Error("PLANNED_SECOND_MISS_REFERENCE_MISSING");
+    const skillResults = Array.isArray(answerFeedback?.skill_results)
+      ? answerFeedback.skill_results as Array<{ skill_id: string; word_id?: string; outcome: "correct" | "incorrect" | "partial" | "not_assessed"; evidence?: string }>
+      : [];
+    const savedFeedback = {
+      ...answerFeedback,
+      is_correct: isCorrect,
+      error_layer: isCorrect ? "none" : errorLayer,
+      message,
+      explanation,
+      reveal_answer: revealAnswer,
+      ...(finalReference ? { reference_answer: finalReference } : {}),
+      ...(finalReference ? {} : { reference_answer: undefined }),
+    };
+    state = {
+      ...state,
+      retry_count: nextRetry,
+      payload: { ...state.payload, feedback: savedFeedback },
+    };
+    const firstAttempt = knownActive.state.retry_count === 0;
+    const evidence = plannedSkillEvidence({
+      plan: atomicSubmission.plan,
+      skill_results: skillResults,
+      first_attempt: firstAttempt,
+      hint_used: atomicSubmission.hint_used,
+      answer_revealed: revealAnswer,
+      modified_correct: !firstAttempt && isCorrect,
+      ...(deterministicOutcome ? { deterministic_outcome: deterministicOutcome } : {}),
+    });
+    const saved = await recordPlannedSubmission({
+      active: knownActive,
+      expected_revision: knownActive.updated_at,
+      submission_id: atomicSubmission.submission_id,
+      plan: atomicSubmission.plan,
+      scope: atomicSubmission.plan.scope,
+      word: knownActive.state.current_word ?? "",
+      activity_type: exercise.data.activity_type,
+      user_answer: answer,
+      is_correct: isCorrect,
+      error_layer: isCorrect ? "none" : errorLayer,
+      skill_evidence: evidence as SkillEvidence[],
+      first_attempt: firstAttempt,
+      hint_used: atomicSubmission.hint_used,
+      answer_revealed: revealAnswer,
+      active_ms: null,
+      grading_ms: null,
+      next_state: state,
+      completion_date: await getStudyDate(),
+      ...(atomicSubmission.plan.scope === "lesson" ? { cadence_candidates: cadenceCandidatePlans(atomicSubmission.plan, knownActive.state.current_word ?? "") } : {}),
+    });
+    if (!saved.state) throw new Error("PLANNED_SUBMISSION_STATE_MISSING");
+    return widgetPayloadWithState(lessonWidgetResponsePayload(saved.state.payload), saved.state);
+  }
   const persisted = state.payload.consolidation === true && knownActive
     ? await persistStudyStateIfRevision(state, knownActive.updated_at, getDatabase(), getAuthenticatedUserId(), knownActive.id)
     : await persistStudyState(state, getDatabase(), getAuthenticatedUserId(), knownActive);
+  const persistedPayload = persisted.state?.payload ?? input.payload;
   return {
-    ...widgetPayloadWithState(persisted.state?.payload ?? input.payload, persisted.state ?? state),
+    ...widgetPayloadWithState(input.widget === "lesson" ? lessonWidgetResponsePayload(persistedPayload) : persistedPayload, persisted.state ?? state),
     ...(input.widget === "pretest" ? { revision: persisted.updated_at } : {}),
   };
 }
@@ -450,6 +610,7 @@ function lessonRenderIndex(
   input: Exclude<LessonInput, { resume: true }>,
 ): number {
   if (active?.state?.widget !== "lesson") return 0;
+  if (active.state.payload.mode === "generation_error") return active.state.current_index;
   return input.mode === "explain"
     ? (active.state.current_word ? active.state.current_index + 1 : active.state.current_index)
     : active.state.current_index;
@@ -520,6 +681,27 @@ export function assertLessonWordMatches(expectedWord: string | null, actualWord:
   }
 }
 
+function persistedExerciseActivity(state: StudyState): string | undefined {
+  const payload = state.payload;
+  const exercise = payload.mode === "feedback" && payload.exercise && typeof payload.exercise === "object"
+    ? payload.exercise as Record<string, unknown>
+    : payload.mode === "explain" && payload.exercise && typeof payload.exercise === "object"
+      ? payload.exercise as Record<string, unknown> : null;
+  const value = exercise?.activity_type ?? (payload.mode === "exercise" ? payload.activity_type : undefined);
+  return typeof value === "string" ? value : undefined;
+}
+
+async function ensurePlannedFlow(
+  flow: StudyState["flow"], queue: string[], db: ReturnType<typeof getDatabase>, userId: string,
+  preserve?: { index: number; activity_type: string },
+): Promise<StudyState["flow"]> {
+  const saved = z.array(lessonExercisePlanSchema).length(queue.length).safeParse(flow.exercise_plans);
+  if (saved.success) return flow;
+  const exercise_plans = await planLessonQueue(queue, flow.relearn_words, db, userId,
+    preserve ? { preserve_existing_activity: preserve } : {});
+  return { ...flow, exercise_plans };
+}
+
 async function validateLessonWord(
   input: Exclude<LessonInput, { resume: true }>,
   active: StudySessionRow | null,
@@ -531,17 +713,16 @@ async function validateLessonWord(
   if (resolvedActive?.state?.widget === "lesson" && resolvedActive.state.flow.lesson_words === undefined) {
     resolvedActive = await normalizeLegacyLessonSession(resolvedActive, db, userId);
   }
-
   if (input.mode === "exercise" || input.mode === "feedback") {
-    const state = resolvedActive?.state?.widget === "lesson" ? resolvedActive.state : null;
-    const marker = state?.payload.consolidation === true
+    let state = resolvedActive?.state?.widget === "lesson" ? resolvedActive.state : null;
+    let marker = state?.payload.consolidation === true
       ? z.object({
-        consolidation_kind: z.enum(["translation", "sentence"]),
+        consolidation_kind: z.enum(["translation", "translation_cn_to_en", "sentence"]),
         consolidation_trigger_round: z.number().int().positive(),
         consolidation_target_words: z.array(z.string().trim().min(1).max(100)).min(1).max(3),
         consolidation_status: z.enum(["pending", "exercise", "feedback", "completed"]),
       }).superRefine((value, context) => {
-        const validCount = value.consolidation_kind === "translation"
+        const validCount = value.consolidation_kind === "translation" && !state?.payload.consolidation_plan
           ? value.consolidation_target_words.length >= 2
           : value.consolidation_target_words.length <= 2;
         if (!validCount) context.addIssue({ code: "custom", message: "LESSON_CONSOLIDATION_TARGET_COUNT_INVALID" });
@@ -553,6 +734,49 @@ async function validateLessonWord(
         || input.consolidation_kind !== marker.data.consolidation_kind) {
         throw new Error("LESSON_CONSOLIDATION_NOT_READY");
       }
+      const savedPlan = lessonExercisePlanSchema.safeParse(state.payload.consolidation_plan ?? state.payload.plan);
+      if (!savedPlan.success) {
+        const savedActivity = persistedExerciseActivity(state);
+        const fallbackActivity = marker.data.consolidation_kind === "translation" ? "translation_en_to_cn"
+          : marker.data.consolidation_kind === "translation_cn_to_en" ? "translation_cn_to_en" : "sentence";
+        const activity = lessonExercisePlanSchema.shape.planned_activity_type.parse(savedActivity ?? fallbackActivity);
+        const candidates = await planLessonQueue(marker.data.consolidation_target_words, state.flow.relearn_words, db, userId);
+        const anchorIndex = marker.data.consolidation_target_words.findIndex((word) => normalizeWord(word) === normalizeWord(state!.current_word!));
+        const base = candidates[Math.max(0, anchorIndex)] ?? candidates[0];
+        if (!base) throw new Error("LESSON_CONSOLIDATION_PLAN_MISSING");
+        const reconstructed = lessonExercisePlanSchema.parse({
+          ...base,
+          plan_id: globalThis.crypto.randomUUID(),
+          exercise_id: globalThis.crypto.randomUUID(),
+          scope: "consolidation",
+          word_id: base.word_id,
+          target_word_ids: candidates.map((candidate) => candidate.word_id).slice(0, 3),
+          planned_activity_type: activity,
+          skill_goal: "保留旧会话已显示的综合任务并补齐技能证据关联",
+          skill_ids: activity === "translation_en_to_cn" ? ["sentence_structure"]
+            : activity === "translation_cn_to_en" ? ["target_sense_retrieval", "lexical_collocation"]
+              : ["target_word_application"],
+          hint_level: activity === "sentence" ? "context" : activity === "translation_cn_to_en" ? "meaning" : "none",
+          estimated_seconds: 120,
+          selection_reason: "旧会话兼容：恢复原综合题，不追算首次发布前的历史欠题。",
+          coverage_exception_reason: "此任务在计划迁移前已建立，保留原题及轮换位置。",
+        });
+        const upgradedState = {
+          ...state,
+          payload: { ...state.payload, plan: reconstructed, consolidation_plan: reconstructed },
+        };
+        resolvedActive = resolvedActive?.updated_at
+          ? await persistStudyStateIfRevision(upgradedState, resolvedActive.updated_at, db, userId, resolvedActive.id)
+          : { ...resolvedActive!, state: upgradedState };
+        state = upgradedState;
+        marker = z.object({
+          consolidation_kind: z.enum(["translation", "translation_cn_to_en", "sentence"]),
+          consolidation_trigger_round: z.number().int().positive(),
+          consolidation_target_words: z.array(z.string().trim().min(1).max(100)).max(3),
+          consolidation_status: z.enum(["pending", "exercise", "feedback", "completed"]),
+        }).safeParse(state.payload);
+        if (!marker.success) throw new Error("LESSON_CONSOLIDATION_PLAN_MISSING");
+      }
       const lessonWords = state.flow.lesson_words;
       const lastIndex = (lessonWords?.length ?? 0) - 1;
       if (!lessonWords || lessonWords.length === 0 || state.current_index !== lastIndex
@@ -560,7 +784,10 @@ async function validateLessonWord(
         throw new Error("LESSON_CONSOLIDATION_NOT_READY");
       }
       assertLessonWordMatches(state.current_word, input.word);
-      const expectedActivity = marker.data.consolidation_kind === "translation" ? "translation_en_to_cn" : "sentence";
+      const consolidationPlan = lessonExercisePlanSchema.safeParse(state.payload.consolidation_plan ?? state.payload.plan);
+      const expectedActivity = consolidationPlan.success ? consolidationPlan.data.planned_activity_type
+        : marker.data.consolidation_kind === "translation" ? "translation_en_to_cn"
+          : marker.data.consolidation_kind === "translation_cn_to_en" ? "translation_cn_to_en" : "sentence";
       const words = marker.data.consolidation_target_words;
       if (input.mode === "exercise") {
         if (marker.data.consolidation_status !== "pending"
@@ -574,9 +801,11 @@ async function validateLessonWord(
           throw new Error("LESSON_CONSOLIDATION_ACTIVITY_INVALID");
         }
         const included = words.filter((word) => containsWholeEnglishWord(input.prompt, word));
-        if (marker.data.consolidation_kind === "translation") {
+        if (expectedActivity === "translation_en_to_cn") {
           const count = input.prompt.toLocaleLowerCase().match(/[a-z]+(?:['’][a-z]+)?/g)?.length ?? 0;
-          if (count < 25 || count > 40 || included.length < 2) throw new Error("LESSON_CONSOLIDATION_CONTENT_INVALID");
+          if (count < 25 || count > 40 || (!consolidationPlan.success && included.length < 2)) throw new Error("LESSON_CONSOLIDATION_CONTENT_INVALID");
+        } else if (expectedActivity === "translation_cn_to_en") {
+          if (!/\p{Script=Han}/u.test(input.prompt)) throw new Error("LESSON_CONSOLIDATION_CONTENT_INVALID");
         } else if (included.length !== words.length) {
           throw new Error("LESSON_CONSOLIDATION_CONTENT_INVALID");
         }
@@ -631,7 +860,12 @@ async function validateLessonWord(
       throw new Error("LESSON_CURSOR_MISMATCH");
     }
     assertLessonWordMatches(state?.current_word ?? null, input.word);
-    return { date: resolvedActive?.state?.date ?? await getStudyDate(), active: resolvedActive, flow: state?.flow };
+    const currentActivity = state ? persistedExerciseActivity(state) : undefined;
+    const flow = state?.flow && state.flow.lesson_words
+      ? await ensurePlannedFlow(state.flow, state.flow.lesson_words, db, userId,
+        currentActivity ? { index: state.current_index, activity_type: currentActivity } : undefined)
+      : state?.flow;
+    return { date: resolvedActive?.state?.date ?? await getStudyDate(), active: resolvedActive, flow };
   }
 
   if (resolvedActive?.state?.widget === "lesson") {
@@ -642,9 +876,13 @@ async function validateLessonWord(
       || !isLessonCursorAtCurrentWord(lessonWords, state.current_word, state.current_index)) {
       throw new Error("LESSON_CURSOR_MISMATCH");
     }
-    const expected = lessonWordAt(lessonWords, state.current_index + 1);
+    const expected = state.payload.mode === "generation_error"
+      ? lessonWordAt(lessonWords, state.current_index)
+      : lessonWordAt(lessonWords, state.current_index + 1);
     assertLessonWordMatches(expected, input.word);
-    return { date: state.date, active: resolvedActive, flow: state.flow };
+    const activity = persistedExerciseActivity(state);
+    return { date: state.date, active: resolvedActive, flow: await ensurePlannedFlow(state.flow, lessonWords, db, userId,
+      activity ? { index: state.current_index, activity_type: activity } : undefined) };
   }
   if (resolvedActive?.state?.widget === "review" && resolvedActive.state.phase === "review_complete") {
     const state = resolvedActive.state;
@@ -654,7 +892,9 @@ async function validateLessonWord(
     }
     const lessonWords = resolvedActive.state?.flow.lesson_words ?? [];
     assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
-    return { date: state.date, active: resolvedActive, flow: resolvedActive.state?.flow };
+    const flow = resolvedActive.state?.flow;
+    return { date: state.date, active: resolvedActive, flow: flow?.lesson_words
+      ? await ensurePlannedFlow(flow, flow.lesson_words, db, userId) : flow };
   }
   if (resolvedActive?.state?.widget === "pretest") {
     const state = normalizeStudyStateForRead(resolvedActive.state);
@@ -666,7 +906,9 @@ async function validateLessonWord(
     }
     const lessonWords = resolvedActive.state?.flow.lesson_words ?? [];
     assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
-    return { date: state.date, active: resolvedActive, flow: resolvedActive.state?.flow };
+    const flow = resolvedActive.state?.flow;
+    return { date: state.date, active: resolvedActive, flow: flow?.lesson_words
+      ? await ensurePlannedFlow(flow, flow.lesson_words, db, userId) : flow };
   }
   const date = await getStudyDate();
   const todayWords = await getTodayWords(date);
@@ -678,7 +920,8 @@ async function validateLessonWord(
     active?.state?.flow.pretest_familiar_words ?? [],
   );
   assertLessonWordMatches(lessonWordAt(lessonWords, 0), input.word);
-  return { date, active: null, flow: { relearn_words: [], pretest_familiar_words: [], lesson_words: lessonWords } };
+  const flow = { relearn_words: [], pretest_familiar_words: [], lesson_words: lessonWords };
+  return { date, active: null, flow: await ensurePlannedFlow(flow, lessonWords, db, userId) };
 }
 
 export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): ReviewWidgetItem {
@@ -826,12 +1069,24 @@ export function registerRenderTools(server: McpServer): void {
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, () => safeTool(async () => {
     await ensureTodayQueue();
-    return { widget: "dashboard", progress: await getProgress() };
+    const [progress, cadence] = await Promise.all([getProgress(), getLessonCadence()]);
+    const pending = cadence.pending_task;
+    return {
+      widget: "dashboard",
+      progress,
+      pending_consolidation: pending ? {
+        activity_type: pending.plan.planned_activity_type,
+        label: pending.plan.planned_activity_type === "translation_en_to_cn" ? "长难句英译中"
+          : pending.plan.planned_activity_type === "translation_cn_to_en" ? "完整中译英"
+            : pending.plan.planned_activity_type === "sentence" ? "情境造句" : "应用任务",
+        estimated_seconds: pending.plan.estimated_seconds,
+      } : null,
+    };
   }));
 
   registerAppTool(server, "render_lesson_widget", {
     title: "打开单词学习",
-    description: "显示一个单词的讲解、练习或批改卡片。Lesson answer grading must terminate in render_lesson_widget mode=feedback; chat-only grading is invalid. Reuse the current word and exercise; backend supplies navigation. 正式学习内容、输入和反馈都留在卡片内；例句与练习必须是不同语境。Lesson round 完成后只有 backend 返回 consolidation 标记时才生成一个对应任务；按 consolidation_kind 使用 translation_en_to_cn 或 sentence，不要自行判断 cadence 或生成第二题。错误反馈第一次必须指出具体错误片段/位置并给出自纠方向，但不公布完整参考答案；连续第二次仍错才公布答案。成功显示后不要在聊天区重复教学正文或操作说明。",
+    description: "显示一个单词的讲解、练习或批改卡片。服务端 exercisePlanner 是 Web 与 MCP 共用的唯一最终选题入口；严格使用已保存 planned_activity_type、目标、skill_ids 和 exercise_id。Lesson answer grading must terminate in render_lesson_widget mode=feedback; chat-only grading is invalid. 正式学习内容、输入和反馈都留在卡片内；例句与练习必须使用不同语境。恢复旧会话时沿用当前单词和已显示题目，导航由 backend 提供。Lesson 轮末只有 backend 返回 pending consolidation 且用户选择“做一道”时才生成任务；按持久化计划精确使用 translation_en_to_cn、translation_cn_to_en 或 sentence，不能自行推断 cadence、换题型或额外出题。固定答案题由服务端判分并只保存在服务端；综合任务不调用 FSRS。第一次核心错误须指出具体片段并给自纠方向，但隐藏完整答案；第二次仍错才展示参考表达。技能结果仅记录有独立证据的技能，不能复制整体对错。Widget 成功显示后不要在聊天区重复题面或反馈。",
     inputSchema: lessonToolInputSchema,
     _meta: { ui: { resourceUri: WIDGET_URIS.lesson } },
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -883,6 +1138,45 @@ export function registerRenderTools(server: McpServer): void {
     const currentIndex = lessonRenderIndex(validated.active, parsedInput);
     const lessonWords = validated.flow?.lesson_words;
     if (!lessonWords) throw new Error("LESSON_QUEUE_MISSING");
+    const savedState = validated.active?.state?.widget === "lesson" ? validated.active.state : null;
+    const plannedPlan = parsedInput.consolidation === true
+      ? lessonExercisePlanSchema.safeParse(savedState?.payload.consolidation_plan ?? savedState?.payload.plan)
+      : lessonExercisePlanSchema.safeParse(validated.flow?.exercise_plans?.[currentIndex]);
+    const plannedActivity = parsedInput.mode === "explain" ? parsedInput.exercise.activity_type
+      : parsedInput.mode === "exercise" ? parsedInput.activity_type : parsedInput.exercise.activity_type;
+    if (plannedPlan.success && plannedPlan.data.planned_activity_type !== plannedActivity) {
+      throw new Error(`LESSON_PLAN_ACTIVITY_MISMATCH:${plannedPlan.data.planned_activity_type}`);
+    }
+    if (parsedInput.consolidation === true && !plannedPlan.success) throw new Error("LESSON_CONSOLIDATION_PLAN_MISSING");
+    let atomicSubmission: { submission_id: string; plan: LessonExercisePlan; hint_used: boolean } | undefined;
+    if (parsedInput.mode === "feedback" && !parsedInput.wrapup && plannedPlan.success) {
+      if (toolInput.mode !== "feedback") throw new Error("PLANNED_SUBMISSION_ID_REQUIRED");
+      const legacyPreservedPlan = plannedPlan.data.selection_reason.startsWith("旧会话兼容：");
+      if ((!toolInput.submission_id || !toolInput.plan_id || !toolInput.exercise_id) && !legacyPreservedPlan) {
+        throw new Error("PLANNED_SUBMISSION_ID_REQUIRED");
+      }
+      if ((toolInput.plan_id !== plannedPlan.data.plan_id || toolInput.exercise_id !== plannedPlan.data.exercise_id)
+        && !legacyPreservedPlan) {
+        throw new Error("PLANNED_SUBMISSION_ID_MISMATCH");
+      }
+      atomicSubmission = { submission_id: toolInput.submission_id ?? globalThis.crypto.randomUUID(), plan: plannedPlan.data, hint_used: toolInput.hint_used };
+    }
+    if (plannedPlan.success && plannedPlan.data.scope === "lesson"
+      && !plannedPlan.data.selection_reason.startsWith("旧会话兼容：")) {
+      const proposedExercise = lessonGenerationSchema.shape.exercise.parse(parsedInput.mode === "explain" ? parsedInput.exercise
+        : parsedInput.mode === "exercise" ? parsedInput : parsedInput.exercise);
+      const profile = lessonProfile.safeParse(savedState?.payload.lesson_profile);
+      const issues = validateGeneratedLessonExercise({
+        word: parsedInput.word,
+        lesson_profile: profile.success ? profile.data : "quick_recall",
+        error_focus: plannedPlan.data.error_focus,
+        plan: plannedPlan.data,
+      }, {
+        example_en: parsedInput.mode === "explain" ? parsedInput.example_en : String(savedState?.payload.example_en ?? ""),
+        exercise: proposedExercise,
+      });
+      if (issues.length > 0) throw new Error(`LESSON_PLAN_CONTENT_INVALID:${issues[0]?.path.join(".")}:${issues[0]?.message}`);
+    }
     const navigation = buildLessonNavigation(lessonWords, currentIndex, parsedInput.word);
     const {
       lesson_profile: _clientLessonProfile,
@@ -904,13 +1198,16 @@ export function registerRenderTools(server: McpServer): void {
         consolidation_kind: savedConsolidation.consolidation_kind,
         consolidation_trigger_round: savedConsolidation.consolidation_trigger_round,
         consolidation_target_words: savedConsolidation.consolidation_target_words,
+        consolidation_plan: savedConsolidation.consolidation_plan ?? savedConsolidation.plan,
         consolidation_status: parsedInput.mode === "exercise" ? "exercise" : "feedback",
-        progress: savedConsolidation.consolidation_kind === "translation" ? "周期巩固 · 英译中" : "周期巩固 · 主动表达",
+        progress: savedConsolidation.consolidation_kind === "translation_cn_to_en" ? "应用巩固 · 中译英"
+          : savedConsolidation.consolidation_kind === "sentence" ? "应用巩固 · 情境造句" : "应用巩固 · 长难句英译中",
       }
       : {};
     const payload = lessonWidgetPayload({
       widget: "lesson",
       ...content,
+      ...(plannedPlan.success ? { plan: plannedPlan.data } : {}),
       ...consolidationFields,
       ...persistedLessonProfileFields(validated.active?.state ?? undefined, parsedInput.word),
       navigation,
@@ -927,6 +1224,7 @@ export function registerRenderTools(server: McpServer): void {
       retry_count: parsedInput.mode === "feedback" ? lessonRetryCount(validated.active, parsedInput) : validated.active?.state?.widget === "lesson" && validated.active.state.current_word === parsedInput.word ? validated.active.state.retry_count : 0,
       flow: validated.flow,
       payload,
+      ...(atomicSubmission ? { atomicSubmission } : {}),
     });
   }));
 

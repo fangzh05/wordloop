@@ -23,11 +23,12 @@ function ProgressRow({ title, detail, note }: { title: string; detail: string; n
   </div>;
 }
 
-export function TodayPage({ view, busy, tokenKey, onContinue, onOpenCapture, onOpenVocabulary }: {
+export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidation, onOpenCapture, onOpenVocabulary }: {
   view: WebApiResponse | null;
   busy: boolean;
   tokenKey: string | null;
   onContinue: () => void;
+  onStartConsolidation: () => void;
   onOpenCapture: () => void;
   onOpenVocabulary: () => void;
 }): React.JSX.Element {
@@ -92,6 +93,17 @@ export function TodayPage({ view, busy, tokenKey, onContinue, onOpenCapture, onO
         {tasksComplete ? "今日计划已完成" : active ? "继续学习" : "开始今日学习"}
       </Button>
     </section>
+
+    {view?.pending_consolidation && <section className="today-focus-card" aria-label="待做应用巩固">
+      <div>
+        <span className="eyebrow">应用巩固待做</span>
+        <h2>{String(view.pending_consolidation.label ?? "应用任务")}</h2>
+        <p>词汇进度与应用巩固分别记录，可以现在做，也可以稍后从这里开始。</p>
+      </div>
+      <Button className="primary today-primary-action" type="button" disabled={busy} onClick={onStartConsolidation}>
+        做一道，约 {Math.max(1, Math.round(number(view.pending_consolidation.estimated_seconds) / 60))} 分钟
+      </Button>
+    </section>}
 
     <section className="today-progress-card" aria-labelledby="today-progress-title">
       <div className="section-heading"><h2 id="today-progress-title">今日进度</h2><span>北京时间 · 服务器记录</span></div>

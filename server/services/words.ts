@@ -267,6 +267,7 @@ export function toVocabularyItem(
   word: WordEntity,
 ): VocabularyItem {
   return {
+    word_id: state.word_id,
     word: word.normalized_word,
     display_word: word.display_word,
     status: state.status,

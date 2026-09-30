@@ -119,11 +119,11 @@ describe("Streamable HTTP server", () => {
     expect(LESSON_WIDGET_VERSION).toBe(3);
     expect(JSON.stringify(lessonTool?._meta ?? {})).toContain(WIDGET_URIS.lesson);
     expect(JSON.stringify(response.tools.find((tool) => tool.name === "render_dictation_widget")?._meta ?? {})).toContain(WIDGET_URIS.dictation);
-    expect(lessonTool?.description).toContain("backend 返回 consolidation 标记");
-    expect(lessonTool?.description).toContain("translation_en_to_cn 或 sentence");
+    expect(lessonTool?.description).toContain("backend 返回 pending consolidation");
+    expect(lessonTool?.description).toContain("按持久化计划精确使用 translation_en_to_cn、translation_cn_to_en 或 sentence");
     expect(lessonTool?.description).toContain("Lesson answer grading must terminate in render_lesson_widget mode=feedback");
     expect(lessonTool?.description).toContain("chat-only grading is invalid");
-    expect(lessonTool?.description).toContain("Reuse the current word and exercise; backend supplies navigation.");
+    expect(lessonTool?.description).toContain("恢复旧会话时沿用当前单词和已显示题目");
     expect(JSON.stringify(lessonTool?.inputSchema)).toContain("resume");
     const lessonInput = lessonTool?.inputSchema as {
       anyOf?: Array<{ properties?: Record<string, unknown>; required?: string[] }>;

@@ -64,6 +64,7 @@ export async function getTodayCompletedLessonWords(
     .eq("user_id", userId)
     .gte("created_at", start)
     .lt("created_at", end)
+    .eq("scope", "lesson")
     .in("activity_type", [...LESSON_ACTIVITY_TYPES]);
   assertDatabaseResult(error);
 
