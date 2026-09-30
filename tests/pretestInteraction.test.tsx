@@ -25,6 +25,28 @@ describe("PretestQuestion", () => {
     expect(markup).not.toContain("/rɪˈkɜːr/");
   });
 
+  it("renders every supplied part of speech", () => {
+    const markup = renderToStaticMarkup(<PretestQuestion item={{
+      ...base,
+      word: "record",
+      part_of_speech: "n./v.",
+      direction: "cn_to_en",
+    }} />);
+    expect(markup).toContain("n./v.");
+  });
+
+  it("shows POS-prefixed meanings without repeating a separate POS label", () => {
+    const markup = renderToStaticMarkup(<PretestQuestion item={{
+      ...base,
+      word: "record",
+      part_of_speech: "n./v.",
+      meaning_zh: "n. 记录；档案　v. 记录；录制",
+      direction: "cn_to_en",
+    }} />);
+    expect(markup).toContain("n. 记录；档案　v. 记录；录制");
+    expect(markup).not.toContain('class="part-of-speech"');
+  });
+
   it("renders the English word and part of speech for en_definition, never prompt or meaning", () => {
     const markup = renderToStaticMarkup(<PretestQuestion item={{
       ...base,

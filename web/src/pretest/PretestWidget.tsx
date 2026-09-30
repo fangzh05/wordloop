@@ -33,12 +33,13 @@ import {
   type PretestMarkFamiliarInput,
   type RecordPretestResultInput,
 } from "../../../shared/toolContracts.js";
+import { meaningIncludesPartOfSpeech } from "../../../shared/lexicalDisplay.js";
 
 const itemSchema = z.object({
   word: z.string().trim().min(1).max(100),
   ipa: z.string().trim().min(1).max(120),
-  part_of_speech: z.string().trim().min(1).max(40),
-  meaning_zh: z.string().trim().min(1).max(240),
+  part_of_speech: z.string().trim().min(1).max(120),
+  meaning_zh: z.string().trim().min(1).max(1000),
   // Compatibility only. The fixed card never renders prompt.
   prompt: z.string().trim().max(1000).optional(),
   direction: directionSchema.default("cn_to_en"),
@@ -302,7 +303,7 @@ export function PretestQuestion({ item }: { item: PretestItem }): React.JSX.Elem
   return <div className="question-block">
     {item.direction === "cn_to_en" ? <>
       <span className="question-label">中 → 英</span>
-      <span className="part-of-speech">{item.part_of_speech}</span>
+      {!meaningIncludesPartOfSpeech(item.meaning_zh, item.part_of_speech) ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
       <p className="question-prompt">{item.meaning_zh}</p>
     </> : <>
       <span className="question-label">英 → 英</span>
@@ -871,7 +872,7 @@ export function PretestWidget(): React.JSX.Element {
           <FocusButton />
         </header>
         <div className="pronunciation-focus">
-          <div className="pronunciation-heading"><strong>{currentPronunciation.word}</strong><span className="part-of-speech">{currentPronunciation.part_of_speech}</span></div>
+          <div className="pronunciation-heading"><strong>{currentPronunciation.word}</strong>{!meaningIncludesPartOfSpeech(currentPronunciation.meaning_zh, currentPronunciation.part_of_speech) ? <span className="part-of-speech">{currentPronunciation.part_of_speech}</span> : null}</div>
           <span className="ipa">{currentPronunciation.ipa}</span>
           <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
         </div>
@@ -904,7 +905,7 @@ export function PretestWidget(): React.JSX.Element {
           <FocusButton />
         </header>
         <div className="pronunciation-focus">
-          <span className="part-of-speech">{currentPronunciation.part_of_speech}</span>
+          {!meaningIncludesPartOfSpeech(currentPronunciation.meaning_zh, currentPronunciation.part_of_speech) ? <span className="part-of-speech">{currentPronunciation.part_of_speech}</span> : null}
           <span className="meaning-zh">{currentPronunciation.meaning_zh}</span>
         </div>
         <button

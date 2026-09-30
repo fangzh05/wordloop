@@ -49,10 +49,16 @@ function englishWords(value: string): string[] {
 
 export const lessonGenerationSchema = z.object({
   ipa: z.string().trim().min(1).max(120),
-  part_of_speech: z.string().trim().min(1).max(40),
+  part_of_speech: z.string().trim().min(1).max(120),
   meaning_zh: z.string().trim().min(1).max(240).refine(hasChineseText, "Use Chinese for the core meaning."),
-  collocations: z.array(z.string().trim().min(1).max(200)).max(8),
-  derivations: z.array(z.string().trim().min(1).max(200)).max(8),
+  collocations: z.array(z.string().trim().min(1).max(200).refine(
+    (value) => /[A-Za-z]/.test(value) && hasChineseText(value),
+    "Include both the English collocation and its Chinese translation.",
+  )).max(8),
+  derivations: z.array(z.string().trim().min(1).max(200).refine(
+    (value) => /[A-Za-z]/.test(value) && hasChineseText(value),
+    "Include both the English derivative and its Chinese meaning.",
+  )).max(8),
   example_en: z.string().trim().min(1).max(1000),
   example_zh: z.string().trim().min(1).max(1000).refine(hasChineseText, "Add a Chinese translation for the example."),
   note: z.string().trim().min(1).max(1000),
@@ -317,6 +323,7 @@ function lessonGenerationSchemaFor(context: LessonExerciseValidationContext) {
 interface DeepSeekJsonOptions {
   maxTokens: number;
   repairMaxTokens?: number;
+  repairGuidance?: (issues: readonly z.ZodIssue[]) => string | undefined;
   timeoutMs: number;
   task: "lesson_generation" | "semantic_lesson_grading" | "english_definition_grading" | "wrapup_generation" | "sentence_consolidation_generation" | "wrapup_grading";
 }
@@ -356,7 +363,10 @@ function retryDelay(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 500));
 }
 
-function repairFeedback(issues: readonly { path: readonly PropertyKey[]; message: string }[]): string {
+function repairFeedback(
+  issues: readonly { path: readonly PropertyKey[]; message: string }[],
+  guidance?: string,
+): string {
   const fields = new Map<string, string>();
   for (const issue of issues) {
     const path = issue.path.map(String).join(".") || "$";
@@ -365,6 +375,7 @@ function repairFeedback(issues: readonly { path: readonly PropertyKey[]; message
   return [
     "上一次 JSON 未通过校验。只修复以下字段：",
     ...[...fields].map(([path, message]) => `- ${path}: ${message}`),
+    ...(guidance ? [guidance] : []),
     "返回完整 JSON。",
   ].join("\n");
 }
@@ -461,7 +472,7 @@ async function deepSeekJson<T>(
       if (!validated.success) {
         const issuePaths = [...new Set(validated.error.issues.map((issue) => issue.path.map(String).join(".") || "$"))];
         if (attempt === 0) {
-          repairMessage = repairFeedback(validated.error.issues);
+          repairMessage = repairFeedback(validated.error.issues, options.repairGuidance?.(validated.error.issues));
           continue;
         }
         throw new DeepSeekError(
@@ -501,8 +512,12 @@ export function generateLesson(input: {
   error_focus: LessonErrorFocus;
   plan: LessonExercisePlan;
 }): Promise<LessonGeneration> {
-  return deepSeekJson(lessonGenerationSchemaFor(input), LESSON_GENERATION_PROMPT, input, {
+  const prompt = `${LESSON_GENERATION_PROMPT}\n\n本次计划的 exercise.activity_type 唯一合法值是 ${JSON.stringify(input.plan.planned_activity_type)}。输出必须逐字相同。搭配和派生词的每个字符串都必须同时含英文表达和简体中文释义。`;
+  return deepSeekJson(lessonGenerationSchemaFor(input), prompt, input, {
     task: "lesson_generation", maxTokens: 1200, timeoutMs: 30_000,
+    repairGuidance: (issues) => issues.some((issue) => issue.path.join(".") === "exercise.activity_type")
+      ? `服务端已锁定唯一题型为 ${JSON.stringify(input.plan.planned_activity_type)}。只把 exercise.activity_type 改为这个完全相同的值；不得改成 cloze、exact_cloze 或其他题型，也不得替换目标或计划。`
+      : undefined,
   });
 }
 

@@ -127,6 +127,15 @@ describe("shared Review and daily progress presentation", () => {
     expect(markup).not.toContain("词性未标注");
   });
 
+  it("shows POS-prefixed Chinese meanings without a duplicate label in standalone Review", () => {
+    const markup = renderToStaticMarkup(<StandaloneReviewQuestion
+      direction="cn_to_en"
+      item={{ direction: "cn_to_en", part_of_speech: "v./n.", meaning_zh: "v. 再次发生；复发　n. 复发" }}
+    />);
+    expect(markup).toContain("v. 再次发生；复发　n. 复发");
+    expect(markup).not.toContain('class="part-of-speech"');
+  });
+
   it("does not carry the previous Review result into the next card", () => {
     const markup = renderToStaticMarkup(<StandaloneReviewFeedback
       notice="答案正确。"

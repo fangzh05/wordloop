@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { registerRenderTools } from "../server/tools/renderWidgets.js";
+import { lessonInputSchema, registerRenderTools, reviewWidgetItemFromVocabulary } from "../server/tools/renderWidgets.js";
 import type { ReviewVocabularyItem } from "../server/types.js";
 import { lessonPayloadSchema } from "../web/src/lesson/LessonWidget.js";
 
@@ -68,6 +68,51 @@ function reviewItem(word: string, nextReviewAt = "2026-09-12T00:00:00Z"): Review
     senses: [{ pos: "n.", definition_cn: "测试含义" }],
   };
 }
+
+describe("review word display fields", () => {
+  it("includes every distinct persisted part of speech", () => {
+    const item = reviewItem("record");
+    item.senses = [
+      { pos: "n.", definition_cn: "记录" },
+      { pos: "v.", definition_cn: "记录" },
+      { pos: "n.", definition_cn: "档案" },
+    ];
+    expect(reviewWidgetItemFromVocabulary(item)).toMatchObject({
+      part_of_speech: "n./v.",
+      meaning_zh: "n. 记录；档案　v. 记录",
+    });
+  });
+});
+
+describe("MCP Lesson content validation", () => {
+  it("rejects untranslated collocations or derivations on newly rendered cards", () => {
+    const lesson = {
+      mode: "explain",
+      word: "allocate",
+      progress: "新词学习 1 / 5",
+      ipa: "/ˈæləkeɪt/",
+      part_of_speech: "v.",
+      meaning_zh: "分配；拨出",
+      collocations: ["allocate resources"],
+      derivations: ["allocation n."],
+      example_en: "The council will allocate funding to improve local transport.",
+      note: "allocate 也可表示拨出经费。",
+      exercise: {
+        activity_type: "exact_cloze",
+        instruction: "填入目标词。",
+        prompt: "The council will ___ funding to improve local transport.",
+        accepted_answers: ["allocate"],
+        multiline: false,
+      },
+    };
+    expect(lessonInputSchema.safeParse(lesson).success).toBe(false);
+    expect(lessonInputSchema.safeParse({
+      ...lesson,
+      collocations: ["allocate resources（分配资源）"],
+      derivations: ["allocation n.（分配；拨款）"],
+    }).success).toBe(true);
+  });
+});
 
 async function withReviewClient<T>(run: (client: Client) => Promise<T>): Promise<T> {
   const server = new McpServer({ name: "review-tool-test", version: "1.0.0" });

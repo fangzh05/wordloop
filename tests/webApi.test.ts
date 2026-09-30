@@ -157,7 +157,7 @@ vi.mock("../server/services/exercisePlanner.js", async () => {
   return { ...actual, planLessonQueue: mocks.planLessonQueue };
 });
 
-import { handleWebApiRequest } from "../server/webApi.js";
+import { buildPretestItems, handleWebApiRequest } from "../server/webApi.js";
 import { makeStudyState } from "../server/services/studySessions.js";
 import { DeepSeekError } from "../server/services/deepseek.js";
 import { buildLessonNavigation } from "../server/services/lessonQueue.js";
@@ -165,6 +165,26 @@ import { resumableLessonPayload } from "../server/tools/renderWidgets.js";
 
 const date = "2026-09-27";
 const userId = "00000000-0000-0000-0000-000000000001";
+
+describe("word displays in study payloads", () => {
+  it("includes every saved part of speech on Pretest cards", () => {
+    const [item] = buildPretestItems([{
+      word: "record", display_word: "record", status: "new", source: null,
+      consecutive_correct: 0, wrong_count: 0, mastered: false, next_review_at: null,
+      error_layers: [], fsrs_stability: 0, fsrs_difficulty: 0, fsrs_scheduled_days: 0, fsrs_state: 0,
+      senses: [
+        { pos: "n.", definition_cn: "记录；唱片" },
+        { pos: "v.", definition_cn: "记录；录制" },
+        { pos: "n.", definition_cn: "档案" },
+      ],
+    }]);
+
+    expect(item).toMatchObject({
+      part_of_speech: "n./v.",
+      meaning_zh: "n. 记录；唱片；档案　v. 记录；录制",
+    });
+  });
+});
 
 function row(state: any, revision = "rev-a") {
   return {
@@ -263,7 +283,10 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.getVocabularyItemsByWords.mockResolvedValue([{
       word_id: "00000000-0000-4000-9000-000000000103",
       word: "fixture", display_word: "fixture", status: "unknown", error_layers: [], ipa_us: "/ˈfɪks.tʃər/",
-      senses: [{ pos: "n.", definition_cn: "设施；固定的事物" }],
+      senses: [
+        { pos: "n.", definition_cn: "设施；固定的事物" },
+        { pos: "v.", definition_cn: "安装；提供设施" },
+      ],
     }]);
     mocks.planLessonQueue.mockImplementation(async (queue: string[]) => queue.map((word, index) => ({
       ...lessonPlan("exact_cloze"),
@@ -881,6 +904,9 @@ describe("Standalone Web API shared-state boundaries", () => {
     const payload = await body(response);
 
     expect(response.status).toBe(200);
+    expect(mocks.generateLesson).toHaveBeenCalledWith(expect.objectContaining({ part_of_speech: "n./v." }));
+    expect(payload.state.payload.part_of_speech).toBe("n./v.");
+    expect(payload.state.payload.meaning_zh).toBe("n. 设施；固定的事物　v. 安装；提供设施");
     expect(mocks.active.state.payload).toMatchObject({
       accepted_answers: ["electricians"],
       exercise: { activity_type: "exact_cloze", accepted_answers: ["electricians"] },

@@ -20,6 +20,7 @@ import {
   type RecordReviewSubmissionInput,
   type ReviewAnswerInput,
 } from "../../../shared/toolContracts.js";
+import { meaningIncludesPartOfSpeech } from "../../../shared/lexicalDisplay.js";
 
 const payloadSchema = reviewWidgetPayloadSchema;
 
@@ -173,7 +174,7 @@ export function ReviewQuestion({ item }: { item: ReviewItem }): React.JSX.Elemen
   return <div className="question-block">
     {item.direction === "cn_to_en" ? <>
       <span className="question-label">中 → 英</span>
-      {item.part_of_speech ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
+      {item.part_of_speech && !meaningIncludesPartOfSpeech(item.meaning_zh, item.part_of_speech) ? <span className="part-of-speech">{item.part_of_speech}</span> : null}
       <p className="question-prompt">{item.meaning_zh}</p>
     </> : <>
       <span className="question-label">英 → 英</span>

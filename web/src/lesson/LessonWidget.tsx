@@ -12,6 +12,7 @@ import {
   lessonSubmissionSchema,
   type AdvanceStudySessionInput,
 } from "../../../shared/toolContracts.js";
+import { meaningIncludesPartOfSpeech } from "../../../shared/lexicalDisplay.js";
 
 export { LESSON_WIDGET_VERSION } from "../../../shared/toolContracts.js";
 
@@ -109,8 +110,8 @@ const explainPayloadSchema = z.object({
   mode: z.literal("explain"),
   progress: z.string().trim().max(40).optional(),
   ipa: z.string().trim().min(1).max(120),
-  part_of_speech: z.string().trim().min(1).max(40),
-  meaning_zh: z.string().trim().min(1).max(240),
+  part_of_speech: z.string().trim().min(1).max(120),
+  meaning_zh: z.string().trim().min(1).max(1000),
   collocations: z.array(z.string().trim().min(1).max(200)).max(8),
   derivations: z.array(z.string().trim().min(1).max(200)).max(8),
   example_en: z.string().trim().min(1).max(1000),
@@ -864,7 +865,7 @@ export function LessonWidget(): React.JSX.Element {
     </header>
     <div className="lesson-word-heading">
       <strong>{payload.word}</strong>
-      {payload.mode === "explain" && payload.part_of_speech ? <span className="part-of-speech">{payload.part_of_speech}</span> : null}
+      {payload.mode === "explain" && payload.part_of_speech && !meaningIncludesPartOfSpeech(payload.meaning_zh, payload.part_of_speech) ? <span className="part-of-speech">{payload.part_of_speech}</span> : null}
     </div>
     {payload.mode === "explain" && payload.ipa ? <div className="lesson-ipa">{payload.ipa}</div> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>核心义</h2><p>{payload.meaning_zh}</p></section> : null}
