@@ -124,9 +124,10 @@ export function standaloneLessonProgressLabel(
   relearnWords: readonly string[],
   queue: readonly string[],
   index: number,
-  consolidationKind: "translation" | "sentence" | boolean | null = null,
+  consolidationKind: "translation" | "translation_cn_to_en" | "sentence" | boolean | null = null,
 ): string {
   if (consolidationKind === "translation" || consolidationKind === true) return "周期巩固 · 英译中";
+  if (consolidationKind === "translation_cn_to_en") return "周期巩固 · 完整中译英";
   if (consolidationKind === "sentence") return "周期巩固 · 主动表达";
   const relearn = new Set(relearnWords.map((word) => word.trim().toLocaleLowerCase()));
   const relearnTotal = queue.filter((word) => relearn.has(word.trim().toLocaleLowerCase())).length;
@@ -135,8 +136,9 @@ export function standaloneLessonProgressLabel(
     : `新词学习 · ${Math.min(index - relearnTotal + 1, Math.max(1, queue.length - relearnTotal))} / ${Math.max(0, queue.length - relearnTotal)}`;
 }
 
-export function standaloneLessonDisplayTitle(word: string, exerciseMode: boolean, consolidationKind: "translation" | "sentence" | boolean | null): string {
+export function standaloneLessonDisplayTitle(word: string, exerciseMode: boolean, consolidationKind: "translation" | "translation_cn_to_en" | "sentence" | boolean | null): string {
   if (consolidationKind === "translation" || consolidationKind === true) return "长难句翻译";
+  if (consolidationKind === "translation_cn_to_en") return "完整中译英";
   if (consolidationKind === "sentence") return "造句练习";
   if (!exerciseMode) return word || "Lesson";
   return "填空练习";
@@ -873,7 +875,7 @@ export default function StandaloneApp(): React.JSX.Element {
           await loadBootstrap();
         } else {
           if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
-            const generationAction = actionName === "continue" || actionName === "lesson_next";
+            const generationAction = ["continue", "lesson_next", "consolidation_start"].includes(actionName);
             if (generationAction) {
               setPage("dashboard");
               setErrorMessage(deepSeekMessage(error.code, "generation"));
@@ -882,7 +884,7 @@ export default function StandaloneApp(): React.JSX.Element {
               setErrorMessage(deepSeekMessage(error.code, "grading"));
             }
           } else {
-            setErrorMessage(messageFor(error, actionName === "continue" || actionName === "lesson_next" ? "generation" : "grading"));
+            setErrorMessage(messageFor(error, ["continue", "lesson_next", "consolidation_start"].includes(actionName) ? "generation" : "grading"));
           }
         }
       } finally {
@@ -933,6 +935,7 @@ export default function StandaloneApp(): React.JSX.Element {
   const busyLabel = busy === "lesson_next"
     ? payload.navigation && record(payload.navigation).action === "round_complete" ? "正在检查本轮任务…" : "正在生成下一词…"
     : busy === "lesson_submit" || busy === "consolidation_submit" || busy === "wrapup_submit" ? "正在批改…"
+      : busy === "consolidation_start" ? "正在打开应用巩固…"
       : busy === "bootstrap" ? "正在加载今日学习…"
         : busy === "pretest_submit" || busy === "review_submit" ? "正在保存…"
           : null;
@@ -986,7 +989,7 @@ export default function StandaloneApp(): React.JSX.Element {
       busy={busy !== null}
       tokenKey={token}
       onContinue={continueFromDashboard}
-      onStartConsolidation={() => { setAppSection("study"); setPage("study"); void dispatch({ action: "consolidation_start" }); }}
+      onStartConsolidation={() => { void dispatch({ action: "consolidation_start" }); }}
       onOpenCapture={() => navigateSection("capture")}
       onOpenVocabulary={() => navigateSection("vocabulary")}
     />}
@@ -1003,6 +1006,8 @@ export default function StandaloneApp(): React.JSX.Element {
       initialUserWordId={selectedVocabularyWordId}
       onDetailChange={setSelectedVocabularyWordId}
     />}
+
+    {busy === "consolidation_start" && visiblePage !== "study" && <p className="standalone-status" role="status">正在打开应用巩固…</p>}
 
     {errorMessage && <section className="widget-card standalone-card" role="alert">
       <p className="standalone-status error">{errorMessage}</p>
@@ -1090,7 +1095,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const navigation = record(payload.navigation);
       const title = String(state.current_word ?? payload.word ?? "Lesson");
       const consolidationKind = payload.consolidation === true
-        ? payload.consolidation_kind === "sentence" ? "sentence" : "translation"
+        ? payload.consolidation_kind === "sentence" ? "sentence" : payload.consolidation_kind === "translation_cn_to_en" ? "translation_cn_to_en" : "translation"
         : null;
       const feedbackMode = payload.mode === "feedback";
       const exerciseMode = payload.mode === "exercise";
@@ -1136,8 +1141,8 @@ export default function StandaloneApp(): React.JSX.Element {
         {phase === "lesson_complete" && exerciseMode && consolidationKind && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
           <div className="lesson-prompt standalone-reading-width">{String(exercise.prompt ?? "")}</div>
-          <textarea className={`standalone-input consolidation-input ${consolidationKind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={consolidationKind === "sentence" ? 2 : 5} aria-label={consolidationKind === "translation" ? "长难句翻译与结构分析" : "造句练习答案"} value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "consolidation_submit", answer }); } }} />
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "translation" ? "提交翻译" : "提交句子"}</Button></div>
+          <textarea className={`standalone-input consolidation-input ${consolidationKind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={consolidationKind === "sentence" ? 2 : 5} aria-label={consolidationKind === "translation" ? "长难句翻译与结构分析" : consolidationKind === "translation_cn_to_en" ? "完整中译英答案" : "造句练习答案"} value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "consolidation_submit", answer }); } }} />
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "sentence" ? "提交句子" : "提交翻译"}</Button></div>
         </div>}
 
         {phase === "lesson_complete" && feedbackMode && consolidationKind && <div className="standalone-content">

@@ -1449,6 +1449,11 @@ async function startPendingConsolidation(action: { expected_revision: string | n
   if (active?.state) {
     const state = normalizeStudyStateForRead(active.state);
     const pending = state.widget === "lesson" ? lessonConsolidation(state) : null;
+    if (pending && state.phase === "lesson_complete"
+      && ((pending.consolidation_status === "exercise" && state.payload.mode === "exercise")
+        || (pending.consolidation_status === "feedback" && state.payload.mode === "feedback"))) {
+      return successForSession(active);
+    }
     if (!pending || pending.consolidation_status !== "pending" || state.phase !== "lesson_complete") {
       throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "There is no pending application task to start.");
     }

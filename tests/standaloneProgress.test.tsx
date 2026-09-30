@@ -13,10 +13,17 @@ import {
   lessonDraftTransitioned,
   runForegroundRequest,
   standaloneLessonProgressLabel,
+  standaloneLessonDisplayTitle,
   todayTasksComplete,
 } from "../web/src/standalone/StandaloneApp.js";
 
 describe("shared Review and daily progress presentation", () => {
+  it("labels a persisted Chinese-to-English consolidation separately from long-sentence translation", () => {
+    expect(standaloneLessonDisplayTitle("fixture", true, "translation_cn_to_en")).toBe("完整中译英");
+    expect(standaloneLessonProgressLabel([], ["fixture"], 0, "translation_cn_to_en")).toBe("周期巩固 · 完整中译英");
+    expect(standaloneLessonDisplayTitle("fixture", true, "translation")).toBe("长难句翻译");
+  });
+
   it("defers visibility bootstrap until an active mutation releases the request lock", async () => {
     const requestInFlightRef = { current: false };
     const refreshPendingRef = { current: false };
