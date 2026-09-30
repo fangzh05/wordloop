@@ -1328,7 +1328,7 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
       retry_count: state.retry_count,
     })
     : await requestSemanticGrade({
-      word: state.current_word!,
+      word: consolidation.consolidation_target_words[0]!,
       target_words: consolidation.consolidation_target_words,
       activity_type: expectedType,
       instruction: exercise.instruction,

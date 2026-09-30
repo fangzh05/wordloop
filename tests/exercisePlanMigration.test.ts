@@ -16,7 +16,9 @@ describe("balanced exercise plan migration", () => {
     expect(normalizedSetup).toContain(normalizeLines(migration).trim());
     const index = normalizedSetup.lastIndexOf(indexMarker);
     expect(index).toBeGreaterThanOrEqual(0);
-    expect(normalizedSetup.slice(index).trim()).toBe(normalizedIndexMigration.trim());
+    expect(normalizedSetup.slice(index)).toContain(normalizedIndexMigration.trim());
+    const targetMigration = readFileSync(new URL("../supabase/migrations/20260930141500_consolidation_target_attribution.sql", import.meta.url), "utf8");
+    expect(normalizedSetup).toContain(normalizeLines(targetMigration).trim());
   });
 
   it("stores scoped submission and per-skill events outside FSRS with CAS/idempotency", () => {

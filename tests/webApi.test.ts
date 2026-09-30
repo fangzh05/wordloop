@@ -1492,6 +1492,31 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.recordReviewSubmission).not.toHaveBeenCalled();
   });
 
+  it("submits a consolidation target different from the frozen final Lesson cursor", async () => {
+    const plan = lessonPlan("translation_cn_to_en", "consolidation");
+    mocks.active = row(makeStudyState({
+      date, widget: "lesson", phase: "lesson_complete", current_word: "hostile", current_index: 1, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture", "hostile"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode: "exercise", word: "hostile", plan, consolidation_plan: plan,
+        consolidation: true, consolidation_kind: "translation_cn_to_en", consolidation_trigger_round: 10,
+        consolidation_target_words: ["fixture"], consolidation_status: "exercise",
+        activity_type: "translation_cn_to_en", instruction: "翻译成英文。", prompt: "这项设施改善了学校的环境。", multiline: true,
+        navigation: buildLessonNavigation(["fixture", "hostile"], 1, "hostile"),
+      },
+    }));
+    mocks.gradeSemanticAnswer.mockResolvedValueOnce({ is_correct: false, error_layer: "meaning", message: "请调整设施的表达。", explanation: "词义需要修改。" });
+    const response = await handleWebApiRequest(post({ action: "consolidation_submit", answer: "The fixture improves the school." }, mocks.active.updated_at));
+    expect(response.status).toBe(200);
+    expect(mocks.gradeSemanticAnswer).toHaveBeenCalledWith(expect.objectContaining({ word: "fixture", target_words: ["fixture"] }));
+    expect(mocks.recordPlannedSubmission).toHaveBeenCalledWith(expect.objectContaining({
+      scope: "consolidation", word: "hostile", plan,
+      next_state: expect.objectContaining({ current_word: "hostile", current_index: 1, flow: expect.objectContaining({ lesson_words: ["fixture", "hostile"] }) }),
+    }));
+    const result = await body(response);
+    expect(result.state.payload.feedback.user_answer).toBe("The fixture improves the school.");
+  });
+
   it.each(["exercise", "feedback"] as const)("resumes an already saved consolidation %s from the Today entry", async (mode) => {
     const state = makeStudyState({
       date, widget: "lesson", phase: "lesson_complete", current_word: "fixture", current_index: 0, retry_count: 0,
