@@ -334,7 +334,8 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .standalone-sidebar, .standalone-main { min-width: 0; }
 .standalone-desktop-prompt { display: none; }
 @media (max-width: 899.98px) {
-  .standalone-layout[data-page="study"] .standalone-sidebar { display: none; }
+  .standalone-layout[data-page="study"] .standalone-sidebar,
+  .standalone-layout[data-page="notes"] .standalone-sidebar { display: none; }
   .standalone-layout[data-page="dashboard"][data-main-content="false"] .standalone-main { display: none; }
 }
 @media (prefers-color-scheme: dark) {
@@ -491,4 +492,230 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
   }
   .standalone-sidebar .standalone-metrics-fsrs dt { font-size: 0.68rem; line-height: 1.25; }
   .standalone-sidebar .standalone-metrics-fsrs dd { font-size: 0.95rem; }
+}
+
+
+/* Reading capture / notes */
+.capture-dashboard-card {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.capture-dashboard-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.capture-dashboard-heading,
+.capture-note-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.capture-dashboard-heading > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.capture-dashboard-count {
+  min-width: 2.2rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: var(--control);
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.capture-notes-page {
+  max-width: 860px;
+}
+
+.capture-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 1rem 0;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+  scrollbar-width: none;
+}
+
+.capture-tabs::-webkit-scrollbar { display: none; }
+
+.capture-tabs button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--control);
+  color: var(--muted);
+  padding: 0.55rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.capture-tabs button span {
+  min-width: 1.2rem;
+  text-align: center;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.capture-tabs button.active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.capture-toolbar {
+  margin-bottom: 1rem;
+}
+
+.capture-note-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.capture-note-card {
+  padding: 1rem;
+  border: 1px solid var(--separator);
+  border-radius: 16px;
+  background: var(--material-raised);
+}
+
+.capture-note-heading strong {
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.capture-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.7rem;
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.capture-state-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--control);
+  padding: 0.28rem 0.55rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.capture-context {
+  margin: 0.9rem 0;
+  padding: 0.75rem 0.85rem;
+  border-left: 3px solid var(--separator-strong);
+  border-radius: 0 10px 10px 0;
+  background: var(--control);
+  color: var(--text);
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.capture-note-input {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.standalone-main textarea.capture-note-input {
+  min-height: 4.5rem;
+}
+
+.capture-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.capture-note-hint {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.capture-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.capture-empty strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}
+
+.capture-empty p {
+  max-width: 34rem;
+  margin: 0 auto;
+  line-height: 1.55;
+}
+
+.capture-selection-action {
+  position: fixed;
+  z-index: 9999;
+  transform: translate(-50%, 0);
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.48rem 0.8rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.22);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.capture-selection-action:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.capture-toast {
+  position: fixed;
+  z-index: 10000;
+  left: 50%;
+  bottom: calc(1rem + var(--safe-area-bottom));
+  transform: translateX(-50%);
+  max-width: min(90vw, 28rem);
+  border: 1px solid var(--separator);
+  border-radius: 999px;
+  padding: 0.6rem 0.85rem;
+  background: var(--material-solid);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .capture-note-card {
+    padding: 0.85rem;
+  }
+
+  .capture-note-actions > button {
+    flex: 1 1 auto;
+  }
+
+  .capture-selection-action {
+    font-size: 0.86rem;
+    padding: 0.55rem 0.9rem;
+  }
 }

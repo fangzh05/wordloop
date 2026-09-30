@@ -1,27 +1,31 @@
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../components/Button.js";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
+import { CaptureNotesPage } from "./CaptureNotesPage.js";
+import { SelectionCapture } from "./SelectionCapture.js";
 import {
   ApiError,
   StaleStudyStateError,
   UnauthorizedError,
   clearToken,
   getBootstrap,
+  getCaptureNotes,
   postAction,
   saveToken,
+  type CaptureListResponse,
   type WebAction,
   type WebApiResponse,
 } from "./apiClient.js";
 
 type PageStatus = "loading" | "auth" | "ready";
-type StandalonePage = "dashboard" | "study";
+type StandalonePage = "dashboard" | "study" | "notes";
 type RetryFields = Record<string, unknown> | null;
 
 export function visibleStandalonePage(
   page: StandalonePage,
   screen: WebApiResponse["screen"] | null,
 ): StandalonePage {
-  return screen === "done" ? "dashboard" : page;
+  return page === "study" && screen === "done" ? "dashboard" : page;
 }
 
 function initialToken(): string | null {
@@ -283,12 +287,14 @@ export function StandaloneProgressBlock({ title, completed, total, emptyText, de
   </div>;
 }
 
-export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, isStudying = false }: {
+export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, isStudying = false, onOpenNotes = () => undefined, captureInboxCount = null }: {
   view: WebApiResponse;
   busy: boolean;
   onContinue: () => void;
   onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
   isStudying?: boolean;
+  onOpenNotes?: () => void;
+  captureInboxCount?: number | null;
 }): React.JSX.Element {
   const [dailyLimitExpanded, setDailyLimitExpanded] = useState(false);
   const dailyLimitEditorId = useId();
@@ -383,15 +389,26 @@ export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWord
         <div><dt>未来 7 天</dt><dd>{numberValue(fsrs.due_next_7_days)}</dd></div>
       </dl>
     </section>}
+
+    <section className="widget-card standalone-card capture-dashboard-card" aria-label="划词笔记">
+      <div className="capture-dashboard-heading">
+        <div><span className="eyebrow">Capture</span><strong>划词笔记</strong></div>
+        <span className="capture-dashboard-count">{captureInboxCount ?? "—"}</span>
+      </div>
+      <p>先捕获，后整理；只有你明确加入学习的项目才会进入 WordLoop 学习队列。</p>
+      <Button className="secondary" type="button" disabled={busy} onClick={onOpenNotes}>打开待整理</Button>
+    </section>
   </>;
 }
 
-export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, hasMainContent, children }: {
+export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes = () => undefined, captureInboxCount = null, hasMainContent, children }: {
   page: StandalonePage;
   view: WebApiResponse | null;
   busy: boolean;
   onContinue: () => void;
   onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
+  onOpenNotes?: () => void;
+  captureInboxCount?: number | null;
   hasMainContent: boolean;
   children?: ReactNode;
 }): React.JSX.Element {
@@ -402,7 +419,7 @@ export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSav
     data-main-content={hasMainContent ? "true" : "false"}
   >
     <aside className="standalone-sidebar" aria-label="Dashboard" aria-hidden={!view}>
-      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onSaveDailyNewWordLimit={onSaveDailyNewWordLimit} isStudying={page === "study"} />}
+      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onSaveDailyNewWordLimit={onSaveDailyNewWordLimit} isStudying={page === "study"} onOpenNotes={onOpenNotes} captureInboxCount={captureInboxCount} />}
     </aside>
     <section className="standalone-main" aria-label="学习区">
       {children}
@@ -452,6 +469,7 @@ export default function StandaloneApp(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState("");
   const [authError, setAuthError] = useState("");
   const [retryFields, setRetryFields] = useState<RetryFields>(null);
+  const [captureCounts, setCaptureCounts] = useState<CaptureListResponse["counts"] | null>(null);
   const requestInFlightRef = useRef(false);
   const refreshPendingRef = useRef(false);
   const refreshProgressPendingRef = useRef(false);
@@ -562,12 +580,26 @@ export default function StandaloneApp(): React.JSX.Element {
   loadBootstrapRef.current = () => loadBootstrap(false, tokenRef.current ?? undefined);
   loadDashboardProgressRef.current = loadDashboardProgress;
 
+  const refreshCaptureCounts = useCallback(async () => {
+    if (!tokenRef.current) return;
+    try {
+      const response = await getCaptureNotes("inbox", 1);
+      setCaptureCounts(response.counts);
+    } catch {
+      // Capture notes are optional to the study flow; do not block learning if this side panel fails.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (token) void refreshCaptureCounts();
+  }, [token, refreshCaptureCounts]);
+
   useEffect(() => {
     if (token) void loadBootstrap();
   }, []);
 
   useEffect(() => {
-    if (view?.screen === "done") setPage("dashboard");
+    if (view?.screen === "done") setPage((currentPage) => currentPage === "study" ? "dashboard" : currentPage);
   }, [view?.screen]);
 
   useEffect(() => {
@@ -773,9 +805,10 @@ export default function StandaloneApp(): React.JSX.Element {
   const hasMainContent = Boolean(errorMessage)
     || pageStatus === "loading"
     || (pageStatus === "ready" && !view && !errorMessage)
-    || visiblePage === "study";
+    || visiblePage === "study"
+    || visiblePage === "notes";
 
-  return <main className="standalone-shell">
+  return <main className="standalone-shell" data-capture-root="true">
     <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
     <StandaloneResponsiveLayout
       page={visiblePage}
@@ -783,8 +816,15 @@ export default function StandaloneApp(): React.JSX.Element {
       busy={busy !== null}
       onContinue={continueFromDashboard}
       onSaveDailyNewWordLimit={saveDailyNewWordLimit}
+      onOpenNotes={() => setPage("notes")}
+      captureInboxCount={captureCounts?.inbox ?? null}
       hasMainContent={hasMainContent}
     >
+
+    {visiblePage === "notes" && <CaptureNotesPage
+      onBack={() => setPage("dashboard")}
+      onCountsChange={setCaptureCounts}
+    />}
 
     {errorMessage && <section className="widget-card standalone-card" role="alert">
       <p className="standalone-status error">{errorMessage}</p>
@@ -928,6 +968,14 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {pageStatus === "loading" && view && <p className="standalone-status" role="status">{busyLabel ?? "正在同步学习状态…"}</p>}
     </StandaloneResponsiveLayout>
+    <SelectionCapture
+      enabled={pageStatus === "ready" && visiblePage !== "notes"}
+      sourceType={visiblePage === "study"
+        ? view?.screen === "lesson" ? "lesson" : view?.screen === "review" ? "review" : view?.screen === "pretest" ? "pretest" : "manual"
+        : "dashboard"}
+      sourceRef={visiblePage === "study" ? `${view?.screen ?? "study"}:${String(state.current_word ?? currentIndex)}` : visiblePage}
+      onCaptured={() => void refreshCaptureCounts()}
+    />
   </main>;
 }
 

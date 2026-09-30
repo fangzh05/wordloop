@@ -59,6 +59,30 @@ import {
 } from "./services/deepseek.js";
 import { normalizeWord } from "./services/wordNormalization.js";
 import { deriveLessonProfile } from "./services/lessonProfile.js";
+import {
+  addCaptureNoteToLearning,
+  createCaptureNote,
+  listCaptureNotes,
+  updateCaptureNote,
+  type CaptureStatus,
+} from "./services/captureNotes.js";
+
+const captureStatusSchema = z.enum(["inbox", "saved", "learning", "archived"]);
+const captureSourceSchema = z.enum(["lesson", "review", "pretest", "dashboard", "manual"]);
+const captureSelectionSchema = z.enum(["word", "phrase", "sentence"]);
+const captureCreateSchema = z.object({
+  selected_text: z.string().trim().min(1).max(500),
+  context_text: z.string().max(4000).optional(),
+  selection_type: captureSelectionSchema.optional(),
+  source_type: captureSourceSchema.optional(),
+  source_ref: z.string().max(500).nullable().optional(),
+}).strict();
+const captureUpdateSchema = z.object({
+  note: z.string().max(2000).optional(),
+  status: captureStatusSchema.optional(),
+}).strict().refine((value) => value.note !== undefined || value.status !== undefined, {
+  message: "At least one capture field is required.",
+});
 
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
@@ -144,6 +168,12 @@ function toApiError(error: unknown): WebApiError {
   }
   if (message === "LESSON_WORD_NOT_FOUND" || message === "LESSON_WORD_MISMATCH") {
     return new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson queue no longer matches the active word.");
+  }
+  if (message === "CAPTURE_NOT_FOUND") {
+    return new WebApiError(404, "CAPTURE_NOT_FOUND", "这条划词笔记不存在或已被移除。");
+  }
+  if (message === "CAPTURE_NOT_LEARNABLE") {
+    return new WebApiError(409, "CAPTURE_NOT_LEARNABLE", "当前只把单词或两词短语加入现有 WordLoop 学习队列；更长表达先保留在笔记库。");
   }
   console.error("WordLoop Web API request failed", {
     code: "INTERNAL_SERVER_ERROR",
@@ -1073,6 +1103,52 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/api/web/bootstrap") {
       return jsonApiResponse(await resolveBootstrap());
+    }
+    if (request.method === "GET" && url.pathname === "/api/web/captures") {
+      const rawStatus = url.searchParams.get("status");
+      let status: CaptureStatus | undefined;
+      if (rawStatus) {
+        const parsedStatus = captureStatusSchema.safeParse(rawStatus);
+        if (!parsedStatus.success) throw new WebApiError(400, "INVALID_REQUEST", "Unknown capture status.");
+        status = parsedStatus.data;
+      }
+      const rawLimit = Number(url.searchParams.get("limit") ?? "80");
+      const limit = Number.isFinite(rawLimit) ? Math.trunc(rawLimit) : 80;
+      return jsonApiResponse(await listCaptureNotes({ status, limit }));
+    }
+    if (request.method === "POST" && url.pathname === "/api/web/captures") {
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
+      }
+      const parsed = captureCreateSchema.safeParse(body);
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The capture payload is invalid.");
+      return jsonApiResponse({ item: await createCaptureNote(parsed.data) }, 201);
+    }
+    const captureMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})$/i.exec(url.pathname);
+    if (request.method === "PATCH" && captureMatch) {
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
+      }
+      const parsed = captureUpdateSchema.safeParse(body);
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The capture update is invalid.");
+      return jsonApiResponse({ item: await updateCaptureNote(captureMatch[1]!, parsed.data) });
+    }
+    const learnMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/learn$/i.exec(url.pathname);
+    if (request.method === "POST" && learnMatch) {
+      const result = await addCaptureNoteToLearning(learnMatch[1]!);
+      return jsonApiResponse({
+        item: result.note,
+        learning_update: {
+          scheduled_today: result.scheduled_today,
+          existing_status: result.existing_status,
+        },
+      });
     }
     if (request.method === "POST" && url.pathname === "/api/web/action") {
       let body: unknown;
