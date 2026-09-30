@@ -3,7 +3,7 @@ import { Button } from "../components/Button.js";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
 import { CaptureNotesPage } from "./CaptureNotesPage.js";
 import { Icon } from "./DesignIcons.js";
-import { SelectionCapture, InlineCaptureButton } from "./SelectionCapture.js";
+import { SelectionCapture } from "./SelectionCapture.js";
 import { AppNavigation, SettingsSheet, type AppSection, type Appearance } from "./AppShell.js";
 import { TodayPage } from "./pages/TodayPage.js";
 import { InsightsPage } from "./pages/InsightsPage.js";
@@ -1102,12 +1102,12 @@ export default function StandaloneApp(): React.JSX.Element {
         {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content" data-capture-root="true">
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>词性与核心义</h2><p>{String(payload.part_of_speech ?? "")} · {String(payload.meaning_zh ?? "")}</p></section>
-          <section className="lesson-section" data-capture-context="true"><h2>例句</h2><div className="inline-capture-row"><p className="lesson-example standalone-reading-width" data-inline-capture-text="true">{String(payload.example_en ?? "")}</p><InlineCaptureButton /></div>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
+          <section className="lesson-section" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
           <div className="lesson-detail-grid">
           <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).slice(0, 3).map((value) => <li key={value}>{value}</li>)}</ul></section>
             <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
           </div>
-          <section className="lesson-section"><h2>易混提醒</h2><div className="inline-capture-row"><p className="standalone-reading-width" data-inline-capture-text="true">{String(payload.note ?? "")}</p><InlineCaptureButton /></div></section>
+          <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width">{String(payload.note ?? "")}</p></section>
           <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
         </div>}
 
@@ -1121,7 +1121,7 @@ export default function StandaloneApp(): React.JSX.Element {
         </div>}
 
         {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
-          <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><div data-inline-capture-text="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div><InlineCaptureButton /></div>
+          <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           {notice && <p className="standalone-status" role="status">{notice}</p>}
           <div className="standalone-actions">
             {feedback.is_correct !== true && feedback.reveal_answer !== true
@@ -1140,7 +1140,7 @@ export default function StandaloneApp(): React.JSX.Element {
         </div>}
 
         {phase === "lesson_complete" && feedbackMode && consolidationKind && <div className="standalone-content">
-          <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><div data-inline-capture-text="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div><InlineCaptureButton /></div>
+          <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           <div className="standalone-actions">
             {feedback.is_correct === true || feedback.reveal_answer === true
               ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "consolidation_finish" })}>继续学习</Button>
