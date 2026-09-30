@@ -1100,7 +1100,7 @@ export default function StandaloneApp(): React.JSX.Element {
       return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
         <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />
 
-        {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content" data-capture-root="true">
+        {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content standalone-explain-content" data-capture-root="true">
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>核心义</h2><p>{meaningIncludesPartOfSpeech(String(payload.meaning_zh ?? ""), String(payload.part_of_speech ?? "")) ? String(payload.meaning_zh ?? "") : `${String(payload.part_of_speech ?? "")} · ${String(payload.meaning_zh ?? "")}`}</p></section>
           <section className="lesson-section" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
