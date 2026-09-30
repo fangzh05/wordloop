@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 describe("GPT Sites surface", () => {
   it("ships a static entrypoint with local assets and no server secrets", async () => {
     const html = await readFile(new URL("../build/index.html", import.meta.url), "utf8");
-    expect(html).toContain('<meta name="viewport" content="width=device-width,initial-scale=1"');
+    expect(html).toContain('<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"');
     expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest"');
     expect(html).toContain('<link rel="stylesheet" href="/styles.css"');
     expect(html).toContain('<script src="/app.js" defer></script>');

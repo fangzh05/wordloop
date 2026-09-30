@@ -60,6 +60,7 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
     const controller = new AbortController();
     let active = true;
     setLoading(true);
+    setResult(null);
     setError("");
     setCursor(null);
     void getAnalytics<AnalyticsData>(section, range, "", 50, controller.signal).then((response) => {
@@ -107,8 +108,8 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
 
   return <section className="insights-page" aria-labelledby="insights-title">
     <header className="page-heading">
-      <span className="eyebrow">只读统计</span><h1 id="insights-title">洞察</h1>
-      <p>浏览统计只读取现有记录，不会评分、重排到期或调用 AI。</p>
+      <span className="eyebrow">Insights</span><h1 id="insights-title">洞察</h1>
+      <p>看见记忆的变化，找到下一步值得关注的地方。</p>
     </header>
     <nav className="insight-tabs" aria-label="洞察分区">
       {sections.map((item) => <button type="button" key={item.id} aria-current={section === item.id ? "page" : undefined} onClick={() => setSection(item.id)}>{item.label}</button>)}
@@ -136,15 +137,15 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
           </div>
         </section>
         <section className="insight-panel"><h2>关注词</h2><FocusList values={focusRows} onOpenWord={onOpenWord} /></section>
-        <section className="insight-panel"><h2>首次回忆成功趋势</h2><TrendBars values={trend} /></section>
+        <section className="insight-panel"><h2>首次回忆成功趋势</h2><TrendBars values={trend} target={number(result.coverage.target_retention)} /></section>
       </>}
 
       {section === "memory" && <>
         <div className="insight-snapshot-label">当前记忆快照 · 不随历史范围变化</div>
         <div className="insight-metric-grid compact">
           <Metric label="已调度词" value={count(memory.scheduled_word_count)} />
-          <Metric label="稳定性均值 / 中位数" value={stability.mean === null ? "—" : `${number(stability.mean)!.toFixed(2)} / ${number(stability.median)!.toFixed(2)} 天`} />
-          <Metric label="难度均值 / 中位数" value={difficulty.mean === null ? "—" : `${number(difficulty.mean)!.toFixed(2)} / ${number(difficulty.median)!.toFixed(2)}`} />
+          <Metric label="稳定性均值 / 中位数" value={number(stability.mean) === null || number(stability.median) === null ? "—" : `${number(stability.mean)!.toFixed(2)} / ${number(stability.median)!.toFixed(2)} 天`} />
+          <Metric label="难度均值 / 中位数" value={number(difficulty.mean) === null || number(difficulty.median) === null ? "—" : `${number(difficulty.mean)!.toFixed(2)} / ${number(difficulty.median)!.toFixed(2)}`} />
           <Metric label="R 无法计算" value={count(memory.retrievability_missing_count)} note="无最后复习或模型输入无效" />
           <Metric label="无效或排除" value={count(memory.excluded_count)} />
         </div>
@@ -152,7 +153,7 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
         <section className="insight-panel"><h2>难度 D</h2><BarList values={histogramLists.difficulty} /></section>
         <section className="insight-panel"><h2>可回忆率 R</h2><p className="muted-copy">模型估计值；低于目标不等于确定忘记。</p><BarList values={histogramLists.retrievability} /></section>
         <section className="insight-panel"><h2>D × S 散点</h2><p className="muted-copy">D 横轴 1–10；S 纵轴为对数天数。点可键盘聚焦后打开词详情。</p><MemoryScatter values={memoryScatter} onOpenWord={onOpenWord} total={number(object(memory.scatter).total) ?? memoryScatter.length} /></section>
-        <section className="insight-panel"><h2>首次回忆趋势</h2><TrendBars values={trend} /></section>
+        <section className="insight-panel"><h2>首次回忆趋势</h2><TrendBars values={trend} target={number(result.coverage.target_retention)} /></section>
       </>}
 
       {section === "weakness" && <>
@@ -182,16 +183,18 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
 
 function FocusList({ values, onOpenWord }: { values: Array<Record<string, unknown>>; onOpenWord: (id: string) => void }): React.JSX.Element {
   if (!values.length) return <p>目前没有关注词。</p>;
-  return <ul className="focus-word-list">{values.map((word) => <li key={String(word.user_word_id)}><button type="button" onClick={() => onOpenWord(String(word.user_word_id))}><strong>{String(word.word || "词条")}</strong><span>{array(word.reasons).map(String).join(" · ")}</span></button></li>)}</ul>;
+  return <ul className="focus-word-list">{values.map((word) => <li key={String(word.user_word_id)}><button type="button" onClick={() => onOpenWord(String(word.user_word_id))}><strong>{String(word.word || "词条")}</strong><span>{array(word.reasons).map((reason) => ({ active_error:"有活动错误",overdue:"已逾期",r_below_target:"回忆概率低于目标",high_d_low_s:"难度较高、稳定性较低" } as Record<string,string>)[String(reason)] ?? String(reason)).join(" · ")}</span></button></li>)}</ul>;
 }
 
-function TrendBars({ values }: { values: Array<Record<string, unknown>> }): React.JSX.Element {
+function TrendBars({ values, target }: { values: Array<Record<string, unknown>>; target: number | null }): React.JSX.Element {
   if (!values.length) return <p>所选期间没有可显示的正式 review 样本。</p>;
-  return <div className="trend-scroll"><svg className="trend-chart" viewBox={`0 0 ${Math.max(280, values.length * 20)} 160`} role="img" aria-label="按日期汇总的滚动首次回忆成功率">
-    <line x1="28" y1="16" x2="28" y2="132" /><line x1="28" y1="132" x2={Math.max(260, values.length * 20 - 4)} y2="132" />
+  return <div className="trend-scroll"><svg className="trend-chart" viewBox={`0 0 ${Math.max(320, values.length * 20 + 70)} 160`} role="img" aria-label="按日期汇总的滚动首次回忆成功率">
+    <line x1="28" y1="16" x2="28" y2="132" /><line x1="28" y1="132" x2={Math.max(290, values.length * 20 + 40)} y2="132" />
+    {target !== null && <g className="retention-target"><line x1="28" y1={132-target*108} x2={Math.max(290,values.length*20+40)} y2={132-target*108} strokeDasharray="5 5"/><text x="55" y={125-target*108}>目标 {percent(target)}</text></g>}
     {values.map((row, index) => {
       const rolling = object(row.rolling_7d);
       const rate = number(rolling.rate);
+      if (rate === null) return null;
       const x = 34 + index * 20;
       const y = rate === null ? 132 : 132 - Math.max(0, Math.min(1, rate)) * 108;
       return <g key={String(row.date)}><circle cx={x} cy={y} r="3.5" className={rate === null ? "no-data" : ""}><title>{String(row.date)}：{percent(rate)}，{count(rolling.passes)} / {count(rolling.samples)}</title></circle><text x={x} y="151">{String(row.date).slice(-2)}</text></g>;
@@ -233,5 +236,5 @@ function errorLabel(value: string): string {
   return ({ meaning: "词义", collocation: "搭配", grammar: "语法", pronunciation: "发音", spelling: "拼写", unclassified: "未分类" } as Record<string, string>)[value] ?? value;
 }
 function activityLabel(value: string): string {
-  return ({ formal_review_count: "正式 review 次数", distinct_review_words: "不同复习词", pretest_count: "预测试次数", first_introductions: "首次引入", capture_count: "捕获次数", ordinary_attempt_count: "练习尝试", distinct_attempt_words: "练习词数", first_formal_learning_completion: "首次正式学习完成" } as Record<string, string>)[value] ?? value;
+  return ({ formal_review_count: "正式 review 次数", distinct_review_words: "不同复习词", pretest_count: "预测试次数", first_introductions: "首次引入", capture_count: "捕获次数", ordinary_attempt_count: "练习尝试", distinct_attempt_words: "练习词数", first_formal_learning_completion: "首次正式学习完成", review: "正式复习", exact_cloze: "语境填空", sentence: "情境造句", translation_en_to_cn: "英译中", translation_cn_to_en: "中译英", pretest_cn_to_en:"预测试", word_recall:"单词回忆", collocation:"搭配" } as Record<string, string>)[value] ?? value;
 }

@@ -1,18 +1,18 @@
+import { Icon } from "./DesignIcons.js";
 import { useEffect, useId, useRef, useState } from "react";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
 import { getTodayOverview } from "./apiClient.js";
 
 export type AppSection = "today" | "study" | "capture" | "insights" | "vocabulary";
-const navItems: Array<{ section: AppSection; label: string; glyph: string }> = [
-  { section: "today", label: "今日", glyph: "◷" }, { section: "study", label: "学习", glyph: "→" },
-  { section: "capture", label: "划词", glyph: "⌁" }, { section: "insights", label: "洞察", glyph: "↗" },
-  { section: "vocabulary", label: "词库", glyph: "Aa" },
+const navItems: Array<{ section: AppSection; label: string; icon: string }> = [
+  { section: "today", label: "今日", icon: "today" }, { section: "study", label: "学习", icon: "study" },
+  { section: "capture", label: "划词", icon: "capture" }, { section: "insights", label: "洞察", icon: "insights" },
+  { section: "vocabulary", label: "词库", icon: "vocabulary" },
 ];
-
 export function AppNavigation({ section, onNavigate }: { section: AppSection; onNavigate: (section: AppSection) => void }): React.JSX.Element {
-  const items = <>{navItems.map((item) => <button key={item.section} type="button" className="app-nav-item" aria-current={section === item.section ? "page" : undefined} onClick={() => onNavigate(item.section)}><span aria-hidden="true">{item.glyph}</span><b>{item.label}</b></button>)}</>;
+  const items = <>{navItems.map((item) => <button key={item.section} type="button" className="app-nav-item" aria-current={section === item.section ? "page" : undefined} onClick={() => onNavigate(item.section)}><Icon name={item.icon} /><b>{item.label}</b></button>)}</>;
   return <>
-    <nav className="app-navigation app-navigation-desktop" aria-label="主导航">{items}</nav>
+    <nav className="app-navigation app-navigation-desktop" aria-label="主导航"><div className="nav-brand"><span><Icon name="loop" /></span><strong>WordLoop</strong></div><p className="nav-caption">你的学习空间</p><div className="nav-list">{items}</div><div className="nav-personal"><span>W</span><div><strong>WordLoop</strong><small>个人学习空间</small></div></div></nav>
     <nav className="app-navigation app-navigation-mobile" aria-label="主导航">{items}</nav>
   </>;
 }

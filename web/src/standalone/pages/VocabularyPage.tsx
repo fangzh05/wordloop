@@ -84,7 +84,7 @@ export function VocabularyPage({ tokenKey, initialUserWordId = null, onDetailCha
   };
 
   return <section className={`vocabulary-page${selected ? " has-word-detail" : ""}`} aria-labelledby="vocabulary-title">
-    <header className="page-heading"><span className="eyebrow">服务端搜索</span><h1 id="vocabulary-title">词库</h1><p>筛选条件可以重叠，所选条件按同时满足处理。</p></header>
+    <header className="page-heading"><span className="eyebrow">Vocabulary</span><h1 id="vocabulary-title">词库</h1><p>保存每一个词，也保留每一次理解。</p></header>
     <div className="vocabulary-toolbar">
       <label className="vocabulary-search-label" htmlFor="vocabulary-search">搜索词条</label>
       <div className="vocabulary-search-row"><input id="vocabulary-search" type="search" value={query} maxLength={120} placeholder="输入英文单词或短语" onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" className="secondary-button" onClick={() => { setQuery(""); setDebouncedQuery(""); }}>清除</button>}</div>

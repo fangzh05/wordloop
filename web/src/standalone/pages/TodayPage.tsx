@@ -18,7 +18,7 @@ function phaseLabel(phase: string): string {
 
 function ProgressRow({ title, detail, note }: { title: string; detail: string; note: string }) {
   return <div className="today-progress-row">
-    <div><strong>{title}</strong><span>{note}</span></div>
+    <div><strong>{title}</strong><span title={note}>{note}</span></div>
     <b>{detail}</b>
   </div>;
 }
@@ -48,10 +48,10 @@ export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidati
       if (current && !controller.signal.aborted) setTodayError("今日进度暂时不可用，请重试。");
     });
     return () => { current = false; controller.abort(); };
-  }, [tokenKey]);
+  }, [tokenKey, view?.session_revision]);
 
   useEffect(() => {
-    if (!detailsOpen || summary || summaryLoading) return;
+    if (!detailsOpen) return;
     const controller = new AbortController();
     setSummaryLoading(true);
     setSummaryError("");
@@ -63,7 +63,7 @@ export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidati
       if (!controller.signal.aborted) setSummaryLoading(false);
     });
     return () => controller.abort();
-  }, [detailsOpen, summary, summaryLoading]);
+  }, [detailsOpen, tokenKey]);
 
   const progress = today?.progress;
   const review = progress?.review;
@@ -86,21 +86,21 @@ export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidati
     <section className="today-focus-card" aria-label="继续今日学习">
       <div>
         <span className="eyebrow">{stage ? `当前阶段 · ${stage}` : "今日学习"}</span>
-        <h2>{stage ? "回到正在进行的任务" : tasksComplete ? "今日计划已完成" : "按顺序继续今日学习"}</h2>
-        <p>{active ? `会话开始于 ${today?.active_session.started_at ? new Date(today.active_session.started_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: today.timezone }) : "今天"}。返回页面不会结束学习。` : "复习、预测试和正式学习由服务器安排。"}</p>
+        <h2>{stage ? "把这一轮学完。" : tasksComplete ? "今日计划已完成" : "先复习，再学一点新的。"}</h2>
+        <p>{active ? `会话开始于 ${today?.active_session.started_at ? new Date(today.active_session.started_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: today.timezone }) : "今天"}。继续上次停下的位置。` : "从今天该做的任务开始。"}</p>
       </div>
       <Button className="primary today-primary-action" type="button" disabled={busy || !view || tasksComplete} onClick={onContinue}>
         {tasksComplete ? "今日计划已完成" : active ? "继续学习" : "开始今日学习"}
       </Button>
     </section>
 
-    {view?.pending_consolidation && <section className="today-focus-card" aria-label="待做应用巩固">
+    {view?.pending_consolidation && <section className="today-focus-card today-consolidation" aria-label="待做应用巩固">
       <div>
         <span className="eyebrow">应用巩固待做</span>
         <h2>{String(view.pending_consolidation.label ?? "应用任务")}</h2>
-        <p>词汇进度与应用巩固分别记录，可以现在做，也可以稍后从这里开始。</p>
+        <p>本轮词汇已经完成，再用一道应用题把它串起来。</p>
       </div>
-      <Button className="primary today-primary-action" type="button" disabled={busy} onClick={onStartConsolidation}>
+      <Button className="secondary today-primary-action" type="button" disabled={busy} onClick={onStartConsolidation}>
         做一道，约 {Math.max(1, Math.round(number(view.pending_consolidation.estimated_seconds) / 60))} 分钟
       </Button>
     </section>}
@@ -110,13 +110,13 @@ export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidati
       {todayError && <p className="standalone-status error" role="alert">{todayError}</p>}
       {!today && !todayError && <p className="standalone-status" role="status">正在读取今日进度…</p>}
       {today && <div className="today-progress-list">
-        <ProgressRow title="正式复习" detail={`${number(review?.completed)} / ${number(review?.total)}`} note={review?.scope === "active_session" ? "当前活动 Review 会话；不并入其他已结束批次" : "今日已记录的 Review 批次合计；不包括 Lesson 补学"} />
-        <ProgressRow title="预测试" detail={`${number(pretest?.completed)} / ${number(pretest?.total)}`} note="已完成预测试状态，不代表正式学习完成" />
-        <ProgressRow title="正式学习" detail={`${number(lesson?.completed_distinct_words)} 个词`} note={`新词 ${number(lesson?.new_words)} · 复习补学 ${number(lesson?.relearn_words)}；按当日去重 Lesson 记录`} />
+        <ProgressRow title="正式复习" detail={`${number(review?.completed)} / ${number(review?.total)}`} note={review?.scope === "active_session" ? "当前这一轮" : "今日正式复习"} />
+        <ProgressRow title="预测试" detail={`${number(pretest?.completed)} / ${number(pretest?.total)}`} note="先判断熟悉程度" />
+        <ProgressRow title="正式学习" detail={`${number(lesson?.completed_distinct_words)} 个词`} note={`新词 ${number(lesson?.new_words)} · 复习补学 ${number(lesson?.relearn_words)}`} />
       </div>}
     </section>
 
-    <section className="today-capture-card" aria-label="划词笔记待整理">
+    <div className="today-secondary-grid"><section className="today-capture-card" aria-label="划词笔记待整理">
       <div><div><span className="eyebrow">Capture</span><h2>待整理</h2></div><strong>{today ? today.captures.inbox_count : "—"}</strong></div>
       <p>划词只保存笔记；加入学习需要你明确选择。</p>
       <Button className="secondary" type="button" onClick={onOpenCapture}>打开划词笔记</Button>
@@ -138,10 +138,10 @@ export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidati
             {(Array.isArray(summary.due_distribution?.future_days) ? summary.due_distribution?.future_days as Array<Record<string, unknown>> : []).slice(0, 7).map((day) => <div key={String(day.date)}><span>{String(day.date)}</span><b>{number(day.count)}</b></div>)}
           </div>
           <h3>最多 3 个关注词</h3>
-          {summary.focus_words?.length ? <ul className="today-focus-list">{summary.focus_words.slice(0, 3).map((word) => <li key={String(word.user_word_id)}><span>{String(word.word || "词条")}</span><small>{(Array.isArray(word.reasons) ? word.reasons : []).map(String).join(" · ")}</small></li>)}</ul> : <p>目前没有需要优先关注的词。</p>}
+          {summary.focus_words?.length ? <ul className="today-focus-list">{summary.focus_words.slice(0, 3).map((word) => <li key={String(word.user_word_id)}><span>{String(word.word || "词条")}</span><small>{(Array.isArray(word.reasons) ? word.reasons : []).map((reason) => ({ active_error:"有活动错误",overdue:"已逾期",r_below_target:"回忆概率低于目标",high_d_low_s:"难度较高、稳定性较低" } as Record<string,string>)[String(reason)] ?? String(reason)).join(" · ")}</small></li>)}</ul> : <p>目前没有需要优先关注的词。</p>}
           <Button className="secondary" type="button" onClick={onOpenVocabulary}>打开词库</Button>
         </>}
       </div>}
-    </section>
+    </section></div>
   </section>;
 }
