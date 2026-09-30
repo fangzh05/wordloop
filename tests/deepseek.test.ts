@@ -178,7 +178,7 @@ describe("DeepSeek stateless JSON client", () => {
     await gradeWrapupAnswer({ words: ["fixture"], instruction: "Translate.", prompt: validWrapup.prompt, answer: "my answer", retry_count: 0 });
 
     const tokenBudgets = fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)).max_tokens);
-    expect(tokenBudgets).toEqual([1200, 600, 400, 900, 400, 700]);
+    expect(tokenBudgets).toEqual([1200, 1200, 400, 900, 400, 1200]);
   });
 
   it("keeps long-sentence translation and sentence consolidation activity types distinct", async () => {
@@ -429,6 +429,89 @@ describe("DeepSeek stateless JSON client", () => {
     expect(logs).not.toContain(privateAnswer);
     expect(logs).not.toContain(privateProviderText);
     expect(logs).not.toContain("test-key");
+  });
+
+  it("accepts nullable evidence fields and normalizes target_word_id to the saved word_id contract", async () => {
+    const wordId = "00000000-0000-4000-8000-000000000003";
+    vi.mocked(fetch).mockResolvedValueOnce(response(JSON.stringify({
+      ...validGrade,
+      reference_answer: null,
+      target_word_results: [{
+        target_word_id: wordId,
+        word: "allocate",
+        outcome: "correct",
+        meaning: "核心义使用正确。",
+        collocation: null,
+        grammar: null,
+        naturalness: "表达自然。",
+        error_excerpt: null,
+        hint: null,
+        reference_expression: null,
+        provider_note: "ignored safely",
+      }],
+      skill_results: [{
+        skill_id: "verb_object_collocation",
+        target_word_id: wordId,
+        outcome: "correct",
+        evidence: "宾语搭配合适。",
+        provider_note: "ignored safely",
+      }],
+    })));
+
+    await expect(gradeSemanticAnswer({
+      word: "allocate", activity_type: "translation_cn_to_en", instruction: "Translate.", prompt: "学校分配资源。", answer: "The school allocates resources.", retry_count: 0,
+    })).resolves.toMatchObject({
+      is_correct: true,
+      target_word_results: [{ word_id: wordId, word: "allocate", outcome: "correct" }],
+      skill_results: [{ skill_id: "verb_object_collocation", word_id: wordId, outcome: "correct" }],
+    });
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("repairs contradictory grading verdicts and requires a reference on the second miss", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validGrade, is_correct: false, error_layer: "none" })))
+      .mockResolvedValueOnce(response(JSON.stringify({
+        ...validGrade,
+        is_correct: false,
+        error_layer: "meaning",
+        reference_answer: "The school allocated its limited resources carefully.",
+      })));
+
+    await expect(gradeSemanticAnswer({
+      word: "allocate", activity_type: "translation_cn_to_en", instruction: "Translate.", prompt: "学校分配资源。", answer: "The school resources.", retry_count: 1,
+    })).resolves.toMatchObject({
+      is_correct: false,
+      error_layer: "meaning",
+      reference_answer: "The school allocated its limited resources carefully.",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const repairRequest = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as { messages: { content: string }[] };
+    expect(repairRequest.messages[1]?.content).toContain("error_layer");
+    expect(repairRequest.messages[1]?.content).toContain("reference_answer");
+  });
+
+  it("retries truncated grading JSON with a larger output budget", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ finish_reason: "length", message: { content: "{\"is_correct\":false" } }],
+      })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(validGrade) } }],
+      })));
+
+    await expect(gradeSemanticAnswer({
+      word: "allocate", activity_type: "translation_cn_to_en", instruction: "Translate.", prompt: "学校分配资源。", answer: "The school allocates resources.", retry_count: 0,
+    })).resolves.toMatchObject(validGrade);
+
+    const requestBodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)) as {
+      max_tokens: number;
+      messages: { content: string }[];
+    });
+    expect(requestBodies.map((request) => request.max_tokens)).toEqual([1200, 1800]);
+    expect(requestBodies[1]?.messages[1]?.content).toContain("达到输出长度上限");
   });
 
   it("does not abort lesson generation at the old 12 second limit", async () => {

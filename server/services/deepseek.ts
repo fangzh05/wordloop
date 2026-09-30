@@ -61,37 +61,53 @@ export const lessonGenerationSchema = z.object({
 
 const errorLayerSchema = z.enum(["none", "meaning", "collocation", "grammar", "spelling", "pronunciation"]);
 
+const nullableOptionalText = (max: number) => z.string().trim().max(max).nullish().transform((value) => value || undefined).optional();
+const nullableOptionalWordId = z.string().trim().uuid().nullish().transform((value) => value || undefined).optional();
+
+const gradeDimensionSchema = z.object({
+  passed: z.boolean(),
+  note: z.string().trim().max(1000).nullish().transform((value) => value ?? ""),
+}).nullish().transform((value) => value ?? undefined).optional();
+
 export const semanticGradeSchema = z.object({
   is_correct: z.boolean(),
   error_layer: errorLayerSchema,
   message: z.string().trim().min(1).max(1000).refine(hasChineseText, "Use Chinese for grading feedback."),
   explanation: z.string().trim().min(1).max(4000).refine(hasChineseText, "Use Chinese for the grading explanation."),
-  reference_answer: z.string().trim().min(1).max(4000).optional(),
-  task_fulfillment: z.boolean().optional(),
-  meaning: z.object({ passed: z.boolean(), note: z.string().trim().max(1000) }).optional(),
-  collocation: z.object({ passed: z.boolean(), note: z.string().trim().max(1000) }).optional(),
-  grammar: z.object({ passed: z.boolean(), note: z.string().trim().max(1000) }).optional(),
-  naturalness: z.object({ passed: z.boolean(), note: z.string().trim().max(1000) }).optional(),
+  reference_answer: z.string().trim().max(4000).nullish().transform((value) => value || undefined),
+  task_fulfillment: z.boolean().nullish().transform((value) => value ?? undefined),
+  meaning: gradeDimensionSchema,
+  collocation: gradeDimensionSchema,
+  grammar: gradeDimensionSchema,
+  naturalness: gradeDimensionSchema,
   target_word_results: z.array(z.object({
-    word_id: z.string().uuid().optional(),
+    word_id: nullableOptionalWordId,
+    target_word_id: nullableOptionalWordId,
     word: z.string().trim().min(1).max(100),
     outcome: z.enum(["correct", "incorrect", "partial", "not_assessed"]),
-    meaning: z.string().trim().max(1000).optional(),
-    collocation: z.string().trim().max(1000).optional(),
-    grammar: z.string().trim().max(1000).optional(),
-    naturalness: z.string().trim().max(1000).optional(),
-    error_excerpt: z.string().trim().max(500).optional(),
-    hint: z.string().trim().max(500).optional(),
-    reference_expression: z.string().trim().max(1000).optional(),
-  }).strict()).max(3).optional(),
+    meaning: nullableOptionalText(1000),
+    collocation: nullableOptionalText(1000),
+    grammar: nullableOptionalText(1000),
+    naturalness: nullableOptionalText(1000),
+    error_excerpt: nullableOptionalText(500),
+    hint: nullableOptionalText(500),
+    reference_expression: nullableOptionalText(1000),
+  }).transform(({ target_word_id, ...result }) => ({
+    ...result,
+    ...(result.word_id ? {} : target_word_id ? { word_id: target_word_id } : {}),
+  }))).nullish().transform((value) => value ?? undefined),
   skill_results: z.array(z.object({
     skill_id: z.string().trim().min(1).max(120),
-    word_id: z.string().uuid().optional(),
+    word_id: nullableOptionalWordId,
+    target_word_id: nullableOptionalWordId,
     outcome: z.enum(["correct", "incorrect", "partial", "not_assessed"]),
-    evidence: z.string().trim().max(500).optional(),
-  }).strict()).max(8).optional(),
-  error_excerpt: z.string().trim().max(500).optional(),
-  short_hint: z.string().trim().max(500).optional(),
+    evidence: nullableOptionalText(500),
+  }).transform(({ target_word_id, ...result }) => ({
+    ...result,
+    ...(result.word_id ? {} : target_word_id ? { word_id: target_word_id } : {}),
+  }))).nullish().transform((value) => value ?? undefined),
+  error_excerpt: nullableOptionalText(500),
+  short_hint: nullableOptionalText(500),
 }).transform((value) => ({
   ...value,
   task_fulfillment: value.task_fulfillment ?? value.is_correct,
@@ -104,6 +120,17 @@ export const semanticGradeSchema = z.object({
   error_excerpt: value.error_excerpt ?? "",
   short_hint: value.short_hint ?? value.message,
 }));
+
+function semanticGradeSchemaFor(retryCount: number) {
+  return semanticGradeSchema.superRefine((grade, context) => {
+    if (!grade.is_correct && grade.error_layer === "none") {
+      context.addIssue({ code: "custom", message: "An incorrect answer needs a core error_layer.", path: ["error_layer"] });
+    }
+    if (!grade.is_correct && retryCount >= 1 && !grade.reference_answer) {
+      context.addIssue({ code: "custom", message: "A second incorrect answer needs a reference_answer.", path: ["reference_answer"] });
+    }
+  });
+}
 
 export const englishDefinitionGradeSchema = z.object({
   is_correct: z.boolean(),
@@ -289,6 +316,7 @@ function lessonGenerationSchemaFor(context: LessonExerciseValidationContext) {
 
 interface DeepSeekJsonOptions {
   maxTokens: number;
+  repairMaxTokens?: number;
   timeoutMs: number;
   task: "lesson_generation" | "semantic_lesson_grading" | "english_definition_grading" | "wrapup_generation" | "sentence_consolidation_generation" | "wrapup_grading";
 }
@@ -298,21 +326,25 @@ export class DeepSeekError extends Error {
     readonly code: string,
     readonly status: number,
     message: string,
-    readonly details: { httpStatus?: number; issuePaths?: string[] } = {},
+    readonly details: { httpStatus?: number; issuePaths?: string[]; finishReason?: string } = {},
   ) {
     super(message);
     this.name = "DeepSeekError";
   }
 }
 
-function retryableJsonError(httpStatus?: number): DeepSeekError {
-  return new DeepSeekError("DEEPSEEK_INVALID_JSON", 502, "DeepSeek returned invalid JSON.", { httpStatus });
+function retryableJsonError(httpStatus?: number, finishReason?: string): DeepSeekError {
+  return new DeepSeekError("DEEPSEEK_INVALID_JSON", 502, "DeepSeek returned invalid JSON.", {
+    httpStatus,
+    ...(finishReason ? { finishReason } : {}),
+  });
 }
 
 function logDeepSeekError(error: DeepSeekError, task: DeepSeekJsonOptions["task"]): void {
   console.error("WordLoop DeepSeek request failed", {
     code: error.code,
     ...(error.details.httpStatus === undefined ? {} : { http_status: error.details.httpStatus }),
+    ...(error.details.finishReason === undefined ? {} : { finish_reason: error.details.finishReason }),
     task,
     ...(error.details.issuePaths ? { issues: error.details.issuePaths } : {}),
   });
@@ -355,6 +387,7 @@ async function deepSeekJson<T>(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.timeoutMs);
     let httpStatus: number | undefined;
+    let finishReason: string | undefined;
     try {
       const response = await fetch(deepseekBase, {
         method: "POST",
@@ -371,7 +404,7 @@ async function deepSeekJson<T>(
             { role: "user", content: [JSON.stringify(input), repairMessage].filter(Boolean).join("\n\n") },
           ],
           response_format: { type: "json_object" },
-          max_tokens: options.maxTokens,
+          max_tokens: attempt === 0 ? options.maxTokens : options.repairMaxTokens ?? options.maxTokens,
         }),
       });
       httpStatus = response.status;
@@ -390,7 +423,9 @@ async function deepSeekJson<T>(
         if (typeof payload === "object" && payload !== null && "choices" in payload) {
           const choices = (payload as { choices?: unknown }).choices;
           if (Array.isArray(choices) && choices[0] && typeof choices[0] === "object" && "message" in choices[0]) {
-            const message = (choices[0] as { message?: unknown }).message;
+            const choice = choices[0] as { finish_reason?: unknown; message?: unknown };
+            if (typeof choice.finish_reason === "string") finishReason = choice.finish_reason;
+            const message = choice.message;
             if (typeof message === "object" && message !== null && "content" in message) {
               content = (message as { content?: unknown }).content;
             }
@@ -402,10 +437,12 @@ async function deepSeekJson<T>(
 
       if (typeof content !== "string" || content.trim().length === 0) {
         if (attempt === 0) {
-          repairMessage = "上一次响应未返回有效 JSON。请修复并返回完整 JSON。";
+          repairMessage = finishReason === "length"
+            ? "上一次响应达到输出长度上限，JSON 被截断。请缩短每条说明，只返回必要字段，并完整闭合 JSON 对象。"
+            : "上一次响应未返回有效 JSON。请只返回简短、完整且可解析的 JSON 对象。";
           continue;
         }
-        throw retryableJsonError(httpStatus);
+        throw retryableJsonError(httpStatus, finishReason);
       }
 
       let parsed: unknown;
@@ -413,10 +450,12 @@ async function deepSeekJson<T>(
         parsed = JSON.parse(content);
       } catch {
         if (attempt === 0) {
-          repairMessage = "上一次响应不是有效 JSON。请修复 JSON 格式并返回完整 JSON。";
+          repairMessage = finishReason === "length"
+            ? "上一次响应达到输出长度上限，JSON 被截断。请缩短每条说明，只返回必要字段，并完整闭合 JSON 对象。"
+            : "上一次响应不是有效 JSON。请只返回简短、完整且可解析的 JSON 对象。";
           continue;
         }
-        throw retryableJsonError(httpStatus);
+        throw retryableJsonError(httpStatus, finishReason);
       }
       const validated = schema.safeParse(parsed);
       if (!validated.success) {
@@ -477,8 +516,8 @@ export function gradeSemanticAnswer(input: {
   retry_count: number;
   plan?: LessonExercisePlan;
 }): Promise<SemanticGrade> {
-  return deepSeekJson(semanticGradeSchema, SEMANTIC_GRADING_PROMPT, input, {
-    task: "semantic_lesson_grading", maxTokens: 600, timeoutMs: 20_000,
+  return deepSeekJson(semanticGradeSchemaFor(input.retry_count), SEMANTIC_GRADING_PROMPT, input, {
+    task: "semantic_lesson_grading", maxTokens: 1200, repairMaxTokens: 1800, timeoutMs: 20_000,
   });
 }
 
@@ -559,7 +598,7 @@ export function gradeWrapupAnswer(input: {
   answer: string;
   retry_count: number;
 }): Promise<WrapupGrade> {
-  return deepSeekJson(wrapupGradeSchema, WRAPUP_GRADING_PROMPT, input, {
-    task: "wrapup_grading", maxTokens: 700, timeoutMs: 20_000,
+  return deepSeekJson(semanticGradeSchemaFor(input.retry_count), WRAPUP_GRADING_PROMPT, input, {
+    task: "wrapup_grading", maxTokens: 1200, repairMaxTokens: 1800, timeoutMs: 20_000,
   });
 }

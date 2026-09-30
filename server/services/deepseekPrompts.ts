@@ -28,9 +28,9 @@ export const LESSON_GENERATION_PROMPT = `为考研英语一与 IELTS Academic �
   }
 }`;
 
-export const SEMANTIC_GRADING_PROMPT = `严格按服务端提供的原题、目标词义、skill_ids 和评分要求批改本次答案。不得改题、换词、重排任务或代替用户决定是否推进。task_fulfillment 判断题目主要命题是否完成；target_word_results 按每个 target_word_id 分别评估词义、搭配、语法和自然度；skill_results 只列出答案中确实能单独判断的技能，并给出各自证据，不要把总体正确机械复制到每项技能。多词题的 skill_result 必须提供对应 word_id；句法结构技能可以不关联某个词。没有足够证据的技能标记 not_assessed。
+export const SEMANTIC_GRADING_PROMPT = `严格按服务端提供的原题、目标词义、skill_ids 和评分要求批改本次答案。不得改题、换词、重排任务或代替用户决定是否推进。task_fulfillment 判断题目主要命题是否完成；target_word_results 按计划中的 target_word_ids 逐词评估词义、搭配、语法和自然度，每项使用 word_id 指向对应 ID；skill_results 只列出答案中确实能单独判断的技能，并给出各自证据，不要把总体正确机械复制到每项技能。多词题的 skill_result 必须提供对应 word_id；句法结构技能可以不关联某个词。没有足够证据的技能标记 not_assessed。
 
-总体 is_correct 只在目标词义、核心搭配、主要命题、否定与关键修饰关系均正确时为 true。无关的小冠词、标点或轻微自然度建议可以核心通过，并放入 naturalness/suggestion；不能因此判定目标词遗忘。meaning、collocation、grammar、naturalness 结果区分核心错误和建议。第一次核心错误指出一个具体错误片段并给简短修改提示，不泄漏完整答案；第二次才给 reference_answer。使用简体中文反馈。只返回 JSON，不要 Markdown：
+总体 is_correct 只在目标词义、核心搭配、主要命题、否定与关键修饰关系均正确时为 true。无关的小冠词、标点或轻微自然度建议可以核心通过，并放入 naturalness/suggestion；不能因此判定目标词遗忘。meaning、collocation、grammar、naturalness 结果区分核心错误和建议。is_correct=false 时 error_layer 必须是 meaning、collocation、grammar、spelling 或 pronunciation 之一，不能是 none。首次提交（输入 retry_count=0）答错时只给一个具体错误片段和简短修改提示，reference_answer 必须省略；第二次提交仍错时才给非空 reference_answer。可选字段不适用时省略，不要输出 null 或空字符串。message 与 explanation 各用一两句简短中文，分项 note 只写最必要证据。使用简体中文反馈。只返回 JSON，不要 Markdown：
 {
   "is_correct": false,
   "task_fulfillment": false,
@@ -44,8 +44,7 @@ export const SEMANTIC_GRADING_PROMPT = `严格按服务端提供的原题、目�
   "error_excerpt": "...",
   "short_hint": "...",
   "message": "...",
-  "explanation": "...",
-  "reference_answer": "..."
+  "explanation": "..."
 }`;
 
 export const ENGLISH_DEFINITION_GRADING_PROMPT = `判断用户给出的简短英文释义是否准确表达目标词的核心义；接受自然的同义表达，不要求复述词典原句。feedback 必须使用简体中文，可引用必要的英文词句。只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
