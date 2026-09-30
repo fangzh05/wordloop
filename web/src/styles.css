@@ -1504,10 +1504,10 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
   .wordloop-shell .capture-notes-page > .capture-tabs { grid-column: 1; margin: 0 0 1rem; }
   .wordloop-shell .capture-notes-page > .capture-toolbar { grid-column: 2; margin: 0 0 1rem; }
 
-  .wordloop-shell .wordloop-app-grid.is-immersive .standalone-layout { display: block; width: min(100%, 72rem); }
+  .wordloop-shell .wordloop-app-grid.is-immersive .standalone-layout { display: block; width: min(100%, 96rem); }
   .wordloop-shell .wordloop-app-grid.is-immersive .standalone-main {
-    max-width: 72rem;
-    padding: 2.5rem clamp(2rem, 6vw, 4.5rem) 4rem;
+    max-width: 96rem;
+    padding: 2.5rem clamp(1.5rem, 4vw, 4rem) 4rem;
   }
   .wordloop-shell .wordloop-app-grid.is-immersive .standalone-main > .standalone-card { max-width: none; }
   .wordloop-shell .wordloop-app-grid.is-immersive .standalone-study-heading { flex-wrap: nowrap; row-gap: 0; }
