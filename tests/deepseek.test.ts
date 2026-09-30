@@ -465,6 +465,30 @@ describe("DeepSeek stateless JSON client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it("accepts a planned word_recall task and preserves that activity type", async () => {
+    const input = {
+      ...lessonInput,
+      plan: { ...lessonInput.plan, planned_activity_type: "word_recall" as const },
+    };
+    const recallLesson = {
+      ...validLesson,
+      exercise: {
+        activity_type: "word_recall",
+        instruction: "根据中文核心义回忆英文词。",
+        prompt: "可供公众使用的固定设施",
+        accepted_answers: ["fixture"],
+        multiline: false,
+      },
+    };
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(response(JSON.stringify(recallLesson)));
+
+    await expect(generateLesson(input)).resolves.toMatchObject({
+      exercise: { activity_type: "word_recall", prompt: "可供公众使用的固定设施" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("repairs missing Chinese translations for collocations and derivations", async () => {
     const untranslated = {
       ...validLesson,
