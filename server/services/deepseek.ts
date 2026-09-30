@@ -10,20 +10,21 @@ import {
   WRAPUP_GRADING_PROMPT,
 } from "./deepseekPrompts.js";
 import { canonicalizeRecallForm } from "../../web/src/grading/deterministic.js";
+import { plannedActivityTypeSchema } from "../../shared/toolContracts.js";
 import type { LessonErrorFocus, LessonProfile } from "./lessonProfile.js";
 import type { LessonExercisePlan } from "../../shared/toolContracts.js";
 
 const deepseekBase = "https://api.deepseek.com/chat/completions";
-const activityTypes = [
-  "cloze", "exact_cloze", "translation_cn_to_en", "translation_en_to_cn", "collocation", "derivation", "recall", "sentence", "semantic_expression",
-] as const;
 const fixedAnswerActivityTypes = new Set<string>(["cloze", "exact_cloze", "derivation", "recall", "word_recall", "collocation"]);
 function hasChineseText(value: string): boolean {
   return /\p{Script=Han}/u.test(value);
 }
 
 const exerciseSchema = z.object({
-  activity_type: z.enum(activityTypes),
+  // Keep generation output aligned with the server's planner contract. A
+  // duplicated list here previously omitted `word_recall`, so valid plans
+  // failed schema validation before their exact planned type could be saved.
+  activity_type: plannedActivityTypeSchema,
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
