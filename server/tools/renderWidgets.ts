@@ -528,7 +528,7 @@ async function saveWidgetState(input: {
     let explanation = typeof answerFeedback?.explanation === "string" ? answerFeedback.explanation : message;
     const recallActivity = ["word_recall", "recall", "spelling"].includes(exercise.data.activity_type);
     const accepted = Array.isArray(exercise.data.accepted_answers) ? exercise.data.accepted_answers : [];
-    const fixedActivity = ["exact_cloze", "cloze", "derivation"].includes(exercise.data.activity_type) && accepted.length > 0;
+    const fixedActivity = ["exact_cloze", "cloze", "derivation", "collocation"].includes(exercise.data.activity_type) && accepted.length > 0;
     let deterministicOutcome: "correct" | "incorrect" | undefined;
     if (fixedActivity || recallActivity) {
       const result = recallActivity
@@ -536,6 +536,7 @@ async function saveWidgetState(input: {
         : gradeExactCloze(answer, accepted);
       isCorrect = result.is_correct;
       errorLayer = result.error_layer;
+      if (exercise.data.activity_type === "collocation" && !isCorrect && errorLayer !== "spelling") errorLayer = "collocation";
       message = result.feedback;
       explanation = result.feedback;
       deterministicOutcome = result.is_correct ? "correct" : "incorrect";
@@ -543,7 +544,7 @@ async function saveWidgetState(input: {
     const nextRetry = isCorrect ? knownActive.state.retry_count : knownActive.state.retry_count + 1;
     const revealAnswer = !isCorrect && nextRetry >= 2;
     const referenceAnswer = typeof answerFeedback?.reference_answer === "string" ? answerFeedback.reference_answer.trim() : "";
-    if (revealAnswer && !referenceAnswer && exercise.data.accepted_answers?.length) {
+    if (revealAnswer && exercise.data.accepted_answers?.length && (fixedActivity || !referenceAnswer)) {
       answerFeedback!.reference_answer = exercise.data.accepted_answers[0];
     }
     const finalReference = revealAnswer ? (typeof answerFeedback?.reference_answer === "string" ? answerFeedback.reference_answer : undefined) : undefined;
