@@ -69,6 +69,7 @@ import {
 import { normalizeWord } from "./services/wordNormalization.js";
 import { deriveLessonProfile } from "./services/lessonProfile.js";
 import { cadenceCandidatePlans, planLessonQueue } from "./services/exercisePlanner.js";
+import { perf } from "./services/perf.js";
 import { plannedSkillEvidence } from "./services/plannedSubmission.js";
 import {
   addCaptureNoteToLearning,
@@ -496,7 +497,15 @@ async function generateAndPersistLesson(input: {
 }): Promise<{ session: StudySessionRow; audioUrl: string | null }> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
-  const [item] = await getVocabularyItemsByWords([input.word], db, userId);
+  const queue = input.flow.lesson_words;
+  if (!queue || queue.length === 0 || !isLessonCursorAtCurrentWord(queue, input.word, input.index)) {
+    throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson queue no longer matches the active word.");
+  }
+  const hasFrozenPlans = input.flow.exercise_plans?.length === queue.length;
+  const items = await perf("lesson.vocabulary", () => getVocabularyItemsByWords(
+    hasFrozenPlans ? [input.word] : queue, db, userId,
+  ));
+  const item = items.find((entry) => normalizeWord(entry.word) === normalizeWord(input.word));
   if (!item) throw new WebApiError(409, "LESSON_WORD_NOT_FOUND", "The queued Lesson word is unavailable.");
   const meaning = persistedMeaning(item);
   if (!meaning) throw new WebApiError(409, "INVALID_STUDY_STATE", "The queued Lesson word has no saved Chinese meaning.");
@@ -514,20 +523,21 @@ async function generateAndPersistLesson(input: {
     ...(input.flow.lesson_profile_history ?? []).filter((entry) => normalizeWord(entry.word) !== normalizeWord(item.word)),
     { word: item.word, ...lessonProfile },
   ];
-  const queue = input.flow.lesson_words;
-  if (!queue || queue.length === 0 || !isLessonCursorAtCurrentWord(queue, item.word, input.index)) {
+  if (!isLessonCursorAtCurrentWord(queue, item.word, input.index)) {
     throw new WebApiError(409, "LESSON_CURSOR_MISMATCH", "The Lesson queue no longer matches the active word.");
   }
-  const plannedFlow = input.flow.exercise_plans?.length === queue.length
+  const plannedFlow = hasFrozenPlans
     ? input.flow
-    : { ...input.flow, exercise_plans: await planLessonQueue(queue, input.flow.relearn_words, db, userId) };
+    : { ...input.flow, exercise_plans: await perf("lesson.plan", () => planLessonQueue(
+      queue, input.flow.relearn_words, db, userId, { vocabulary_items: items },
+    )) };
   const plan = plannedFlow.exercise_plans?.[input.index];
   if (!plan || plan.scope !== "lesson" || plan.word_id !== item.word_id) {
     throw new WebApiError(409, "LESSON_PLAN_MISMATCH", "The saved Lesson plan does not match the active word.");
   }
   let expectedRevision = input.expectedRevision;
   let sessionId = input.sessionId;
-  const existing = await assertActiveStudySessionRevision(expectedRevision, sessionId, db, userId);
+  const needsPlanFreeze = plannedFlow !== input.flow;
   const generationState = makeStudyState({
     date: input.date,
     widget: "lesson",
@@ -547,9 +557,12 @@ async function generateAndPersistLesson(input: {
       progress: lessonProgressLabel(plannedFlow.relearn_words, queue, input.index),
     },
   });
-  const plannedSession = await persistStudyStateIfRevision(generationState, expectedRevision, db, userId, existing?.id ?? sessionId);
-  expectedRevision = plannedSession.updated_at;
-  sessionId = plannedSession.id;
+  if (needsPlanFreeze) {
+    // Freeze new plan IDs once for crash recovery. Subsequent words reuse them.
+    const plannedSession = await perf("lesson.freeze", () => persistStudyStateIfRevision(generationState, expectedRevision, db, userId, sessionId));
+    expectedRevision = plannedSession.updated_at;
+    sessionId = plannedSession.id;
+  }
   const [generated, audioUrl] = await Promise.all([
     generateLesson({
       word: item.word,
@@ -560,9 +573,15 @@ async function generateAndPersistLesson(input: {
       plan,
     }),
     pronunciationUrl(item.word),
-  ]);
+  ]).catch(async (error: unknown) => {
+    if (!needsPlanFreeze) {
+      // A failed next word still has a durable retry cursor; CAS rejects stale clients.
+      await persistStudyStateIfRevision(generationState, expectedRevision, db, userId, sessionId);
+    }
+    throw error;
+  });
   const navigation = buildLessonNavigation(queue, input.index, item.word);
-  await assertActiveStudySessionRevision(expectedRevision, sessionId, db, userId);
+  // Final persistence validates the revision and performs a conditional update.
   const state = makeStudyState({
     date: input.date,
     widget: "lesson",
@@ -592,7 +611,7 @@ async function generateAndPersistLesson(input: {
       navigation,
     },
   });
-  const session = await persistStudyStateIfRevision(state, expectedRevision, db, userId, sessionId);
+  const session = await perf("lesson.persist", () => persistStudyStateIfRevision(state, expectedRevision, db, userId, sessionId));
   return { session, audioUrl };
 }
 
@@ -1134,12 +1153,14 @@ async function submitLesson(action: Extract<WebAction, { action: "lesson_submit"
   const exercise = lessonExercise(state);
   const plan = await savedOrLegacyPlan(state, exercise.activity_type, "lesson");
   const plannedState = state.payload.plan ? state : { ...state, payload: { ...state.payload, plan } };
+  const gradingStarted = Date.now();
   const grade = await gradeLesson(plannedState, exercise, action.answer);
+  const gradingMs = Date.now() - gradingStarted;
   const nextState = lessonFeedbackState(plannedState, exercise, action.answer, grade);
   const feedback = nextState.payload.feedback as Record<string, unknown>;
   const answerRevealed = feedback.reveal_answer === true;
   const hintUsed = state.payload.hint_used === true;
-  const saved = await recordPlannedSubmission({
+  const saved = await perf("submission.database", async () => recordPlannedSubmission({
     active,
     expected_revision: action.expected_revision,
     submission_id: action.submission_id ?? globalThis.crypto.randomUUID(),
@@ -1155,11 +1176,11 @@ async function submitLesson(action: Extract<WebAction, { action: "lesson_submit"
     hint_used: hintUsed,
     answer_revealed: answerRevealed,
     active_ms: null,
-    grading_ms: null,
+    grading_ms: gradingMs,
     next_state: nextState,
     completion_date: await getStudyDate(),
     cadence_candidates: cadenceCandidatePlans(plan, state.current_word!),
-  });
+  }));
   return successForSession(saved, {
     result: { is_correct: grade.is_correct, error_layer: grade.error_layer, message: grade.message },
   });
@@ -1319,6 +1340,7 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
   if (exercise.activity_type !== expectedType || !exercise.multiline) {
     throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved consolidation exercise is invalid.");
   }
+  const gradingStarted = Date.now();
   const grade: WrapupGrade | SemanticGrade = !existingPlan.success && consolidation.consolidation_kind === "translation"
     ? await gradeWrapupAnswer({
       words: consolidation.consolidation_target_words,
@@ -1337,6 +1359,7 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
       retry_count: state.retry_count,
       plan,
     });
+  const gradingMs = Date.now() - gradingStarted;
   if (!grade.is_correct && grade.error_layer === "none") {
     throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "DeepSeek output did not satisfy the grading rules.");
   }
@@ -1358,7 +1381,7 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
   });
   const feedback = feedbackState.payload.feedback as Record<string, unknown>;
   const answerRevealed = feedback.reveal_answer === true;
-  const saved = await recordPlannedSubmission({
+  const saved = await perf("submission.database", async () => recordPlannedSubmission({
     active,
     expected_revision: action.expected_revision,
     submission_id: action.submission_id ?? globalThis.crypto.randomUUID(),
@@ -1389,10 +1412,10 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
     hint_used: state.payload.hint_used === true,
     answer_revealed: answerRevealed,
     active_ms: null,
-    grading_ms: null,
+    grading_ms: gradingMs,
     next_state: feedbackState,
     completion_date: await getStudyDate(),
-  });
+  }));
   return successForSession(saved);
 }
 

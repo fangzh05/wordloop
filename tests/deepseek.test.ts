@@ -215,7 +215,7 @@ describe("DeepSeek stateless JSON client", () => {
     await gradeWrapupAnswer({ words: ["fixture"], instruction: "Translate.", prompt: validWrapup.prompt, answer: "my answer", retry_count: 0 });
 
     const tokenBudgets = fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)).max_tokens);
-    expect(tokenBudgets).toEqual([1200, 1200, 400, 900, 400, 1200]);
+    expect(tokenBudgets).toEqual([1200, 600, 400, 900, 400, 600]);
   });
 
   it("keeps long-sentence translation and sentence consolidation activity types distinct", async () => {
@@ -584,6 +584,23 @@ describe("DeepSeek stateless JSON client", () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts compact feedback and repairs non-core contradictions locally without fabricating analytics", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(response(JSON.stringify({
+      is_correct: false, error_layer: "none", task_fulfillment: false,
+      message: "目标义错误。", short_hint: "请检查否定关系。", reference_answer: "must not leak",
+    })));
+    const grade = await gradeSemanticAnswer({
+      word: "allocate", activity_type: "sentence", instruction: "造句。", prompt: "分配资源", answer: "wrong", retry_count: 0,
+    });
+    expect(grade).toMatchObject({ is_correct: false, error_layer: "meaning", explanation: "请检查否定关系。" });
+    expect(grade.reference_answer).toBeUndefined();
+    expect(grade.meaning).toBeUndefined();
+    expect(grade.grammar).toBeUndefined();
+    expect(grade.skill_results).toEqual([]);
+    expect(grade.target_word_results).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("repairs contradictory grading verdicts and requires a reference on the second miss", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
@@ -604,7 +621,7 @@ describe("DeepSeek stateless JSON client", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const repairRequest = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as { messages: { content: string }[] };
-    expect(repairRequest.messages[1]?.content).toContain("error_layer");
+    expect(repairRequest.messages[1]?.content).not.toContain("error_layer: An incorrect");
     expect(repairRequest.messages[1]?.content).toContain("reference_answer");
   });
 
@@ -626,7 +643,7 @@ describe("DeepSeek stateless JSON client", () => {
       max_tokens: number;
       messages: { content: string }[];
     });
-    expect(requestBodies.map((request) => request.max_tokens)).toEqual([1200, 1800]);
+    expect(requestBodies.map((request) => request.max_tokens)).toEqual([600, 900]);
     expect(requestBodies[1]?.messages[1]?.content).toContain("达到输出长度上限");
   });
 
