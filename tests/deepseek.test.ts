@@ -182,8 +182,8 @@ describe("DeepSeek stateless JSON client", () => {
 
   it("repairs unsupported translation grading categories with explicit enum guidance", async () => {
     vi.mocked(fetch)
-      .mockResolvedValueOnce(response(JSON.stringify({ ...validGrade, error_layer: "structure" })))
-      .mockResolvedValueOnce(response(JSON.stringify({ ...validGrade, error_layer: "grammar" })));
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validGrade, is_correct: false, error_layer: "structure" })))
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validGrade, is_correct: false, error_layer: "grammar" })));
     await expect(gradeWrapupAnswer({
       words: ["fixture"], instruction: "请翻译。", prompt: validWrapup.prompt,
       answer: "这是我的译文。", retry_count: 0,
