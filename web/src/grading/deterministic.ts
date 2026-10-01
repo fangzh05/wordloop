@@ -105,7 +105,9 @@ export function gradingRoute(activityType: string): GradingRoute {
 export function gradingRouteForDirection(
   activityType: string,
   direction?: "cn_to_en" | "en_definition",
+  hasAcceptedAnswers = false,
 ): GradingRoute {
+  if (activityType === "collocation" && hasAcceptedAnswers) return "deterministic_cloze";
   if (activityType === "pretest_en_definition") return "semantic";
   if (activityType === "review" && direction === "en_definition") return "semantic";
   return gradingRoute(activityType);
@@ -286,6 +288,8 @@ export interface GradeContext {
   reviewSubmission?: boolean;
   /** The persisted direction, when the question type has one. */
   direction?: "cn_to_en" | "en_definition";
+  /** Server-persisted fixed-answer snapshot, never a client-supplied override. */
+  hasAcceptedAnswers?: boolean;
 }
 
 /**
@@ -309,7 +313,7 @@ export function isDeterministicSpellingNearMiss(grade: GradeResult, context: Gra
  * prompt wording.
  */
 export function assertGradeInvariants(grade: GradeResult, context: GradeContext): void {
-  const route = gradingRouteForDirection(context.activity_type, context.direction);
+  const route = gradingRouteForDirection(context.activity_type, context.direction, context.hasAcceptedAnswers);
 
   // A failed retrieval is always Again. There is no such thing as failing and
   // being scheduled as Good or Easy.
@@ -332,7 +336,7 @@ export function assertGradeInvariants(grade: GradeResult, context: GradeContext)
 
   // Deterministic recall questions have exactly one authority. A semantic claim
   // over one of these is a routing bug, not a judgement call.
-  if (route === "deterministic" && grade.graded_by !== "deterministic") {
+  if ((route === "deterministic" || route === "deterministic_cloze") && grade.graded_by !== "deterministic") {
     throw new GradeInvariantError(`Activity "${context.activity_type}" must be graded deterministically.`);
   }
   if (route === "semantic" && grade.graded_by !== "semantic") {

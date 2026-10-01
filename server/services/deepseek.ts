@@ -128,7 +128,7 @@ export const semanticGradeSchema = z.object({
   short_hint: value.short_hint ?? value.message,
 }));
 
-function semanticGradeSchemaFor(retryCount: number) {
+function semanticGradeSchemaFor(retryCount: number, answer: string) {
   // Accept the compact wire format while retaining the existing feedback contract.
   // Missing analytical dimensions are unknown, never inferred from the verdict.
   return z.preprocess((input) => {
@@ -147,6 +147,14 @@ function semanticGradeSchemaFor(retryCount: number) {
     if (retryCount === 0 && value.is_correct === false) delete value.reference_answer;
     return value;
   }, semanticGradeSchema.superRefine((grade, context) => {
+    const comparable = (value: string) => value.trim().toLocaleLowerCase().replace(/\s+/gu, " ");
+    if (!grade.is_correct && grade.reference_answer
+      && comparable(grade.reference_answer) === comparable(answer)) {
+      context.addIssue({ code: "custom", message: "判错结果与用户答案完全相同的参考答案相互矛盾。重新独立评估本次答案；正确则 is_correct=true，确实有错则指出真实错误并提供不同的正确参考表达。不要因 retry_count 判错。", path: ["is_correct"] });
+    }
+    if (grade.is_correct && !grade.task_fulfillment) {
+      context.addIssue({ code: "custom", message: "正确答案必须完成核心任务；请统一判分与 task_fulfillment。", path: ["task_fulfillment"] });
+    }
     // A reference cannot safely be invented locally: it is core feedback on retry.
     if (!grade.is_correct && retryCount >= 1 && !grade.reference_answer) {
       context.addIssue({ code: "custom", message: "A second incorrect answer needs a reference_answer.", path: ["reference_answer"] });
@@ -579,7 +587,7 @@ export function gradeSemanticAnswer(input: {
   retry_count: number;
   plan?: LessonExercisePlan;
 }): Promise<SemanticGrade> {
-  return deepSeekJson(semanticGradeSchemaFor(input.retry_count), SEMANTIC_GRADING_PROMPT, input, {
+  return deepSeekJson(semanticGradeSchemaFor(input.retry_count, input.answer), SEMANTIC_GRADING_PROMPT, input, {
     task: "semantic_lesson_grading", maxTokens: 600, repairMaxTokens: 900, timeoutMs: 20_000,
   });
 }
@@ -661,7 +669,7 @@ export function gradeWrapupAnswer(input: {
   answer: string;
   retry_count: number;
 }): Promise<WrapupGrade> {
-  return deepSeekJson(semanticGradeSchemaFor(input.retry_count), WRAPUP_GRADING_PROMPT, input, {
+  return deepSeekJson(semanticGradeSchemaFor(input.retry_count, input.answer), WRAPUP_GRADING_PROMPT, input, {
     task: "wrapup_grading", maxTokens: 600, repairMaxTokens: 900, timeoutMs: 20_000,
   });
 }

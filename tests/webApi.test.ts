@@ -525,7 +525,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(responsePayload.state.payload).not.toHaveProperty("accepted_answers");
   });
 
-  it.each(["cloze", "derivation", "recall"])("keeps legacy fixed-answer %s exercises deterministic", async (activityType) => {
+  it.each(["cloze", "derivation", "recall", "collocation"])("keeps legacy fixed-answer %s exercises deterministic", async (activityType) => {
     const state = lessonState(activityType);
     state.payload.accepted_answers = ["electricians"];
     mocks.active = row(state);
@@ -537,6 +537,38 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.recordAttempt).toHaveBeenCalledWith(expect.objectContaining({
       activity_type: activityType, user_answer: "electricians", is_correct: true, error_layer: "none",
     }));
+  });
+
+  it("grades the quarantine collocation from its frozen answers on both attempts without calling the model", async () => {
+    const state = lessonState("collocation");
+    state.current_word = "quarantine";
+    state.flow.lesson_words = ["quarantine"];
+    state.payload.word = "quarantine";
+    state.payload.prompt = "Travelers must remain ___ for ten days.";
+    state.payload.accepted_answers = ["in quarantine", "under quarantine"];
+    mocks.active = row(state);
+    const first = await handleWebApiRequest(post({ action: "lesson_submit", answer: "quarantine" }));
+    expect(first.status).toBe(200);
+    expect(mocks.active.state.payload.feedback).toMatchObject({ is_correct: false, error_layer: "collocation", reveal_answer: false });
+    const retry = await handleWebApiRequest(post({ action: "lesson_retry" }, mocks.active.updated_at));
+    expect(retry.status).toBe(200);
+    const second = await handleWebApiRequest(post({ action: "lesson_submit", answer: "in quarantine" }, mocks.active.updated_at));
+    expect(second.status).toBe(200);
+    expect(mocks.active.state.payload.feedback).toMatchObject({ is_correct: true, error_layer: "none", user_answer: "in quarantine" });
+    expect(mocks.gradeSemanticAnswer).not.toHaveBeenCalled();
+    expect(mocks.recordReviewSubmission).not.toHaveBeenCalled();
+  });
+
+  it("keeps a second incorrect fixed collocation's reference stable instead of inventing a new model answer", async () => {
+    const state = lessonState("collocation", "lesson_exercise", 1);
+    state.payload.accepted_answers = ["in quarantine", "under quarantine"];
+    mocks.active = row(state);
+    const response = await handleWebApiRequest(post({ action: "lesson_submit", answer: "quarantining" }));
+    expect(response.status).toBe(200);
+    expect(mocks.active.state.payload.feedback).toMatchObject({
+      is_correct: false, error_layer: "collocation", reference_answer: "in quarantine", reveal_answer: true,
+    });
+    expect(mocks.gradeSemanticAnswer).not.toHaveBeenCalled();
   });
 
   it.each(["spelling", "word_recall"])("keeps %s exercises deterministic", async (activityType) => {

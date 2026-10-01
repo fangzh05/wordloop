@@ -947,13 +947,22 @@ function savedAcceptedAnswers(state: StudyState): string[] {
 
 function deterministicLessonGrade(state: StudyState, exercise: z.infer<typeof lessonExerciseSchema>, answer: string) {
   if (!state.current_word) throw new WebApiError(409, "INVALID_STUDY_STATE", "The Lesson word is unavailable.");
-  const route = gradingRouteForDirection(exercise.activity_type);
+  const accepted = savedAcceptedAnswers(state);
+  const route = gradingRouteForDirection(exercise.activity_type, undefined, accepted.length > 0);
   if (route === "deterministic_cloze") {
-    const accepted = savedAcceptedAnswers(state);
     if (accepted.length === 0) throw new WebApiError(409, "INVALID_STUDY_STATE", "The exact cloze answer is missing from saved state.");
     const grade = gradeExactCloze(answer, accepted);
     const { rating: _rating, ...practiceGrade } = grade;
-    return { ...practiceGrade, message: grade.feedback, explanation: grade.is_correct ? "答案与已保存的正确词形一致。" : "核对空格处要求的词形，再试一次。", reference_answer: accepted[0] };
+    const isCollocation = exercise.activity_type === "collocation";
+    const result = {
+      ...practiceGrade,
+      error_layer: !grade.is_correct && isCollocation && grade.error_layer !== "spelling" ? "collocation" as const : grade.error_layer,
+      message: grade.feedback,
+      explanation: grade.is_correct ? "答案与已保存的正确表达一致。" : isCollocation ? "核对空格处要求的完整搭配，再试一次。" : "核对空格处要求的词形，再试一次。",
+      reference_answer: accepted[0],
+    };
+    assertGradeInvariants(result, { activity_type: exercise.activity_type, advancesFsrs: false, hasAcceptedAnswers: true });
+    return result;
   }
   if (route !== "deterministic") return null;
   const grade = exercise.activity_type === "spelling" || exercise.activity_type === "word_recall"
