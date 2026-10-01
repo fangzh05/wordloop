@@ -1,3 +1,4 @@
+import { lessonExercisePlanSchema } from "../shared/toolContracts.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -936,10 +937,10 @@ describe("Standalone Web API shared-state boundaries", () => {
       },
     });
     mocks.active = row(state);
-    mocks.getVocabularyItemsByWords.mockImplementationOnce(async (words: string[]) => [{
+    mocks.getVocabularyItemsByWords.mockImplementationOnce(async (words: string[]) => words.map((word) => ({
       word_id: "00000000-0000-4000-9000-000000000103",
-      word: words[0]!, display_word: words[0]!, status: "unknown", error_layers: [], ipa_us: "/nekst/", senses: [{ pos: "n.", definition_cn: "下一个词" }],
-    }]);
+      word, display_word: word, status: "unknown", error_layers: [], ipa_us: "/nekst/", senses: [{ pos: "n.", definition_cn: "下一个词" }],
+    })));
     const response = await handleWebApiRequest(post({ action: "lesson_next" }));
     const payload = await body(response);
     expect(response.status).toBe(200);
@@ -998,6 +999,70 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.advanceEvents).toEqual([]);
     expect(mocks.finishStudySession).toHaveBeenCalledWith({}, userId, expect.objectContaining({ allowLessonRoundCompletion: true }));
     expect(mocks.generateWrapup).not.toHaveBeenCalled();
+  });
+
+  it("reuses frozen plans on successful generation with one persistence and no replanning", async () => {
+    const plan = lessonExercisePlanSchema.parse(lessonPlan("exact_cloze"));
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_explain", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"], exercise_plans: [plan] },
+      payload: { widget: "lesson", mode: "generation_error", word: "fixture", plan },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "resume" });
+    const sessions = await import("../server/services/studySessions.js");
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    expect(response.status).toBe(200);
+    expect(mocks.planLessonQueue).not.toHaveBeenCalled();
+    expect(sessions.persistStudyStateIfRevision).toHaveBeenCalledTimes(1);
+    expect(mocks.active.state.flow.exercise_plans).toEqual([plan]);
+  });
+
+  it.each([false, true])("discards frozen-plan output when another client advances during generation (failure=%s)", async (fails) => {
+    const plan = lessonExercisePlanSchema.parse(lessonPlan("exact_cloze"));
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_explain", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"], exercise_plans: [plan] },
+      payload: { widget: "lesson", mode: "generation_error", word: "fixture", plan },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "resume" });
+    const generate = mocks.generateLesson.getMockImplementation()!;
+    mocks.generateLesson.mockImplementationOnce(async (input: any) => {
+      mocks.active = { ...mocks.active, updated_at: "other-client" };
+      if (fails) throw new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "timeout");
+      return generate(input);
+    });
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    expect(response.status).toBe(409);
+    expect(mocks.active.updated_at).toBe("other-client");
+    expect(mocks.active.state).toEqual(state);
+  });
+
+  it("persists a retry cursor only after frozen-plan generation fails", async () => {
+    const plan = lessonExercisePlanSchema.parse(lessonPlan("exact_cloze"));
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_explain", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"], exercise_plans: [plan] },
+      payload: { widget: "lesson", mode: "generation_error", word: "fixture", plan },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "resume" });
+    const sessions = await import("../server/services/studySessions.js");
+    mocks.generateLesson.mockImplementationOnce(async () => {
+      expect(sessions.persistStudyStateIfRevision).not.toHaveBeenCalled();
+      throw new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "timeout");
+    });
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    expect(response.status).toBe(504);
+    expect(sessions.persistStudyStateIfRevision).toHaveBeenCalledTimes(1);
+    expect(mocks.active.state.payload).toMatchObject({ mode: "generation_error", plan });
   });
 
   it("keeps the frozen plan and exercise id when Lesson generation returns invalid output", async () => {

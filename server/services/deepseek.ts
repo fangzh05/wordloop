@@ -118,10 +118,10 @@ export const semanticGradeSchema = z.object({
 }).transform((value) => ({
   ...value,
   task_fulfillment: value.task_fulfillment ?? value.is_correct,
-  meaning: value.meaning ?? { passed: value.is_correct, note: value.message },
-  collocation: value.collocation ?? { passed: value.is_correct, note: value.message },
-  grammar: value.grammar ?? { passed: value.is_correct, note: value.message },
-  naturalness: value.naturalness ?? { passed: value.is_correct, note: value.message },
+  meaning: value.meaning,
+  collocation: value.collocation,
+  grammar: value.grammar,
+  naturalness: value.naturalness,
   target_word_results: value.target_word_results ?? [],
   skill_results: value.skill_results ?? [],
   error_excerpt: value.error_excerpt ?? "",
@@ -129,14 +129,29 @@ export const semanticGradeSchema = z.object({
 }));
 
 function semanticGradeSchemaFor(retryCount: number) {
-  return semanticGradeSchema.superRefine((grade, context) => {
-    if (!grade.is_correct && grade.error_layer === "none") {
-      context.addIssue({ code: "custom", message: "An incorrect answer needs a core error_layer.", path: ["error_layer"] });
+  // Accept the compact wire format while retaining the existing feedback contract.
+  // Missing analytical dimensions are unknown, never inferred from the verdict.
+  return z.preprocess((input) => {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+    const value = { ...input } as Record<string, unknown>;
+    if (value.explanation === undefined) value.explanation = value.short_hint ?? value.message;
+    if (value.is_correct === true) value.error_layer = "none";
+    if (value.is_correct === false && value.error_layer === "none") {
+      value.error_layer = ["meaning", "collocation", "grammar"].find((key) => {
+        const dimension = value[key];
+        return typeof dimension === "object" && dimension !== null && "passed" in dimension
+          && dimension.passed === false;
+      }) ?? "meaning";
     }
+    // References must not leak on the first miss, even if a provider includes one.
+    if (retryCount === 0 && value.is_correct === false) delete value.reference_answer;
+    return value;
+  }, semanticGradeSchema.superRefine((grade, context) => {
+    // A reference cannot safely be invented locally: it is core feedback on retry.
     if (!grade.is_correct && retryCount >= 1 && !grade.reference_answer) {
       context.addIssue({ code: "custom", message: "A second incorrect answer needs a reference_answer.", path: ["reference_answer"] });
     }
-  });
+  }));
 }
 
 export const englishDefinitionGradeSchema = z.object({
@@ -398,6 +413,11 @@ async function deepSeekJson<T>(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+    const attemptStarted = Date.now();
+    let headersMs: number | undefined;
+    let outcome = "error";
+    let retryReason: string | undefined;
+    let completionTokens: number | undefined;
     let httpStatus: number | undefined;
     let finishReason: string | undefined;
     try {
@@ -419,10 +439,13 @@ async function deepSeekJson<T>(
           max_tokens: attempt === 0 ? options.maxTokens : options.repairMaxTokens ?? options.maxTokens,
         }),
       });
+      headersMs = Date.now() - attemptStarted;
       httpStatus = response.status;
       if (!response.ok) {
         if (attempt === 0 && retryableHttpStatuses.has(response.status)) {
           try { await response.body?.cancel(); } catch { /* Retry even if the response body cannot be drained. */ }
+          outcome = "retry";
+          retryReason = "transient_http";
           await retryDelay();
           continue;
         }
@@ -432,6 +455,11 @@ async function deepSeekJson<T>(
       let content: unknown;
       try {
         const payload: unknown = await response.json();
+        if (typeof payload === "object" && payload !== null && "usage" in payload) {
+          const usage = payload.usage;
+          if (typeof usage === "object" && usage !== null && "completion_tokens" in usage
+            && typeof usage.completion_tokens === "number") completionTokens = usage.completion_tokens;
+        }
         if (typeof payload === "object" && payload !== null && "choices" in payload) {
           const choices = (payload as { choices?: unknown }).choices;
           if (Array.isArray(choices) && choices[0] && typeof choices[0] === "object" && "message" in choices[0]) {
@@ -449,6 +477,8 @@ async function deepSeekJson<T>(
 
       if (typeof content !== "string" || content.trim().length === 0) {
         if (attempt === 0) {
+          outcome = "retry";
+          retryReason = finishReason === "length" ? "truncated_json" : "invalid_json";
           repairMessage = finishReason === "length"
             ? "上一次响应达到输出长度上限，JSON 被截断。请缩短每条说明，只返回必要字段，并完整闭合 JSON 对象。"
             : "上一次响应未返回有效 JSON。请只返回简短、完整且可解析的 JSON 对象。";
@@ -462,6 +492,8 @@ async function deepSeekJson<T>(
         parsed = JSON.parse(content);
       } catch {
         if (attempt === 0) {
+          outcome = "retry";
+          retryReason = finishReason === "length" ? "truncated_json" : "invalid_json";
           repairMessage = finishReason === "length"
             ? "上一次响应达到输出长度上限，JSON 被截断。请缩短每条说明，只返回必要字段，并完整闭合 JSON 对象。"
             : "上一次响应不是有效 JSON。请只返回简短、完整且可解析的 JSON 对象。";
@@ -473,6 +505,8 @@ async function deepSeekJson<T>(
       if (!validated.success) {
         const issuePaths = [...new Set(validated.error.issues.map((issue) => issue.path.map(String).join(".") || "$"))];
         if (attempt === 0) {
+          outcome = "retry";
+          retryReason = "invalid_schema";
           repairMessage = repairFeedback(validated.error.issues, options.repairGuidance?.(validated.error.issues));
           continue;
         }
@@ -483,6 +517,7 @@ async function deepSeekJson<T>(
           { httpStatus, issuePaths },
         );
       }
+      outcome = "success";
       return validated.data;
     } catch (error) {
       if (controller.signal.aborted) {
@@ -497,6 +532,14 @@ async function deepSeekJson<T>(
       throw requestError;
     } finally {
       clearTimeout(timer);
+      if (typeof process !== "undefined" && process.env.WORDLOOP_PERF_LOG === "1") {
+        console.log("[wordloop deepseek]", {
+          task: options.task, attempt: attempt + 1, retry: attempt > 0,
+          headers_ms: headersMs, total_ms: Date.now() - attemptStarted,
+          outcome, http_status: httpStatus, finish_reason: finishReason,
+          retry_reason: retryReason, completion_tokens: completionTokens,
+        });
+      }
     }
   }
   const error = retryableJsonError();
@@ -533,7 +576,7 @@ export function gradeSemanticAnswer(input: {
   plan?: LessonExercisePlan;
 }): Promise<SemanticGrade> {
   return deepSeekJson(semanticGradeSchemaFor(input.retry_count), SEMANTIC_GRADING_PROMPT, input, {
-    task: "semantic_lesson_grading", maxTokens: 1200, repairMaxTokens: 1800, timeoutMs: 20_000,
+    task: "semantic_lesson_grading", maxTokens: 600, repairMaxTokens: 900, timeoutMs: 20_000,
   });
 }
 
@@ -615,6 +658,6 @@ export function gradeWrapupAnswer(input: {
   retry_count: number;
 }): Promise<WrapupGrade> {
   return deepSeekJson(semanticGradeSchemaFor(input.retry_count), WRAPUP_GRADING_PROMPT, input, {
-    task: "wrapup_grading", maxTokens: 1200, repairMaxTokens: 1800, timeoutMs: 20_000,
+    task: "wrapup_grading", maxTokens: 600, repairMaxTokens: 900, timeoutMs: 20_000,
   });
 }
