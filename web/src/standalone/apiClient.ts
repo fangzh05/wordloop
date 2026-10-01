@@ -1,4 +1,5 @@
 const TOKEN_KEY = "wordloop_web_token";
+export const WEB_REQUEST_TIMEOUT_MS = 75_000;
 const readModelCache = new Map<string, { stored_at: number; value: unknown }>();
 
 export function clearReadModelCache(): void {
@@ -140,11 +141,24 @@ async function request<T = WebApiResponse>(path: string, init: RequestInit, toke
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
   headers.set("accept", "application/json");
-  const response = await fetch(path, { ...init, headers, cache: "no-store" });
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  init.signal?.addEventListener("abort", abort, { once: true });
+  if (init.signal?.aborted) controller.abort();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new ApiError("REQUEST_TIMEOUT", "请求等待过久。操作可能已保存，请刷新状态后继续。", 0));
+    }, WEB_REQUEST_TIMEOUT_MS);
+  });
+  try {
+  const response = await Promise.race([fetch(path, { ...init, headers, signal: controller.signal, cache: "no-store" }), deadline]);
   let payload: T & { error?: { code: string; message: string } };
   try {
-    payload = await response.json() as T & { error?: { code: string; message: string } };
+    payload = await Promise.race([response.json(), deadline]) as T & { error?: { code: string; message: string } };
   } catch {
+    if (controller.signal.aborted && !init.signal?.aborted) throw new ApiError("REQUEST_TIMEOUT", "请求等待过久。操作可能已保存，请刷新状态后继续。", 0);
     throw new ApiError("INVALID_RESPONSE", "服务器返回了无法读取的响应。", response.status);
   }
   if (response.status === 401) throw new UnauthorizedError();
@@ -157,6 +171,15 @@ async function request<T = WebApiResponse>(path: string, init: RequestInit, toke
     );
   }
   return payload;
+  } catch (error) {
+    if (controller.signal.aborted && !init.signal?.aborted) {
+      throw new ApiError("REQUEST_TIMEOUT", "请求等待过久。操作可能已保存，请刷新状态后继续。", 0);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    init.signal?.removeEventListener("abort", abort);
+  }
 }
 
 export function getBootstrap(tokenOverride?: string): Promise<WebApiResponse> {

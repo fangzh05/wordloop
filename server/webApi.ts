@@ -1359,7 +1359,7 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
       retry_count: state.retry_count,
     })
     : await requestSemanticGrade({
-      word: state.current_word!,
+      word: consolidation.consolidation_target_words[0]!,
       target_words: consolidation.consolidation_target_words,
       activity_type: expectedType,
       instruction: exercise.instruction,
@@ -1481,6 +1481,31 @@ async function startPendingConsolidation(action: { expected_revision: string | n
   if (active?.state) {
     const state = normalizeStudyStateForRead(active.state);
     const pending = state.widget === "lesson" ? lessonConsolidation(state) : null;
+    // Today advertises the durable cadence task even before the user has
+    // advanced the final accepted vocabulary feedback. Explicit start may
+    // complete that boundary, but must never skip an unfinished word.
+    const queue = state.flow.lesson_words ?? [];
+    const feedback = state.payload.feedback as Record<string, unknown> | undefined;
+    if (!pending && state.widget === "lesson" && state.phase === "lesson_feedback"
+      && queue.length > 0 && state.current_index === queue.length - 1
+      && state.current_word === queue[state.current_index]
+      && (feedback?.is_correct === true || feedback?.reveal_answer === true)) {
+      const task = (await getLessonCadence()).pending_task;
+      if (task) {
+        const completed = await persistStudyStateIfRevision({
+          ...state, phase: "lesson_complete",
+          payload: { ...state.payload, consolidation: true, consolidation_kind: task.kind,
+            consolidation_trigger_round: 10, consolidation_target_words: task.target_words,
+            consolidation_plan: task.plan, consolidation_status: "pending" },
+        }, action.expected_revision, getDatabase(), getAuthenticatedUserId(), active.id);
+        return generateAndReturnConsolidation(completed);
+      }
+    }
+    if (pending && state.phase === "lesson_complete"
+      && ((pending.consolidation_status === "exercise" && state.payload.mode === "exercise")
+        || (pending.consolidation_status === "feedback" && state.payload.mode === "feedback"))) {
+      return successForSession(active);
+    }
     if (!pending || pending.consolidation_status !== "pending" || state.phase !== "lesson_complete") {
       throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "There is no pending application task to start.");
     }

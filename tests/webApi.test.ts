@@ -1589,6 +1589,76 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.recordReviewSubmission).not.toHaveBeenCalled();
   });
 
+  it("submits a consolidation target different from the frozen final Lesson cursor", async () => {
+    const plan = lessonPlan("translation_cn_to_en", "consolidation");
+    mocks.active = row(makeStudyState({
+      date, widget: "lesson", phase: "lesson_complete", current_word: "hostile", current_index: 1, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture", "hostile"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode: "exercise", word: "hostile", plan, consolidation_plan: plan,
+        consolidation: true, consolidation_kind: "translation_cn_to_en", consolidation_trigger_round: 10,
+        consolidation_target_words: ["fixture"], consolidation_status: "exercise",
+        activity_type: "translation_cn_to_en", instruction: "翻译成英文。", prompt: "这项设施改善了学校的环境。", multiline: true,
+        navigation: buildLessonNavigation(["fixture", "hostile"], 1, "hostile"),
+      },
+    }));
+    mocks.gradeSemanticAnswer.mockResolvedValueOnce({ is_correct: false, error_layer: "meaning", message: "请调整设施的表达。", explanation: "词义需要修改。" });
+    const response = await handleWebApiRequest(post({ action: "consolidation_submit", answer: "The fixture improves the school." }, mocks.active.updated_at));
+    expect(response.status).toBe(200);
+    expect(mocks.gradeSemanticAnswer).toHaveBeenCalledWith(expect.objectContaining({ word: "fixture", target_words: ["fixture"] }));
+    expect(mocks.recordPlannedSubmission).toHaveBeenCalledWith(expect.objectContaining({
+      scope: "consolidation", word: "hostile", plan,
+      next_state: expect.objectContaining({ current_word: "hostile", current_index: 1, flow: expect.objectContaining({ lesson_words: ["fixture", "hostile"] }) }),
+    }));
+    const result = await body(response);
+    expect(result.state.payload.feedback.user_answer).toBe("The fixture improves the school.");
+  });
+
+  it("starts the advertised cadence task directly from accepted final vocabulary feedback", async () => {
+    const state = lessonState("collocation");
+    state.payload.mode = "feedback";
+    state.phase = "lesson_feedback";
+    state.payload.feedback = { is_correct: false, reveal_answer: true, user_answer: "wrong", reference_answer: "saved answer" };
+    mocks.active = row(state);
+    const plan = lessonPlan("translation_en_to_cn", "consolidation");
+    mocks.getLessonCadence.mockResolvedValueOnce({ completion_credit: 0, rotation_cursor: 0, pending_task: { plan, kind: "translation", target_words: ["fixture"] } } as any);
+    const response = await handleWebApiRequest(post({ action: "consolidation_start" }));
+    expect(response.status).toBe(200);
+    expect((await body(response)).state).toMatchObject({ phase: "lesson_complete", payload: { consolidation_status: "exercise", mode: "exercise", activity_type: "translation_en_to_cn" } });
+    expect(mocks.generatePlannedConsolidation).toHaveBeenCalledOnce();
+    expect(mocks.recordPlannedSubmission).not.toHaveBeenCalled();
+    expect(mocks.recordReviewSubmission).not.toHaveBeenCalled();
+  });
+
+  it.each(["exercise", "feedback"] as const)("resumes an already saved consolidation %s from the Today entry", async (mode) => {
+    const state = makeStudyState({
+      date, widget: "lesson", phase: "lesson_complete", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: {
+        widget: "lesson", widget_version: 3, mode, word: "fixture",
+        consolidation: true, consolidation_kind: "translation_cn_to_en",
+        consolidation_trigger_round: 10, consolidation_target_words: ["fixture"], consolidation_status: mode,
+        activity_type: "translation_cn_to_en", instruction: "翻译成英文。", prompt: "这项设施改善了学校的环境。", multiline: true,
+        exercise: { activity_type: "translation_cn_to_en", instruction: "翻译成英文。", prompt: "这项设施改善了学校的环境。", multiline: true },
+        ...(mode === "feedback" ? { feedback: { is_correct: false, user_answer: "my draft", message: "请修改词义。", reveal_answer: false } } : {}),
+        navigation: buildLessonNavigation(["fixture"], 0, "fixture"),
+      },
+    });
+    mocks.active = row(state);
+    const original = JSON.stringify(mocks.active);
+    for (let click = 0; click < 2; click++) {
+      const response = await handleWebApiRequest(post({ action: "consolidation_start" }, mocks.active.updated_at));
+      expect(response.status).toBe(200);
+      const payload = await body(response);
+      expect(payload).toMatchObject({ screen: "lesson", session_revision: "rev-a", state: { payload: { mode, consolidation_kind: "translation_cn_to_en" } } });
+      expect(payload.state.payload.prompt).toBe("这项设施改善了学校的环境。");
+    }
+    expect(JSON.stringify(mocks.active)).toBe(original);
+    expect(mocks.generatePlannedConsolidation).not.toHaveBeenCalled();
+    expect(mocks.generateWrapup).not.toHaveBeenCalled();
+    expect(mocks.recordPlannedSubmission).not.toHaveBeenCalled();
+  });
+
   it("generates and semantically grades a short sentence consolidation with one recent target", async () => {
     const state = makeStudyState({
       date, widget: "lesson", phase: "lesson_feedback", current_word: "fixture", current_index: 0, retry_count: 0,

@@ -440,7 +440,9 @@ async function deepSeekJson<T>(
           model: "deepseek-flash",
           thinking: { type: "disabled" },
           messages: [
-            { role: "system", content: prompt },
+            // JSON mode requires a literal json mention in messages. Keep
+            // this transport contract independent of task prompt edits.
+            { role: "system", content: `只返回一个合法 JSON（json）对象，不要 Markdown。\n${prompt}` },
             { role: "user", content: [JSON.stringify(input), repairMessage].filter(Boolean).join("\n\n") },
           ],
           response_format: { type: "json_object" },
@@ -515,7 +517,11 @@ async function deepSeekJson<T>(
         if (attempt === 0) {
           outcome = "retry";
           retryReason = "invalid_schema";
-          repairMessage = repairFeedback(validated.error.issues, options.repairGuidance?.(validated.error.issues));
+          repairMessage = repairFeedback(validated.error.issues, [
+            options.repairGuidance?.(validated.error.issues),
+            ...(validated.error.issues.some((issue) => issue.path.join(".") === "error_layer")
+              ? ["error_layer 只能使用 none、meaning、collocation、grammar、spelling、pronunciation。正确用 none；错误不能用 none。结构错误用 grammar，语义或逻辑误译用 meaning。"] : []),
+          ].filter(Boolean).join("\n"));
           continue;
         }
         throw new DeepSeekError(
@@ -639,7 +645,15 @@ export function generatePlannedConsolidation(input: {
     : input.plan.planned_activity_type === "translation_cn_to_en" ? FULL_CN_TO_EN_CONSOLIDATION_PROMPT
       : input.plan.planned_activity_type === "sentence" ? SENTENCE_CONSOLIDATION_GENERATION_PROMPT : null;
   if (!prompt) throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "The saved consolidation activity is unsupported.");
-  return deepSeekJson(plannedConsolidationExerciseSchema, prompt, {
+  const schema = plannedConsolidationExerciseSchema.superRefine((exercise, context) => {
+    if (exercise.activity_type !== input.plan.planned_activity_type) {
+      context.addIssue({ code: "custom", path: ["activity_type"], message: `Use the saved planned activity type: ${input.plan.planned_activity_type}.` });
+    }
+    if (exercise.activity_type === "sentence" && !words.every((word) => englishWords(exercise.prompt).includes(word.toLocaleLowerCase()))) {
+      context.addIssue({ code: "custom", path: ["prompt"], message: "The sentence prompt must explicitly show every target word as hinted application." });
+    }
+  });
+  return deepSeekJson(schema, prompt, {
     plan: {
       planned_activity_type: input.plan.planned_activity_type,
       skill_goal: input.plan.skill_goal,
@@ -647,15 +661,7 @@ export function generatePlannedConsolidation(input: {
       hint_level: input.plan.hint_level,
     },
     words,
-  }, { task: "wrapup_generation", maxTokens: 900, timeoutMs: 30_000 }).then((exercise) => {
-    if (exercise.activity_type !== input.plan.planned_activity_type) {
-      throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "The generated consolidation activity did not match its saved plan.");
-    }
-    if (exercise.activity_type === "sentence" && !words.every((word) => englishWords(exercise.prompt).some((part) => part.toLocaleLowerCase() === word.toLocaleLowerCase()))) {
-      throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "The sentence prompt must explicitly show the target word as hinted application.");
-    }
-    return exercise;
-  });
+  }, { task: "wrapup_generation", maxTokens: 900, timeoutMs: 30_000 });
 }
 
 export function gradeWrapupAnswer(input: {

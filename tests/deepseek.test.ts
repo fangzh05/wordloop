@@ -5,6 +5,7 @@ vi.mock("../server/db.js", () => ({ getDeepSeekApiKey: mocks.getDeepSeekApiKey }
 
 import {
   generateLesson,
+  generatePlannedConsolidation,
   generateSentenceConsolidation,
   generateWrapup,
   gradeEnglishDefinition,
@@ -155,6 +156,42 @@ describe("DeepSeek stateless JSON client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("repairs a planned translation returned as a different consolidation type", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validWrapup, activity_type: "sentence" })))
+      .mockResolvedValueOnce(response(JSON.stringify(validWrapup)));
+    await expect(generatePlannedConsolidation({
+      plan: { ...lessonInput.plan, scope: "consolidation", planned_activity_type: "translation_en_to_cn" },
+      words: ["fixture"],
+    })).resolves.toMatchObject({ activity_type: "translation_en_to_cn" });
+    const request = JSON.parse(String(vi.mocked(fetch).mock.calls[1]?.[1]?.body));
+    expect(request.messages[1].content).toContain("Use the saved planned activity type: translation_en_to_cn");
+  });
+
+  it("repairs an undersized long sentence without replacing the saved plan", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validWrapup, prompt: "The fixture is useful." })))
+      .mockResolvedValueOnce(response(JSON.stringify(validWrapup)));
+    await expect(generatePlannedConsolidation({
+      plan: { ...lessonInput.plan, scope: "consolidation", planned_activity_type: "translation_en_to_cn" },
+      words: ["fixture"],
+    })).resolves.toMatchObject(validWrapup);
+    const request = JSON.parse(String(vi.mocked(fetch).mock.calls[1]?.[1]?.body));
+    expect(request.messages[1].content).toContain("25–40 English words");
+  });
+
+  it("repairs unsupported translation grading categories with explicit enum guidance", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validGrade, is_correct: false, error_layer: "structure" })))
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validGrade, is_correct: false, error_layer: "grammar" })));
+    await expect(gradeWrapupAnswer({
+      words: ["fixture"], instruction: "请翻译。", prompt: validWrapup.prompt,
+      answer: "这是我的译文。", retry_count: 0,
+    })).resolves.toMatchObject({ error_layer: "grammar" });
+    const request = JSON.parse(String(vi.mocked(fetch).mock.calls[1]?.[1]?.body));
+    expect(request.messages[1].content).toContain("error_layer 只能使用 none、meaning、collocation、grammar、spelling、pronunciation");
+  });
+
   it("uses the configured per-task token budgets", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
@@ -217,6 +254,21 @@ describe("DeepSeek stateless JSON client", () => {
     expect(WRAPUP_GENERATION_PROMPT).toContain("\"multiline\": true");
     expect(WRAPUP_GENERATION_PROMPT).toContain("\"activity_type\": \"translation_en_to_cn\"");
     expect(SENTENCE_CONSOLIDATION_GENERATION_PROMPT).toContain("10–25");
+  });
+
+  it("satisfies the provider JSON-mode contract on every real grading request", async () => {
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      const request = JSON.parse(String(init?.body));
+      const mentionsJson = request.messages.some((message: { content: string }) => /json/i.test(message.content));
+      if (!mentionsJson) return new Response(JSON.stringify({ error: { message: "messages must contain json" } }), { status: 400 });
+      expect(request.response_format).toEqual({ type: "json_object" });
+      return response(JSON.stringify(validGrade));
+    });
+    await expect(gradeSemanticAnswer({ word: "quarantine", activity_type: "translation_en_to_cn", instruction: "翻译。", prompt: "They remained in quarantine.", answer: "他们继续处于隔离中。", retry_count: 0 }))
+      .resolves.toMatchObject({ is_correct: true });
+    await expect(gradeWrapupAnswer({ words: ["quarantine"], instruction: "翻译。", prompt: "They remained in quarantine.", answer: "他们继续处于隔离中。", retry_count: 0 }))
+      .resolves.toMatchObject({ is_correct: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("retries schema-invalid JSON once, then accepts a valid result", async () => {
