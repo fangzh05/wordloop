@@ -1162,9 +1162,9 @@ async function submitLesson(action: Extract<WebAction, { action: "lesson_submit"
   const exercise = lessonExercise(state);
   const plan = await savedOrLegacyPlan(state, exercise.activity_type, "lesson");
   const plannedState = state.payload.plan ? state : { ...state, payload: { ...state.payload, plan } };
-  const gradingStarted = Date.now();
+  const gradingStarted = performance.now();
   const grade = await gradeLesson(plannedState, exercise, action.answer);
-  const gradingMs = Date.now() - gradingStarted;
+  const gradingMs = Math.min(86_400_000, Math.max(0, Math.round(performance.now() - gradingStarted)));
   const nextState = lessonFeedbackState(plannedState, exercise, action.answer, grade);
   const feedback = nextState.payload.feedback as Record<string, unknown>;
   const answerRevealed = feedback.reveal_answer === true;
@@ -1349,7 +1349,7 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
   if (exercise.activity_type !== expectedType || !exercise.multiline) {
     throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved consolidation exercise is invalid.");
   }
-  const gradingStarted = Date.now();
+  const gradingStarted = performance.now();
   const grade: WrapupGrade | SemanticGrade = !existingPlan.success && consolidation.consolidation_kind === "translation"
     ? await gradeWrapupAnswer({
       words: consolidation.consolidation_target_words,
@@ -1368,7 +1368,7 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
       retry_count: state.retry_count,
       plan,
     });
-  const gradingMs = Date.now() - gradingStarted;
+  const gradingMs = Math.min(86_400_000, Math.max(0, Math.round(performance.now() - gradingStarted)));
   if (!grade.is_correct && grade.error_layer === "none") {
     throw new DeepSeekError("DEEPSEEK_INVALID_OUTPUT", 502, "DeepSeek output did not satisfy the grading rules.");
   }
