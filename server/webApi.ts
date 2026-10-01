@@ -82,10 +82,20 @@ import {
   type CaptureNote,
 } from "./services/captureNotes.js";
 import {
+  listNoteReviews,
+  NoteReviewServiceError,
+  rateNoteReview,
+  setNoteReviewEnabled,
+} from "./services/noteReviews.js";
+import {
   captureCreateRequestSchema,
   captureListRequestSchema,
   captureUpdateRequestSchema,
 } from "../shared/captureContracts.js";
+import {
+  noteReviewEnabledRequestSchema,
+  noteReviewRatingRequestSchema,
+} from "../shared/noteReviewContracts.js";
 import { analyticsQuerySchema } from "../shared/analyticsContracts.js";
 import { vocabularyQuerySchema } from "../shared/analyticsContracts.js";
 import { VocabularyServiceError, getVocabularyDetail, listVocabulary } from "./services/vocabulary.js";
@@ -139,8 +149,9 @@ export function jsonApiResponse(body: unknown, status = 200): Response {
 }
 
 function legacyCaptureResponse(note: CaptureNote) {
+  const { note_review: _noteReview, ...legacyNote } = note;
   return {
-    ...note,
+    ...legacyNote,
     status: note.status === "learning" ? "converted" : note.status === "archived" ? "dismissed" : note.status,
     converted_user_word_id: note.user_word_id,
     occurrences: note.occurrences.map((occurrence) => ({ ...occurrence, captured_at: occurrence.created_at })),
@@ -175,6 +186,7 @@ function authenticate(request: Request): void {
 function toApiError(error: unknown): WebApiError {
   if (error instanceof WebApiError) return error;
   if (error instanceof CaptureServiceError) return new WebApiError(error.status, error.code, error.message);
+  if (error instanceof NoteReviewServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof AnalyticsServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof VocabularyServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof DeepSeekError) return new WebApiError(error.status, error.code, error.message);
@@ -1695,6 +1707,9 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
         new_occurrence: item.new_occurrence,
       }, 201);
     }
+    if (request.method === "GET" && url.pathname === "/api/web/note-reviews") {
+      return jsonApiResponse(await listNoteReviews());
+    }
     const occurrenceMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/occurrences$/i.exec(url.pathname);
     if (request.method === "GET" && occurrenceMatch) {
       const parsed = z.object({
@@ -1743,6 +1758,30 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
           existing_status: result.existing_status,
         },
       });
+    }
+    const noteReviewRatingMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/note-review\/ratings$/i.exec(url.pathname);
+    if (request.method === "POST" && noteReviewRatingMatch) {
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
+      }
+      const parsed = noteReviewRatingRequestSchema.safeParse(body);
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The note review rating is invalid.");
+      return jsonApiResponse(await rateNoteReview(noteReviewRatingMatch[1]!, parsed.data));
+    }
+    const noteReviewEnabledMatch = /^\/api\/web\/captures\/([0-9a-f-]{36})\/note-review$/i.exec(url.pathname);
+    if (request.method === "PUT" && noteReviewEnabledMatch) {
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        throw new WebApiError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
+      }
+      const parsed = noteReviewEnabledRequestSchema.safeParse(body);
+      if (!parsed.success) throw new WebApiError(400, "INVALID_REQUEST", "The note review state is invalid.");
+      return jsonApiResponse(await setNoteReviewEnabled(noteReviewEnabledMatch[1]!, parsed.data));
     }
     if (request.method === "POST" && url.pathname === "/api/web/action") {
       let body: unknown;

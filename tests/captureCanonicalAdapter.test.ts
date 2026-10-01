@@ -50,9 +50,11 @@ describe("canonical Capture adapter", () => {
         captured_at: "2026-09-29T10:05:00.000Z",
       }], count: 1, error: null,
     });
+    const noteReviewQuery = queryBuilder({ data: [], error: null });
     const from = vi.fn((table: string) => {
       if (table === "captured_notes") return noteQuery;
       if (table === "captured_note_occurrences") return occurrenceQuery;
+      if (table === "note_review_states") return noteReviewQuery;
       throw new Error(`Unexpected table: ${table}`);
     });
     const db = { rpc, from } as unknown as SupabaseClient;
@@ -74,7 +76,7 @@ describe("canonical Capture adapter", () => {
       p_source_url: "https://example.test/lesson",
       p_idempotency_key: occurrenceId,
     }));
-    expect(from.mock.calls.map(([table]) => table)).toEqual(["captured_notes", "captured_note_occurrences"]);
+    expect(from.mock.calls.map(([table]) => table)).toEqual(["captured_notes", "captured_note_occurrences", "note_review_states"]);
     expect(result.user_word_id).toBeNull();
     expect(result.latest_occurrence?.created_at).toBe("2026-09-29T10:05:00.000Z");
   });

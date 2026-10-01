@@ -5,6 +5,7 @@ import {
   addCaptureNoteToLearning,
   getCaptureNote,
   getCaptureNoteOccurrences,
+  setNoteReviewEnabled,
   updateCaptureNote,
   type CaptureNote,
   type CaptureOccurrence,
@@ -54,6 +55,7 @@ export function CaptureDetail({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [noteReviewBusy, setNoteReviewBusy] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -150,6 +152,45 @@ export function CaptureDetail({
     }
   };
 
+  const toggleNoteReview = async () => {
+    const enabling = note.note_review?.enabled !== true;
+    if (enabling && !draft.trim()) {
+      setError("请先填写“我的理解”，再加入笔记复习。");
+      return;
+    }
+    setNoteReviewBusy(true);
+    setError("");
+    try {
+      let current = note;
+      if (enabling && draft !== note.note) {
+        const saved = await updateCaptureNote(note.id, { note: draft });
+        current = saved.item;
+        setNote(saved.item);
+        onNoteChange(saved.item);
+        onDraftChange(note.id, saved.item.note);
+      }
+      const result = await setNoteReviewEnabled(note.id, enabling);
+      const next = {
+        ...current,
+        note_review: {
+          enabled: result.enabled,
+          due: result.due,
+          revision: result.revision ?? current.note_review?.revision ?? 0,
+        },
+      };
+      setNote(next);
+      onNoteChange(next);
+      onMutation(enabling ? "已加入笔记复习。" : "已停止笔记复习；当前排程已保留。 ");
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "笔记复习状态更新失败，请重试。");
+    } finally {
+      setNoteReviewBusy(false);
+    }
+  };
+
+  const noteReviewEnabled = note.note_review?.enabled === true;
+  const noteReviewEligible = (note.status === "inbox" || note.status === "saved") && !note.user_word_id;
+
   return <section className="capture-detail" aria-labelledby="capture-detail-title">
     <header className="capture-detail-header">
       <button className="standalone-back capture-detail-back" type="button" onClick={onBack}>← 列表</button>
@@ -205,5 +246,20 @@ export function CaptureDetail({
       {!canJoinLearning(note) && !note.user_word_id && note.status !== "learning" && <p className="capture-note-hint">这类内容可继续保存在笔记中；当前学习队列仅接收单词和受支持的短语。</p>}
       {error && <p className="standalone-status error" role="alert">{error}</p>}
     </section>
+
+    {(noteReviewEligible || noteReviewEnabled) && <section className="capture-detail-section capture-note-review" aria-labelledby="capture-note-review-title">
+      <div className="capture-detail-section-heading">
+        <div><h3 id="capture-note-review-title">笔记复习</h3><p>独立于普通单词学习；只在你明确加入后排程。</p></div>
+        {noteReviewEnabled && <span className="capture-state-badge">已加入</span>}
+      </div>
+      {noteReviewEnabled && (!noteReviewEligible || !draft.trim()) && <p className="capture-note-hint">当前笔记暂不满足复习条件；恢复状态或补充“我的理解”后会沿用原排程。</p>}
+      {noteReviewEligible && <Button
+        className={noteReviewEnabled ? "secondary" : ""}
+        type="button"
+        disabled={busy || noteReviewBusy}
+        onClick={() => void toggleNoteReview()}
+      >{noteReviewBusy ? "正在保存…" : noteReviewEnabled ? "停止笔记复习" : "加入笔记复习"}</Button>}
+      {noteReviewEnabled && !noteReviewEligible && <Button className="secondary" type="button" disabled={busy || noteReviewBusy} onClick={() => void toggleNoteReview()}>停止笔记复习</Button>}
+    </section>}
   </section>;
 }

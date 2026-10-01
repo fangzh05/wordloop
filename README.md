@@ -112,7 +112,8 @@ wordloop/
 │   ├── 20260929120641_captured_notes.sql
 │   ├── 20260929172617_captured_notes_canonical_adapter.sql
 │   ├── 20260929172621_analytics_read_models.sql
-│   └── 20260929184221_progress_scheduled_stability_mean.sql
+│   ├── 20260929184221_progress_scheduled_stability_mean.sql
+│   └── 202610020001_note_review_states.sql
 ├── tests/
 │   ├── mcpHttp.test.ts
 │   ├── fsrsReview.test.ts
@@ -174,7 +175,7 @@ The client never accepts a `user_id`. The current identity comes only from trust
 
 1. Create a Supabase project.
 2. Open SQL Editor.
-3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains the migrations listed above. If a real database already ran an older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes, migration 007 adds the due-only review snapshot RPC, the activity-type migration adds fixed-answer and semantic-expression activities, formal Lesson history excludes previously studied words from future new-word queues, and the Capture migrations preserve legacy Notes while routing new writes to the canonical store. The analytics read models are read-only and report historical metrics as unavailable when the source events cannot support them.
+3. For a new database, run the latest [`/setup.sql`](https://wordloop-study.zehaoo.chatgpt.site/setup.sql). It contains the migrations listed above. If a real database already ran an older setup, execute only the missing migration files in order; migration 006 adds read-only performance RPCs and partial indexes, migration 007 adds the due-only review snapshot RPC, the activity-type migration adds fixed-answer and semantic-expression activities, formal Lesson history excludes previously studied words from future new-word queues, and the Capture migrations preserve legacy Notes while routing new writes to the canonical store. `202610020001_note_review_states.sql` adds explicitly enabled, Capture-only note review state/events and does not write learning tables or study sessions. The analytics read models are read-only and report historical metrics as unavailable when the source events cannot support them.
 4. Create a random UUID for `DEV_USER_ID`; the first import creates the matching `users` row automatically.
 5. Put the project URL and service-role key in `.env` on the server only.
 

@@ -53,6 +53,7 @@ export type CaptureSelectionType = "word" | "phrase" | "collocation" | "sentence
 export type LegacyCaptureStatus = "inbox" | "saved" | "dismissed" | "converted";
 export type CaptureStatus = "inbox" | "saved" | "learning" | "archived";
 export type CaptureSourceType = "lesson_example" | "lesson_prompt" | "review_question" | "manual" | "lesson" | "review" | "pretest" | "dashboard";
+export type NoteReviewRating = "again" | "good";
 
 export interface CapturedNoteOccurrence {
   context_text: string;
@@ -106,6 +107,10 @@ export interface CapturedNotePromotion {
 }
 
 export function newCaptureIdempotencyKey(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+export function newNoteReviewIdempotencyKey(): string {
   return globalThis.crypto.randomUUID();
 }
 
@@ -243,6 +248,7 @@ export interface CaptureNote {
   last_seen_at: string;
   latest_occurrence: CaptureOccurrence | null;
   occurrences: CaptureOccurrence[];
+  note_review: { enabled: boolean; due: string | null; revision: number } | null;
 }
 
 export interface CaptureListResponse {
@@ -260,6 +266,41 @@ export interface CaptureOccurrencePage {
 export interface CaptureMutationResponse {
   item: CaptureNote;
   learning_update?: { scheduled_today: boolean; existing_status: string | null };
+}
+
+export interface NoteReviewOccurrence {
+  context_text: string;
+  source_type: string;
+  source_title: string | null;
+  source_url: string | null;
+  captured_at: string;
+}
+
+export interface NoteReviewItem {
+  note_id: string;
+  selected_text: string;
+  note: string;
+  note_updated_at: string;
+  due: string;
+  revision: number;
+  latest_occurrence: NoteReviewOccurrence | null;
+}
+
+export interface NoteReviewListResponse {
+  items: NoteReviewItem[];
+  total: number;
+  as_of: string;
+}
+
+export interface NoteReviewStateResponse {
+  note_id: string;
+  enabled: boolean;
+  due: string | null;
+  revision: number | null;
+  card: Record<string, unknown> | null;
+  rating?: NoteReviewRating;
+  server_time?: string;
+  replayed?: boolean;
 }
 
 async function captureRequest<T>(path: string, init: RequestInit): Promise<T> {
@@ -403,6 +444,34 @@ export function updateCaptureNote(
 export function addCaptureNoteToLearning(id: string): Promise<CaptureMutationResponse> {
   return captureRequest<CaptureMutationResponse>(`/api/web/captures/${encodeURIComponent(id)}/learn`, {
     method: "POST",
+  });
+}
+
+export function getNoteReviews(signal?: AbortSignal): Promise<NoteReviewListResponse> {
+  return captureRequest<NoteReviewListResponse>("/api/web/note-reviews", { method: "GET", signal });
+}
+
+export function setNoteReviewEnabled(id: string, enabled: boolean): Promise<NoteReviewStateResponse> {
+  return captureRequest<NoteReviewStateResponse>(`/api/web/captures/${encodeURIComponent(id)}/note-review`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function rateNoteReview(
+  id: string,
+  input: {
+    rating: NoteReviewRating;
+    expected_revision: number;
+    expected_note_updated_at: string;
+    idempotency_key: string;
+  },
+): Promise<NoteReviewStateResponse> {
+  return captureRequest<NoteReviewStateResponse>(`/api/web/captures/${encodeURIComponent(id)}/note-review/ratings`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
   });
 }
 

@@ -30,9 +30,11 @@ function selectionLabel(value: string): string {
   return "笔记";
 }
 
-export function CaptureNotesPage({ onBack, onCountsChange }: {
+export function CaptureNotesPage({ onBack, onCountsChange, onOpenReview, noteReviewDueCount = null }: {
   onBack: () => void;
   onCountsChange?: (counts: CaptureListResponse["counts"]) => void;
+  onOpenReview?: () => void;
+  noteReviewDueCount?: number | null;
 }): React.JSX.Element {
   const [status, setStatus] = useState<CaptureStatus>("inbox");
   const [items, setItems] = useState<CaptureNote[]>([]);
@@ -115,7 +117,10 @@ export function CaptureNotesPage({ onBack, onCountsChange }: {
         <button className="standalone-back" type="button" onClick={onBack}>← 返回</button>
         <div><span className="eyebrow">Capture</span><h1 id="capture-notes-title">划词笔记</h1></div>
       </div>
-      <span className="standalone-count">{counts.inbox} 待整理</span>
+      <div className="capture-notes-header-actions">
+        {onOpenReview && <Button className="secondary" type="button" onClick={onOpenReview}>笔记复习 · {noteReviewDueCount ?? "—"} 项待复习</Button>}
+        <span className="standalone-count">{counts.inbox} 待整理</span>
+      </div>
     </header>
 
     <div className="capture-tabs" role="tablist" aria-label="划词笔记状态">

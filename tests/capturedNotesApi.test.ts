@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   createCaptureNote: vi.fn(),
   updateCaptureNote: vi.fn(),
   addCaptureNoteToLearning: vi.fn(),
+  listNoteReviews: vi.fn(),
+  setNoteReviewEnabled: vi.fn(),
+  rateNoteReview: vi.fn(),
   assertActiveStudySessionRevision: vi.fn(),
   getActiveStudySession: vi.fn(),
 }));
@@ -28,6 +31,15 @@ vi.mock("../server/services/captureNotes.js", () => ({
   createCaptureNote: mocks.createCaptureNote,
   updateCaptureNote: mocks.updateCaptureNote,
   addCaptureNoteToLearning: mocks.addCaptureNoteToLearning,
+}));
+
+vi.mock("../server/services/noteReviews.js", () => ({
+  NoteReviewServiceError: class NoteReviewServiceError extends Error {
+    constructor(readonly status: number, readonly code: string, message: string) { super(message); }
+  },
+  listNoteReviews: mocks.listNoteReviews,
+  setNoteReviewEnabled: mocks.setNoteReviewEnabled,
+  rateNoteReview: mocks.rateNoteReview,
 }));
 
 vi.mock("../server/services/studySessions.js", async () => {
@@ -87,6 +99,9 @@ describe("Capture Web API routes", () => {
     mocks.createCaptureNote.mockResolvedValue(note);
     mocks.updateCaptureNote.mockResolvedValue(note);
     mocks.addCaptureNoteToLearning.mockResolvedValue({ note, scheduled_today: true, existing_status: null });
+    mocks.listNoteReviews.mockResolvedValue({ items: [], total: 0, as_of: "2026-10-02T00:00:00.000Z" });
+    mocks.setNoteReviewEnabled.mockResolvedValue({ note_id: note.id, enabled: true, due: "2026-10-02T00:00:00.000Z", revision: 0, card: {} });
+    mocks.rateNoteReview.mockResolvedValue({ note_id: note.id, enabled: true, due: "2026-10-03T00:00:00.000Z", revision: 1, card: {}, rating: "good" });
   });
 
   it("lists captures with no-store responses and does not load or revise the study session", async () => {
@@ -116,6 +131,41 @@ describe("Capture Web API routes", () => {
     expect(mocks.updateCaptureNote).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000002", { status: "saved" });
     expect(mocks.addCaptureNoteToLearning).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000002");
     expect(mocks.assertActiveStudySessionRevision).not.toHaveBeenCalled();
+  });
+
+  it("keeps note review on its own list, enable, and rating routes", async () => {
+    const noteReviewId = "00000000-0000-4000-8000-000000000002";
+    const list = await handleWebApiRequest(request("/api/web/note-reviews"));
+    const enable = await handleWebApiRequest(request(`/api/web/captures/${noteReviewId}/note-review`, "PUT", { enabled: true }));
+    const ratingInput = {
+      rating: "good",
+      expected_revision: 0,
+      expected_note_updated_at: "2026-10-02T00:00:00.000Z",
+      idempotency_key: "00000000-0000-4000-8000-000000000003",
+    };
+    const rating = await handleWebApiRequest(request(`/api/web/captures/${noteReviewId}/note-review/ratings`, "POST", ratingInput));
+    expect(list.status).toBe(200);
+    expect(enable.status).toBe(200);
+    expect(rating.status).toBe(200);
+    expect(mocks.listNoteReviews).toHaveBeenCalledExactlyOnceWith();
+    expect(mocks.setNoteReviewEnabled).toHaveBeenCalledExactlyOnceWith(noteReviewId, { enabled: true });
+    expect(mocks.rateNoteReview).toHaveBeenCalledExactlyOnceWith(noteReviewId, ratingInput);
+  });
+
+  it("does not accept client identity or extra rating fields", async () => {
+    const response = await handleWebApiRequest(request(
+      "/api/web/captures/00000000-0000-4000-8000-000000000002/note-review/ratings",
+      "POST",
+      {
+        rating: "good",
+        expected_revision: 0,
+        expected_note_updated_at: "2026-10-02T00:00:00.000Z",
+        idempotency_key: "00000000-0000-4000-8000-000000000003",
+        user_id: "00000000-0000-4000-8000-000000000099",
+      },
+    ));
+    expect(response.status).toBe(400);
+    expect(mocks.rateNoteReview).not.toHaveBeenCalled();
   });
 
   it("requires the configured bearer token for Capture routes", async () => {

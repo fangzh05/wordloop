@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 
 import { Button } from "../components/Button.js";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
 import { CaptureNotesPage } from "./CaptureNotesPage.js";
+import { NoteReviewPage } from "./NoteReviewPage.js";
 import { Icon } from "./DesignIcons.js";
 import { SelectionCapture } from "./SelectionCapture.js";
 import { AppNavigation, SettingsSheet, type AppSection, type Appearance } from "./AppShell.js";
@@ -18,6 +19,7 @@ import {
   clearToken,
   getBootstrap,
   getCaptureNotes,
+  getNoteReviews,
   postAction,
   saveToken,
   type CaptureListResponse,
@@ -26,7 +28,7 @@ import {
 } from "./apiClient.js";
 
 type PageStatus = "loading" | "auth" | "ready";
-type StandalonePage = "dashboard" | "study" | "notes";
+type StandalonePage = "dashboard" | "study" | "notes" | "note_review";
 type RetryFields = Record<string, unknown> | null;
 
 export function visibleStandalonePage(
@@ -548,6 +550,7 @@ export default function StandaloneApp(): React.JSX.Element {
   const [authError, setAuthError] = useState("");
   const [retryFields, setRetryFields] = useState<RetryFields>(null);
   const [captureCounts, setCaptureCounts] = useState<CaptureListResponse["counts"] | null>(null);
+  const [noteReviewDueCount, setNoteReviewDueCount] = useState<number | null>(null);
   const requestInFlightRef = useRef(false);
   const refreshPendingRef = useRef(false);
   const refreshProgressPendingRef = useRef(false);
@@ -714,17 +717,22 @@ export default function StandaloneApp(): React.JSX.Element {
 
   const refreshCaptureCounts = useCallback(async () => {
     if (!tokenRef.current) return;
-    try {
-      const response = await getCaptureNotes("inbox", 1);
-      setCaptureCounts(response.counts);
-    } catch {
-      // Capture notes are optional to the study flow; do not block learning if this side panel fails.
-    }
+    const [captureResult, noteReviewResult] = await Promise.allSettled([
+      getCaptureNotes("inbox", 1),
+      getNoteReviews(),
+    ]);
+    if (captureResult.status === "fulfilled") setCaptureCounts(captureResult.value.counts);
+    if (noteReviewResult.status === "fulfilled") setNoteReviewDueCount(noteReviewResult.value.total);
   }, []);
 
   useEffect(() => {
     if (token) void refreshCaptureCounts();
   }, [token, refreshCaptureCounts]);
+
+  const handleCaptureCountsChange = useCallback((counts: CaptureListResponse["counts"]) => {
+    setCaptureCounts(counts);
+    void refreshCaptureCounts();
+  }, [refreshCaptureCounts]);
 
   useEffect(() => {
     if (token) void loadBootstrap();
@@ -1000,7 +1008,14 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {appSection === "capture" && visiblePage === "notes" && <CaptureNotesPage
       onBack={backToToday}
-      onCountsChange={setCaptureCounts}
+      onCountsChange={handleCaptureCountsChange}
+      noteReviewDueCount={noteReviewDueCount}
+      onOpenReview={() => setPage("note_review")}
+    />}
+
+    {appSection === "capture" && visiblePage === "note_review" && <NoteReviewPage
+      onBack={() => setPage("notes")}
+      onCountChange={setNoteReviewDueCount}
     />}
 
     {appSection === "insights" && visiblePage === "dashboard" && <InsightsPage tokenKey={token} onOpenWord={openVocabularyWord} />}

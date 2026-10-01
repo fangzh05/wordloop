@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { CaptureInboxPage } from "../web/src/standalone/CaptureInboxPage.js";
+import { NoteReviewCard } from "../web/src/standalone/NoteReviewPage.js";
 import { StandaloneDashboard, StandaloneReviewQuestion, visibleStandalonePage } from "../web/src/standalone/StandaloneApp.js";
 import type { WebApiResponse } from "../web/src/standalone/apiClient.js";
 
@@ -38,5 +39,32 @@ describe("Standalone Notes UI", () => {
     expect(review).toContain("data-capture-text=\"true\"");
     const css = readFileSync(new URL("../web/src/styles.css", import.meta.url), "utf8");
     expect(css.match(/\.standalone-layout\[data-page="notes"\] \.standalone-sidebar/g)).toHaveLength(2);
+  });
+
+  it("keeps the note and source context out of the front until the learner reveals it", () => {
+    const item = {
+      note_id: "00000000-0000-4000-8000-000000000002",
+      selected_text: "in light of",
+      note: "表示考虑到某个事实。",
+      note_updated_at: "2026-10-02T00:00:00.000Z",
+      due: "2026-10-02T00:00:00.000Z",
+      revision: 0,
+      latest_occurrence: {
+        context_text: "In light of the evidence, we changed course.",
+        source_type: "lesson_example",
+        source_title: "Lesson",
+        source_url: null,
+        captured_at: "2026-10-01T00:00:00.000Z",
+      },
+    };
+    const front = renderToStaticMarkup(<NoteReviewCard item={item} revealed={false} onReveal={() => undefined} onRate={() => undefined} />);
+    const revealed = renderToStaticMarkup(<NoteReviewCard item={item} revealed onReveal={() => undefined} onRate={() => undefined} />);
+    expect(front).toContain("in light of");
+    expect(front).not.toContain("表示考虑到某个事实");
+    expect(front).not.toContain("In light of the evidence");
+    expect(revealed).toContain("表示考虑到某个事实");
+    expect(revealed).toContain("In light of the evidence");
+    expect(revealed).toContain(">Again<");
+    expect(revealed).toContain(">Good<");
   });
 });

@@ -15,6 +15,7 @@ import {
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { dateInTimeZone } from "./shared.js";
 import { getUserTimeZone } from "./words.js";
+import type { NoteReviewStateSummary } from "../../shared/noteReviewContracts.js";
 
 export type { CaptureSelectionType, CaptureSourceType, CaptureStatus };
 
@@ -43,6 +44,7 @@ export interface CaptureNote {
   last_seen_at: string;
   latest_occurrence: CaptureOccurrence | null;
   occurrences: CaptureOccurrence[];
+  note_review: NoteReviewStateSummary | null;
   new_occurrence?: boolean;
 }
 
@@ -89,6 +91,13 @@ interface CanonicalOccurrenceRow {
   source_title: string | null;
   source_url: string | null;
   captured_at: string;
+}
+
+interface NoteReviewStateRow {
+  captured_note_id: string;
+  enabled: boolean;
+  due: string;
+  revision: number | string;
 }
 
 const canonicalStatuses = ["inbox", "saved", "dismissed", "converted"] as const;
@@ -235,7 +244,34 @@ async function userWordIdsForRows(
   return links;
 }
 
-function modelFromRow(row: CanonicalCaptureRow, wordIds: Map<string, string>): CaptureNote {
+function noteReviewSummary(row: NoteReviewStateRow): NoteReviewStateSummary {
+  return {
+    enabled: row.enabled,
+    due: new Date(row.due).toISOString(),
+    revision: Math.max(0, Math.trunc(Number(row.revision) || 0)),
+  };
+}
+
+async function noteReviewStatesForRows(
+  rows: readonly CanonicalCaptureRow[],
+  db: SupabaseClient,
+  userId: string,
+): Promise<Map<string, NoteReviewStateSummary>> {
+  const ids = [...new Set(rows.map((row) => row.id))];
+  if (ids.length === 0) return new Map();
+  const result = await db.from("note_review_states")
+    .select("captured_note_id,enabled,due,revision")
+    .eq("user_id", userId)
+    .in("captured_note_id", ids);
+  if (result.error) databaseFailure(result.error);
+  return new Map(((result.data ?? []) as NoteReviewStateRow[]).map((row) => [row.captured_note_id, noteReviewSummary(row)]));
+}
+
+function modelFromRow(
+  row: CanonicalCaptureRow,
+  wordIds: Map<string, string>,
+  noteReviewStates: Map<string, NoteReviewStateSummary>,
+): CaptureNote {
   const occurrences = parseOccurrences(row.occurrences);
   const createdAt = row.created_at;
   return {
@@ -254,6 +290,7 @@ function modelFromRow(row: CanonicalCaptureRow, wordIds: Map<string, string>): C
     last_seen_at: occurrences[0]?.created_at ?? row.updated_at,
     latest_occurrence: occurrences[0] ?? null,
     occurrences,
+    note_review: noteReviewStates.get(row.id) ?? null,
   };
 }
 
@@ -270,7 +307,7 @@ async function readOne(
     .maybeSingle();
   if (result.error) databaseFailure(result.error);
   if (!result.data) throw new CaptureServiceError(404, "CAPTURE_NOT_FOUND", "这条划词笔记不存在或已被移除。");
-  const [wordIds, occurrenceResult] = await Promise.all([
+  const [wordIds, occurrenceResult, noteReviewStates] = await Promise.all([
     userWordIdsForRows([{ ...result.data, occurrence_count: occurrenceCount ?? 0, occurrences: [] } as CanonicalCaptureRow], db, userId),
     db.from("captured_note_occurrences")
       .select("id,context_text,source_type,source_ref,source_title,source_url,captured_at", { count: "exact" })
@@ -279,11 +316,12 @@ async function readOne(
       .order("captured_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(3),
+    noteReviewStatesForRows([{ ...result.data, occurrence_count: occurrenceCount ?? 0, occurrences: [] } as CanonicalCaptureRow], db, userId),
   ]);
   if (occurrenceResult.error) databaseFailure(occurrenceResult.error);
   const occurrences = ((occurrenceResult.data ?? []) as CanonicalOccurrenceRow[]).map(occurrenceFromRow);
   const row = result.data as Omit<CanonicalCaptureRow, "occurrence_count" | "occurrences">;
-  const model = modelFromRow({ ...row, occurrence_count: occurrenceCount ?? occurrenceResult.count ?? 0, occurrences }, wordIds);
+  const model = modelFromRow({ ...row, occurrence_count: occurrenceCount ?? occurrenceResult.count ?? 0, occurrences }, wordIds, noteReviewStates);
   return model;
 }
 
@@ -334,8 +372,11 @@ export async function listCaptureNotes(
   if (result.error) databaseFailure(result.error);
   const rows = (result.data ?? []) as CanonicalCaptureRow[];
   const visibleRows = rows.slice(0, filters.limit);
-  const wordIds = await userWordIdsForRows(visibleRows, db, userId);
-  const items = visibleRows.map((row) => modelFromRow(row, wordIds));
+  const [wordIds, noteReviewStates] = await Promise.all([
+    userWordIdsForRows(visibleRows, db, userId),
+    noteReviewStatesForRows(visibleRows, db, userId),
+  ]);
+  const items = visibleRows.map((row) => modelFromRow(row, wordIds, noteReviewStates));
   const last = items[items.length - 1];
   return {
     items,

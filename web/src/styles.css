@@ -1303,6 +1303,28 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .wordloop-shell .capture-detail-actions { gap:10px; }
 .wordloop-shell .capture-note-hint { font-size:.6875rem; }
 .wordloop-shell .capture-state-badge { background:var(--control); color:var(--muted); border:0; font-size:.625rem; }
+.wordloop-shell .capture-notes-header-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:10px; }
+.wordloop-shell .capture-note-review { border-top:1px solid var(--separator); }
+.wordloop-shell .capture-note-review .capture-detail-section-heading { align-items:flex-start; }
+.wordloop-shell .capture-note-review .capture-detail-section-heading h3 { margin-bottom:4px; }
+.wordloop-shell .capture-note-review .capture-detail-section-heading p { margin:0; color:var(--muted); font-size:.75rem; line-height:1.5; }
+.wordloop-shell .note-review-page { max-width:none; }
+.wordloop-shell .note-review-card { width:min(100%, 58rem); margin:0 auto; border:1px solid var(--separator); border-radius:20px; background:var(--material-solid); overflow:hidden; }
+.wordloop-shell .note-review-front { display:grid; gap:14px; padding:clamp(1.5rem, 5vw, 4rem); min-height:20rem; align-content:center; }
+.wordloop-shell .note-review-front h2 { margin:0; overflow-wrap:anywhere; font-size:clamp(2rem, 6vw, 4.25rem); line-height:1.12; letter-spacing:-.045em; }
+.wordloop-shell .note-review-prompt { margin:0; color:var(--muted); line-height:1.6; }
+.wordloop-shell .note-review-front .button { justify-self:start; margin-top:10px; }
+.wordloop-shell .note-review-answer { display:grid; gap:24px; padding:0 clamp(1.5rem, 5vw, 4rem) clamp(1.5rem, 5vw, 4rem); }
+.wordloop-shell .note-review-answer section { padding-top:24px; border-top:1px solid var(--separator); }
+.wordloop-shell .note-review-note { margin:10px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:1.1rem; line-height:1.75; }
+.wordloop-shell .note-review-context blockquote { margin:10px 0 8px; padding:0 0 0 14px; border-left:3px solid var(--accent); color:var(--text); font-size:1rem; line-height:1.75; overflow-wrap:anywhere; }
+.wordloop-shell .note-review-context a { display:inline-block; margin-top:10px; color:var(--accent); font-size:.75rem; }
+.wordloop-shell .note-review-actions { display:flex; flex-wrap:wrap; gap:10px; padding-top:4px; }
+.wordloop-shell .note-review-actions .button { min-width:7rem; }
+.wordloop-shell .note-review-status { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.wordloop-shell .note-review-status .standalone-status { margin:0; }
+.wordloop-shell .note-review-empty { width:min(100%, 58rem); margin:0 auto; }
+.wordloop-shell .note-review-batch-hint { text-align:center; }
 .wordloop-shell .vocabulary-toolbar { background:transparent; border:0; box-shadow:none; padding:0; }
 .wordloop-shell .vocabulary-list-pane { padding:8px 20px; }
 .wordloop-shell .vocabulary-list-item { padding:18px 0; }
