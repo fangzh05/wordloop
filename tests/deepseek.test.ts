@@ -588,6 +588,26 @@ describe("DeepSeek stateless JSON client", () => {
     expect(repairRequest.messages[1]?.content).toContain("reference_answer");
   });
 
+  it("re-evaluates an incorrect semantic verdict whose reference exactly matches the submitted answer", async () => {
+    const answer = "The school allocates resources.";
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(JSON.stringify({ ...validGrade, is_correct: false, error_layer: "meaning", reference_answer: answer })))
+      .mockResolvedValueOnce(response(JSON.stringify(validGrade)));
+    await expect(gradeSemanticAnswer({ word: "allocate", activity_type: "sentence", instruction: "造句。", prompt: "分配资源", answer, retry_count: 1 }))
+      .resolves.toMatchObject({ is_correct: true, error_layer: "none" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const request = JSON.parse(String(vi.mocked(fetch).mock.calls[1]?.[1]?.body));
+    expect(request.messages[1].content).toContain("相互矛盾");
+  });
+
+  it("rejects repeated contradictory semantic feedback rather than saving a false mistake", async () => {
+    const answer = "in quarantine";
+    vi.mocked(fetch).mockImplementation(async () => response(JSON.stringify({ ...validGrade, is_correct: false, error_layer: "meaning", reference_answer: " IN   QUARANTINE " })));
+    await expect(gradeSemanticAnswer({ word: "quarantine", activity_type: "sentence", instruction: "表达。", prompt: "处于隔离中", answer, retry_count: 1 }))
+      .rejects.toMatchObject({ code: "DEEPSEEK_INVALID_OUTPUT" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it("retries truncated grading JSON with a larger output budget", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock

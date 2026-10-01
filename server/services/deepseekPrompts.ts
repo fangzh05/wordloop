@@ -29,14 +29,14 @@ export const LESSON_GENERATION_PROMPT = `为考研英语一与 IELTS Academic �
 }`;
 
 export const SEMANTIC_GRADING_PROMPT = `严格按服务端原题、目标词义和评分要求批改，不改题、不换词、不决定推进。总体 is_correct 仅在目标词义、核心搭配、主要命题、否定与关键修饰关系正确时为 true；自然准确的不同表达均可通过。无关的小冠词、标点或轻微自然度建议不能判作目标词遗忘。task_fulfillment 表示主要命题是否完成。核心错误选择 meaning、collocation、grammar、spelling 或 pronunciation；正确时 error_layer=none。
-首次答错（retry_count=0）只给一个具体错误片段与短提示，禁止提供参考答案；第二次仍错必须给非空 reference_answer。message 与 short_hint 各用一句简短中文。不要输出分项评分、target_word_results、skill_results 或分析报告。只返回以下紧凑 JSON，可选 reference_answer 仅在第二次答错时提供：
+每次只独立评估本次 answer。retry_count 只控制答错时是否显示答案，不表示本次仍然错误，不得照搬第一次的错误提示。先判定答案，再决定反馈；不能一边判错一边把用户原答案作为正确参考答案。
+首次答错（retry_count=0）只给一个具体错误片段与短提示，禁止提供参考答案；第二次仍错必须给非空 reference_answer。message 与 short_hint 各用一句简短中文。不要输出分项评分、target_word_results、skill_results 或分析报告。以下只是结构示例，不能默认使用示例的判分；可选 reference_answer 仅在第二次答错时提供：
 {
-  "is_correct": false,
-  "error_layer": "meaning",
-  "task_fulfillment": false,
-  "message": "核心词义尚未准确表达。",
-  "short_hint": "请检查这里的否定关系。",
-  "error_excerpt": "..."
+  "is_correct": true,
+  "error_layer": "none",
+  "task_fulfillment": true,
+  "message": "答案正确。",
+  "short_hint": "核心含义和用法表达准确。"
 }`;
 
 export const ENGLISH_DEFINITION_GRADING_PROMPT = `判断用户给出的简短英文释义是否准确表达目标词的核心义；接受自然的同义表达，不要求复述词典原句。feedback 必须使用简体中文，可引用必要的英文词句。只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：

@@ -71,10 +71,15 @@ export async function decideLessonConsolidation(
   assertDatabaseResult(error);
   const task = parsePendingTask(data?.pending_task);
   if (!task || data?.last_reminder_task_id === task.plan.exercise_id) return state;
-  const { error: updateError } = await db.from("user_lesson_cadence")
+  let reminderUpdate = db.from("user_lesson_cadence")
     .update({ last_reminder_task_id: task.plan.exercise_id, updated_at: new Date().toISOString() })
-    .eq("user_id", userId)
-    .is("last_reminder_task_id", data?.last_reminder_task_id ?? null);
+    .eq("user_id", userId);
+  // PostgREST IS accepts null/booleans, not a UUID. Subsequent reminders
+  // require equality against the previous UUID for the same CAS guard.
+  reminderUpdate = data?.last_reminder_task_id == null
+    ? reminderUpdate.is("last_reminder_task_id", null)
+    : reminderUpdate.eq("last_reminder_task_id", data.last_reminder_task_id);
+  const { error: updateError } = await reminderUpdate;
   assertDatabaseResult(updateError);
   return {
     ...state,
