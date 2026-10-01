@@ -256,6 +256,21 @@ describe("DeepSeek stateless JSON client", () => {
     expect(SENTENCE_CONSOLIDATION_GENERATION_PROMPT).toContain("10–25");
   });
 
+  it("satisfies the provider JSON-mode contract on every real grading request", async () => {
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      const request = JSON.parse(String(init?.body));
+      const mentionsJson = request.messages.some((message: { content: string }) => /json/i.test(message.content));
+      if (!mentionsJson) return new Response(JSON.stringify({ error: { message: "messages must contain json" } }), { status: 400 });
+      expect(request.response_format).toEqual({ type: "json_object" });
+      return response(JSON.stringify(validGrade));
+    });
+    await expect(gradeSemanticAnswer({ word: "quarantine", activity_type: "translation_en_to_cn", instruction: "翻译。", prompt: "They remained in quarantine.", answer: "他们继续处于隔离中。", retry_count: 0 }))
+      .resolves.toMatchObject({ is_correct: true });
+    await expect(gradeWrapupAnswer({ words: ["quarantine"], instruction: "翻译。", prompt: "They remained in quarantine.", answer: "他们继续处于隔离中。", retry_count: 0 }))
+      .resolves.toMatchObject({ is_correct: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it("retries schema-invalid JSON once, then accepts a valid result", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock

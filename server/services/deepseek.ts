@@ -440,7 +440,9 @@ async function deepSeekJson<T>(
           model: "deepseek-flash",
           thinking: { type: "disabled" },
           messages: [
-            { role: "system", content: prompt },
+            // JSON mode requires a literal json mention in messages. Keep
+            // this transport contract independent of task prompt edits.
+            { role: "system", content: `只返回一个合法 JSON（json）对象，不要 Markdown。\n${prompt}` },
             { role: "user", content: [JSON.stringify(input), repairMessage].filter(Boolean).join("\n\n") },
           ],
           response_format: { type: "json_object" },
