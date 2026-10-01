@@ -1614,6 +1614,22 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(result.state.payload.feedback.user_answer).toBe("The fixture improves the school.");
   });
 
+  it("starts the advertised cadence task directly from accepted final vocabulary feedback", async () => {
+    const state = lessonState("collocation");
+    state.payload.mode = "feedback";
+    state.phase = "lesson_feedback";
+    state.payload.feedback = { is_correct: false, reveal_answer: true, user_answer: "wrong", reference_answer: "saved answer" };
+    mocks.active = row(state);
+    const plan = lessonPlan("translation_en_to_cn", "consolidation");
+    mocks.getLessonCadence.mockResolvedValueOnce({ completion_credit: 0, rotation_cursor: 0, pending_task: { plan, kind: "translation", target_words: ["fixture"] } } as any);
+    const response = await handleWebApiRequest(post({ action: "consolidation_start" }));
+    expect(response.status).toBe(200);
+    expect((await body(response)).state).toMatchObject({ phase: "lesson_complete", payload: { consolidation_status: "exercise", mode: "exercise", activity_type: "translation_en_to_cn" } });
+    expect(mocks.generatePlannedConsolidation).toHaveBeenCalledOnce();
+    expect(mocks.recordPlannedSubmission).not.toHaveBeenCalled();
+    expect(mocks.recordReviewSubmission).not.toHaveBeenCalled();
+  });
+
   it.each(["exercise", "feedback"] as const)("resumes an already saved consolidation %s from the Today entry", async (mode) => {
     const state = makeStudyState({
       date, widget: "lesson", phase: "lesson_complete", current_word: "fixture", current_index: 0, retry_count: 0,

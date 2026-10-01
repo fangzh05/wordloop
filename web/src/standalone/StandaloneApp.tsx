@@ -822,7 +822,10 @@ export default function StandaloneApp(): React.JSX.Element {
     const answerActions = new Set(["review_submit", "pretest_submit", "lesson_submit", "consolidation_submit", "wrapup_submit"]);
     if (answerActions.has(actionName) && fields.mark_unknown !== true
       && (typeof fields.answer !== "string" || !fields.answer.trim())) return null;
-    if (requestInFlightRef.current) return null;
+    if (requestInFlightRef.current) {
+      setNotice("上一个请求仍在处理中，请稍候。超时后会恢复重试。");
+      return null;
+    }
     const stableFields = ["lesson_submit", "consolidation_submit", "wrapup_submit"].includes(actionName)
       ? { ...fields, submission_id: typeof fields.submission_id === "string" ? fields.submission_id : crypto.randomUUID() }
       : fields;
@@ -990,6 +993,7 @@ export default function StandaloneApp(): React.JSX.Element {
       tokenKey={token}
       onContinue={continueFromDashboard}
       onStartConsolidation={() => { void dispatch({ action: "consolidation_start" }); }}
+      busyLabel={busyLabel}
       onOpenCapture={() => navigateSection("capture")}
       onOpenVocabulary={() => navigateSection("vocabulary")}
     />}
@@ -1133,6 +1137,7 @@ export default function StandaloneApp(): React.JSX.Element {
         </div>}
 
         {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
+          {busy !== null && <p className="standalone-status" role="status">{busyLabel ?? "正在处理，请稍候…"}</p>}
           <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           {notice && <p className="standalone-status" role="status">{notice}</p>}
           <div className="standalone-actions">
@@ -1140,7 +1145,7 @@ export default function StandaloneApp(): React.JSX.Element {
               ? <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_retry" })}>重做当前题</Button>
               : navigation.action === "next_word"
                 ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>下一词</Button>
-                : <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>完成本轮并继续</Button>}
+                : <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>{busy === "lesson_next" ? "正在完成本轮…" : "完成本轮并继续"}</Button>}
           </div>
         </div>}
 
@@ -1151,7 +1156,7 @@ export default function StandaloneApp(): React.JSX.Element {
           <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "sentence" ? "提交句子" : "提交翻译"}</Button></div>
         </div>}
 
-        {phase === "lesson_complete" && feedbackMode && consolidationKind && <div className="standalone-content">
+        {phase === "lesson_complete" && feedbackMode && consolidationKind && payload.consolidation_status === "feedback" && <div className="standalone-content">
           <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           <div className="standalone-actions">
             {feedback.is_correct === true || feedback.reveal_answer === true

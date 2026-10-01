@@ -23,9 +23,10 @@ function ProgressRow({ title, detail, note }: { title: string; detail: string; n
   </div>;
 }
 
-export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidation, onOpenCapture, onOpenVocabulary }: {
+export function TodayPage({ view, busy, busyLabel, tokenKey, onContinue, onStartConsolidation, onOpenCapture, onOpenVocabulary }: {
   view: WebApiResponse | null;
   busy: boolean;
+  busyLabel?: string | null;
   tokenKey: string | null;
   onContinue: () => void;
   onStartConsolidation: () => void;
@@ -90,7 +91,7 @@ export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidati
         <p>{active ? `会话开始于 ${today?.active_session.started_at ? new Date(today.active_session.started_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: today.timezone }) : "今天"}。继续上次停下的位置。` : "从今天该做的任务开始。"}</p>
       </div>
       <Button className="primary today-primary-action" type="button" disabled={busy || !view || tasksComplete} onClick={onContinue}>
-        {tasksComplete ? "今日计划已完成" : active ? "继续学习" : "开始今日学习"}
+        {busy ? busyLabel ?? "正在处理…" : tasksComplete ? "今日计划已完成" : active ? "继续学习" : "开始今日学习"}
       </Button>
     </section>
 
@@ -101,7 +102,7 @@ export function TodayPage({ view, busy, tokenKey, onContinue, onStartConsolidati
         <p>本轮词汇已经完成，再用一道应用题把它串起来。</p>
       </div>
       <Button className="secondary today-primary-action" type="button" disabled={busy} onClick={onStartConsolidation}>
-        做一道，约 {Math.max(1, Math.round(number(view.pending_consolidation.estimated_seconds) / 60))} 分钟
+        {busy ? busyLabel ?? "正在处理…" : `做一道，约 ${Math.max(1, Math.round(number(view.pending_consolidation.estimated_seconds) / 60))} 分钟`}
       </Button>
     </section>}
 
