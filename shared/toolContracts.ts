@@ -82,6 +82,9 @@ export const skillEvidenceSchema = z.object({
   hint_used: z.boolean(),
   modified_correct: z.boolean(),
   answer_revealed: z.boolean(),
+  quality: z.enum(["OBSERVE", "LEARN_ONLY", "IGNORE"]).optional(),
+  quality_reason: z.string().max(120).optional(),
+  evidence_version: z.string().max(40).optional(),
   evidence: z.string().trim().max(500).optional(),
 }).strict();
 export type SkillEvidence = z.output<typeof skillEvidenceSchema>;

@@ -1654,3 +1654,12 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
   .wordloop-shell .study-task-card .standalone-actions { display: flex; gap: .75rem; max-width: none; margin: .5rem 0 0; padding-top: 1.25rem; border-top: 1px solid var(--separator); justify-content: flex-end; flex-wrap: wrap; }
   .wordloop-shell .study-task-card .standalone-actions .button { flex: 0 0 auto; min-width: 8rem; }
 }
+
+.learning-budget-panel { padding: 18px; margin: 12px 0; border: 1px solid #d6ded8; border-radius: 16px; background: #f7faf7; color: #263b31; min-width: 0; overflow-wrap: anywhere; }
+.learning-budget-panel p { margin: 8px 0; }
+.learning-budget-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+.learning-budget-controls input { width: 78px; padding: 8px; }
+.learning-budget-panel button, .learning-budget-panel select { min-height: 44px; padding: 8px 12px; border: 1px solid #bcc9bf; border-radius: 8px; background: white; color: inherit; }
+.learning-budget-panel summary { cursor: pointer; padding: 10px 0; }
+.evidence-label { border-top: 1px solid #d6ded8; margin-top: 10px; }
+.evidence-label label { display: inline-flex; flex-wrap: wrap; gap: 8px; margin: 8px; }

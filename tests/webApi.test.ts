@@ -1,3 +1,13 @@
+// These tests isolate the original flow; budget admission is exercised in learningBudget.test.ts.
+vi.mock("../server/services/learningBudget.js", async importOriginal => ({
+  ...await importOriginal<typeof import("../server/services/learningBudget.js")>(),
+  getLearningBudget: vi.fn(async () => ({ date:"2026-10-02",daily_minutes:45,remaining_seconds:2700,estimated_used_seconds:0,due_count:0,overdue_count:0,new_word_cap:50,effective_new_limit:50,enabled:true,forecast:[] })),
+  reserveLearningBudget: vi.fn(async () => undefined),
+  setLearningBudget: vi.fn(async () => ({})),
+}));
+vi.mock("../server/services/learningModel.js", () => ({ getEvidenceEvaluation: vi.fn(async () => ({ reviewed_count: 0, rows: [] })), labelEvidence: vi.fn(async () => ({saved:true})) }));
+import { getLearningBudget, setLearningBudget } from "../server/services/learningBudget.js";
+import { labelEvidence } from "../server/services/learningModel.js";
 import { lessonExercisePlanSchema } from "../shared/toolContracts.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -329,6 +339,23 @@ describe("Standalone Web API shared-state boundaries", () => {
     }));
   });
 
+  it("protects budget and evidence reads and rejects invented human labels", async () => {
+    for (const route of ["budget", "evidence"]) {
+      expect((await handleWebApiRequest(new Request(`https://wordloop.test/api/web/${route}`))).status).toBe(401);
+      const response = await handleWebApiRequest(new Request(`https://wordloop.test/api/web/${route}`, {headers:{authorization:`Bearer ${mocks.token}`}}));
+      expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    const invalid = await handleWebApiRequest(new Request("https://wordloop.test/api/web/evidence/label", {method:"POST",headers:{authorization:`Bearer ${mocks.token}`,"content-type":"application/json"},body:JSON.stringify({id:1,outcome:"invented",user_id:"foreign"})}));
+    expect(invalid.status).toBe(400); expect(labelEvidence).not.toHaveBeenCalled(); expect(getLearningBudget).toHaveBeenCalled();
+  });
+  it("validates daily minutes and passes the same extra-time key through retries", async () => {
+    expect((await handleWebApiRequest(post({action:"set_daily_time_budget",minutes:0}))).status).toBe(400);
+    const request_id = crypto.randomUUID();
+    for (let i=0;i<2;i++) expect((await handleWebApiRequest(post({action:"extend_daily_time_budget",request_id}))).status).toBe(200);
+    expect(setLearningBudget).toHaveBeenNthCalledWith(1,undefined,request_id);
+    expect(setLearningBudget).toHaveBeenNthCalledWith(2,undefined,request_id);
+    expect(mocks.recordAttempt).not.toHaveBeenCalled();
+  });
   it("requires a bearer token, returns no-store headers, and rejects client-owned cursor fields", async () => {
     const missing = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap"));
     expect(missing.status).toBe(401);

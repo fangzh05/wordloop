@@ -1,4 +1,11 @@
-import { describe, expect, it } from "vitest";
+vi.mock("../server/services/learningModel.js", () => ({ tryConsumeSkillEvidence: vi.fn(async () => undefined) }));
+// These tests isolate the original flow; budget admission is exercised in learningBudget.test.ts.
+vi.mock("../server/services/learningBudget.js", async importOriginal => ({
+  ...await importOriginal<typeof import("../server/services/learningBudget.js")>(),
+  getLearningBudget: vi.fn(async () => ({ date:"2026-10-02",daily_minutes:45,remaining_seconds:2700,estimated_used_seconds:0,due_count:0,overdue_count:0,new_word_cap:50,effective_new_limit:50,enabled:true,forecast:[] })),
+  reserveLearningBudget: vi.fn(async () => undefined),
+}));
+import { vi, describe, expect, it } from "vitest";
 import { State } from "ts-fsrs";
 import type { UserWordRow, StudySessionRow } from "../server/types.js";
 import { recordReviewSubmission } from "../server/services/fsrsReviews.js";
@@ -144,31 +151,13 @@ function fakeDatabase(options: FakeDbOptions) {
     async rpc(name: string, args: Record<string, unknown>) {
       rpcCalls.push({ name, args });
       if (options.rpcError) return { data: null, error: options.rpcError };
-      if (name === "get_due_review_candidates_v1") {
+      if (name === "get_due_review_states_v1") {
         const isDue = Boolean(row.next_review_at)
           && Date.parse(row.next_review_at!) <= Date.parse(String(args.p_now));
         return {
           data: isDue ? [{
-            word: "air-conditioning",
-            display_word: "air-conditioning",
-            status: row.status,
-            source: row.source,
-            consecutive_correct: row.consecutive_correct,
-            wrong_count: row.wrong_count,
-            mastered: row.mastered,
-            next_review_at: row.next_review_at,
-            meaning_error: row.meaning_error,
-            collocation_error: row.collocation_error,
-            grammar_error: row.grammar_error,
-            pronunciation_error: row.pronunciation_error,
-            spelling_error: row.spelling_error,
-            fsrs_stability: row.fsrs_stability,
-            fsrs_difficulty: row.fsrs_difficulty,
-            fsrs_scheduled_days: row.fsrs_scheduled_days,
-            fsrs_state: row.fsrs_state,
-            ipa_us: null,
-            ipa_uk: null,
-            senses: [],
+            state: row,
+            word: { normalized_word: "air-conditioning", display_word: "air-conditioning", senses: [], ipa_us: null, ipa_uk: null },
           }] : [],
           error: null,
         };

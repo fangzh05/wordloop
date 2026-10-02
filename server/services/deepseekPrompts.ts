@@ -30,7 +30,7 @@ export const LESSON_GENERATION_PROMPT = `为考研英语一与 IELTS Academic �
 
 export const SEMANTIC_GRADING_PROMPT = `严格按服务端原题、目标词义和评分要求批改，不改题、不换词、不决定推进。总体 is_correct 仅在目标词义、核心搭配、主要命题、否定与关键修饰关系正确时为 true；自然准确的不同表达均可通过。无关的小冠词、标点或轻微自然度建议不能判作目标词遗忘。task_fulfillment 表示主要命题是否完成。核心错误选择 meaning、collocation、grammar、spelling 或 pronunciation；正确时 error_layer=none。
 只返回一个 JSON 对象，不要 Markdown。每次只独立评估本次 answer。retry_count 只控制答错时是否显示答案，不表示本次仍然错误，不得照搬第一次的错误提示。先判定答案，再决定反馈；不能一边判错一边把用户原答案作为正确参考答案。
-首次答错（retry_count=0）只给一个具体错误片段与短提示，禁止提供参考答案；第二次仍错必须给非空 reference_answer。message 与 short_hint 各用一句简短中文。不要输出分项评分、target_word_results、skill_results 或分析报告。以下只是结构示例，不能默认使用示例的判分；可选 reference_answer 仅在第二次答错时提供：
+首次答错（retry_count=0）只给一个具体错误片段与短提示，禁止提供参考答案；第二次仍错必须给非空 reference_answer。message 与 short_hint 各用一句简短中文。不要输出冗长分项分析或 target_word_results。若输入含 plan，额外输出紧凑 skill_results 数组：仅评价 plan.skill_ids，每项只含 skill_id、outcome（correct/incorrect/partial/not_assessed），词级证据附 plan.target_word_ids 中的 word_id；句法整体证据省略 word_id。每个技能独立判断，不能把总体判分复制给所有技能，无法确定则 not_assessed。输入无 plan 时省略 skill_results。以下只是结构示例，不能默认使用示例的判分；可选 reference_answer 仅在第二次答错时提供：
 {
   "is_correct": true,
   "error_layer": "none",

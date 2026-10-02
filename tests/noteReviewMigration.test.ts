@@ -37,7 +37,7 @@ describe("Capture note review migration contract", () => {
     const setup = readFileSync(new URL("../setup.sql", import.meta.url), "utf8").replace(/\r\n/gu, "\n");
     const builder = readFileSync(new URL("../scripts/build-sites-worker.ts", import.meta.url), "utf8");
     const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
-    expect(setup).toContain(migration.trim());
+    expect(setup).toContain(migration.replace(/\r\n/gu, "\n").trim());
     expect(builder).toContain("202610020001_note_review_states.sql");
     expect(readme).toContain("202610020001_note_review_states.sql");
   });

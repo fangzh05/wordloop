@@ -1,3 +1,4 @@
+import { getLearningBudget, reserveLearningBudget } from "./learningBudget.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { UserWordRow, VocabularyItem, WordStatus } from "../types.js";
@@ -135,6 +136,7 @@ export async function recordPretestResult(input: {
     .eq("word.normalized_word", normalizedWord)
     .single();
   assertDatabaseResult(lookupError);
+  await reserveLearningBudget(`pretest:${(joined as unknown as UserWordRow).word_id}:${sessionStartedAt ?? "initial"}`, "pretest", undefined, db, userId);
   const rating = input.result === "known" ? "good" : input.result === "uncertain" ? "hard" : "again";
   const scheduled = scheduleReview(joined as unknown as UserWordRow, rating, new Date());
   const { data, error } = await db.rpc("record_pretest_result_v2", {
@@ -281,6 +283,7 @@ export function toVocabularyItem(
     fsrs_difficulty: state.fsrs_difficulty ?? 0,
     fsrs_scheduled_days: state.fsrs_scheduled_days ?? 0,
     fsrs_reps: state.fsrs_reps,
+    last_reviewed_at: state.last_reviewed_at,
     fsrs_state: state.fsrs_state ?? 0,
     ipa_us: word.ipa_us,
     ipa_uk: word.ipa_uk,
@@ -314,7 +317,8 @@ export async function prepareDailyNewWords(
   db = getDatabase(), userId = getAuthenticatedUserId(), date?: string,
 ): Promise<{ date: string; prepared: number; added: number; limit: number }> {
   const targetDate = date ?? dateInTimeZone(await getUserTimeZone(db, userId));
-  const { data, error } = await db.rpc("prepare_daily_new_words_v1", { p_user_id: userId, p_date: targetDate });
+  const budget = await getLearningBudget(db, userId);
+  const { data, error } = await db.rpc("prepare_daily_new_words_budget_v1", { p_user_id: userId, p_date: targetDate, p_budget_limit: budget.effective_new_limit });
   assertDatabaseResult(error);
   return data as { date: string; prepared: number; added: number; limit: number };
 }

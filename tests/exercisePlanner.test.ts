@@ -38,7 +38,7 @@ describe("exercisePlanner", () => {
     expect(plans.some((plan) => plan.planned_activity_type === "collocation")).toBe(true);
     expect(plans.every((plan) => plan.planned_activity_type !== "derivation")).toBe(true);
     const translation = plans.find((plan) => plan.planned_activity_type === "translation_cn_to_en");
-    expect(translation?.skill_ids).toEqual(["target_sense_retrieval", "verb_object_collocation"]);
+    expect(translation?.skill_ids).toEqual(["target_sense_retrieval", "verb_object_collocation", "syntactic_word_use"]);
     expect(translation?.skill_ids).not.toContain("translation_cn_to_en");
   });
 

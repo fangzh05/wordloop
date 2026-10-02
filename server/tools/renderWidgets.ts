@@ -570,6 +570,7 @@ async function saveWidgetState(input: {
     const firstAttempt = knownActive.state.retry_count === 0;
     const evidence = plannedSkillEvidence({
       plan: atomicSubmission.plan,
+      overall_correct: isCorrect,
       skill_results: skillResults,
       first_attempt: firstAttempt,
       hint_used: atomicSubmission.hint_used,
@@ -1161,7 +1162,7 @@ export function registerRenderTools(server: McpServer): void {
         && !legacyPreservedPlan) {
         throw new Error("PLANNED_SUBMISSION_ID_MISMATCH");
       }
-      atomicSubmission = { submission_id: toolInput.submission_id ?? globalThis.crypto.randomUUID(), plan: plannedPlan.data, hint_used: toolInput.hint_used };
+      atomicSubmission = { submission_id: toolInput.submission_id ?? globalThis.crypto.randomUUID(), plan: plannedPlan.data, hint_used: savedState?.payload.hint_used === true || toolInput.hint_used };
     }
     if (plannedPlan.success && plannedPlan.data.scope === "lesson"
       && !plannedPlan.data.selection_reason.startsWith("旧会话兼容：")) {

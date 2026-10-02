@@ -112,7 +112,7 @@ export const semanticGradeSchema = z.object({
   }).transform(({ target_word_id, ...result }) => ({
     ...result,
     ...(result.word_id ? {} : target_word_id ? { word_id: target_word_id } : {}),
-  }))).nullish().transform((value) => value ?? undefined),
+  }))).nullish().transform((value) => value ?? undefined).catch([{ skill_id: "__invalid_evidence__", outcome: "not_assessed" }]),
   error_excerpt: nullableOptionalText(500),
   short_hint: nullableOptionalText(500),
 }).transform((value) => ({

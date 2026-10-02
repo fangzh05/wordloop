@@ -1,3 +1,5 @@
+import { getLearningBudget, setLearningBudget, reserveLearningBudget, LearningBudgetReached } from "./services/learningBudget.js";
+import { getEvidenceEvaluation, labelEvidence } from "./services/learningModel.js";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase, getWordloopWebToken } from "./db.js";
 import { getStudyBootstrap } from "./services/studyBootstrap.js";
@@ -103,6 +105,8 @@ import { VocabularyServiceError, getVocabularyDetail, listVocabulary } from "./s
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
 const webActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("set_daily_time_budget"), minutes: z.number().int().min(5).max(240), ...mutationBase }).strict(),
+  z.object({ action: z.literal("extend_daily_time_budget"), request_id: z.string().uuid(), ...mutationBase }).strict(),
   z.object({ action: z.literal("set_daily_new_word_limit"), ...setDailyNewWordLimitSchema.shape, ...mutationBase }).strict(),
   z.object({ action: z.literal("continue"), ...mutationBase }).strict(),
   z.object({ action: z.literal("review_submit"), answer: z.string().max(4000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
@@ -575,6 +579,7 @@ async function generateAndPersistLesson(input: {
     expectedRevision = plannedSession.updated_at;
     sessionId = plannedSession.id;
   }
+  await reserveLearningBudget(`exercise:${plan.exercise_id}`, plan.planned_activity_type, "lesson", db, userId);
   const [generated, audioUrl] = await Promise.all([
     generateLesson({
       word: item.word,
@@ -690,6 +695,7 @@ async function createLessonFromBootstrap(
 async function resolveBootstrap(expectedRevision?: string | null): Promise<Record<string, unknown>> {
   const prepared = await prepareBootstrap(expectedRevision);
   const { bootstrap, active, revision } = prepared;
+  if (bootstrap.action === "budget_complete") return { ...await doneResponse(revision), budget_paused: true };
   if (bootstrap.action === "resume") {
     if (!active) throw new WebApiError(409, "NO_ACTIVE_SESSION", "There is no active study session to resume.");
     if (active.state?.widget === "lesson" && active.state.payload.mode === "generation_error" && active.state.current_word) {
@@ -1159,11 +1165,13 @@ function lessonSkillEvidence(
 ) {
   return plannedSkillEvidence({
     plan,
+    overall_correct: grade.is_correct,
     skill_results: grade.skill_results,
     first_attempt: firstAttempt,
     hint_used: hintUsed,
     answer_revealed: answerRevealed,
     modified_correct: !firstAttempt && grade.is_correct,
+    deterministic_error_layer: grade.error_layer,
     ...(grade.graded_by === "deterministic" ? { deterministic_outcome: grade.is_correct ? "correct" : "incorrect" } : {}),
   });
 }
@@ -1174,6 +1182,7 @@ async function submitLesson(action: Extract<WebAction, { action: "lesson_submit"
   const exercise = lessonExercise(state);
   const plan = await savedOrLegacyPlan(state, exercise.activity_type, "lesson");
   const plannedState = state.payload.plan ? state : { ...state, payload: { ...state.payload, plan } };
+  await reserveLearningBudget(`exercise:${plan.exercise_id}`, exercise.activity_type, "lesson");
   const gradingStarted = Date.now();
   const grade = await gradeLesson(plannedState, exercise, action.answer);
   const gradingMs = Date.now() - gradingStarted;
@@ -1286,6 +1295,7 @@ export async function generateAndReturnConsolidation(active: StudySessionRow): P
   if (state.current_index !== queue.length - 1) throw new WebApiError(409, "LESSON_CONSOLIDATION_NOT_READY", "The Lesson round is not at its final word.");
   const words = consolidation.consolidation_target_words;
   const plan = consolidation.consolidation_plan;
+  if (plan) await reserveLearningBudget(`exercise:${plan.exercise_id}`, plan.planned_activity_type, "consolidation");
   const exercise = plan
     ? await generatePlannedConsolidation({ plan, words })
     : consolidation.consolidation_kind === "translation"
@@ -1361,6 +1371,7 @@ async function submitConsolidation(action: { answer: string; expected_revision: 
   if (exercise.activity_type !== expectedType || !exercise.multiline) {
     throw new WebApiError(409, "INVALID_STUDY_STATE", "The saved consolidation exercise is invalid.");
   }
+  await reserveLearningBudget(`exercise:${plan.exercise_id}`, expectedType, "consolidation");
   const gradingStarted = Date.now();
   const grade: WrapupGrade | SemanticGrade = !existingPlan.success && consolidation.consolidation_kind === "translation"
     ? await gradeWrapupAnswer({
@@ -1602,6 +1613,11 @@ async function setDailyNewWordLimitAction(
 }
 
 async function performAction(action: WebAction): Promise<Record<string, unknown>> {
+  if (action.action === "set_daily_time_budget" || action.action === "extend_daily_time_budget") {
+    await setLearningBudget(action.action === "set_daily_time_budget" ? action.minutes : undefined, action.action === "extend_daily_time_budget" ? action.request_id : undefined);
+    const active = await getActiveStudySession();
+    return active ? successForSession(active) : doneResponse();
+  }
   if (action.action === "set_daily_new_word_limit") return setDailyNewWordLimitAction(action);
   if (action.action === "refresh_progress") return { screen: "done", session_revision: action.expected_revision, state: {}, progress: await getProgress() };
   if (action.action === "continue") return resolveBootstrap(action.expected_revision);
@@ -1641,6 +1657,13 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
   try {
     authenticate(request);
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/api/web/evidence") return jsonApiResponse(await getEvidenceEvaluation());
+    if (request.method === "POST" && url.pathname === "/api/web/evidence/label") {
+      const input = z.object({ id: z.number().int().positive(), outcome: z.enum(["correct","incorrect","partial","not_assessed"]), error_label: z.enum(["none","meaning","collocation","grammar","spelling","pronunciation"]).default("none") }).strict().safeParse(await request.json());
+      if (!input.success) throw new WebApiError(400,"INVALID_REQUEST","The human evidence label is invalid.");
+      return jsonApiResponse(await labelEvidence(input.data.id,input.data.outcome,input.data.error_label));
+    }
+    if (request.method === "GET" && url.pathname === "/api/web/budget") return jsonApiResponse(await getLearningBudget());
     if (request.method === "GET" && url.pathname === "/api/web/bootstrap") {
       return jsonApiResponse(await resolveBootstrap());
     }
@@ -1799,6 +1822,10 @@ export async function handleWebApiRequest(request: Request): Promise<Response> {
     }
     return jsonApiResponse({ error: { code: "NOT_FOUND", message: "Not found." } }, 404);
   } catch (error) {
+    if (error instanceof LearningBudgetReached) {
+      const active = await getActiveStudySession();
+      return jsonApiResponse({ ...await doneResponse(active?.updated_at ?? null), budget_paused: true });
+    }
     return failure(error);
   }
 }

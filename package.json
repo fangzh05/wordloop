@@ -17,7 +17,8 @@
     "test:inspector": "npm run build && node scripts/inspect-mcp.mjs",
     "check:shanbay": "node --import tsx scripts/check-shanbay.ts",
     "check:db": "node --import tsx scripts/check-db-schema.ts",
-    "predeploy:check": "npm run typecheck && npm test && npm run build && npm run check:db"
+    "predeploy:check": "npm run typecheck && npm test && npm run build && npm run check:db",
+    "evidence:replay": "node --import tsx scripts/replay-learning-evidence.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.5",
@@ -31,6 +32,7 @@
     "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@modelcontextprotocol/inspector": "2.6.0",
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.1",

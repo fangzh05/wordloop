@@ -15,6 +15,14 @@ type RpcCheck = {
 };
 
 const checks: SchemaCheck[] = [
+  { table: "exercise_skill_evidence", column: "evidence_version", migration: "20261002024106" },
+  { table: "user_skill_state", column: "p_mastery", migration: "20261002024106" },
+  { table: "learning_settings", column: "daily_minutes", migration: "20261002024106" },
+  { table: "learning_budget_events", column: "task_key", migration: "20261002024106" },
+  { table: "evidence_gold_labels", column: "reviewed_at", migration: "20261002024106" },
+  { table: "bkt_updates", column: "prediction", migration: "20261002024106" },
+  { table: "tutor_shadow_decisions", column: "suggested_activity", migration: "20261002024106" },
+
   { table: "users", column: "daily_new_word_limit", migration: "202609130002" },
   { table: "user_words", column: "fsrs_state", migration: "202609130002" },
   { table: "study_sessions", column: "state", migration: "202609150004" },
@@ -32,6 +40,8 @@ const checks: SchemaCheck[] = [
 ];
 
 const rpcChecks: RpcCheck[] = [
+  { name: "learning_budget_snapshot_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000" }, migration: "20261002024106" },
+  { name: "pending_skill_evidence_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000" }, migration: "20261002024106" },
   {
     name: "get_today_words_v2",
     args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_date: "2000-01-01" },

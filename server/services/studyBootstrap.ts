@@ -1,3 +1,4 @@
+import { getLearningBudget } from "./learningBudget.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { getCompletedLessonWords } from "./attempts.js";
 import type { StudyPhase, StudySessionRow, VocabularyItem } from "../types.js";
@@ -28,7 +29,8 @@ export type StudyBootstrapResult =
   | { action: "review"; count: number }
   | { action: "pretest"; words: VocabularyItem[] }
   | { action: "lesson"; word: VocabularyItem; lesson_words?: string[] }
-  | { action: "done" };
+  | { action: "done" }
+  | { action: "budget_complete" };
 
 async function firstLessonWord(
   lessonWords: string[] | undefined,
@@ -209,6 +211,9 @@ export async function getStudyBootstrap(options?: {
     if (options && (active?.updated_at ?? null) !== options.expectedRevision) {
       throw new StaleStudyStateError();
     }
+    const budget = await getLearningBudget(db, userId);
+    // Resume feedback and a question already on screen; never discard its draft.
+    if (budget.enabled && budget.remaining_seconds < 8 && (!active?.state || ["review_complete", "pretest_complete"].includes(active.state.phase))) return { action: "budget_complete" };
     let normalizedActive = active?.state
       ? { ...active, state: normalizeStudyStateForRead(active.state) }
       : active;

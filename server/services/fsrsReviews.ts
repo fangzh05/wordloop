@@ -1,3 +1,5 @@
+import { tryConsumeSkillEvidence } from "./learningModel.js";
+import { reserveLearningBudget } from "./learningBudget.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { RecordReviewSubmissionInput } from "../../shared/toolContracts.js";
 import type { ErrorLayer, FsrsRating, ReviewSource, UserWordRow } from "../types.js";
@@ -52,6 +54,7 @@ export async function recordReviewResult(input: {
   const word = normalizeWord(input.word);
   const row = await loadUserWord(word, db, userId);
   assertReviewCardDue(row.next_review_at, now);
+  await reserveLearningBudget(`review:${row.word_id}:${row.next_review_at}`, "review", undefined, db, userId);
   const result = scheduleReview(row, input.rating, now, enableFuzz);
   const { error } = await db.rpc("record_review_result_v1", {
     p_user_id: userId, p_normalized_word: word, p_session_id: input.session_id ?? null,
@@ -103,6 +106,7 @@ export async function recordReviewSubmission(
   }
 
   const suppressRelearn = !input.is_correct && await hasCompletedLessonRelearnToday(word, now, db, userId);
+  await reserveLearningBudget(`review:${row.word_id}:${row.next_review_at}`, "review", undefined, db, userId);
   const result = scheduleReview(row, input.rating, now, enableFuzz);
   const { data, error } = await db.rpc("record_review_submission_v1", {
     p_user_id: userId,
@@ -117,6 +121,7 @@ export async function recordReviewSubmission(
   });
   assertDatabaseResult(error);
   await advanceReviewAnswerFromServer(word, input.is_correct, db, userId, { suppressRelearn });
+  await tryConsumeSkillEvidence(db, userId);
   const persisted = data as { attempt?: unknown; review?: unknown } | null;
   const persistedReview = persisted?.review && typeof persisted.review === "object"
     ? persisted.review as Record<string, unknown>

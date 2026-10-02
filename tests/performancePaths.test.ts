@@ -21,7 +21,7 @@ describe("WordLoop hot-path query boundaries", () => {
   it("uses review candidates from SQL and keeps learning context lightweight", () => {
     const review = source("server/services/review.ts");
     expect(review).toContain("get_review_candidates_v1");
-    expect(review).toContain("get_due_review_candidates_v1");
+    expect(review).toContain("get_due_review_states_v1");
     expect(review).toContain("selectDueReviewWords");
     expect(review).not.toContain("getAllUserWords(");
     expect(review).toContain("Promise.all");

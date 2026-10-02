@@ -1,3 +1,5 @@
+import { tryConsumeSkillEvidence } from "./learningModel.js";
+import { reserveLearningBudget } from "./learningBudget.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
@@ -515,6 +517,7 @@ export async function recordPlannedSubmission(input: {
   cadence_candidates?: Record<string, unknown>;
 }, db: StudySessionDb = getDatabase(), userId = getAuthenticatedUserId()): Promise<StudySessionRow> {
   if (!input.expected_revision) throw new StaleStudyStateError();
+  await reserveLearningBudget(`exercise:${input.plan.exercise_id}`, input.activity_type, input.scope, db as ReturnType<typeof getDatabase>, userId);
   const { data, error } = await db.rpc("record_planned_submission_v1", {
     p_user_id: userId,
     p_session_id: input.active.id,
@@ -547,6 +550,7 @@ export async function recordPlannedSubmission(input: {
     assertDatabaseResult(error);
   }
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("PLANNED_SUBMISSION_RESULT_MISSING");
+  await tryConsumeSkillEvidence(db as ReturnType<typeof getDatabase>, userId);
   return parseSession(data);
 }
 

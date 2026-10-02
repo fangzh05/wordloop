@@ -369,3 +369,7 @@ The full runtime teaching behavior lives in [`server/teachingPrompt.ts`](server/
 ## 正式学习卡片
 
 正式学习使用唯一的 `render_lesson_widget`，通过 `explain`、`exercise`、`feedback` 三种模式在同一张卡片内完成讲解、练习和批改。预测试后的听音跟读与听音还原由预测试卡片内完成；`render_pronunciation_cards` 仅用于独立发音查询。
+
+### Evidence and daily time budget
+
+The additive migration `20261002024106_evidence_budget.sql` adds versioned skill evidence, a fixed-parameter shadow BKT projection, and a default 45-minute estimated daily budget. `202610020001_note_review_states.sql` remains the independent Capture note-review migration. The budget does not change FSRS due dates or ratings. Details and operational recovery are in `docs/EVIDENCE_BUDGET.md`.

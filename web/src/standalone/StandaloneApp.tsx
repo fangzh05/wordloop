@@ -1,3 +1,4 @@
+import { LearningBudgetPanel } from "./components/LearningBudgetPanel.js";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../components/Button.js";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
@@ -995,6 +996,7 @@ export default function StandaloneApp(): React.JSX.Element {
       <button type="button" className="settings-open-button" aria-haspopup="dialog" aria-label="设置" onClick={() => setSettingsOpen(true)}><Icon name="settings" /></button>
     </header>}
 
+    {(view?.budget_paused || (visiblePage === "dashboard" && appSection === "today")) && pageStatus === "ready" && <LearningBudgetPanel revision={view?.session_revision} paused={view?.budget_paused} onAction={dispatch} />}
     {visiblePage === "dashboard" && appSection === "today" && <TodayPage
       view={view}
       busy={busy !== null}

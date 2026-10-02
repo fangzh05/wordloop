@@ -1,3 +1,5 @@
+import { createFsrsScheduler, cardFromUserWord } from "./fsrsScheduler.js";
+import { toVocabularyItem } from "./words.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { getCompletedLessonWords } from "./attempts.js";
 import type { ActiveErrorLayer, ReviewKind, ReviewVocabularyItem, UserWordRow, VocabularyItem } from "../types.js";
@@ -60,7 +62,14 @@ export function selectReviewWords(all: VocabularyItem[], limit: number, now = ne
     .slice(0, limit);
 }
 
-function byDuePriority(a: ReviewVocabularyItem, b: ReviewVocabularyItem): number {
+export function reviewRetrievability(item: VocabularyItem, now = new Date()): number {
+  if (!item.last_reviewed_at || item.fsrs_stability <= 0) return 0;
+  return createFsrsScheduler(false).get_retrievability(cardFromUserWord(item as unknown as UserWordRow), now, false);
+}
+function byDuePriority(a: ReviewVocabularyItem, b: ReviewVocabularyItem, now = new Date()): number {
+  const risk = reviewRetrievability(a, now) - reviewRetrievability(b, now);
+  if (Math.abs(risk) > 1e-12) return risk;
+  if (a.wrong_count !== b.wrong_count) return b.wrong_count - a.wrong_count;
   const aTime = a.next_review_at ? Date.parse(a.next_review_at) : Number.MAX_SAFE_INTEGER;
   const bTime = b.next_review_at ? Date.parse(b.next_review_at) : Number.MAX_SAFE_INTEGER;
   const aSortableTime = Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER;
@@ -78,7 +87,7 @@ export function selectDueReviewWords(
   return all
     .filter((word) => reviewDueAt(word, now))
     .map((word) => decorateReviewWord(word, now))
-    .sort(byDuePriority)
+    .sort((a, b) => byDuePriority(a, b, now))
     .slice(0, boundedLimit);
 }
 
@@ -142,17 +151,16 @@ export async function getDueReviewSelection(
   oldRandomReview: VocabularyItem[];
 }> {
   return perf("get_due_review_selection", async () => {
-    const { data, error } = await db.rpc("get_due_review_candidates_v1", {
-      p_user_id: userId,
-      p_now: now.toISOString(),
-      p_limit: Math.max(0, Math.min(REVIEW_SESSION_MAX, limit)),
-    });
-    assertDatabaseResult(error);
-    const candidates = ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
-    return {
-      rollingReview: candidates.map((item) => decorateReviewWord(item, now)),
-      oldRandomReview: [],
-    };
+    const candidates: VocabularyItem[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const r = await db.rpc("get_due_review_states_v1", { p_user_id: userId, p_now: now.toISOString(), p_offset: offset });
+      assertDatabaseResult(r.error);
+      const page = (r.data ?? []) as Array<{ state: UserWordRow; word: Parameters<typeof toVocabularyItem>[1] }>;
+      candidates.push(...page.map(row => toVocabularyItem(row.state, row.word)));
+      if (page.length < 1000) break;
+    }
+    return { rollingReview: selectDueReviewWords(candidates, limit, now), oldRandomReview: [] };
+
   });
 }
 

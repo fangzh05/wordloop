@@ -72,6 +72,7 @@ export interface UserWordRow {
 }
 
 export interface VocabularyItem {
+  last_reviewed_at?: string | null;
   word_id?: string;
   word: string;
   display_word: string;
@@ -137,6 +138,7 @@ export interface StudySessionRow {
 }
 
 export interface ProgressResult {
+  budget?: import("./services/learningBudget.js").BudgetSnapshot;
   today: { total: number; known: number; uncertain: number; unknown: number; completed: number };
   review_today: { completed: number; total: number; remaining: number };
   all_time: { total_words: number; mastered: number; learning: number; error_book: number };

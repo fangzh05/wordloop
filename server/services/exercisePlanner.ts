@@ -1,3 +1,4 @@
+import { activityCost } from "../../shared/learningEvidence.js";
 import type { VocabularyItem } from "../types.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
@@ -79,15 +80,13 @@ function skillIdsFor(word: PlannerWord, activity: PlannedActivityType, signals: 
         || skillId === collocationSkill(word.part_of_speech));
     // Translation is the prompt format. A short translation may provide
     // evidence about lexical recall, collocation, or syntax, each separately.
-    return [...new Set(["target_sense_retrieval", collocationSkill(word.part_of_speech), ...relevantSignals])];
+    return [...new Set(["target_sense_retrieval", collocationSkill(word.part_of_speech), "syntactic_word_use", ...relevantSignals])];
   }
-  return ["target_sense_retrieval"];
+  return activity === "word_recall" ? ["target_sense_retrieval", "target_word_spelling"] : ["target_sense_retrieval"];
 }
 
 function estimatedSeconds(activity: PlannedActivityType): number {
-  if (activity === "translation_cn_to_en") return 38;
-  if (activity === "collocation" || activity === "derivation") return 25;
-  return 20;
+  return Math.max(10, activityCost(activity));
 }
 
 function isOrdinary(word: PlannerWord): boolean {
@@ -293,17 +292,17 @@ export function cadenceCandidatePlans(plan: LessonExercisePlan, word: string): R
       error_focus: plan.error_focus,
       skill_ids,
       hint_level,
-      estimated_seconds: 120,
+      estimated_seconds: 90,
       selection_reason: "每累计 10 个不同 Lesson 词轮换一次的跨天综合任务。",
     };
     const kind = activity === "translation_en_to_cn" ? "translation" : activity;
     return { plan: taskPlan, kind, target_words: [word] };
   };
   return {
-    "0": make("translation_en_to_cn", ["relative_clause_attachment"], "meaning"),
+    "0": make("translation_en_to_cn", ["target_sense_comprehension", "relative_clause_attachment"], "meaning"),
     "1": make("translation_cn_to_en", ["target_sense_retrieval", "verb_object_collocation"], "meaning"),
-    "2": make("translation_en_to_cn", ["concession_scope"], "meaning"),
-    "3": make("sentence", ["target_word_application"], "context"),
+    "2": make("translation_en_to_cn", ["target_sense_comprehension", "concession_scope"], "meaning"),
+    "3": make("sentence", ["target_word_application", collocationSkill(undefined), "syntactic_word_use"], "context"),
   };
 }
 
@@ -429,5 +428,25 @@ export async function planLessonQueue(
       coverage_exception_reason: "当前题已显示，恢复时保留题型以避免替换题目。",
     });
   }
+  // Shadow adapter uses the same arbitration layer, but never replaces live plans.
+  try {
+    const settings = await db.from("learning_settings").select("bkt_mode").eq("user_id",userId).maybeSingle();
+    if (settings.error) throw settings.error;
+    if (settings.data?.bkt_mode !== "off") {
+      const estimates = await db.from("user_skill_state").select("skill_id,p_mastery,evidence_count").eq("user_id",userId).eq("bkt_version","fixed-v1");
+      if (estimates.error) throw estimates.error;
+      const signals: SkillSignal[] = (estimates.data ?? []).filter(s => s.evidence_count >= 5).map(s => ({
+        skill_id:s.skill_id, state:s.p_mastery < .6 ? "needs_practice" : s.p_mastery >= .9 ? "ready" : "developing",
+        source:"adapter", confidence:1-s.p_mastery, reason:"uncalibrated_bkt_shadow" }));
+      if (signals.length) {
+        const proposed = planLessonRound({words:plannerWords,recent_activities:recent,skill_signals:signals});
+        const saved = await db.from("tutor_shadow_decisions").upsert(plans.map((p,i) => ({
+          user_id:userId,plan_id:p.plan_id,actual_activity:p.planned_activity_type,
+          suggested_activity:proposed[i]!.planned_activity_type,reason:proposed[i]!.selection_reason,signals
+        })),{onConflict:"user_id,plan_id",ignoreDuplicates:true});
+        if (saved.error) throw saved.error;
+      }
+    }
+  } catch { console.warn("Tutor shadow unavailable; deterministic planner retained"); }
   return plans;
 }

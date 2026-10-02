@@ -1,3 +1,4 @@
+import { getLearningBudget } from "./learningBudget.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ProgressResult, StudySessionRow, VocabularyItem } from "../types.js";
 import { addCalendarDays, assertDatabaseResult, dateInTimeZone, localDateRange } from "./shared.js";
@@ -110,7 +111,7 @@ export async function getProgress(
       getReviewTodayProgress(db, userId, now),
     ]);
     assertDatabaseResult(error);
-    return { ...(data as Omit<ProgressResult, "review_today">), review_today };
+    return { ...(data as Omit<ProgressResult, "review_today">), review_today, budget: await getLearningBudget(db, userId) };
   });
 }
 

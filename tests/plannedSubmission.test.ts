@@ -39,7 +39,7 @@ describe("planned skill evidence", () => {
       expect.objectContaining({ skill_id: "verb_object_collocation", word_id: wordA, outcome: "incorrect" }),
       expect.objectContaining({ skill_id: "relative_clause_attachment", outcome: "not_assessed" }),
     ]);
-    expect(evidence[0]?.first_unprompted).toBe(false);
+    expect(evidence[0]?.first_unprompted).toBe(true);
     expect(evidence[1]?.modified_correct).toBe(false);
   });
 
@@ -89,6 +89,6 @@ describe("planned skill evidence", () => {
       answer_revealed: false,
       modified_correct: false,
     });
-    expect(evidence[0]).toMatchObject({ outcome: "correct", first_unprompted: false });
+    expect(evidence[0]).toMatchObject({ outcome: "correct", first_unprompted: true });
   });
 });

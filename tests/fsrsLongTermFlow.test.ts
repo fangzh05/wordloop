@@ -1,3 +1,9 @@
+// These tests isolate the original flow; budget admission is exercised in learningBudget.test.ts.
+vi.mock("../server/services/learningBudget.js", async importOriginal => ({
+  ...await importOriginal<typeof import("../server/services/learningBudget.js")>(),
+  getLearningBudget: vi.fn(async () => ({ date:"2026-10-02",daily_minutes:45,remaining_seconds:2700,estimated_used_seconds:0,due_count:0,overdue_count:0,new_word_cap:50,effective_new_limit:50,enabled:true,forecast:[] })),
+  reserveLearningBudget: vi.fn(async () => undefined),
+}));
 import { describe, expect, it, vi } from "vitest";
 import { Rating, State } from "ts-fsrs";
 import { buildLessonWords } from "../server/services/lessonQueue.js";
@@ -75,30 +81,12 @@ function pretestDb() {
         stored = { ...stored, ...(args.p_card as Partial<UserWordRow>) };
         return { data: { word: "fresh-word", result: args.p_result }, error: null };
       }
-      if (name === "get_due_review_candidates_v1") {
+      if (name === "get_due_review_states_v1") {
         const due = Date.parse(stored.next_review_at ?? "") <= Date.parse(String(args.p_now));
         return {
           data: due ? [{
-            word: "fresh-word",
-            display_word: "fresh-word",
-            status: stored.status,
-            source: stored.source,
-            consecutive_correct: stored.consecutive_correct,
-            wrong_count: stored.wrong_count,
-            mastered: stored.mastered,
-            next_review_at: stored.next_review_at,
-            meaning_error: stored.meaning_error,
-            collocation_error: stored.collocation_error,
-            grammar_error: stored.grammar_error,
-            pronunciation_error: stored.pronunciation_error,
-            spelling_error: stored.spelling_error,
-            fsrs_stability: stored.fsrs_stability,
-            fsrs_difficulty: stored.fsrs_difficulty,
-            fsrs_scheduled_days: stored.fsrs_scheduled_days,
-            fsrs_state: stored.fsrs_state,
-            ipa_us: null,
-            ipa_uk: null,
-            senses: [],
+            state: stored,
+            word: { normalized_word: "fresh-word", display_word: "fresh-word", senses: [] },
           }] : [],
           error: null,
         };

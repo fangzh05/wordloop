@@ -1,3 +1,9 @@
+// These tests isolate the original flow; budget admission is exercised in learningBudget.test.ts.
+vi.mock("../server/services/learningBudget.js", async importOriginal => ({
+  ...await importOriginal<typeof import("../server/services/learningBudget.js")>(),
+  getLearningBudget: vi.fn(async () => ({ date:"2026-10-02",daily_minutes:45,remaining_seconds:2700,estimated_used_seconds:0,due_count:0,overdue_count:0,new_word_cap:50,effective_new_limit:50,enabled:true,forecast:[] })),
+  reserveLearningBudget: vi.fn(async () => undefined),
+}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VocabularyItem } from "../server/types.js";
 

@@ -27,7 +27,11 @@ const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, ...migratio
   readFile(path.join(root, "supabase", "migrations", "20260929172617_captured_notes_canonical_adapter.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20260929172621_analytics_read_models.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20260929184221_progress_scheduled_stability_mean.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "20260930043404_balanced_exercise_plans.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "20260930043648_exercise_plan_fk_indexes.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "20260930141500_consolidation_target_attribution.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202610020001_note_review_states.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "20261002024106_evidence_budget.sql"), "utf8"),
 ]);
 
 const assetHash = (asset: string): string => createHash("sha256").update(asset).digest("hex").slice(0, 12);
