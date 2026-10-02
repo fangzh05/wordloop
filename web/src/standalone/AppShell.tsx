@@ -1,3 +1,4 @@
+import { EvidenceEvaluation } from "./components/LearningBudgetPanel.js";
 import { Icon } from "./DesignIcons.js";
 import { useEffect, useId, useRef, useState } from "react";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
@@ -80,6 +81,7 @@ export function SettingsSheet({ open, onClose, appearance, onAppearanceChange, d
       </div></div>
       <div className="settings-section"><h3>每日新词目标</h3><p>降低目标不会删除已经学习的记录。</p>{dailyLimit !== null && onSaveDailyNewWordLimit ? <DailyNewWordLimitEditor limit={dailyLimit} onSave={async (limit) => { setSaveError(""); try { return await onSaveDailyNewWordLimit(limit); } catch (error) { setSaveError(error instanceof Error ? error.message : "目标保存失败，请重试。"); throw error; } }} disabled={busy} /> : <p>当前目标暂时不可读取。</p>}{saveError && <p role="alert" className="standalone-status error">{saveError}</p>}</div>
       <div className="settings-section"><h3>目标记忆率</h3><p>{targetRetention === null ? "暂时不可读取" : `${(targetRetention * 100).toFixed(0)}%`} · 只读，由当前 FSRS 调度配置决定。</p></div>
+      <div className="settings-section"><EvidenceEvaluation /></div>
     </section>
   </div>;
 }

@@ -1,3 +1,5 @@
+import { LearningBudgetPanel } from "../components/LearningBudgetPanel.js";
+import type { BudgetSnapshot } from "../../../../server/services/learningBudget.js";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/Button.js";
 import { getAnalytics, getTodayOverview, type TodayOverview } from "../apiClient.js";
@@ -23,16 +25,18 @@ function ProgressRow({ title, detail, note }: { title: string; detail: string; n
   </div>;
 }
 
-export function TodayPage({ view, busy, busyLabel, tokenKey, onContinue, onStartConsolidation, onOpenCapture, onOpenVocabulary }: {
+export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onContinue, onStartConsolidation, onOpenCapture, onOpenVocabulary }: {
   view: WebApiResponse | null;
   busy: boolean;
   busyLabel?: string | null;
   tokenKey: string | null;
+  onBudgetAction: (fields: Record<string, unknown>) => Promise<unknown>;
   onContinue: () => void;
   onStartConsolidation: () => void;
   onOpenCapture: () => void;
   onOpenVocabulary: () => void;
 }): React.JSX.Element {
+  const [budget, setBudget] = useState<BudgetSnapshot>();
   const [today, setToday] = useState<TodayOverview | null>(null);
   const [todayError, setTodayError] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -115,6 +119,7 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onContinue, onStart
         <ProgressRow title="预测试" detail={`${number(pretest?.completed)} / ${number(pretest?.total)}`} note="先判断熟悉程度" />
         <ProgressRow title="正式学习" detail={`${number(lesson?.completed_distinct_words)} 个词`} note={`新词 ${number(lesson?.new_words)} · 复习补学 ${number(lesson?.relearn_words)}`} />
       </div>}
+      <LearningBudgetPanel key={tokenKey} revision={view?.session_revision} paused={view?.budget_paused} onAction={onBudgetAction} onBudgetChange={setBudget} />
     </section>
 
     <div className="today-secondary-grid"><section className="today-capture-card" aria-label="划词笔记待整理">
@@ -125,18 +130,19 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onContinue, onStart
 
     <section className="today-lower-section">
       <button className="today-disclosure" type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}>
-        <span><strong>接下来 7 天</strong><small>当前已排定到期快照</small></span><span aria-hidden="true">{detailsOpen ? "−" : "+"}</span>
+        <span><strong>接下来 7 天</strong><small>到期安排 · 预计用时</small></span><span aria-hidden="true">{detailsOpen ? "−" : "+"}</span>
       </button>
       {detailsOpen && <div className="today-lower-content">
         {summaryLoading && <p role="status">正在读取到期安排…</p>}
         {summaryError && <p className="standalone-status error" role="alert">{summaryError}</p>}
         {summary && <>
-          <p className="today-snapshot-note">更新时间 {new Date(today?.as_of ?? Date.now()).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: today?.timezone ?? "Asia/Shanghai" })}。只包含当前已排定的下次到期，不预测复习后产生的任务。</p>
+          <p className="today-snapshot-note">更新时间 {new Date(today?.as_of ?? Date.now()).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: today?.timezone ?? "Asia/Shanghai" })}。只包含当前已排定的下次到期，不预测复习后产生的任务；用时按题型估算。</p>
           <div className="today-due-summary">
             <div><span>往日逾期</span><b>{number(summary.due_distribution?.overdue_previous_days)}</b></div>
             <div><span>今日已到期</span><b>{number(summary.due_distribution?.due_today_elapsed)}</b></div>
             <div><span>今日稍后</span><b>{number(summary.due_distribution?.due_today_later)}</b></div>
-            {(Array.isArray(summary.due_distribution?.future_days) ? summary.due_distribution?.future_days as Array<Record<string, unknown>> : []).slice(0, 7).map((day) => <div key={String(day.date)}><span>{String(day.date)}</span><b>{number(day.count)}</b></div>)}
+            {(budget?.forecast ?? []).map(day => <div key={day.date}><span>{new Intl.DateTimeFormat("zh-CN", {month:"numeric",day:"numeric",timeZone:"Asia/Shanghai"}).format(new Date(`${day.date}T12:00:00+08:00`))}</span><b>约 {Math.ceil(day.review_seconds / 60)} 分钟</b></div>)}
+            {!budget && (Array.isArray(summary.due_distribution?.future_days) ? summary.due_distribution.future_days as Array<Record<string, unknown>> : []).slice(0,7).map(day => <div key={String(day.date)}><span>{String(day.date)}</span><b>{number(day.count)} 词</b></div>)}
           </div>
           <h3>最多 3 个关注词</h3>
           {summary.focus_words?.length ? <ul className="today-focus-list">{summary.focus_words.slice(0, 3).map((word) => <li key={String(word.user_word_id)}><span>{String(word.word || "词条")}</span><small>{(Array.isArray(word.reasons) ? word.reasons : []).map((reason) => ({ active_error:"有活动错误",overdue:"已逾期",r_below_target:"回忆概率低于目标",high_d_low_s:"难度较高、稳定性较低" } as Record<string,string>)[String(reason)] ?? String(reason)).join(" · ")}</small></li>)}</ul> : <p>目前没有需要优先关注的词。</p>}

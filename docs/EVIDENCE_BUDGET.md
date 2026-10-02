@@ -1,6 +1,6 @@
 # Evidence and daily time budget
 
-The default is 45 minutes per local day. The existing daily new-word limit remains a ceiling. The Today screen can change the time budget, add 15 minutes once per request ID, export the most recent evidence samples, and record human labels. These routes require the existing web bearer token; every query is scoped to the configured learner.
+The default is 45 minutes per local day. The existing daily new-word limit remains a ceiling. The Today progress card includes the time budget and can add 15 minutes once per request ID. Time editing is collapsed by default; the existing seven-day due panel shows estimated costs. Settings contains the advanced evidence export and human labeling tools. These routes require the existing web bearer token; every query is scoped to the configured learner.
 
 ## Boundaries
 
