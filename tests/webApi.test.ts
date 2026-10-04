@@ -1213,9 +1213,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     mocks.bootstrap.mockImplementation((options: any) => actualBootstrap.getStudyBootstrap(options));
     mocks.generateLesson.mockRejectedValueOnce(new DeepSeekError("DEEPSEEK_TIMEOUT", 504, "DeepSeek request timed out."));
 
-    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
-      headers: { authorization: `Bearer ${mocks.token}` },
-    }));
+    const response = await handleWebApiRequest(post({ action: "continue" }));
     const sessions = await import("../server/services/studySessions.js");
 
     expect(response.status).toBe(504);
@@ -1513,9 +1511,7 @@ describe("Standalone Web API shared-state boundaries", () => {
     const actualBootstrap = await vi.importActual<typeof import("../server/services/studyBootstrap.js")>("../server/services/studyBootstrap.js");
     mocks.bootstrap.mockImplementation((options: any) => actualBootstrap.getStudyBootstrap(options));
 
-    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
-      headers: { authorization: `Bearer ${mocks.token}` },
-    }));
+    const response = await handleWebApiRequest(post({ action: "continue" }));
     const payload = await body(response);
     const sessions = await import("../server/services/studySessions.js");
 

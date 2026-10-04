@@ -385,7 +385,7 @@ async function doneResponse(revision: string | null = null): Promise<Record<stri
 }
 
 /** Normalize old session payloads before the bootstrap path can persist anything. */
-async function prepareBootstrap(expectedRevision?: string | null): Promise<{
+async function prepareBootstrap(expectedRevision?: string | null, startNewRound = true): Promise<{
   bootstrap: Awaited<ReturnType<typeof getStudyBootstrap>>;
   active: StudySessionRow | null;
   revision: string | null;
@@ -449,6 +449,7 @@ async function prepareBootstrap(expectedRevision?: string | null): Promise<{
     activeSession: active,
     expectedRevision: revision,
     deferLessonQueueFreeze: true,
+    startNewRound,
   });
   const latest = await getActiveStudySession(db, userId);
   if ((latest?.id ?? null) !== (active?.id ?? null)
@@ -460,13 +461,14 @@ async function persistPretest(
   words: VocabularyItem[],
   active: StudySessionRow | null,
   expectedRevision: string | null,
+  date?: string,
 ): Promise<StudySessionRow> {
   const items = buildPretestItems(words);
   const firstWord = String(items[0]?.word ?? "");
   const prior = active?.state ? normalizeStudyStateForRead(active.state) : null;
   const flow = prior?.flow ?? { relearn_words: [] };
   const state = makeStudyState({
-    date: prior?.date ?? await getStudyDate(),
+    date: date ?? prior?.date ?? await getStudyDate(),
     widget: "pretest",
     phase: "pretest",
     current_word: firstWord,
@@ -644,7 +646,7 @@ async function createLessonFromBootstrap(
     }
     return generateAndPersistLesson({
       word: firstWord,
-      date: state.date,
+      date: bootstrap.date ?? state.date,
       flow: currentFlow,
       index: 0,
       expectedRevision: revision,
@@ -671,8 +673,8 @@ async function createLessonFromBootstrap(
   });
 }
 
-async function resolveBootstrap(expectedRevision?: string | null): Promise<Record<string, unknown>> {
-  const prepared = await prepareBootstrap(expectedRevision);
+async function resolveBootstrap(expectedRevision?: string | null, startNewRound = true): Promise<Record<string, unknown>> {
+  const prepared = await prepareBootstrap(expectedRevision, startNewRound);
   const { bootstrap, active, revision } = prepared;
   if (bootstrap.action === "budget_complete") return { ...await doneResponse(revision), budget_paused: true };
   if (bootstrap.action === "resume") {
@@ -700,12 +702,18 @@ async function resolveBootstrap(expectedRevision?: string | null): Promise<Recor
     return successForSession(session);
   }
   if (bootstrap.action === "pretest") {
-    const session = await persistPretest(bootstrap.words, active, revision);
+    const session = await persistPretest(bootstrap.words, active, revision, bootstrap.date);
     return successForSession(session);
   }
   if (bootstrap.action === "lesson") {
     const result = await createLessonFromBootstrap(bootstrap, active, revision);
     return successForSession(result.session, {}, result.audioUrl);
+  }
+  if (active?.state?.phase === "review_complete" && active.state.flow.relearn_words.length === 0) {
+    await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
+      revision: revision!, sessionId: active.id, allowCompletedReview: true,
+    });
+    return { ...await doneResponse(null), round_complete: true };
   }
   return doneResponse(revision);
 }
@@ -1208,7 +1216,7 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
       sessionId: scheduled.id,
       allowLessonRoundCompletion: true,
     });
-    return resolveBootstrap(null);
+    return { ...await doneResponse(null), round_complete: true };
   }
   if (state.phase !== "lesson_feedback") throw new WebApiError(409, "INVALID_STUDY_STATE", "The Lesson has no completed exercise to advance.");
   if (action.expected_revision === null) throw new StaleStudyStateError();
@@ -1247,7 +1255,7 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
     sessionId: active.id,
     allowLessonRoundCompletion: true,
   });
-  return resolveBootstrap(null);
+  return { ...await doneResponse(null), round_complete: true };
 }
 
 async function ensureLessonConsolidationScheduled(active: StudySessionRow): Promise<StudySessionRow> {
@@ -1476,7 +1484,7 @@ async function finishConsolidation(action: { expected_revision: string | null },
     sessionId: active.id,
     allowLessonRoundCompletion: true,
   });
-  return resolveBootstrap(null);
+  return { ...await doneResponse(null), round_complete: true };
 }
 
 async function startPendingConsolidation(action: { expected_revision: string | null }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
@@ -1671,7 +1679,7 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
     }
     if (request.method === "GET" && url.pathname === "/api/web/budget") return jsonApiResponse(await getLearningBudget());
     if (request.method === "GET" && url.pathname === "/api/web/bootstrap") {
-      return jsonApiResponse(await resolveBootstrap());
+      return jsonApiResponse(await resolveBootstrap(undefined, false));
     }
     if (request.method === "GET" && url.pathname === "/api/web/today") {
       return jsonApiResponse(await getTodayOverview());

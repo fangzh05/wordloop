@@ -31,6 +31,7 @@ export class ApiError extends Error {
 }
 
 export interface WebApiResponse {
+  round_complete?: boolean;
   budget_paused?: boolean;
   screen: "review" | "pretest" | "lesson" | "done";
   session_revision: string | null;

@@ -339,9 +339,8 @@ describe("complete WordLoop study flow", () => {
     }
 
     expect(visited).toEqual(["b", "d", "e"]);
-    // One strict due-only query starts the fresh flow; the second runs only
-    // after the immutable Review snapshot completes.
-    expect(bootstrapMocks.getDueReviewSelection).toHaveBeenCalledTimes(2);
+    // Only an explicit initial start discovers due cards; completion hands off.
+    expect(bootstrapMocks.getDueReviewSelection).toHaveBeenCalledTimes(1);
     expect(bootstrapMocks.getActiveStudySession).toHaveBeenCalledTimes(3);
   });
 });

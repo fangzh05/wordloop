@@ -91,11 +91,12 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
     <section className="today-focus-card" aria-label="继续今日学习">
       <div>
         <span className="eyebrow">{stage ? `当前阶段 · ${stage}` : "今日学习"}</span>
-        <h2>{view?.budget_paused ? "今日预计预算已完成" : stage ? "把这一轮学完。" : tasksComplete ? "今日计划已完成" : "先复习，再学一点新的。"}</h2>
+        <h2>{view?.budget_paused ? "今日预计预算已完成" : view?.round_complete ? "本轮学习完成" : stage ? "把这一轮学完。" : tasksComplete ? "本轮任务已完成" : "先复习，再学一点新的。"}</h2>
         <p>{active ? `会话开始于 ${today?.active_session.started_at ? new Date(today.active_session.started_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: today.timezone }) : "今天"}。继续上次停下的位置。` : "从今天该做的任务开始。"}</p>
       </div>
-      <Button className="primary today-primary-action" type="button" disabled={busy || !view || tasksComplete} onClick={onContinue}>
-        {busy ? busyLabel ?? "正在处理…" : view?.budget_paused ? "查看保留的任务" : tasksComplete ? "今日计划已完成" : active ? "继续学习" : "开始今日学习"}
+      {view?.screen === "done" && number(view.progress?.fsrs.due_now) > 0 && <p>仍有 {number(view.progress?.fsrs.due_now)} 个到期词待复习，开始下一轮时安排。</p>}
+      <Button className="primary today-primary-action" type="button" disabled={busy || !view} onClick={onContinue}>
+        {busy ? busyLabel ?? "正在处理…" : view?.budget_paused ? "查看保留的任务" : active ? "继续学习" : "开始下一轮"}
       </Button>
     </section>
 

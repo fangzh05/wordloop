@@ -1304,14 +1304,16 @@ export function isCompletedLessonRound(state: StudyState | null): boolean {
 export async function finishStudySession(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
-  expected?: { revision: string; sessionId: string; allowLessonRoundCompletion?: boolean },
+  expected?: { revision: string; sessionId: string; allowLessonRoundCompletion?: boolean; allowCompletedReview?: boolean },
 ): Promise<StudySessionRow> {
   const active = await getActiveStudySession(db, userId);
   if (!active) throw new Error("No active study session to finish.");
   if (expected && (active.id !== expected.sessionId || active.updated_at !== expected.revision)) {
     throw new StaleStudyStateError();
   }
-  const completed = isCompletedLessonWrapup(active.state) || isCompletedLessonRound(active.state);
+  const completedReview = active.state?.widget === "review" && active.state.phase === "review_complete"
+    && active.state.flow.relearn_words.length === 0 && expected?.allowCompletedReview === true;
+  const completed = isCompletedLessonWrapup(active.state) || isCompletedLessonRound(active.state) || completedReview;
   if (!completed) throw new Error("LESSON_WRAPUP_NOT_COMPLETE");
   const completedLessonRound = isCompletedLessonWrapup(active.state) || isCompletedLessonRound(active.state);
   const lessonProfileHistory = completedLessonRound ? active.state?.flow.lesson_profile_history ?? [] : [];
@@ -1343,7 +1345,7 @@ export async function finishStudySession(
         } : {}),
       },
     }
-    : {};
+    : completedReview && active.state ? active.state : {};
   const now = new Date().toISOString();
   let update = db
     .from("study_sessions")

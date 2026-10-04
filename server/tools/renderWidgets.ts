@@ -5,10 +5,8 @@ import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { getCompletedLessonWords } from "../services/attempts.js";
 import { ensureTodayQueue } from "../services/dailyQueue.js";
 import { getProgress } from "../services/progress.js";
-import {
-  filterDueCandidatesAfterCompletedSnapshot,
-  getDueReviewSelection,
-} from "../services/review.js";
+import { getDueReviewSelection } from "../services/review.js";
+import { getLearningBudget, newWordAdmissionLimit } from "../services/learningBudget.js";
 import {
   freezeLessonQueueForSession,
   getActiveStudySession,
@@ -982,10 +980,9 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
   const completedReviewState = active?.state?.widget === "review" && active.state.phase === "review_complete"
     ? active.state
     : null;
+  if (completedReviewState) throw new Error("REVIEW_STAGE_COMPLETE: 本组复习已完成，请继续预测试或补学。");
   const { rollingReview } = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
-  const candidates = completedReviewState
-    ? filterDueCandidatesAfterCompletedSnapshot(rollingReview, completedReviewState.payload.items)
-    : rollingReview;
+  const candidates = rollingReview;
   if (candidates.length === 0) throw new Error("No review words are currently due.");
   const items = buildReviewWidgetItems(candidates, REVIEW_SESSION_MAX);
   if (items.length === 0) throw new Error("到期复习词缺少释义数据。");
@@ -1001,7 +998,7 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
     current_word: items[0]?.word ?? null,
     current_index: 0,
     retry_count: 0,
-    flow: completedReviewState?.flow ?? { relearn_words: [] },
+    flow: { relearn_words: [] },
     payload,
   });
   const persisted = expectedRevision === undefined
@@ -1035,6 +1032,10 @@ export function registerRenderTools(server: McpServer): void {
       getCompletedLessonWords(),
     ]);
     const items = validatePretestItems(parsedInput.items, todayWords, completedLessonWords);
+    const budget = await getLearningBudget();
+    const allowed = new Set(filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords)
+      .slice(0, newWordAdmissionLimit(budget)).map(word => normalizeWord(word.word)));
+    if (items.some(item => !allowed.has(normalizeWord(item.word)))) throw new Error("DAILY_NEW_WORD_ALLOWANCE_REACHED");
     const payload = { widget: "pretest", ...parsedInput, source: "new_word", items };
     return saveWidgetState({
       date,

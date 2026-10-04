@@ -12,6 +12,7 @@ beforeAll(async () => {
     create table words(id uuid primary key,normalized_word text,display_word text);
     create table user_words(id uuid primary key,user_id uuid,word_id uuid,next_review_at timestamptz,status text,mastered boolean,first_seen_at timestamptz);
     create table attempts(id uuid primary key,user_id uuid,word_id uuid,activity_type text,session_id uuid,user_answer text,is_correct boolean,error_layer text,submission_id uuid,scope text,exercise_id uuid,plan_id uuid,skill_ids text[],skill_evidence jsonb,first_attempt boolean,hint_used boolean,answer_revealed boolean);
+    create table fsrs_review_logs(user_id uuid,word_id uuid,reviewed_at timestamptz,review_source text);
     create table study_sessions(id uuid,user_id uuid,state jsonb,ended_at timestamptz);
     create table daily_imports(id uuid primary key default gen_random_uuid(),user_id uuid,import_date date,source text,raw_count integer,unique(user_id,import_date,source));
     create table daily_import_words(import_id uuid,word_id uuid,position integer,unique(import_id,word_id));
@@ -19,6 +20,7 @@ beforeAll(async () => {
     create table exercise_skill_evidence(id bigint generated always as identity primary key,user_id uuid,submission_id uuid,exercise_id uuid,plan_id uuid,scope text,word_id uuid,skill_id text,outcome text,first_unprompted boolean,hint_used boolean,modified_correct boolean,answer_revealed boolean,evidence text,created_at timestamptz default now());`);
   await db.exec(readFileSync(new URL("../supabase/migrations/20261002024106_evidence_budget.sql", import.meta.url), "utf8"));
   await db.exec(readFileSync(new URL("../supabase/migrations/20261004045839_bkt_active_planner.sql", import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../supabase/migrations/20261004164746_cross_day_review_handoff.sql", import.meta.url), "utf8"));
 }, 30000);
 afterAll(() => db.close());
 beforeEach(async () => { await db.exec("begin"); await db.query("insert into users(id) values($1)", [user]); });
@@ -89,13 +91,35 @@ describe("real PostgreSQL evidence and budget transactions", () => {
     const id = await evidence();
     await expect(db.query("select commit_bkt_update_v1($1,$2,0,.5,.34,'OBSERVE',true)", [crypto.randomUUID(), id])).rejects.toThrow("EVIDENCE_NOT_FOUND");
   });
-  it("preserves due dates and blocks new admissions when overdue", async () => {
+  it("preserves due dates and allows six new admissions when overdue", async () => {
     await db.query("insert into words values($1,'opaque','opaque')", [exercise]);
     await db.query("insert into user_words values($1,$2,$1,now()-interval '2 days','review',false,now())", [exercise, user]);
     const before = await value("select next_review_at from user_words");
     const r = await value("select prepare_daily_new_words_budget_v1($1,current_date,50) b", [user]);
-    expect(r.b.added).toBe(0); expect(r.b.limit).toBe(0);
+    expect(r.b.added).toBe(0); expect(r.b.limit).toBe(6);
     expect(await value("select next_review_at from user_words")).toEqual(before);
+  });
+  it("prepares at most six overdue new words across repeat calls and preserves the existing queue", async () => {
+    for(let i=0;i<12;i++) {
+      const id=crypto.randomUUID();
+      await db.query("insert into user_words values($1,$2,$1,now()-interval '2 days','new',false,now())",[id,user]);
+    }
+    const first=await value("select prepare_daily_new_words_budget_v1($1,(now() at time zone 'Asia/Shanghai')::date,50) b",[user]);
+    expect(first.b).toMatchObject({limit:6,added:6,prepared:6});
+    const again=await value("select prepare_daily_new_words_budget_v1($1,(now() at time zone 'Asia/Shanghai')::date,50) b",[user]);
+    expect(again.b).toMatchObject({limit:6,added:0,prepared:6});
+    await db.query("update users set daily_new_word_limit=3 where id=$1",[user]);
+    expect((await value("select prepare_daily_new_words_budget_v1($1,current_date,50) b",[user])).b.prepared).toBe(6);
+  });
+  it("counts only first-ever new Pretests on the user's local day and respects insufficient time", async () => {
+    await db.query("insert into fsrs_review_logs values($1,$2,now()-interval '2 days','pretest'),($1,$2,now(),'pretest')",[user,exercise]);
+    expect((await value("select learning_budget_snapshot_v1($1) b",[user])).b.new_words_started_today).toBe(0);
+    await db.query("insert into fsrs_review_logs values($1,$2,now(),'pretest')",[user,crypto.randomUUID()]);
+    expect((await value("select learning_budget_snapshot_v1($1) b",[user])).b.new_words_started_today).toBe(1);
+    await db.query("insert into user_words values($1,$2,$1,now()-interval '2 days','new',false,now())",[exercise,user]);
+    for (let i=0;i<8;i++) await value("select reserve_learning_budget_v1($1,$2,300,'test')",[user,`spent-${i}`]);
+    await value("select reserve_learning_budget_v1($1,'spent-last',224,'test')",[user]);
+    expect((await value("select prepare_daily_new_words_budget_v1($1,current_date,50) b",[user])).b.limit).toBe(1);
   });
   it("keeps all new tables inaccessible to browser roles", async () => {
     const result = await db.query<{ relname: string; relrowsecurity: boolean; allowed: boolean }>("select c.relname,c.relrowsecurity,has_table_privilege('anon',c.oid,'SELECT') allowed from pg_class c where c.relname in ('user_skill_state','bkt_updates','learning_settings','learning_budget_events','evidence_gold_labels')");

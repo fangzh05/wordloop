@@ -226,7 +226,7 @@ describe("Review render tool schema compatibility", () => {
     expect(sessionMocks.persistStudyState).not.toHaveBeenCalled();
   });
 
-  it("creates a new Review snapshot after the previous snapshot completes", async () => {
+  it("rejects another Review snapshot after completion and preserves the finished one", async () => {
     const completedPayload = {
       widget: "review",
       title: "复习",
@@ -262,17 +262,12 @@ describe("Review render tool schema compatibility", () => {
     });
 
     await withReviewClient(async (client) => {
-      const payload = payloadOf(await client.callTool({ name: "render_review_widget_v2", arguments: {} }));
-      expect((payload.items as Array<{ word: string }>).map((item) => item.word)).toEqual(["review-b"]);
+      const result = await client.callTool({ name: "render_review_widget_v2", arguments: {} });
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain("REVIEW_STAGE_COMPLETE");
     });
-    const persisted = sessionMocks.persistStudyState.mock.calls.at(-1)?.[0] as any;
-    expect(persisted).toMatchObject({
-      widget: "review",
-      phase: "review",
-      current_word: "review-b",
-      current_index: 0,
-      flow: { relearn_words: ["failed-word"] },
-    });
+    expect(sessionMocks.persistStudyState).not.toHaveBeenCalled();
+    expect(mockedGetDueReviewSelection).not.toHaveBeenCalled();
     expect(completedState.payload.items).toEqual(completedPayload.items);
   });
 

@@ -30,7 +30,7 @@ Supabase 保存持久状态，`ts-fsrs` 计算复习时间，WordLoop backend �
 
 WordLoop 是学习流程状态的唯一真源。GPT 不得根据聊天历史猜测学到哪个词、上一道题、题号或重试次数，也不得依赖 `updateModelContext`、host Widget state 或完整聊天记录恢复状态。
 
-用户说“WordLoop 开始”或要求继续时，正常第一步必须调用 `get_study_bootstrap`。无 active session 时，bootstrap 会先幂等准备今日队列，再按 due-only 复习→新词预测试→Lesson→完成的顺序短路；active=true 时立即恢复，不额外准备今天队列，只按返回的 widget 调用对应 render tool 的 `resume=true`：review→`render_review_widget_v2`，lesson→`render_lesson_widget`，pretest→`render_pretest_widget`，dictation→`render_dictation_widget`。Review 完成后继续同一个 study flow，不重新开始 Review；恢复成功后保持聊天区安静。若 active Lesson phase=`lesson_complete`，bootstrap 只恢复现有 Lesson 状态，不关闭会话或重新发现当天队列；必须先用 `render_lesson_widget resume=true` 恢复轮末交接或已持久化的长难句收尾卡。完成收尾作答并批改后调用 `finish_study_session` exactly once，再立即调用 `get_study_bootstrap`；只有释放 active session 后且没有 review、pretest 或 lesson 项的新 bootstrap 返回 `done`，才可说明没有剩余学习项。旧客户端没有 `get_study_bootstrap` 时，才调用 `get_active_study_session` 并兼容使用 `get_learning_context`。如果迁移词库后今日列表为空，调用一次 `prepare_daily_new_words`。每日新词数量由用户设置决定，默认 50，不是固定值。用户明确说“今天学 20 个”“每天 30 个”或“新词改成 50”时，只调用 `set_daily_new_word_limit`；该工具会在同一服务调用中准备当天队列。若降低数量，不删除今天已经准备的内容。
+用户说“WordLoop 开始”或要求继续时，正常第一步必须调用 `get_study_bootstrap`。无 active session 时，bootstrap 会先幂等准备今日队列，再按 due-only 复习→新词预测试→Lesson→完成的顺序短路；active=true 时立即恢复，不额外准备今天队列，只按返回的 widget 调用对应 render tool 的 `resume=true`：review→`render_review_widget_v2`，lesson→`render_lesson_widget`，pretest→`render_pretest_widget`，dictation→`render_dictation_widget`。Review 完成后继续同一个 study flow，不重新开始 Review；恢复成功后保持聊天区安静。若 active Lesson phase=`lesson_complete`，bootstrap 只恢复现有 Lesson 状态，不关闭会话或重新发现当天队列；必须先用 `render_lesson_widget resume=true` 恢复轮末交接或已持久化的长难句收尾卡。完成收尾作答并批改后调用 `finish_study_session` exactly once，报告本轮学习完成，等待用户主动开始下一轮；不得自动调用 `get_study_bootstrap` 拉取另一组复习。只有确实没有剩余到期词及学习任务时才可说明全部任务完成。旧客户端没有 `get_study_bootstrap` 时，才调用 `get_active_study_session` 并兼容使用 `get_learning_context`。如果迁移词库后今日列表为空，调用一次 `prepare_daily_new_words`。每日新词数量由用户设置决定，默认 50，不是固定值。用户明确说“今天学 20 个”“每天 30 个”或“新词改成 50”时，只调用 `set_daily_new_word_limit`；该工具会在同一服务调用中准备当天队列。若降低数量，不删除今天已经准备的内容。
 
 兼容流程中的 `get_learning_context` 只用于读取 WordLoop 数据；due-only `rolling_review` 非空时优先调用 `render_review_widget_v2`，若 host 只暴露 legacy `render_review_widget` 则调用 legacy tool。两者都不要传 `items`；即使旧客户端传入 `items` 或 `title`，WordLoop backend 也会忽略它们并从固定的 due-only Review snapshot 生成复习卡。一次 Review session 最多 200 个卡片，不足时不提前抽取未到期词；active error-only 词不触发初始 Review。按 backend 给定题目方向给中文核心义产出英文单词，或给英文单词做简短英文解释。不要同时公布答案。
 
@@ -58,7 +58,7 @@ WordLoop 是学习流程状态的唯一真源。GPT 不得根据聊天历史猜�
 
 ## 滚动复习
 
-每次会话开头由 `get_study_bootstrap` 检查并固定一份 due-only Review snapshot：只取 `next_review_at <= now`，按 due 时间和 normalized word 排序，最多 200 个；active error 但未到期的词不再阻塞初始 Review。WordLoop backend 为每个词返回 `review_kind`：`error_repair`、`fsrs_due` 或 `both`。优先调用 `render_review_widget_v2`；若 host 只暴露 legacy `render_review_widget` 则调用它。两者都不要传 `items`，LLM 不得漏词、换词、改顺序或提前拉取未来卡。每张卡完成后由 Widget 原子调用对应记录工具，再提交 `review_answer` 推进 durable cursor；失败或“不会”进入当前 flow 的 relearn queue，Review 完成后优先学习今日新词，再处理 relearn queue。对应错误层连续答对 2 次才能清除，FSRS 的 Good 不直接清除错误层。有待复习词时调用 server-owned review render tool，把题面、输入、批改和记录留在卡片内；卡片成功渲染后不要在聊天区重复题目、进度或逐词反馈。
+每次会话开头由 `get_study_bootstrap` 检查并固定一份 due-only Review snapshot：只取 `next_review_at <= now`，按 due 时间和 normalized word 排序，最多 200 个；active error 但未到期的词不再阻塞初始 Review。WordLoop backend 为每个词返回 `review_kind`：`error_repair`、`fsrs_due` 或 `both`。优先调用 `render_review_widget_v2`；若 host 只暴露 legacy `render_review_widget` 则调用它。两者都不要传 `items`，LLM 不得漏词、换词、改顺序或提前拉取未来卡。每张卡完成后由 Widget 原子调用对应记录工具，再提交 `review_answer` 推进 durable cursor；失败或“不会”进入当前 flow 的 relearn queue，Review 固定列表完成后交接到预测试与 Lesson，不重新检查并追加到期卡；跨日交接按用户时区准备当天新词。Lesson 保留 relearn queue 优先，再学习预测试中的新词。对应错误层连续答对 2 次才能清除，FSRS 的 Good 不直接清除错误层。有待复习词时调用 server-owned review render tool，把题面、输入、批改和记录留在卡片内；卡片成功渲染后不要在聊天区重复题目、进度或逐词反馈。
 
 ## FSRS Rating
 
@@ -77,7 +77,7 @@ WordLoop 是学习流程状态的唯一真源。GPT 不得根据聊天历史猜�
 
 当用户准备结束学习时进行自由回忆：要求用户默写本次全部新词，并各写 1 个搭配。会话末自由回忆默认只调用 `record_attempt`，不推进 FSRS。批改结束后调用 `get_progress`，输出：
 
-Lesson `round_complete` 只标记词汇轮结束。没有 pending 综合任务时按既有 session 流程完成并继续当天剩余学习；有 pending 时用户可现在做或稍后做。综合题完成后才推进轮换 cursor；会话收尾仍须由用户明确结束学习触发。
+Lesson `round_complete` 只标记词汇轮结束。没有 pending 综合任务时完成本轮 session 并等待用户主动开始下一轮；有 pending 时用户可现在做或稍后做。综合题完成后才推进轮换 cursor；会话收尾仍须由用户明确结束学习触发。
 
 ```text
 ▸ 本次新学：…
@@ -118,3 +118,5 @@ Plugin 已经保存状态，用户以后不需要依赖手动粘贴摘要才能�
 
 
 时间预算默认每日45分钟，原新词数仅为上限。bootstrap 返回 budget_complete 表示预算用完，不能说全部到期任务已完成；提示用户可调用 extend_daily_time_budget 加练15分钟。BKT在active模式使用真实答题证据参与新Lesson选题；shadow模式只记录建议，off模式停用。不得改变已显示题目、正式FSRS Review题型、评分或到期日。
+
+逾期期间预算启用时，每日首次新词预测试最多 min(6, 用户每日新词上限) 个，同时受剩余时间按每词77秒估算限制。已经显示的题目、导入内容和补学队列不删除。网页刷新只恢复任务，开始下一轮必须由用户点击。

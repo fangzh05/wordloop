@@ -1046,7 +1046,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const direction = item.direction === "en_definition" ? "en_definition" : "cn_to_en";
       return <section className="widget-card standalone-card study-task-card" aria-labelledby="study-title">
         <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={backToToday} />
-        {complete ? <div className="standalone-content"><p>本轮复习完成。</p><div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
+        {complete ? <div className="standalone-content"><p>本组复习完成。接下来进入预测试或补学。</p>{numberValue(record(record(view.progress).fsrs).due_now) > 0 && <p>仍有 {numberValue(record(record(view.progress).fsrs).due_now)} 个到期词，留待下一轮复习。</p>}<div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
           <StandaloneReviewQuestion item={item} direction={direction} />
           <label className="answer-label" htmlFor="study-answer">{direction === "cn_to_en" ? "写出英文单词" : "英文释义"}</label>
           <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "review_submit", answer }); } }} />

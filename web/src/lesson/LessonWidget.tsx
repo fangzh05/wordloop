@@ -340,7 +340,7 @@ export function buildRoundCompleteMessage(
       "WORDLOOP_ROUND_COMPLETE",
       "",
       "The server reports no periodic consolidation for this Lesson round.",
-      "Call finish_study_session exactly once, then immediately call get_study_bootstrap.",
+      "Call finish_study_session exactly once, report this round complete, and wait for the user to start another round.",
       "Do not generate any round-end exercise or infer cadence from chat history.",
     ].join("\n");
   }
@@ -624,7 +624,7 @@ export function LessonWidget(): React.JSX.Element {
     try {
       if (payload.mode !== "explain" && payload.consolidation === true
         && payload.consolidation_status === "feedback") {
-        await sendUserMessage("WordLoop 周期巩固已完成批改。请调用 finish_study_session exactly once，然后立即调用 get_study_bootstrap 继续当天剩余学习；不要生成新题。成功渲染下一张 Widget 后保持聊天区安静。");
+        await sendUserMessage("WordLoop 周期巩固已完成批改。请调用 finish_study_session exactly once，报告本轮学习完成，等待用户主动开始下一轮；不要自动生成新题或调用 get_study_bootstrap。");
         nextStatusRef.current = "sent";
         setNextStatus("sent");
         return;

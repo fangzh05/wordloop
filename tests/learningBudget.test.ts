@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { getLearningBudget, newWordAllowance, newWordForecast, reserveLearningBudget, LearningBudgetReached, type BudgetSnapshot } from "../server/services/learningBudget.js";
+import { getLearningBudget, newWordAllowance, newWordAdmissionLimit, newWordForecast, reserveLearningBudget, LearningBudgetReached, type BudgetSnapshot } from "../server/services/learningBudget.js";
 import { updateBkt, predictCorrect, predictionMetrics } from "../server/services/bkt.js";
 import { plannedSkillEvidence } from "../server/services/plannedSubmission.js";
 import type { LessonExercisePlan } from "../shared/toolContracts.js";
@@ -51,9 +51,19 @@ describe("fixed shadow BKT", () => {
   });
 });
 describe("time budget admission", () => {
-  it("stops new words for overdue cards and overloaded reviews", () => {
-    expect(newWordAllowance({ ...budget, overdue_count: 1 })).toBe(0);
+  it("keeps six daily slots despite overdue reviews, while preserving the no-overdue forecast", () => {
+    expect(newWordAllowance({ ...budget, overdue_count: 150, due_count: 1000 })).toBe(6);
     expect(newWordAllowance({ ...budget, due_count: 338 })).toBe(0);
+  });
+  it("counts prior new words and limits admission by remaining time and user cap", () => {
+    const overdue = { ...budget, overdue_count: 1 };
+    expect(newWordAdmissionLimit({ ...overdue, new_words_started_today: 5 })).toBe(1);
+    expect(newWordAdmissionLimit({ ...overdue, new_words_started_today: 6 })).toBe(0);
+    expect(newWordAdmissionLimit({ ...overdue, remaining_seconds: 76 })).toBe(0);
+    expect(newWordAdmissionLimit({ ...overdue, remaining_seconds: 154 })).toBe(2);
+    expect(newWordAdmissionLimit({ ...overdue, new_word_cap: 3 })).toBe(3);
+    expect(newWordAllowance({ ...overdue, new_words_started_today: 5, remaining_seconds: 76 })).toBe(5);
+    expect(newWordAdmissionLimit({ ...overdue, enabled: false })).toBe(6);
   });
   it("reserves study and consolidation costs and respects the word cap", () => {
     expect(newWordAllowance({ ...budget, new_word_cap: 3 })).toBe(3);

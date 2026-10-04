@@ -1,10 +1,9 @@
-import { getLearningBudget } from "./learningBudget.js";
+import { getLearningBudget, newWordAdmissionLimit, type BudgetSnapshot } from "./learningBudget.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { getCompletedLessonWords } from "./attempts.js";
 import type { StudyPhase, StudySessionRow, VocabularyItem } from "../types.js";
 import { ensureTodayQueue } from "./dailyQueue.js";
 import {
-  filterDueCandidatesAfterCompletedSnapshot,
   getDueReviewSelection,
 } from "./review.js";
 import {
@@ -27,8 +26,8 @@ import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 export type StudyBootstrapResult =
   | { action: "resume"; widget: "pretest" | "lesson" | "dictation" | "review"; phase: StudyPhase }
   | { action: "review"; count: number }
-  | { action: "pretest"; words: VocabularyItem[] }
-  | { action: "lesson"; word: VocabularyItem; lesson_words?: string[] }
+  | { action: "pretest"; words: VocabularyItem[]; date?: string }
+  | { action: "lesson"; word: VocabularyItem; lesson_words?: string[]; date?: string }
   | { action: "done" }
   | { action: "budget_complete" };
 
@@ -73,30 +72,21 @@ async function lessonAction(
 async function continueCompletedReview(
   active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>,
   deferLessonQueueFreeze: boolean,
+  budget: BudgetSnapshot,
 ): Promise<StudyBootstrapResult> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
-  const date = active.state?.date;
+  const date = active.state?.flow.lesson_words !== undefined
+    ? active.state.date : (await ensureTodayQueue(db, userId)).date;
   if (!date) return { action: "done" };
-
-  // A Review snapshot is immutable while it is active. Once it is complete,
-  // query strict FSRS due cards again so cards that became due during the
-  // previous snapshot can form the next small Review snapshot.
-  const newlyDue = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
-  const eligibleDue = filterDueCandidatesAfterCompletedSnapshot(
-    newlyDue.rollingReview,
-    active.state?.payload.items,
-  );
-  if (eligibleDue.length > 0) {
-    return { action: "review", count: eligibleDue.length };
-  }
 
   const [todayWords, completedLessonWords] = await Promise.all([
     getTodayWords(date, db, userId),
     getCompletedLessonWords(db, userId),
   ]);
   const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
-  if (newWords.length > 0) return { action: "pretest", words: newWords.slice(0, 6) };
+  const admitted = newWords.slice(0, newWordAdmissionLimit(budget));
+  if (admitted.length > 0) return { action: "pretest", words: admitted, date };
 
   const existingLessonWords = lessonWordsFromFlow(active.state?.flow ?? { relearn_words: [] });
   if (existingLessonWords !== undefined) {
@@ -119,16 +109,19 @@ async function continueCompletedReview(
       completedLessonWords,
       active.state?.flow?.pretest_familiar_words ?? [],
     );
-    return lessonAction(lessonWords, db, userId, true);
+    const planned = await lessonAction(lessonWords, db, userId, true);
+    return planned.action === "lesson" ? { ...planned, date } : planned;
   }
 
-  const frozen = await freezeAndReadFirstLessonWord(active, todayWords);
+  const handoff = active.state ? { ...active, state: { ...active.state, date } } : active;
+  const frozen = await freezeAndReadFirstLessonWord(handoff, todayWords);
   return frozen.word ? { action: "lesson", word: frozen.word } : { action: "done" };
 }
 
 export async function continueCompletedPretest(
   active: NonNullable<Awaited<ReturnType<typeof getActiveStudySession>>>,
   deferLessonQueueFreeze = false,
+  budget?: BudgetSnapshot,
 ): Promise<StudyBootstrapResult> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
@@ -162,14 +155,16 @@ export async function continueCompletedPretest(
     const planned = await lessonAction(lessonWords, db, userId, true);
     if (planned.action === "lesson") return planned;
     const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
-    return newWords.length > 0 ? { action: "pretest", words: newWords.slice(0, 6) } : planned;
+    const admitted = newWords.slice(0, newWordAdmissionLimit(budget ?? await getLearningBudget(db, userId)));
+    return admitted.length > 0 ? { action: "pretest", words: admitted } : planned;
   }
   const frozen = await freezeAndReadFirstLessonWord(active, todayWords);
   if (frozen.word) return { action: "lesson", word: frozen.word };
 
   const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
-  return newWords.length > 0
-    ? { action: "pretest", words: newWords.slice(0, 6) }
+  const admitted = newWords.slice(0, newWordAdmissionLimit(budget ?? await getLearningBudget(db, userId)));
+  return admitted.length > 0
+    ? { action: "pretest", words: admitted }
     : { action: "done" };
 }
 
@@ -177,6 +172,7 @@ async function bootstrapFreshFlow(
   db: ReturnType<typeof getDatabase>,
   userId: string,
   deferLessonQueueFreeze: boolean,
+  budget: BudgetSnapshot,
 ): Promise<StudyBootstrapResult> {
   const queue = await ensureTodayQueue(db, userId);
 
@@ -190,8 +186,9 @@ async function bootstrapFreshFlow(
     getCompletedLessonWords(db, userId),
   ]);
   const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
-  if (newWords.length > 0) {
-    return { action: "pretest", words: newWords.slice(0, 6) };
+  const admitted = newWords.slice(0, newWordAdmissionLimit(budget));
+  if (admitted.length > 0) {
+    return { action: "pretest", words: admitted };
   }
 
   const lessonWords = buildLessonWords([], todayWords, completedLessonWords);
@@ -202,6 +199,7 @@ export async function getStudyBootstrap(options?: {
   activeSession: StudySessionRow | null;
   expectedRevision: string | null;
   deferLessonQueueFreeze?: boolean;
+  startNewRound?: boolean;
 }): Promise<StudyBootstrapResult> {
   return perf("get_study_bootstrap", async () => {
     const db = getDatabase();
@@ -212,6 +210,7 @@ export async function getStudyBootstrap(options?: {
       throw new StaleStudyStateError();
     }
     const budget = await getLearningBudget(db, userId);
+    if (options?.startNewRound === false && !active?.state) return { action: "done" };
     // Resume feedback and a question already on screen; never discard its draft.
     if (budget.enabled && budget.remaining_seconds < 8 && (!active?.state || ["review_complete", "pretest_complete"].includes(active.state.phase))) return { action: "budget_complete" };
     let normalizedActive = active?.state
@@ -223,6 +222,9 @@ export async function getStudyBootstrap(options?: {
       normalizedActive = await normalizeLegacyLessonSession(normalizedActive, db, userId);
     }
     if (normalizedActive?.state) {
+      if (options?.startNewRound === false && ["review_complete", "pretest_complete"].includes(normalizedActive.state.phase)) {
+        return { action: "resume", widget: normalizedActive.state.widget, phase: normalizedActive.state.phase };
+      }
       if (normalizedActive.state.widget === "lesson" && normalizedActive.state.phase === "lesson_complete") {
         // The vocabulary cursor is complete, but the active study session stays
         // open until the backend cadence handoff is finished. Returning resume
@@ -231,14 +233,14 @@ export async function getStudyBootstrap(options?: {
         return { action: "resume", widget: "lesson", phase: "lesson_complete" };
       }
       if (normalizedActive.state.widget === "review" && normalizedActive.state.phase === "review_complete") {
-        return continueCompletedReview(normalizedActive, options?.deferLessonQueueFreeze ?? false);
+        return continueCompletedReview(normalizedActive, options?.deferLessonQueueFreeze ?? false, budget);
       }
       if (normalizedActive.state.widget === "pretest" && normalizedActive.state.phase === "pretest_complete") {
-        return continueCompletedPretest(normalizedActive, options?.deferLessonQueueFreeze ?? false);
+        return continueCompletedPretest(normalizedActive, options?.deferLessonQueueFreeze ?? false, budget);
       }
       return { action: "resume", widget: normalizedActive.state.widget, phase: normalizedActive.state.phase };
     }
 
-    return bootstrapFreshFlow(db, userId, options?.deferLessonQueueFreeze ?? false);
+    return bootstrapFreshFlow(db, userId, options?.deferLessonQueueFreeze ?? false, budget);
   });
 }

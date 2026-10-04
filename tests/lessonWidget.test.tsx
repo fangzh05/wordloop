@@ -457,7 +457,7 @@ describe("guided lesson widget", () => {
       "WORDLOOP_ROUND_COMPLETE",
       "",
       "The server reports no periodic consolidation for this Lesson round.",
-      "Call finish_study_session exactly once, then immediately call get_study_bootstrap.",
+      "Call finish_study_session exactly once, report this round complete, and wait for the user to start another round.",
       "Do not generate any round-end exercise or infer cadence from chat history.",
     ].join("\n"));
     const translation = buildRoundCompleteMessage("shrink", { kind: "translation", trigger_round: 2, target_words: ["policy", "pressure"] });

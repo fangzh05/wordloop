@@ -88,6 +88,34 @@ function word(index: number, status: VocabularyItem["status"] = "new"): Vocabula
 }
 
 describe("study bootstrap daily queue invariant", () => {
+  it("refreshes the production-shaped 7/106 cursor without replacing or extending its snapshot", async () => {
+    const state = { version: 1, date: "2026-10-04", widget: "review", phase: "review", current_word: "word-7", current_index: 7,
+      retry_count: 0, flow: { relearn_words: Array.from({ length: 70 }, (_, i) => `failed-${i}`) },
+      payload: { widget: "review", items: Array.from({ length: 106 }, (_, i) => ({ word: `word-${i}` })) } };
+    const active = { state, updated_at: "revision", review_words_count: 139 } as any;
+    const before = JSON.stringify(active);
+    expect(await getStudyBootstrap({ activeSession: active, expectedRevision: "revision", startNewRound: false })).toEqual({ action: "resume", widget: "review", phase: "review" });
+    expect(JSON.stringify(active)).toBe(before);
+    expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
+    expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
+  });
+  it("does not start a fresh round on refresh, but an explicit start can query due cards", async () => {
+    expect(await getStudyBootstrap({ activeSession: null, expectedRevision: null, startNewRound: false })).toEqual({ action: "done" });
+    expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
+    mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [word(1, "review")], oldRandomReview: [] });
+    expect(await getStudyBootstrap({ activeSession: null, expectedRevision: null, startNewRound: true })).toEqual({ action: "review", count: 1 });
+  });
+  it("hands a completed cross-day snapshot to today's Pretest while preserving all old progress", async () => {
+    const active = { updated_at: "revision", review_words_count: 238, state: { version: 1, date: "2026-10-04", widget: "review", phase: "review_complete", current_index: 106, current_word: null,
+      retry_count: 0, flow: { relearn_words: Array.from({ length: 70 }, (_, i) => `failed-${i}`) }, payload: { widget: "review", items: Array.from({ length: 106 }, (_, i) => ({ word: `word-${i}` })) } } } as any;
+    mocks.ensureTodayQueue.mockResolvedValue({ ...queue, date: "2026-10-05" });
+    mocks.getTodayWords.mockResolvedValue([word(1, "new")]);
+    const before = JSON.stringify(active);
+    expect(await getStudyBootstrap({ activeSession: active, expectedRevision: "revision", startNewRound: true, deferLessonQueueFreeze: true })).toMatchObject({ action: "pretest", date: "2026-10-05" });
+    expect(mocks.getTodayWords).toHaveBeenCalledWith("2026-10-05", expect.anything(), expect.any(String));
+    expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
+    expect(JSON.stringify(active)).toBe(before);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.normalizeStudyStateForRead.mockReset().mockImplementation((state: any) => {
@@ -179,7 +207,7 @@ describe("study bootstrap daily queue invariant", () => {
     expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
   });
 
-  it("continues a completed Review session into its re-learn queue when no new card became due", async () => {
+  it("continues a completed Review session into its re-learn queue even when other cards are due", async () => {
     mocks.getActiveStudySession.mockResolvedValue({
       state: {
         version: 1,
@@ -195,11 +223,11 @@ describe("study bootstrap daily queue invariant", () => {
     });
     mocks.getTodayWords.mockResolvedValue([word(1, "known")]);
     await expect(getStudyBootstrap()).resolves.toMatchObject({ action: "lesson", word: { word: "failed-word" } });
-    expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
-    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+    expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
+    expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
   });
 
-  it("starts a new immutable Review snapshot when another card became due during the completed snapshot", async () => {
+  it("hands off without appending cards that became due during the completed snapshot", async () => {
     mocks.getActiveStudySession.mockResolvedValue({
       state: {
         version: 1,
@@ -216,9 +244,9 @@ describe("study bootstrap daily queue invariant", () => {
     const newlyDue = { ...word(2, "review"), word: "review-b", display_word: "review-b", next_review_at: "2026-09-16T04:16:00.000Z" };
     mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [newlyDue], oldRandomReview: [] });
 
-    await expect(getStudyBootstrap()).resolves.toEqual({ action: "review", count: 1 });
-    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
-    expect(mocks.getTodayWords).not.toHaveBeenCalled();
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
+    expect(mocks.getTodayWords).toHaveBeenCalledOnce();
   });
 
   it("does not reopen a completed Review card whose due timestamp never advanced", async () => {
@@ -241,11 +269,11 @@ describe("study bootstrap daily queue invariant", () => {
     mocks.getTodayWords.mockResolvedValue([word(3, "known")]);
 
     await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
-    expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+    expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
     expect(mocks.getTodayWords).toHaveBeenCalledOnce();
   });
 
-  it("allows the same card into a later snapshot after it received a new due timestamp and became due again", async () => {
+  it("defers a rescheduled due card until the user starts another round", async () => {
     const oldDue = "2026-09-16T04:00:00.000Z";
     const rescheduledDue = "2026-09-16T04:10:00.000Z";
     mocks.getActiveStudySession.mockResolvedValue({
@@ -266,8 +294,8 @@ describe("study bootstrap daily queue invariant", () => {
       oldRandomReview: [],
     });
 
-    await expect(getStudyBootstrap()).resolves.toEqual({ action: "review", count: 1 });
-    expect(mocks.getTodayWords).not.toHaveBeenCalled();
+    await expect(getStudyBootstrap()).resolves.toEqual({ action: "done" });
+    expect(mocks.getTodayWords).toHaveBeenCalledOnce();
   });
 
   it("keeps an active Review snapshot immutable even if another card would be due now", async () => {

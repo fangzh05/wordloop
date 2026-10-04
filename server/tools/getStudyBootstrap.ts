@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getStudyBootstrap } from "../services/studyBootstrap.js";
 import { getTodayCompletedLessonWords } from "../services/attempts.js";
 import { planLessonQueue } from "../services/exercisePlanner.js";
-import { getStudyDate, getActiveStudySession, makeStudyState, persistStudyState, persistStudyStateIfRevision } from "../services/studySessions.js";
+import { getStudyDate, getActiveStudySession, finishStudySession, makeStudyState, persistStudyState, persistStudyStateIfRevision } from "../services/studySessions.js";
 import { getTodayWords } from "../services/words.js";
 import { buildLessonWords } from "../services/lessonQueue.js";
 import { safeTool } from "./helpers.js";
@@ -11,6 +11,10 @@ import { safeTool } from "./helpers.js";
 async function bootstrapWithSavedLessonPlan() {
   const bootstrap = await getStudyBootstrap();
   const active = await getActiveStudySession();
+  if (bootstrap.action === "done" && active?.state?.phase === "review_complete" && active.state.flow.relearn_words.length === 0) {
+    await finishStudySession(undefined, undefined, { revision: active.updated_at, sessionId: active.id, allowCompletedReview: true });
+    return { ...bootstrap, round_complete: true };
+  }
   if (bootstrap.action === "resume") {
     if (bootstrap.widget === "lesson" && active?.state?.widget === "lesson" && active.state.payload.plan) {
       return { ...bootstrap, lesson_plan: active.state.payload.plan };
@@ -18,7 +22,7 @@ async function bootstrapWithSavedLessonPlan() {
     return bootstrap;
   }
   if (bootstrap.action !== "lesson") return bootstrap;
-  const date = active?.state?.date ?? await getStudyDate();
+  const date = bootstrap.date ?? active?.state?.date ?? await getStudyDate();
   const relearnWords = active?.state?.flow.relearn_words ?? [];
   const queue = active?.state?.flow.lesson_words ?? bootstrap.lesson_words ?? buildLessonWords(
     relearnWords,
