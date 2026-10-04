@@ -1694,7 +1694,8 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .auth-card .standalone-brand { margin-bottom: 28px; }
 .auth-form { display: grid; gap: 18px; margin: 24px 0; }
 .auth-form label { display: grid; gap: 8px; font-size: 14px; }
-.auth-form input { width: 100%; min-height: 46px; box-sizing: border-box; }
+.auth-form input:not([type="checkbox"]) { width: 100%; min-height: 46px; box-sizing: border-box; margin-top: 0; }
+.auth-form input[type="checkbox"] { width: auto; min-height: auto; accent-color: var(--accent); }
 .auth-form button { width: 100%; }
 .auth-link { display: inline-block; color: inherit; font-size: 14px; margin: 8px 0; }
 .auth-helper { color: var(--muted); font-size: 12px; margin: 16px 0 0; line-height: 1.7; }

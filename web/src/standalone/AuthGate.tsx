@@ -12,6 +12,7 @@ export function AuthGate() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   useEffect(() => {
+    try { const theme = localStorage.getItem("wordloop_appearance"); document.documentElement.dataset.theme = theme === "dark" || theme === "light" ? theme : "system"; } catch {}
     let active = true;
     let unsubscribe: (() => void) | undefined;
     const expired = () => { void getAuthClient().then(auth => auth.auth.signOut({ scope: "local" })); };
@@ -79,9 +80,9 @@ function AuthPage({ client, session, initialError }: { client: SupabaseClient | 
     <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
     <header className="widget-header"><span className="eyebrow">内测</span><h1 id="auth-title">{reset ? "设置密码" : update ? "创建登录密码" : "登录"}</h1><p>{reset ? "输入邀请账号使用的邮箱，获取密码设置链接。" : update ? "设置密码后，即可继续学习。" : "使用受邀账号，继续你的每日学习。"}</p></header>
     <form className="auth-form" onSubmit={submit}>
-      {!update && <label>邮箱<input type="email" autoComplete="username" autoCapitalize="none" value={email} onChange={e => setEmail(e.target.value)} required /></label>}
-      {!reset && <label>{update ? "新密码" : "密码"}<input type="password" autoComplete={update ? "new-password" : "current-password"} minLength={update ? 8 : undefined} value={password} onChange={e => setPassword(e.target.value)} required /></label>}
-      {update && <label>再次输入新密码<input type="password" autoComplete="new-password" minLength={8} value={confirm} onChange={e => setConfirm(e.target.value)} required /></label>}
+      {!update && <label>邮箱<input className="answer-input standalone-input" type="email" autoComplete="username" autoCapitalize="none" value={email} onChange={e => setEmail(e.target.value)} required /></label>}
+      {!reset && <label>{update ? "新密码" : "密码"}<input className="answer-input standalone-input" type="password" autoComplete={update ? "new-password" : "current-password"} minLength={update ? 8 : undefined} value={password} onChange={e => setPassword(e.target.value)} required /></label>}
+      {update && <label>再次输入新密码<input className="answer-input standalone-input" type="password" autoComplete="new-password" minLength={8} value={confirm} onChange={e => setConfirm(e.target.value)} required /></label>}
       {error && <p className="standalone-status error" role="alert">{error}</p>}{message && <p className="standalone-status" role="status">{message}</p>}
       <Button type="submit" disabled={busy || !client || (update && !session)}>{busy ? "正在处理…" : reset ? "发送密码设置邮件" : update ? "保存密码" : "登录"}</Button>
     </form>

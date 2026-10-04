@@ -23,8 +23,8 @@ export function BetaAccounts() {
     finally { setBusy(false); }
   }
   return <div className="settings-section"><h3>内测</h3><p>每个账号拥有独立的词库和学习记录。</p><form className="auth-form" onSubmit={submit}>
-    <label>账号邮箱<input type="email" autoComplete="off" required value={email} onChange={e => setEmail(e.target.value)} /></label>
-    <label>初始密码<input type="password" autoComplete="new-password" minLength={8} required value={password} onChange={e => setPassword(e.target.value)} /></label>
+    <label>账号邮箱<input className="answer-input standalone-input" type="email" autoComplete="off" required value={email} onChange={e => setEmail(e.target.value)} /></label>
+    <label>初始密码<input className="answer-input standalone-input" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={e => setPassword(e.target.value)} /></label>
     <label>初始词汇（可选，用空格或逗号分隔）<textarea value={words} onChange={e => setWords(e.target.value)} rows={3} /></label>
     <label><span><input type="checkbox" checked={ownAccount} onChange={e => setOwnAccount(e.target.checked)} />这是我的账号，保留现有学习记录</span></label>
     <Button type="submit" disabled={busy}>{busy ? "正在创建…" : "创建内测账号"}</Button>
