@@ -54,6 +54,7 @@ await build({
   sourcemap: false,
   format: "esm",
   platform: "browser",
+  external: ["node:async_hooks"],
   target: ["es2022"],
   conditions: ["worker", "browser", "import"],
   legalComments: "none",

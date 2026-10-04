@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import StandaloneApp from "./StandaloneApp.js";
+import { AuthGate } from "./AuthGate.js";
 
 const root = document.getElementById("root");
-if (root) createRoot(root).render(<StrictMode><StandaloneApp /></StrictMode>);
+if (root) createRoot(root).render(<StrictMode><AuthGate /></StrictMode>);

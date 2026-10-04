@@ -1,4 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { authenticateWebUser, WebAuthError } from "./webAuth.js";
+import { getPublicAuthConfig, getLegacyOwnerId, withUserIdentity } from "./db.js";
 import { configureRuntimeEnv } from "./db.js";
 import { createWordloopMcpServer, type WidgetKind } from "./mcpCore.js";
 import { LESSON_WIDGET_VERSION } from "../shared/toolContracts.js";
@@ -50,7 +52,7 @@ function withCors(source: Response): Response {
   const headers = new Headers(source.headers);
   headers.set("access-control-allow-origin", "*");
   headers.set("access-control-allow-methods", "GET, POST, DELETE, OPTIONS");
-  headers.set("access-control-allow-headers", "content-type, mcp-session-id, mcp-protocol-version, last-event-id");
+  headers.set("access-control-allow-headers", "content-type, authorization, mcp-session-id, mcp-protocol-version, last-event-id");
   headers.set("access-control-expose-headers", "mcp-session-id, mcp-protocol-version");
   return new Response(source.body, { status: source.status, statusText: source.statusText, headers });
 }
@@ -58,7 +60,7 @@ function withCors(source: Response): Response {
 export const worker = {
   async fetch(request: Request, env: WorkerEnv, _context?: unknown): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/") return response(siteHtml, "text/html; charset=utf-8");
+    if (request.method === "GET" && ["/", "/login", "/reset-password", "/update-password"].includes(url.pathname)) return response(siteHtml, "text/html; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/styles.css") return response(siteCss, "text/css; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/app.js") return response(siteJs, "text/javascript; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/manifest.webmanifest") return response(siteManifest, "application/manifest+json; charset=utf-8");
@@ -67,6 +69,10 @@ export const worker = {
       return response(JSON.stringify({ name: "wordloop", status: "ok", mcp: "/api/mcp", version: "0.1.0" }), "application/json; charset=utf-8");
     }
     if (url.pathname.startsWith("/api/")) configureRuntimeEnv(env as Record<string, unknown>);
+    if (request.method === "GET" && url.pathname === "/api/web/auth/config") {
+      try { return new Response(JSON.stringify(getPublicAuthConfig()), { headers: { "content-type": "application/json", "cache-control": "no-store" } }); }
+      catch { return response(JSON.stringify({ error: { message: "登录服务暂时不可用。" } }), "application/json", 503); }
+    }
     if (url.pathname.startsWith("/api/web/")) return handleWebApiRequest(request);
     // GPT Sites reserves /mcp before requests reach the Worker. Keep the standard
     // Streamable HTTP protocol on a non-reserved public path instead.
@@ -74,11 +80,19 @@ export const worker = {
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
     try {
+      const body = request.method === "POST" ? await request.clone().json() : null;
+      const calls = Array.isArray(body) ? body : [body];
+      const needsIdentity = calls.some((call: { method?: string } | null) => call?.method === "tools/call");
+      const userId = needsIdentity ? await authenticateWebUser(request) : undefined;
+      if (userId && userId !== getLegacyOwnerId() && calls.some((call: { params?: { name?: string } } | null) => call?.params?.name?.includes("shanbay"))) {
+        throw new WebAuthError(403, "FORBIDDEN", "此导入仅供管理员使用。");
+      }
       const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
       const server = createWordloopMcpServer(widgetHtml);
       await server.connect(transport);
-      return withCors(await transport.handleRequest(request));
+      return withCors(await (userId ? withUserIdentity(userId, () => transport.handleRequest(request)) : transport.handleRequest(request)));
     } catch (error) {
+      if (error instanceof WebAuthError) return response(JSON.stringify({ error: { code: error.code, message: error.message } }), "application/json", error.status);
       console.error("Wordloop MCP request failed", error instanceof Error ? error.message : "unknown error");
       return withCors(response(JSON.stringify({
         jsonrpc: "2.0",

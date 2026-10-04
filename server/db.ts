@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -7,6 +8,17 @@ const envSchema = z.object({
   DEV_USER_ID: z.string().uuid(),
 });
 
+const requestIdentity = new AsyncLocalStorage<string>();
+export function withUserIdentity<T>(userId: string, work: () => T): T {
+  return requestIdentity.run(userId, work);
+}
+export function getPublicAuthConfig() {
+  const env = activeEnv();
+  const url = z.string().url().parse(env.SUPABASE_URL);
+  const key = z.string().min(20).parse(env.SUPABASE_PUBLISHABLE_KEY);
+  if (key === env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("Invalid public auth configuration.");
+  return { url, key };
+}
 let client: SupabaseClient | undefined;
 let runtimeEnv: Record<string, unknown> | undefined;
 
@@ -36,6 +48,12 @@ export function getDatabase(): SupabaseClient {
 }
 
 export function getAuthenticatedUserId(): string {
+  const userId = requestIdentity.getStore();
+  if (userId) return userId;
+  return getLegacyOwnerId();
+}
+
+export function getLegacyOwnerId(): string {
   const parsed = z.string().uuid().safeParse(activeEnv().DEV_USER_ID);
   if (!parsed.success) throw new Error("DEV_USER_ID must be a valid UUID.");
   return parsed.data;

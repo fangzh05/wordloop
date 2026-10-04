@@ -6,6 +6,13 @@ import { WIDGET_URIS } from "../server/tools/renderWidgets.js";
 const testOrigin = "https://wordloop.test";
 
 describe("Sites Worker", () => {
+  it("requires identity before any MCP tool call, including a batched call", async () => {
+    for (const body of [{ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_progress", arguments: {} } }, [{ jsonrpc: "2.0", id: 1, method: "tools/list" }, { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_progress", arguments: {} } }]]) {
+      const result = await worker.fetch(new Request(`${testOrigin}/api/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), {});
+      expect(result.status).toBe(401);
+    }
+  });
+
   it("serves health status from the public origin", async () => {
     const result = await worker.fetch(new Request(`${testOrigin}/health`), {});
     expect(result.status).toBe(200);

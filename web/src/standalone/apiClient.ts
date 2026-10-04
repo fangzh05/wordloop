@@ -1,8 +1,11 @@
+import { currentAccessToken } from "./authClient.js";
 const TOKEN_KEY = "wordloop_web_token";
 export const WEB_REQUEST_TIMEOUT_MS = 75_000;
+let cacheGeneration = 0;
 const readModelCache = new Map<string, { stored_at: number; value: unknown }>();
 
 export function clearReadModelCache(): void {
+  cacheGeneration += 1;
   readModelCache.clear();
 }
 
@@ -144,7 +147,7 @@ export function clearToken(): void {
 }
 
 async function request<T = WebApiResponse>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
-  const token = tokenOverride ?? storedToken();
+  const token = await currentAccessToken() ?? tokenOverride ?? storedToken();
   if (!token) throw new UnauthorizedError();
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
@@ -169,7 +172,7 @@ async function request<T = WebApiResponse>(path: string, init: RequestInit, toke
     if (controller.signal.aborted && !init.signal?.aborted) throw new ApiError("REQUEST_TIMEOUT", "请求等待过久。操作可能已保存，请刷新状态后继续。", 0);
     throw new ApiError("INVALID_RESPONSE", "服务器返回了无法读取的响应。", response.status);
   }
-  if (response.status === 401) throw new UnauthorizedError();
+  if (response.status === 401) { if (typeof window !== "undefined") window.dispatchEvent(new Event("wordloop-session-expired")); throw new UnauthorizedError(); }
   if (response.status === 409 && payload.error?.code === "STALE_STUDY_STATE") throw new StaleStudyStateError();
   if (!response.ok) {
     throw new ApiError(
@@ -320,7 +323,7 @@ async function captureRequest<T>(path: string, init: RequestInit): Promise<T> {
   } catch {
     throw new ApiError("INVALID_RESPONSE", "服务器返回了无法读取的响应。", response.status);
   }
-  if (response.status === 401) throw new UnauthorizedError();
+  if (response.status === 401) { if (typeof window !== "undefined") window.dispatchEvent(new Event("wordloop-session-expired")); throw new UnauthorizedError(); }
   if (!response.ok) {
     const error = typeof payload === "object" && payload !== null && "error" in payload
       ? (payload as { error?: { code?: string; message?: string } }).error
@@ -331,10 +334,11 @@ async function captureRequest<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 async function readModel<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const generation = cacheGeneration;
   const cached = readModelCache.get(path);
   if (cached && Date.now() - cached.stored_at < 60_000) return cached.value as T;
   const value = await captureRequest<T>(path, { method: "GET", signal });
-  if (!signal?.aborted) readModelCache.set(path, { stored_at: Date.now(), value });
+  if (!signal?.aborted && generation === cacheGeneration) readModelCache.set(path, { stored_at: Date.now(), value });
   return value;
 }
 
@@ -542,3 +546,6 @@ export function getEvidenceReport(): Promise<any> { return request("/api/web/evi
 export function saveEvidenceLabel(id: number, outcome: string, error_label: string): Promise<{ saved: boolean }> {
   return request("/api/web/evidence/label", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, outcome, error_label }) });
 }
+
+export function accountInfo() { return request<{ is_owner: boolean }>("/api/web/account", { method: "GET" }); }
+export function createBetaAccount(input: { email: string; password: string; owner: boolean; words: string[] }) { return request<{ created: boolean; vocabulary_imported: boolean; message?: string }>("/api/web/accounts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }); }

@@ -1,3 +1,6 @@
+import { BetaAccounts } from "./BetaAccounts.js";
+import { getAuthClient } from "./authClient.js";
+import { clearToken } from "./apiClient.js";
 import { EvidenceEvaluation } from "./components/LearningBudgetPanel.js";
 import { Icon } from "./DesignIcons.js";
 import { useEffect, useId, useRef, useState } from "react";
@@ -81,6 +84,8 @@ export function SettingsSheet({ open, onClose, appearance, onAppearanceChange, d
       </div></div>
       <div className="settings-section"><h3>每日新词目标</h3><p>降低目标不会删除已经学习的记录。</p>{dailyLimit !== null && onSaveDailyNewWordLimit ? <DailyNewWordLimitEditor limit={dailyLimit} onSave={async (limit) => { setSaveError(""); try { return await onSaveDailyNewWordLimit(limit); } catch (error) { setSaveError(error instanceof Error ? error.message : "目标保存失败，请重试。"); throw error; } }} disabled={busy} /> : <p>当前目标暂时不可读取。</p>}{saveError && <p role="alert" className="standalone-status error">{saveError}</p>}</div>
       <div className="settings-section"><h3>目标记忆率</h3><p>{targetRetention === null ? "暂时不可读取" : `${(targetRetention * 100).toFixed(0)}%`} · 只读，由当前 FSRS 调度配置决定。</p></div>
+      <div className="settings-section"><h3>账号</h3><a className="auth-link" href="/reset-password">设置 / 修改密码</a><button type="button" className="settings-open-button" disabled={busy} onClick={async () => { try { const auth = await getAuthClient(); const result = await auth.auth.signOut({ scope: "local" }); if (result.error) throw result.error; clearToken(); sessionStorage.removeItem("wordloop_draft"); window.location.assign("/login"); } catch { setSaveError("退出失败，请重试。"); } }}>退出登录</button></div>
+      <BetaAccounts />
       <div className="settings-section"><EvidenceEvaluation /></div>
     </section>
   </div>;

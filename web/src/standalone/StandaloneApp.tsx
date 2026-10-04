@@ -638,7 +638,8 @@ export default function StandaloneApp(): React.JSX.Element {
     setPage("dashboard");
     setAppSection("today");
     setPageStatus("auth");
-    setAuthError(wrongToken ? "访问密钥错误" : "");
+    setAuthError(wrongToken ? "登录已过期，请重新登录。" : "");
+    window.dispatchEvent(new Event("wordloop-session-expired"));
   }, []);
 
   const loadDashboardProgress = useCallback(async () => {

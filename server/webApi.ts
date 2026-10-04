@@ -1,7 +1,9 @@
+import { WebAuthError, authenticateWebUser } from "./webAuth.js";
+import { withUserIdentity } from "./db.js";
 import { getLearningBudget, setLearningBudget, reserveLearningBudget, LearningBudgetReached } from "./services/learningBudget.js";
 import { getEvidenceEvaluation, labelEvidence } from "./services/learningModel.js";
 import { z } from "zod";
-import { getAuthenticatedUserId, getDatabase, getWordloopWebToken } from "./db.js";
+import { getAuthenticatedUserId, getDatabase, getLegacyOwnerId } from "./db.js";
 import { getStudyBootstrap } from "./services/studyBootstrap.js";
 import { getProgress } from "./services/progress.js";
 import { AnalyticsServiceError, getAnalytics, getTodayOverview } from "./services/analytics.js";
@@ -162,33 +164,9 @@ function legacyCaptureResponse(note: CaptureNote) {
   };
 }
 
-function bearerToken(request: Request): string | null {
-  const value = request.headers.get("authorization");
-  if (!value) return null;
-  const match = /^Bearer ([^\s]+)$/i.exec(value.trim());
-  return match?.[1] ?? null;
-}
-
-function tokensEqual(left: string, right: string): boolean {
-  let diff = left.length ^ right.length;
-  const length = Math.max(left.length, right.length);
-  for (let index = 0; index < length; index += 1) {
-    diff |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
-  }
-  return diff === 0;
-}
-
-function authenticate(request: Request): void {
-  const expected = getWordloopWebToken();
-  if (!expected) throw new WebApiError(503, "WEB_TOKEN_NOT_CONFIGURED", "Web access is not configured.");
-  const supplied = bearerToken(request);
-  if (!supplied || !tokensEqual(supplied, expected)) {
-    throw new WebApiError(401, "UNAUTHORIZED", "Unauthorized.");
-  }
-}
-
 function toApiError(error: unknown): WebApiError {
   if (error instanceof WebApiError) return error;
+  if (error instanceof WebAuthError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof CaptureServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof NoteReviewServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof AnalyticsServiceError) return new WebApiError(error.status, error.code, error.message);
@@ -1655,8 +1633,34 @@ async function performAction(action: WebAction): Promise<Record<string, unknown>
 
 export async function handleWebApiRequest(request: Request): Promise<Response> {
   try {
-    authenticate(request);
+    const userId = await authenticateWebUser(request);
+    return await withUserIdentity(userId, () => handleAuthenticatedWebRequest(request));
+  } catch (error) { return failure(error); }
+}
+
+async function handleAuthenticatedWebRequest(request: Request): Promise<Response> {
+  try {
+
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/api/web/account") return jsonApiResponse({ is_owner: getAuthenticatedUserId() === getLegacyOwnerId() });
+    if (request.method === "POST" && url.pathname === "/api/web/accounts") {
+      if (getAuthenticatedUserId() !== getLegacyOwnerId()) throw new WebApiError(403, "FORBIDDEN", "只有管理员可以创建内测账号。");
+      const input = z.object({ email: z.email(), password: z.string().min(8).max(256), owner: z.boolean().default(false), words: z.array(z.string().trim().min(1).max(100)).max(5000).default([]) }).strict().safeParse(await request.json());
+      if (!input.success) throw new WebApiError(400, "INVALID_REQUEST", "请输入有效邮箱和至少 8 位的密码。");
+      const db = getDatabase();
+      const created = await db.auth.admin.createUser({ email: input.data.email, password: input.data.password, email_confirm: true, ...(input.data.owner ? { id: getLegacyOwnerId() } : {}) });
+      if (created.error || !created.data.user) throw new WebApiError(409, "ACCOUNT_NOT_CREATED", "账号未创建，请检查邮箱是否已经使用。");
+      const userId = created.data.user.id;
+      const profile = await db.from("users").upsert({ id: userId }, { onConflict: "id", ignoreDuplicates: true });
+      if (profile.error) { await db.auth.admin.deleteUser(userId); throw new WebApiError(503, "ACCOUNT_NOT_CREATED", "账号设置失败，请稍后重试。"); }
+      if (input.data.words.length) {
+        const { importWords } = await import("./services/words.js");
+        try { await importWords({ words: input.data.words, source: "private_beta" }, db, userId); }
+        catch { return jsonApiResponse({ created: true, vocabulary_imported: false, message: "账号已创建，词汇导入失败。" }, 201); }
+      }
+      return jsonApiResponse({ created: true, vocabulary_imported: true }, 201);
+    }
+
     if (request.method === "GET" && url.pathname === "/api/web/evidence") return jsonApiResponse(await getEvidenceEvaluation());
     if (request.method === "POST" && url.pathname === "/api/web/evidence/label") {
       const input = z.object({ id: z.number().int().positive(), outcome: z.enum(["correct","incorrect","partial","not_assessed"]), error_label: z.enum(["none","meaning","collocation","grammar","spelling","pronunciation"]).default("none") }).strict().safeParse(await request.json());
