@@ -57,6 +57,7 @@ vi.mock("../server/db.js", async () => {
     getDatabase: mocks.getDatabase,
     getAuthenticatedUserId: mocks.getAuthenticatedUserId,
     getWordloopWebToken: () => mocks.token,
+    getLegacyOwnerId: () => "00000000-0000-0000-0000-000000000001",
   };
 });
 
@@ -265,8 +266,30 @@ async function body(response: Response): Promise<any> {
 }
 
 describe("Standalone Web API shared-state boundaries", () => {
+  it("creates the owner Auth identity with the existing ID without replacing learning records", async () => {
+    const id = "00000000-0000-0000-0000-000000000001";
+    const createUser = vi.fn(async () => ({ data: { user: { id } }, error: null }));
+    const upsert = vi.fn(async () => ({ error: null }));
+    const from = vi.fn(() => ({ upsert }));
+    mocks.getDatabase.mockReturnValue({ auth: { admin: { createUser } }, from });
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/accounts", { method: "POST", headers: { authorization: `Bearer ${mocks.token}`, "content-type": "application/json" }, body: JSON.stringify({ email: "owner@example.invalid", password: "test-password-only", owner: true }) }));
+    expect(response.status).toBe(201);
+    expect(createUser).toHaveBeenCalledWith(expect.objectContaining({ id }));
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith("users");
+    expect(upsert).toHaveBeenCalledWith({ id }, { onConflict: "id", ignoreDuplicates: true });
+  });
+  it("rejects a non-owner before creating or changing any account", async () => {
+    mocks.getAuthenticatedUserId.mockReturnValue("00000000-0000-0000-0000-000000000002");
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/accounts", { method: "POST", headers: { authorization: `Bearer ${mocks.token}` }, body: "{}" }));
+    expect(response.status).toBe(403);
+    expect(mocks.getDatabase).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getDatabase.mockReturnValue({});
+    mocks.getAuthenticatedUserId.mockReturnValue("00000000-0000-0000-0000-000000000001");
     mocks.active = null;
     mocks.consolidationDecision = null;
     mocks.revisionNumber = 0;

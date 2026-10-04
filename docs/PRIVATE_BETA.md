@@ -4,7 +4,7 @@ WordLoop uses the same email/password experience as BodyLoop. There is no regist
 
 ## Create an account
 
-From your existing owner session, open Settings → Friends beta. Create a friend with email, initial password and optional vocabulary. To switch yourself to email/password while preserving all existing records, tick the owner-account checkbox. Only the server-verified owner can use this operation. Share credentials yourself; no invitation messages are sent automatically.
+Your existing access key remains usable at `/owner` if you need to restore the owner session. From your existing owner session, open Settings → Friends beta. Create a friend with email, initial password and optional vocabulary. To switch yourself to email/password while preserving all existing records, tick the owner-account checkbox. Only the server-verified owner can use this operation. Share credentials yourself; no invitation messages are sent automatically.
 
 Run `node --import tsx scripts/create-beta-user.ts` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` supplied in the environment. Supply one JSON object through hidden stdin: `email`, `password` (at least 8 characters), optional `words` array. Share the account details privately yourself. The script does not send emails. Avoid putting passwords in shell history or files.
 

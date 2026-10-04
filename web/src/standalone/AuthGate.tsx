@@ -8,7 +8,7 @@ import { Button } from "../components/Button.js";
 export function AuthGate() {
   const [client, setClient] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [legacy, setLegacy] = useState(() => { try { const token = localStorage.getItem("wordloop_web_token"); return token && !token.includes(".") ? token : null; } catch { return null; } });
+  const [legacy, setLegacy] = useState(() => { try { const token = localStorage.getItem("wordloop_web_token"); return token && token.split(".").length !== 3 ? token : null; } catch { return null; } });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -34,6 +34,7 @@ export function AuthGate() {
   }, []);
   const path = window.location.pathname;
   if (loading) return <main className="standalone-shell auth-shell"><section className="widget-card standalone-card" role="status">正在连接 WordLoop…</section></main>;
+  if (path === "/owner") return <StandaloneApp />;
   if (legacy && !session && path === "/") { saveToken(legacy); return <StandaloneApp />; }
   if (!session || path === "/reset-password" || path === "/update-password") return <AuthPage client={client} session={session} initialError={error} />;
   return <StandaloneApp key={session.user.id} />;

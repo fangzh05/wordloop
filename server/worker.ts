@@ -60,7 +60,7 @@ function withCors(source: Response): Response {
 export const worker = {
   async fetch(request: Request, env: WorkerEnv, _context?: unknown): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method === "GET" && ["/", "/login", "/reset-password", "/update-password"].includes(url.pathname)) return response(siteHtml, "text/html; charset=utf-8");
+    if (request.method === "GET" && ["/", "/login", "/owner", "/reset-password", "/update-password"].includes(url.pathname)) return response(siteHtml, "text/html; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/styles.css") return response(siteCss, "text/css; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/app.js") return response(siteJs, "text/javascript; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/manifest.webmanifest") return response(siteManifest, "application/manifest+json; charset=utf-8");
