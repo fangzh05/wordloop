@@ -1,4 +1,5 @@
 import { WebAuthError, authenticateWebUser } from "./webAuth.js";
+import { handleShanbayImportRequest } from "./shanbayImportApi.js";
 import { withUserIdentity } from "./db.js";
 import { getLearningBudget, setLearningBudget, reserveLearningBudget, LearningBudgetReached } from "./services/learningBudget.js";
 import { getEvidenceEvaluation, labelEvidence } from "./services/learningModel.js";
@@ -1642,6 +1643,7 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
   try {
 
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/web/shanbay-import/")) return handleShanbayImportRequest(request);
     if (request.method === "GET" && url.pathname === "/api/web/account") return jsonApiResponse({ is_owner: getAuthenticatedUserId() === getLegacyOwnerId() });
     if (request.method === "POST" && url.pathname === "/api/web/accounts") {
       if (getAuthenticatedUserId() !== getLegacyOwnerId()) throw new WebApiError(403, "FORBIDDEN", "只有管理员可以创建内测账号。");

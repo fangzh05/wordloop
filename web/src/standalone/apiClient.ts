@@ -548,4 +548,8 @@ export function saveEvidenceLabel(id: number, outcome: string, error_label: stri
 }
 
 export function accountInfo() { return request<{ is_owner: boolean }>("/api/web/account", { method: "GET" }); }
+export interface ShanbayImportJob { jobId: string; state: "waiting_login" | "ready" | "importing" | "completed" | "cancelled" | "expired" | "failed"; expiresAt: number; liveUrl?: string; book?: { id: string; name: string }; processed: number; added: number; existing: number; warning?: string }
+export function shanbayImport(action: "start" | "status" | "chunk" | "cancel", jobId?: string): Promise<ShanbayImportJob> {
+  return request(`/api/web/shanbay-import/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(jobId ? { jobId } : {}) });
+}
 export function createBetaAccount(input: { email: string; password: string; owner: boolean; words: string[] }) { return request<{ created: boolean; vocabulary_imported: boolean; message?: string }>("/api/web/accounts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }); }

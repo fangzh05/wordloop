@@ -5,6 +5,8 @@ web/dist/
 .env
 .env.local
 coverage/
+.qa/
+**/.wrangler/
 *.log
 
 evidence-test-output.txt

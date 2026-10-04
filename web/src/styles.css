@@ -1700,3 +1700,8 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .auth-link { display: inline-block; color: inherit; font-size: 14px; margin: 8px 0; }
 .auth-helper { color: var(--muted); font-size: 12px; margin: 16px 0 0; line-height: 1.7; }
 @media (max-width: 480px) { .auth-shell { padding: 16px; } .auth-card { padding: 24px; } }
+/* Shanbay import uses the existing vocabulary typography and button system. */
+.shanbay-import-panel { background: var(--material); border: 1px solid var(--separator); border-radius: var(--radius-large); padding: 16px; margin-bottom: 16px; }
+.shanbay-import-panel p { margin: 8px 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.shanbay-import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.shanbay-import-actions a { text-decoration: none; }

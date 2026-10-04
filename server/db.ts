@@ -28,6 +28,14 @@ function activeEnv(): Record<string, unknown> {
   return {};
 }
 
+export function getShanbayImportBridgeConfig(): { url: string; secret: string } | null {
+  const env = activeEnv();
+  if (!env.SHANBAY_IMPORT_WORKER_URL || !env.SHANBAY_IMPORT_BRIDGE_SECRET) return null;
+  const url = z.string().url().parse(env.SHANBAY_IMPORT_WORKER_URL);
+  if (new URL(url).protocol !== "https:") throw new Error("Invalid import bridge configuration.");
+  return { url, secret: z.string().min(32).parse(env.SHANBAY_IMPORT_BRIDGE_SECRET) };
+}
+
 export function configureRuntimeEnv(env: Record<string, unknown>): void {
   const changed = runtimeEnv?.SUPABASE_URL !== env.SUPABASE_URL
     || runtimeEnv?.SUPABASE_SERVICE_ROLE_KEY !== env.SUPABASE_SERVICE_ROLE_KEY;

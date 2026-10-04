@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wordloop-shanbay-import",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "browser": { "binding": "BROWSER" },
+  "durable_objects": { "bindings": [{ "name": "IMPORTS", "class_name": "ShanbayImportSession" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ShanbayImportSession"] }],
+  "observability": { "enabled": false }
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getVocabularyPage, type VocabularyListItem } from "../apiClient.js";
 import { WordDetailPanel } from "../components/WordDetailPanel.js";
+import { ShanbayImportPanel } from "../components/ShanbayImportPanel.js";
 
 const filterOptions = [
   ["not_started", "未开始"], ["in_memory", "已进入记忆"], ["active_error", "有活动错误"], ["due", "到期"],
@@ -16,6 +17,7 @@ export function VocabularyPage({ tokenKey, initialUserWordId = null, onDetailCha
   onDetailChange?: (userWordId: string | null) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState("");
+  const [importRevision, setImportRevision] = useState(0);
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [filters, setFilters] = useState<string[]>([]);
   const [items, setItems] = useState<VocabularyListItem[]>([]);
@@ -51,7 +53,7 @@ export function VocabularyPage({ tokenKey, initialUserWordId = null, onDetailCha
       if (id === requestId.current) setLoading(false);
     });
     return () => controller.abort();
-  }, [debouncedQuery, filters, tokenKey]);
+  }, [debouncedQuery, filters, tokenKey, importRevision]);
 
   useEffect(() => {
     if (!selected) return;
@@ -85,6 +87,7 @@ export function VocabularyPage({ tokenKey, initialUserWordId = null, onDetailCha
 
   return <section className={`vocabulary-page${selected ? " has-word-detail" : ""}`} aria-labelledby="vocabulary-title">
     <header className="page-heading"><span className="eyebrow">Vocabulary</span><h1 id="vocabulary-title">词库</h1><p>保存每一个词，也保留每一次理解。</p></header>
+    <ShanbayImportPanel key={tokenKey} onImported={() => setImportRevision((revision) => revision + 1)} />
     <div className="vocabulary-toolbar">
       <label className="vocabulary-search-label" htmlFor="vocabulary-search">搜索词条</label>
       <div className="vocabulary-search-row"><input id="vocabulary-search" type="search" value={query} maxLength={120} placeholder="输入英文单词或短语" onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" className="secondary-button" onClick={() => { setQuery(""); setDebouncedQuery(""); }}>清除</button>}</div>

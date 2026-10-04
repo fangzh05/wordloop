@@ -1,0 +1,8 @@
+{
+  "name": "wordloop-shanbay-import",
+  "private": true,
+  "type": "module",
+  "scripts": { "deploy": "wrangler deploy", "check": "tsc --noEmit" },
+  "dependencies": { "@cloudflare/puppeteer": "latest" },
+  "devDependencies": { "@cloudflare/workers-types": "latest", "wrangler": "^4.137.0", "typescript": "^5.9.2" }
+}
