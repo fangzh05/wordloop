@@ -18,6 +18,7 @@ beforeAll(async () => {
     create table exercise_submission_events(user_id uuid,submission_id uuid,skill_evidence jsonb,session_id uuid,plan_id uuid,exercise_id uuid,scope text,word_id uuid,activity_type text,skill_ids text[],outcome text,result jsonb);
     create table exercise_skill_evidence(id bigint generated always as identity primary key,user_id uuid,submission_id uuid,exercise_id uuid,plan_id uuid,scope text,word_id uuid,skill_id text,outcome text,first_unprompted boolean,hint_used boolean,modified_correct boolean,answer_revealed boolean,evidence text,created_at timestamptz default now());`);
   await db.exec(readFileSync(new URL("../supabase/migrations/20261002024106_evidence_budget.sql", import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../supabase/migrations/20261004045839_bkt_active_planner.sql", import.meta.url), "utf8"));
 }, 30000);
 afterAll(() => db.close());
 beforeEach(async () => { await db.exec("begin"); await db.query("insert into users(id) values($1)", [user]); });
@@ -29,6 +30,13 @@ async function evidence(outcome = "correct", quality = "OBSERVE", submission = c
   return (await value("insert into exercise_skill_evidence(user_id,submission_id,exercise_id,skill_id,outcome) values($1,$2,$3,'target_sense_retrieval',$4) returning id", [user, submission, exercise, outcome])).id;
 }
 describe("real PostgreSQL evidence and budget transactions", () => {
+  it("supports active mode while keeping an explicit off switch and budget unchanged", async () => {
+    await db.query("insert into learning_settings(user_id,bkt_mode,daily_minutes) values($1,'active',60)", [user]);
+    expect((await value("select bkt_mode,daily_minutes from learning_settings where user_id=$1", [user]))).toMatchObject({ bkt_mode: "active", daily_minutes: 60 });
+    await db.query("update learning_settings set bkt_mode='off' where user_id=$1", [user]);
+    expect((await value("select daily_minutes from learning_settings where user_id=$1", [user])).daily_minutes).toBe(60);
+    await expect(db.query("update learning_settings set bkt_mode='invalid' where user_id=$1", [user])).rejects.toThrow();
+  });
   it("records formal retrieval without confusing grammar errors with memory failure", async () => {
     await db.query("insert into words values($1,'opaque','opaque')", [exercise]);
     await db.query("insert into study_sessions values($1,$2,$3,null)", [exercise,user,JSON.stringify({ widget: 'review', current_index: 0, payload: { items: [{word:'opaque',direction:'cn_to_en',prompt:'不透明的'}] } })]);

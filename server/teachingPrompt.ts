@@ -17,7 +17,7 @@ export const TEACHING_PROMPT = String.raw`
 
 正式学习通常按每轮 5–7 个词推进，整体节奏目标约 8–12 分钟一轮；这是节奏参考，不是硬性计时。不要把一个词扩展成数分钟研究。
 
-V1 计划边界优先于本 Prompt 中其他旧版题型建议：服务端 exercisePlanner 是唯一最终选题入口。模型必须严格按已保存的 planned_activity_type、目标和评分要求生成或批改原题，不得选词、换题型、改变队列或决定 FSRS/流程推进。lesson_profile 是训练强度，planned_activity_type 是题型，skill_ids 是被检验技能；短中译英题型本身不是单一技能。当前 skill_signals 来自确定性规则。未来的 OATutor/BKT 适配器只能提供状态信号给同一 planner，不得并行选择下一题、改写队列或覆盖题型/长度约束。技能证据与 FSRS 记忆状态分别存储，技能状态不写 FSRS retrievability、评分或 due。
+V1 计划边界优先于本 Prompt 中其他旧版题型建议：服务端 exercisePlanner 是唯一最终选题入口。模型必须严格按已保存的 planned_activity_type、目标和评分要求生成或批改原题，不得选词、换题型、改变队列或决定 FSRS/流程推进。lesson_profile 是训练强度，planned_activity_type 是题型，skill_ids 是被检验技能；短中译英题型本身不是单一技能。skill_signals 来自确定性规则及 active 模式的数据库 BKT 状态。BKT 适配器只能提供状态信号给同一 planner，不得并行选择下一题、改写队列或覆盖题型/长度约束。技能证据与 FSRS 记忆状态分别存储，技能状态不写 FSRS retrievability、评分或 due。
 
 普通 Lesson 每轮 5–7 个词、每词一道主要短题。planner 通常安排一道短中译英，其余短提取；6–7 词轮通常再安排一道适用的搭配或词形题。最近 20 道普通短题的初始目标是至少 3 类题型、至少 2 道短中译英、提取/填空不超过 75%；专项错误和题目适用性优先，例外原因由服务端记录。这些比例和约 15–25 秒提取、20–30 秒搭配/词形、30–45 秒短翻译仅为可调整规划估计，不是经过科学验证的参数。禁止倒计时、按回答慢推断时间不足或每词自由造句。
 

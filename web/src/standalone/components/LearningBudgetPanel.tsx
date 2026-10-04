@@ -63,10 +63,11 @@ export function EvidenceEvaluation() {
   }
   return <details className="learning-evidence-settings" onToggle={e => { if (e.currentTarget.open && !report && !busy) void evaluate(); }}>
     <summary>高级 · 学习记录评测</summary>
-    <p>用于人工检查技能判断。BKT 仍在影子模式，掌握概率尚未校准。只有明确保存的人工标注计入评测。</p>
+    <p>用于人工检查技能判断。只有明确保存的人工标注计入评测。</p>
     {busy && <p role="status">正在读取评测…</p>}
     {error && <><p className="standalone-status error" role="alert">{error}</p><Button className="secondary" type="button" onClick={() => void evaluate()}>重试</Button></>}
     {report && <>
+      <p>{report.mode === "active" ? "BKT 已参与新一轮 Lesson 选题。" : report.mode === "off" ? "BKT 已关闭。" : "BKT 正在影子模式运行。"}掌握概率是模型估计，尚未校准，不代表已验证的能力。</p>
       <p>人工审核 {report.reviewed_count}/{report.rows.length} · Brier {report.bkt.brier?.toFixed(3) ?? "样本不足"} · Log loss {report.bkt.log_loss?.toFixed(3) ?? "样本不足"}</p>
       <Button className="secondary" type="button" onClick={download}>导出脱敏样本与指标</Button>
       {report.rows.map((row: any) => <EvidenceLabel key={row.id} row={row} onSaved={evaluate} />)}

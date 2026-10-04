@@ -20,7 +20,7 @@ Supabase 保存持久状态，`ts-fsrs` 计算复习时间，WordLoop backend �
 
 `exercisePlanner` 是 lesson 与 consolidation 的唯一最终选题入口。它读取已冻结队列、训练强度、目标词义、错误层、有限的近期题型记录和可选 `skill_signals`，保存具体 `planned_activity_type`、目标、技能、提示程度、预计用时和选择原因。模型只按计划生成内容；输出题型必须与计划完全相同。Review 继续使用现有 FSRS 到期快路，不在 V1 更改评分任务或 due。
 
-`activity_type` 表示题面形式，`skill_ids` 表示被检验技能。例如 `translation_cn_to_en` 是题型，`verb_object_collocation` 和 `relative_clause_attachment` 是技能。规则是当前技能信号来源。未来若接入 OATutor/BKT，只可将状态估计结果作为 `skill_signals` 交给同一个 planner；不能让 adapter 改队列、单独决定题型或绕过覆盖约束。技能证据事件与 FSRS 记忆状态独立保存，可从历史事件重新估计技能状态；技能状态不能写入 FSRS retrievability、rating 或 due。
+`activity_type` 表示题面形式，`skill_ids` 表示被检验技能。例如 `translation_cn_to_en` 是题型，`verb_object_collocation` 和 `relative_clause_attachment` 是技能。规则是当前技能信号来源。BKT 在 active 模式将数据库中的状态估计作为 `skill_signals` 交给同一个 planner；不能让 adapter 改队列、单独决定题型或绕过覆盖约束。技能证据事件与 FSRS 记忆状态独立保存，可从历史事件重新估计技能状态；技能状态不能写入 FSRS retrievability、rating 或 due。
 
 普通 Lesson 每轮 5–7 词、每词一道主要短题。通常安排一道短中译英，其余用短提取；6–7 词轮通常再加入一道有适用线索的搭配或词形题。专项错误与题目适用性优先于类型覆盖，例外原因必须持久化。最近 20 道普通短题的初始目标是至少 3 类任务、至少 2 道短中译英、提取/填空不超过 75%；专项或内容不足可形成有原因的例外。这些比例和短题时间仅为可调整的规划初值，不代表科学验证结果。提取约 15–25 秒、搭配/词形约 20–30 秒、短中译英约 30–45 秒；不显示倒计时，也不因答得慢判断遗忘。普通练习至少两类任务，但不要求每轮覆盖所有题型，也不要求逐词造句。
 
@@ -117,4 +117,4 @@ Plugin 已经保存状态，用户以后不需要依赖手动粘贴摘要才能�
 展示例句 `example_en` 与随后练习必须使用不同语境。练习不得是例句的翻译、逆向翻译、近义改写或机械复述。Widget 提交 Lesson/综合题时携带 `submission_id`、`plan_id`、`exercise_id`；后端校验当前计划并在事务内写入 attempt、逐技能证据、cadence 与 session CAS。模型不得另调 `record_attempt` 或自行推进流程。Review 使用独立既有路径。正式学习卡片成功渲染后，聊天区保持安静，不重复题面、批改或教学正文。
 
 
-时间预算默认每日45分钟，原新词数仅为上限。bootstrap 返回 budget_complete 表示预算用完，不能说全部到期任务已完成；提示用户可调用 extend_daily_time_budget 加练15分钟。BKT只在shadow模式保存技能估计，不得改变正式FSRS Review题型、评分或到期日。
+时间预算默认每日45分钟，原新词数仅为上限。bootstrap 返回 budget_complete 表示预算用完，不能说全部到期任务已完成；提示用户可调用 extend_daily_time_budget 加练15分钟。BKT在active模式使用真实答题证据参与新Lesson选题；shadow模式只记录建议，off模式停用。不得改变已显示题目、正式FSRS Review题型、评分或到期日。

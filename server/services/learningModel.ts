@@ -2,8 +2,9 @@ import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { assertDatabaseResult } from "./shared.js";
 import { BKT_PARAMS, BKT_VERSION, predictCorrect, predictionMetrics, updateBkt } from "./bkt.js";
 import type { EvidenceQuality } from "../../shared/learningEvidence.js";
+import { bktMode } from "./bktPlanner.js";
 
-/** Bounded, replayable shadow projection. The event is already durable before this runs. */
+/** Bounded, replayable projection. The event is already durable before this runs. */
 export async function consumeSkillEvidence(db = getDatabase(), userId = getAuthenticatedUserId()): Promise<void> {
   const mode = await db.from("learning_settings").select("bkt_mode").eq("user_id", userId).maybeSingle();
   assertDatabaseResult(mode.error);
@@ -29,11 +30,13 @@ export async function consumeSkillEvidence(db = getDatabase(), userId = getAuthe
 
 export async function tryConsumeSkillEvidence(db = getDatabase(), userId = getAuthenticatedUserId()) {
   try { await consumeSkillEvidence(db, userId); }
-  catch { console.warn("BKT shadow projection pending replay"); }
+  catch { console.warn("BKT projection pending replay"); }
 }
 
 export async function getEvidenceEvaluation(db = getDatabase(), userId = getAuthenticatedUserId()) {
   await tryConsumeSkillEvidence(db, userId);
+  const settings = await db.from("learning_settings").select("bkt_mode").eq("user_id", userId).maybeSingle();
+  assertDatabaseResult(settings.error);
   const [evidence, gold, updates, states] = await Promise.all([
     db.from("exercise_skill_evidence").select("id,submission_id,skill_id,outcome,quality,quality_reason,evidence_version,created_at").eq("user_id", userId).eq("evidence_version", "evidence-v1").order("id", { ascending: false }).limit(200),
     db.from("evidence_gold_labels").select("evidence_id,outcome,error_label,reviewed_at").eq("user_id", userId).order("reviewed_at", { ascending: false }).limit(1000),
@@ -83,7 +86,7 @@ export async function getEvidenceEvaluation(db = getDatabase(), userId = getAuth
     streak.push({ prediction: (h.streak + 1) / (h.streak + 2), correct: u.correct });
     h.correct += Number(u.correct); h.count++; h.streak = u.correct ? h.streak + 1 : 0; history.set(u.skill_id,h);
   }
-  return { mode: "shadow", version: BKT_VERSION, params: BKT_PARAMS, calibrated: false,
+  return { mode: bktMode(settings.data?.bkt_mode), version: BKT_VERSION, params: BKT_PARAMS, calibrated: false,
     error_labels: errorLabels, evaluation_window: { samples: 200, observations: 1000, baselines: "prequential within this window; no future outcomes" },
     rows, states: states.data ?? [], reviewed_count: rows.filter(r => r.gold).length,
     observation_coverage: rows.length ? rows.filter(r => r.quality === "OBSERVE").length / rows.length : null,

@@ -1,4 +1,5 @@
 import { activityCost } from "../../shared/learningEvidence.js";
+import { loadBktPlannerSignals } from "./bktPlanner.js";
 import type { VocabularyItem } from "../types.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
@@ -155,7 +156,9 @@ function selectActivity(
 
   const signal = skillSignals
     .filter((candidate) => candidate.state === "needs_practice"
-      && (!candidate.word_id || candidate.word_id === word.word_id))
+      && (!candidate.word_id || candidate.word_id === word.word_id)
+      && (!candidate.reason?.startsWith("bkt_") || !candidate.skill_id.includes("collocation")
+        || candidate.skill_id === collocationSkill(word.part_of_speech)))
     .sort((left, right) => (right.confidence ?? 0) - (left.confidence ?? 0))[0];
   const signalActivity: PlannedActivityType | null = signal?.skill_id === "target_word_spelling" ? "word_recall"
     : ["verb_object_collocation", "adjective_complement_pattern", "noun_preposition_collocation", "lexical_collocation"].includes(signal?.skill_id ?? "") ? "collocation"
@@ -163,6 +166,14 @@ function selectActivity(
       : signal?.skill_id === "syntactic_word_use" ? "translation_cn_to_en"
           : signal?.skill_id === "target_sense_retrieval" ? "word_recall" : null;
   if (signalActivity && activityAllowed(word, signalActivity)) {
+    // BKT may prioritize practice, but cannot remove the existing coverage floor.
+    if (signal?.reason?.startsWith("bkt_") && need && activityAllowed(word, need)) {
+      return { activity: need, reason: "补足最近 20 道短题的类型覆盖。" };
+    }
+    if (signal?.reason?.startsWith("bkt_") && roundSize > 1
+      && !precedingTypes.slice(-Math.max(1, roundSize)).includes("translation_cn_to_en") && index === 0) {
+      return { activity: "translation_cn_to_en", reason: "保证本轮包含一道短中译英。" };
+    }
     const exception = need && signalActivity !== need
       ? `技能信号 ${signal?.skill_id} 的近期表现优先于短题覆盖目标。`
       : undefined;
@@ -206,8 +217,7 @@ function selectActivity(
 /**
  * Select and freeze one server-owned primary exercise plan per queued word.
  * Skill estimates are inputs; this function remains the sole final activity
- * planner. Supplying an OATutor/BKT adapter in a future version must replace
- * the corresponding signal policy here rather than add a competing planner.
+ * planner. The BKT adapter supplies estimates to this same arbitration layer.
  */
 export function planLessonRound(input: ExercisePlannerInput): LessonExercisePlan[] {
   const id = input.id_factory ?? (() => globalThis.crypto.randomUUID());
@@ -403,10 +413,14 @@ export async function planLessonQueue(
     error_focus: event.error_focus,
     exception_reason: event.coverage_exception_reason,
   }));
+  let bkt: Awaited<ReturnType<typeof loadBktPlannerSignals>> = { mode: "off", signals: [] };
+  try { bkt = await loadBktPlannerSignals(db, userId); }
+  catch { console.warn("BKT estimates unavailable; deterministic planner retained"); }
   const plans = planLessonRound({
     words: plannerWords,
     recent_activities: recent,
-    ...(options.skill_signals ? { skill_signals: options.skill_signals } : {}),
+    ...((options.skill_signals || (bkt.mode === "active" && bkt.signals.length))
+      ? { skill_signals: [...(options.skill_signals ?? []), ...(bkt.mode === "active" ? bkt.signals : [])] } : {}),
     ...(options.id_factory ? { id_factory: options.id_factory } : {}),
   });
   const preserve = options.preserve_existing_activity;
@@ -428,25 +442,17 @@ export async function planLessonQueue(
       coverage_exception_reason: "当前题已显示，恢复时保留题型以避免替换题目。",
     });
   }
-  // Shadow adapter uses the same arbitration layer, but never replaces live plans.
+  // Audit after freezing: failure to write diagnostics cannot change the selected task.
   try {
-    const settings = await db.from("learning_settings").select("bkt_mode").eq("user_id",userId).maybeSingle();
-    if (settings.error) throw settings.error;
-    if (settings.data?.bkt_mode !== "off") {
-      const estimates = await db.from("user_skill_state").select("skill_id,p_mastery,evidence_count").eq("user_id",userId).eq("bkt_version","fixed-v1");
-      if (estimates.error) throw estimates.error;
-      const signals: SkillSignal[] = (estimates.data ?? []).filter(s => s.evidence_count >= 5).map(s => ({
-        skill_id:s.skill_id, state:s.p_mastery < .6 ? "needs_practice" : s.p_mastery >= .9 ? "ready" : "developing",
-        source:"adapter", confidence:1-s.p_mastery, reason:"uncalibrated_bkt_shadow" }));
-      if (signals.length) {
+    if (bkt.signals.length) {
+        const signals = bkt.signals;
         const proposed = planLessonRound({words:plannerWords,recent_activities:recent,skill_signals:signals});
         const saved = await db.from("tutor_shadow_decisions").upsert(plans.map((p,i) => ({
           user_id:userId,plan_id:p.plan_id,actual_activity:p.planned_activity_type,
-          suggested_activity:proposed[i]!.planned_activity_type,reason:proposed[i]!.selection_reason,signals
+          suggested_activity:proposed[i]!.planned_activity_type,reason:`${bkt.mode}: ${p.selection_reason}`,signals
         })),{onConflict:"user_id,plan_id",ignoreDuplicates:true});
         if (saved.error) throw saved.error;
-      }
     }
-  } catch { console.warn("Tutor shadow unavailable; deterministic planner retained"); }
+  } catch { console.warn("BKT decision audit unavailable"); }
   return plans;
 }

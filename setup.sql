@@ -3997,3 +3997,11 @@ end $$;
 create trigger formal_review_evidence_after_insert after insert on public.attempts for each row execute function public.record_formal_review_evidence_v1();
 revoke all on function public.record_formal_review_evidence_v1() from public,anon,authenticated;
 grant execute on function public.record_formal_review_evidence_v1() to service_role;
+
+-- BKT active planner mode
+-- Enable the additional mode without changing budget settings, evidence, or FSRS.
+alter table public.learning_settings drop constraint learning_settings_bkt_mode_check;
+alter table public.learning_settings add constraint learning_settings_bkt_mode_check
+  check (bkt_mode in ('off','shadow','active'));
+
+-- Fresh rows retain the shadow default. Activate a learner explicitly after deployment.
