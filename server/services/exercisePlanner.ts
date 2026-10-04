@@ -170,9 +170,12 @@ function selectActivity(
     if (signal?.reason?.startsWith("bkt_") && need && activityAllowed(word, need)) {
       return { activity: need, reason: "补足最近 20 道短题的类型覆盖。" };
     }
-    if (signal?.reason?.startsWith("bkt_") && roundSize > 1
-      && !precedingTypes.slice(-Math.max(1, roundSize)).includes("translation_cn_to_en") && index === 0) {
+    if (signal?.reason?.startsWith("bkt_") && roundSize > 1 && index === 0) {
       return { activity: "translation_cn_to_en", reason: "保证本轮包含一道短中译英。" };
+    }
+    if (signal?.reason?.startsWith("bkt_") && roundSize > 1 && index === 1
+      && signalActivity === "translation_cn_to_en" && precedingTypes.at(-1) === "translation_cn_to_en") {
+      return { activity: appliesToCollocation(word) ? "collocation" : "word_recall", reason: "保证本轮包含第二类适用短题。" };
     }
     const exception = need && signalActivity !== need
       ? `技能信号 ${signal?.skill_id} 的近期表现优先于短题覆盖目标。`

@@ -52,4 +52,14 @@ describe("database-backed BKT selection", () => {
     expect(plans.map(p => p.planned_activity_type)).toEqual(["translation_cn_to_en", "collocation"]);
     expect(plans.map(p => p.word_id)).toEqual([wordId, userId]);
   });
+  it("keeps a mixed new round even when history contains translation or all weakness is syntax", () => {
+    const words = [word, { ...word, word_id: userId }];
+    const recent_activities = [{ scope: "lesson" as const, activity_type: "translation_cn_to_en" }];
+    for (const skill_id of ["target_sense_retrieval", "syntactic_word_use"]) {
+      const plans = planLessonRound({ words, recent_activities,
+        skill_signals: [{ skill_id, state: "needs_practice", source: "adapter", reason: "bkt_active:fixed-v1", confidence: .9 }] });
+      expect(plans[0]?.planned_activity_type).toBe("translation_cn_to_en");
+      expect(new Set(plans.map(p => p.planned_activity_type)).size).toBe(2);
+    }
+  });
 });
