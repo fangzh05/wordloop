@@ -1,0 +1,314 @@
+{
+  "protocol": "wordloop-bkt-calibration-v1",
+  "seed": 20261004,
+  "policy": {
+    "train_fraction": 0.6,
+    "validation_fraction": 0.2,
+    "minimum_class_count_per_split": 10,
+    "bootstrap_samples": 2000,
+    "bootstrap_block_length": 5,
+    "confidence": 0.95,
+    "requires": [
+      "both losses beat fixed and past-only frequency",
+      "paired block bootstrap upper bound below zero for both losses",
+      "both labels supported in every split"
+    ]
+  },
+  "snapshot_at": "2026-10-04T05:21:28.703981+00:00",
+  "total_snapshot_rows": 126,
+  "trusted_observations": 124,
+  "human_gold_count": 0,
+  "source_candidate_available": true,
+  "limitations": [
+    "One learner; intervals are diagnostic and not learning-effect evidence",
+    "Automatic exact-answer audit is not a human gold label or semantic mastery assessment",
+    "Only audited independent observations replayed; this is a controlled benchmark, not a full production-state replay",
+    "SLAM exercise correctness combines multiple causes; skill transfer requires a separate WordLoop gate"
+  ],
+  "skills": {
+    "target_sense_retrieval": {
+      "count": 92,
+      "splits": {
+        "train": {
+          "count": 55,
+          "correct": 16,
+          "incorrect": 39
+        },
+        "validation": {
+          "count": 18,
+          "correct": 5,
+          "incorrect": 13
+        },
+        "test": {
+          "count": 19,
+          "correct": 10,
+          "incorrect": 9
+        }
+      },
+      "selected_on_validation": "local-shrunk",
+      "candidates": {
+        "fixed-v1": {
+          "params": {
+            "prior": 0.2,
+            "learn": 0.1,
+            "guess": 0.2,
+            "slip": 0.1
+          },
+          "validation": {
+            "count": 18,
+            "correct": 5,
+            "brier": 0.27046917020340655,
+            "log_loss": 0.737100136419137
+          },
+          "test": {
+            "count": 19,
+            "correct": 10,
+            "brier": 0.27125816008428144,
+            "log_loss": 0.7594381461384302
+          }
+        },
+        "local-mle": {
+          "params": {
+            "prior": 0.0001,
+            "learn": 0.0001,
+            "guess": 0.290870968985072,
+            "slip": 0.49
+          },
+          "validation": {
+            "count": 18,
+            "correct": 5,
+            "brier": 0.20084552612929463,
+            "log_loss": 0.5913992232110546
+          },
+          "test": {
+            "count": 19,
+            "correct": 10,
+            "brier": 0.3041233941920574,
+            "log_loss": 0.8112532032111843
+          }
+        },
+        "local-shrunk": {
+          "params": {
+            "prior": 0.0001,
+            "learn": 0.0001,
+            "guess": 0.2895639224643852,
+            "slip": 0.10080897762899933
+          },
+          "validation": {
+            "count": 18,
+            "correct": 5,
+            "brier": 0.20080186117996857,
+            "log_loss": 0.5912936093675776
+          },
+          "test": {
+            "count": 19,
+            "correct": 10,
+            "brier": 0.3048614674903338,
+            "log_loss": 0.8130410485556866
+          }
+        },
+        "slam-exercise-production": {
+          "params": {
+            "prior": 0.5906878876232876,
+            "learn": 0.001077950645407182,
+            "guess": 0.4820780740331323,
+            "slip": 0.28417673366169777
+          },
+          "validation": {
+            "count": 18,
+            "correct": 5,
+            "brier": 0.242954283812206,
+            "log_loss": 0.6790507463693303
+          },
+          "test": {
+            "count": 19,
+            "correct": 10,
+            "brier": 0.25094169720854614,
+            "log_loss": 0.6950311788489522
+          }
+        }
+      },
+      "frequency_test": {
+        "count": 19,
+        "correct": 10,
+        "brier": 0.2960708129911113,
+        "log_loss": 0.7923514453230036
+      },
+      "paired_test": {
+        "fixed-v1": {
+          "brier": {
+            "difference": 0.03360330740605244,
+            "interval_95": [
+              -0.124142162339626,
+              0.13494027434415196
+            ]
+          },
+          "log_loss": {
+            "difference": 0.05360290241725637,
+            "interval_95": [
+              -0.30073536112031396,
+              0.2624906093617029
+            ]
+          }
+        },
+        "past-only-frequency": {
+          "brier": {
+            "difference": 0.008790654499222596,
+            "interval_95": [
+              -0.0030639409200977404,
+              0.01807876997122191
+            ]
+          },
+          "log_loss": {
+            "difference": 0.020689603232682773,
+            "interval_95": [
+              -0.007258697222659148,
+              0.04262274097872659
+            ]
+          }
+        }
+      },
+      "eligible": false,
+      "reasons": [
+        "Both outcome classes lack the predeclared split support",
+        "Candidate does not improve both test losses against both baselines",
+        "Loss improvement is not supported by both paired intervals",
+        "Opened holdout is descriptive only; fresh validation required"
+      ]
+    },
+    "target_word_spelling": {
+      "count": 32,
+      "splits": {
+        "train": {
+          "count": 19,
+          "correct": 19,
+          "incorrect": 0
+        },
+        "validation": {
+          "count": 6,
+          "correct": 5,
+          "incorrect": 1
+        },
+        "test": {
+          "count": 7,
+          "correct": 7,
+          "incorrect": 0
+        }
+      },
+      "selected_on_validation": "fixed-v1",
+      "candidates": {
+        "fixed-v1": {
+          "params": {
+            "prior": 0.2,
+            "learn": 0.1,
+            "guess": 0.2,
+            "slip": 0.1
+          },
+          "validation": {
+            "count": 6,
+            "correct": 5,
+            "brier": 0.14333333333333861,
+            "log_loss": 0.471564611880559
+          },
+          "test": {
+            "count": 7,
+            "correct": 7,
+            "brier": 0.010000000000000009,
+            "log_loss": 0.10536051565782636
+          }
+        },
+        "local-mle": {
+          "params": {
+            "prior": 0.9999,
+            "learn": 0.5,
+            "guess": 0.49,
+            "slip": 0.0001
+          },
+          "validation": {
+            "count": 6,
+            "correct": 5,
+            "brier": 0.16663334333333338,
+            "log_loss": 1.5351400661629937
+          },
+          "test": {
+            "count": 7,
+            "correct": 7,
+            "brier": 9.999999999997798e-09,
+            "log_loss": 0.00010000500033334731
+          }
+        },
+        "local-shrunk": {
+          "params": {
+            "prior": 0.5917114665975224,
+            "learn": 0.14802166671996686,
+            "guess": 0.2390752313733868,
+            "slip": 0.0001
+          },
+          "validation": {
+            "count": 6,
+            "correct": 5,
+            "brier": 0.16663334333333324,
+            "log_loss": 1.53514006616257
+          },
+          "test": {
+            "count": 7,
+            "correct": 7,
+            "brier": 1.0000000003154003e-08,
+            "log_loss": 0.00010000500034912992
+          }
+        }
+      },
+      "frequency_test": {
+        "count": 7,
+        "correct": 7,
+        "brier": 0.004504481680937976,
+        "log_loss": 0.06932444305378914
+      },
+      "paired_test": {
+        "fixed-v1": {
+          "brier": {
+            "difference": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ]
+          },
+          "log_loss": {
+            "difference": 0.0,
+            "interval_95": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "past-only-frequency": {
+          "brier": {
+            "difference": 0.005495518319062032,
+            "interval_95": [
+              0.005065566221337408,
+              0.005693850069553805
+            ]
+          },
+          "log_loss": {
+            "difference": 0.03603607260403722,
+            "interval_95": [
+              0.032606053293902273,
+              0.037552812292716245
+            ]
+          }
+        }
+      },
+      "eligible": false,
+      "reasons": [
+        "Validation retained fixed-v1",
+        "Both outcome classes lack the predeclared split support",
+        "Candidate does not improve both test losses against both baselines",
+        "Loss improvement is not supported by both paired intervals",
+        "Opened holdout is descriptive only; fresh validation required"
+      ]
+    }
+  },
+  "production_parameters_changed": false,
+  "holdout_already_opened": true,
+  "snapshot_sha256": "bfeef76424791ff396e75c7c5574a0463773bf4b04261c2b1521dd0211a12de7"
+}

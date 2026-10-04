@@ -10,3 +10,7 @@ coverage/
 evidence-test-output.txt
 
 supabase/.temp/
+
+# Private offline calibration inputs and environment.
+.bkt-calibration/
+**/__pycache__/
