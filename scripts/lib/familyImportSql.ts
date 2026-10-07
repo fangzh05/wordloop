@@ -2,9 +2,10 @@
 // The only write targets are lexical tables; all data values remain JSON literals.
 export const LEXICAL_TABLES=["lexical_morphemes","lexical_lexemes","lexical_senses","lexical_forms","lexical_relations"] as const;
 export type LexicalTable=typeof LEXICAL_TABLES[number];
+export type DictionaryTable="lexical_dictionary_entries";
 const literal=(s: string)=>`'${s.replaceAll("'","''")}'`;
-export function lexicalInsertSql(table: LexicalTable,rows: Record<string,any>[]): string {
-  if(!LEXICAL_TABLES.includes(table)||!rows.length)throw new Error("Invalid lexical batch");
+export function lexicalInsertSql(table: LexicalTable | DictionaryTable,rows: Record<string,any>[]): string {
+  if(!(table==="lexical_dictionary_entries" || LEXICAL_TABLES.includes(table))||!rows.length)throw new Error("Invalid lexical batch");
   const columns=Object.keys(rows[0]!),pk=columns[0]!;
   if(columns.some(c=>!/^\w+$/.test(c)))throw new Error("Unsafe lexical column");
   const same=(a:any,b:any)=>JSON.stringify(a)===JSON.stringify(b),common:Record<string,any>={},prov:Record<string,any>={};

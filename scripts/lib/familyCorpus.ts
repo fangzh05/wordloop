@@ -20,10 +20,10 @@ export function readOewn(xml: string) {
     const body=m[0], lemmaTag=body.match(/<Lemma\b[^>]*>/)?.[0]??"", lemma=normalizeLemma(attr(lemmaTag,"writtenForm")), pos=attr(lemmaTag,"partOfSpeech");
     if (!valid(lemma) || !["n","v","a","r"].includes(pos)) continue;
     const id=lexemeId(lemma,pos), entry=entries.get(id)??{id,lemma,pos,senses:[],pronunciation:decode(body.match(/<Pronunciation[^>]*variety="US"[^>]*>([^<]*)/)?.[1]??"")||null};
-    for(const sense of body.matchAll(/<Sense\b[^>]*>([\s\S]*?)<\/Sense>/g)) {
+    for(const sense of body.matchAll(/<Sense\b[^>]*?(?:\/>|>([\s\S]*?)<\/Sense>)/g)) {
       const senseId=attr(sense[0],"id"); owners.set(senseId,id);
       entry.senses.push({id:senseId,synset:attr(sense[0],"synset")});
-      for(const relation of sense[1]!.matchAll(/<SenseRelation\b[^>]*\/>/g)) if(attr(relation[0],"relType")==="derivation")
+      for(const relation of (sense[1]??"").matchAll(/<SenseRelation\b[^>]*\/>/g)) if(attr(relation[0],"relType")==="derivation")
         raw.push({source:id,target:attr(relation[0],"target"),evidence:{source_sense_id:senseId,target_sense_id:attr(relation[0],"target"),raw_type:"derivation"}});
     }
     entries.set(id,entry);

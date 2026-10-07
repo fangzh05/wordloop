@@ -4,6 +4,7 @@ import { beforeAll, afterAll, beforeEach, afterEach, describe, it, expect } from
 import seed from "../server/data/familySeed.json" with { type: "json" };
 import { buildFamilyLesson } from "../server/services/familyLesson.js";
 import { lexicalInsertSql } from "../scripts/lib/familyImportSql.js";
+import {buildEcdictCorpus} from "../scripts/lib/ecdictCorpus.js";
 import { selectFamilyCandidate } from "../server/services/familyPolicy.js";
 import { getFamilyContext } from "../server/services/familyGraph.js";
 import { cardToDatabase, reviewLogToDatabase, scheduleReview } from "../server/services/fsrsScheduler.js";
@@ -18,6 +19,7 @@ const files = ["202609130001_initial_wordloop.sql","202609130002_fsrs_shanbay.sq
 beforeAll(async () => {
   await db.exec("create role anon; create role authenticated; create role service_role bypassrls;");
   for (const file of files) await db.exec(readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), "utf8").replace("create extension if not exists pgcrypto;", ""));
+  await db.exec(readFileSync(new URL("../supabase/migrations/20261007095603_lexical_dictionary_entries.sql",import.meta.url),"utf8"));
   // PGlite has gen_random_uuid built in; only Supabase's grant defaults differ.
   await db.exec("grant all on all tables in schema public to service_role; grant all on all sequences in schema public to service_role;");
   for (const [table, rows] of [["lexical_lexemes",seed.lexemes],["lexical_senses",seed.senses],["lexical_forms",seed.forms],["lexical_morphemes",seed.morphemes],["lexical_relations",seed.relations]] as const) {
@@ -51,6 +53,15 @@ async function answer(id: string,index: number,text: string,content: FamilyLesso
   return (await one("select submit_family_step_v1($1,$2,$3,$4,$5,$6) as value",[u1,id,index,text,JSON.stringify(cardToDatabase(result.card)),JSON.stringify(reviewLogToDatabase(result.log))])).value;
 }
 describe("real PostgreSQL Family transactions", () => {
+  it("imports bilingual entries idempotently without touching lexical relations, cards, or frozen sessions",async()=>{
+    const before=await one("select (select count(*) from lexical_relations) relations,(select to_jsonb(x) from user_words x where user_id=$1) card,(select state from study_sessions where id=$2) session",[u1,sid]);
+    const rows=buildEcdictCorpus('word,definition,translation,pos\nact,v. perform,"n. 行动\\nvi. 表演\\nvt. 扮演",\n',["act"]).dictionary_entries;
+    const sql=lexicalInsertSql("lexical_dictionary_entries",rows);await db.exec(sql);await db.exec(sql);
+    const stored=await one("select * from lexical_dictionary_entries where lemma='act'");expect(stored.chinese_translation).toContain("扮演");expect(stored.parts_of_speech).toHaveLength(3);
+    expect((await one("select count(*) n from lexical_dictionary_entries")).n).toBe(1);
+    expect(await one("select (select count(*) from lexical_relations) relations,(select to_jsonb(x) from user_words x where user_id=$1) card,(select state from study_sessions where id=$2) session",[u1,sid])).toEqual(before);
+    for(const role of ["anon","authenticated"])expect((await one(`select has_table_privilege('${role}','lexical_dictionary_entries','SELECT') allowed`)).allowed).toBe(false);
+  });
   it("imports compact lexical batches losslessly and idempotently without learner mutations", async () => {
     const card=await one("select to_jsonb(uw) as value from user_words uw where user_id=$1",[u1]);
     const session=await one("select state,updated_at from study_sessions where id=$1",[sid]);

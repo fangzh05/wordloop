@@ -1740,6 +1740,16 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .family-recommendation p { margin: 0 0 .75rem; font-size: .875rem; line-height: 1.65; }
 .family-recommendation > .button { width: 100%; }
 .family-sources { margin-top: .5rem; }
+.family-dictionary h4,.family-english-definitions h4 { margin: .75rem 0 .5rem; font-size: .875rem; }
+.family-dictionary dl { margin: 0; }
+.family-dictionary dl > div { display: grid; grid-template-columns: minmax(2.5rem,auto) minmax(0,1fr); gap: .5rem; margin: .5rem 0; }
+.family-dictionary dt { font-weight: 600; color: var(--muted); font-size: .8125rem; }
+.family-dictionary dd { margin: 0; overflow-wrap: anywhere; line-height: 1.65; }
+.family-dictionary-source { color: var(--muted); font-size: .75rem; }
+.family-dictionary-source a { color: var(--accent); }
+.family-english-definitions { margin: .75rem 0; font-size: .875rem; line-height: 1.65; }
+.family-english-definitions summary { cursor: pointer; }
+.family-dictionary-english { white-space: pre-line; overflow-wrap: anywhere; }
 .family-sources a { margin-left: .5rem; color: var(--accent); }
 .family-micro { max-width: 34rem; margin: 0 auto; padding: .75rem 0; line-height: 1.7; }
 .family-micro-progress { display: flex; justify-content: space-between; color: var(--muted); font-size: .8125rem; font-variant-numeric: tabular-nums; }

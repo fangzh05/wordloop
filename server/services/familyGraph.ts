@@ -2,18 +2,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getDatabase, getAuthenticatedUserId } from "../db.js";
 import type { UserWordRow } from "../types.js";
 import type { FamilyGraph, FamilyNode, LexicalRelation, FamilyLesson, FamilySessionView } from "../../shared/familyContracts.js";
-import { localFamilyGraph, normalizeLemma, selectFamilyCandidate, type FamilyExposure } from "./familyPolicy.js";
+import { baseStable,localFamilyGraph, normalizeLemma, selectFamilyCandidate, type FamilyExposure } from "./familyPolicy.js";
 import { buildFamilyLesson } from "./familyLesson.js";
 import { scheduleReview, cardToDatabase, reviewLogToDatabase } from "./fsrsScheduler.js";
+import { getFamilyDictionary } from "./familyDictionary.js";
+import { FamilyServiceError } from "./familyErrors.js";
+export { FamilyServiceError } from "./familyErrors.js";
 
-export class FamilyServiceError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
-}
 function fail(error: { message?: string; code?: string } | null): void {
   if (!error) return;
   const code = error.message?.match(/FAMILY_[A-Z_]+/)?.[0];
   if (code) throw new FamilyServiceError(code.includes("NOT_FOUND") ? 404 : 409, code,
-    code === "FAMILY_BUDGET_REACHED" ? "今日学习预算已用完。" : code === "FAMILY_SESSION_PENDING" ? "请先完成已开始的词族短练习。" : "当前学习状态已变化，请重新打开词族；系统会保留学习间隔。");
+    code === "FAMILY_BUDGET_REACHED" ? "今日学习预算已用完。" : code === "FAMILY_STUDY_REQUIRED" ? "请从正在学习的 Lesson 页面开始短练习。" : code === "FAMILY_SESSION_PENDING" ? "请先完成已开始的词族短练习。" : "当前学习状态已变化，请重新打开词族；系统会保留学习间隔。");
   if (["42P01", "42883", "PGRST202"].includes(error.code ?? "")) throw new FamilyServiceError(503, "FAMILY_SCHEMA_REQUIRED", "词族学习数据尚未安装。");
   throw new FamilyServiceError(500, "FAMILY_QUERY_FAILED", "词族暂时不可用，请稍后重试。");
 }
@@ -77,9 +77,19 @@ export async function startFamilyMicroSession(lexeme: string, requestId: string)
   if (pending) return pending;
   const { graph, exposures } = await getFamilyContext(lexeme, db, userId);
   const decision = selectFamilyCandidate(graph, exposures, new Date());
+  // Dictionary lookup only on explicit short-course start, not graph browsing.
+  // Missing Chinese remains an honest English fallback; no invented translation.
+  const relevant=decision.stage==="D"?graph.nodes.filter(n=>baseStable(n)).slice(0,3):[graph.center,...(decision.candidate?[decision.candidate]:[])];
+  await Promise.all(relevant.map(async node=>{
+    try { node.dictionary=await getFamilyDictionary(node.lemma,db); }
+    catch(error) { if(!(error instanceof FamilyServiceError)||error.code!=="FAMILY_DICTIONARY_UNAVAILABLE")throw error; }
+  }));
   let lesson: FamilyLesson;
   try { lesson = buildFamilyLesson(graph, decision); }
-  catch (error) { throw new FamilyServiceError(409, error instanceof Error ? error.message : "FAMILY_CONTENT_UNAVAILABLE", decision.reason); }
+  catch (error) {
+    const code=error instanceof Error&&/^FAMILY_[A-Z_]+$/.test(error.message)?error.message:"FAMILY_CONTENT_UNAVAILABLE";
+    throw new FamilyServiceError(409,code,code==="FAMILY_CONTENT_UNAVAILABLE"?"这个词暂时缺少可用释义，无法开始短练习。请重试或继续原来的学习。":decision.reason);
+  }
   const r = await db.rpc("start_family_micro_v1", { p_user_id: userId, p_request_id: requestId, p_lesson: lesson });
   fail(r.error);
   return familySessionView(r.data as MicroRow);

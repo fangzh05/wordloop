@@ -14,6 +14,15 @@ export interface Sense { sense_id: string; lexeme_id: string; definition: string
 export interface Form { form_id: string; lexeme_id: string; surface_form: string; form_type: string; pronunciation: string | null }
 export interface Morpheme { morpheme_id: string; surface: string; type: "prefix" | "root" | "suffix"; meaning: string }
 export interface SourceMetadata { source: string; source_version: string; license: string; provenance: Record<string, unknown>; confidence: number }
+export interface DictionaryGloss {
+  label: string; part_of_speech: string | null; definition_zh: string | null; definition_en: string | null;
+}
+// A bilingual dictionary entry is lemma-level source material. Its translations
+// are not asserted to align with individual OEWN synsets or derivation edges.
+export interface LexicalDictionaryEntry extends SourceMetadata {
+  entry_id: string; lemma: string; language: string; phonetic: string | null;
+  english_definition: string; chinese_translation: string; parts_of_speech: DictionaryGloss[];
+}
 export interface LexicalRelation extends SourceMetadata {
   relation_id: string; source_id: string; target_id: string; relation_type: RelationType; direction: "forward" | "undirected";
   transparency: number; interference_risk: number; morphology: string | null;
@@ -26,6 +35,7 @@ export interface LearnerState {
 }
 export interface FamilyNode extends Lexeme {
   senses: Sense[]; forms: Form[]; user_state: LearnerState | null; priority: number; reason: string;
+  dictionary?: LexicalDictionaryEntry | null;
 }
 export interface FamilyGraph {
   center: FamilyNode; nodes: FamilyNode[]; edges: LexicalRelation[]; depth: 1; truncated: boolean;
@@ -53,4 +63,5 @@ export const familyGraphQuerySchema = z.object({
   lexeme: z.string().trim().min(1).max(120), depth: z.coerce.number().int().min(1).max(1).default(1),
 }).strict();
 export const familyStartSchema = z.object({ lexeme: z.string().trim().min(1).max(120), request_id: z.string().uuid() }).strict();
+export const familyDictionaryQuerySchema = z.object({ lemma: z.string().trim().min(1).max(120) }).strict();
 export const familyAnswerSchema = z.object({ session_id: z.string().uuid(), index: z.number().int().min(0).max(8), answer: z.string().trim().min(1).max(500) }).strict();

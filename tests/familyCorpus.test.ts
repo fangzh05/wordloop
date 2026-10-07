@@ -20,6 +20,10 @@ function graph() {
  return localFamilyGraph(nodes.find(n=>n.lemma==="circulate")!,nodes,data.relations as LexicalRelation[]);
 }
 describe("Sourced family corpus import",()=>{
+ it("reads self-closing WordNet senses and preserves asymmetric derivation targets",()=>{
+  const data=readOewn('<Lexicon id="oewn" version="2025"><LexicalEntry><Lemma writtenForm="quart" partOfSpeech="n"/><Sense id="q1" synset="qs"/></LexicalEntry><LexicalEntry><Lemma writtenForm="quartic" partOfSpeech="a"/><Sense id="qa1" synset="qas"><SenseRelation relType="derivation" target="q1"/></Sense></LexicalEntry><Synset id="qs"><Definition>a unit of volume</Definition></Synset></Lexicon>');
+  expect(data.entries.get("en:quart:n")!.senses).toEqual([{id:"q1",synset:"qs"}]);expect(data.pairs.size).toBe(1);
+ });
  it("reads explicit derivation only, retains sense evidence, deduplicates reciprocal pairs",()=>{
   const data=readOewn(xml);expect(data.pairs.size).toBe(1);expect([...data.pairs.values()][0]!.evidence).toHaveLength(2);expect(data.synsets.get("ns")!.examples).toEqual(["Good circulation is vital."]);
  });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { FamilyCandidate, FamilyGraph, FamilyNode, FamilySessionView } from "../../../shared/familyContracts.js";
+import type { FamilyCandidate, FamilyGraph, FamilyNode, FamilySessionView,LexicalDictionaryEntry } from "../../../shared/familyContracts.js";
 import { FAMILY_VISIBLE_LIMIT } from "../../../shared/familyContracts.js";
 import { request } from "../standalone/apiClient.js";
 import type { FamilyEngine } from "./familyEngine.js";
@@ -30,11 +30,35 @@ export function FamilyEntry({ word, disabled = false }: { word: string; disabled
     {open && <FamilyPanel initialWord={word} onClose={() => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); }} />}</>;
 }
 export function FamilyMiniCard({ node }: { node: FamilyNode }) {
+  const [dictionary,setDictionary]=useState<LexicalDictionaryEntry|null>(node.dictionary??null);
+  const [dictionaryStatus,setDictionaryStatus]=useState(node.dictionary===undefined?"loading":"ready");
+  const [dictionaryRetry,setDictionaryRetry]=useState(0);
+  useEffect(()=>{
+    let cancelled=false;setDictionary(node.dictionary??null);
+    if(node.dictionary!==undefined){setDictionaryStatus("ready");return;}
+    setDictionaryStatus("loading");
+    void request<LexicalDictionaryEntry|null>(`/api/web/family/dictionary?lemma=${encodeURIComponent(node.lemma)}`,{})
+      .then(value=>{if(!cancelled){setDictionary(value);setDictionaryStatus("ready");}})
+      .catch(()=>{if(!cancelled)setDictionaryStatus("error");});
+    return ()=>{cancelled=true;};
+  },[node.lemma,node.dictionary,dictionaryRetry]);
+  const posLabels:Record<string,string>={n:"n. 名词",v:"v. 动词",a:"adj. 形容词",r:"adv. 副词"};
   const layerLabels = { meaning: "词义", spelling: "拼写", pronunciation: "发音", collocation: "搭配", grammar: "语法" };
   const stateLabel = ({ known: "已熟悉", uncertain: "待巩固", unknown: "学习中", new: "待学习", review: "复习中" } as Record<string, string>)[node.user_state?.status ?? ""] ?? "学习中";
-  return <div className="family-mini-card"><h3>{node.lemma} <span className="part-of-speech">{node.part_of_speech}</span></h3>
-    {node.forms.some((f) => f.pronunciation) && <p className="family-pronunciation">{node.forms.find((f) => f.pronunciation)?.pronunciation}</p>}
-    <p>{node.senses[0]?.definition}</p><p className="family-reason">{node.reason}</p>
+  return <div className="family-mini-card"><h3>{node.lemma} <span className="part-of-speech">{posLabels[node.part_of_speech]??node.part_of_speech}</span></h3>
+    {(node.forms.some(f=>f.pronunciation)||dictionary?.phonetic) && <p className="family-pronunciation">{node.forms.find(f=>f.pronunciation)?.pronunciation??dictionary?.phonetic}</p>}
+    {dictionaryStatus==="loading"&&<p role="status" className="family-reason">正在加载中文词典释义…</p>}
+    {dictionaryStatus==="error"&&<p className="family-reason">词典暂时不可用。<Button className="secondary" onClick={()=>setDictionaryRetry(n=>n+1)}>重试释义</Button></p>}
+    {dictionary && <section className="family-dictionary" aria-label="词典释义与词性"><h4>词典释义</h4>
+      <dl>{dictionary.parts_of_speech.map((gloss,index)=><div key={index}><dt>{gloss.label||"补充释义"}</dt><dd>{gloss.definition_zh??gloss.definition_en}{!gloss.definition_zh&&gloss.definition_en&&<span className="family-reason"> · 暂无中文释义</span>}</dd></div>)}</dl>
+      <p className="family-dictionary-source">来源：<a href="https://github.com/skywind3000/ECDICT" target="_blank" rel="noreferrer">{dictionary.source}</a> · {dictionary.license}</p>
+    </section>}
+    {dictionaryStatus==="ready"&&!dictionary?.chinese_translation&&<p className="family-reason">公开词典暂未收录中文释义，可查看英文释义。</p>}
+    {(node.senses.length>0||dictionary?.english_definition)&&<details className="family-english-definitions"><summary>英文释义</summary>
+      {dictionary?.english_definition&&<><h4>ECDICT · 词条释义</h4><p className="family-dictionary-english">{dictionary.english_definition}</p></>}
+      {node.senses.length>0&&<><h4>WordNet · {posLabels[node.part_of_speech]??node.part_of_speech}</h4><ol>{node.senses.map(s=><li key={s.sense_id}>{s.definition}</li>)}</ol></>}
+    </details>}
+    <p className="family-reason">{node.reason}</p>
     {!node.user_state ? <p className="family-learning-label">未学习 · Unlearned</p> : <details className="family-learning-state"><summary>学习状态 · {stateLabel}</summary>
       <p className="family-reason">记忆稳定度 {node.user_state.stability.toFixed(1)} 天</p>
       <dl className="family-layers">{(["meaning", "spelling", "pronunciation", "collocation", "grammar"] as const).map((layer) => {
@@ -50,6 +74,7 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
   const [pending, setPending] = useState<FamilySessionView | null>(null);
   const [answer, setAnswer] = useState(""), [feedbackOpen, setFeedbackOpen] = useState(false), [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [message, setMessage] = useState("");
+  const [startError,setStartError]=useState(""),[starting,setStarting]=useState(false);
   const requestId = useRef(crypto.randomUUID()), epoch = useRef(0), alive = useRef(true);
   const graphRef = useRef(graph); graphRef.current = graph;
   const controls = useRef({ select: setSelectedId, recenter: (id: string) => void load(id), candidate: (id: string) => void saveCandidate(id) });
@@ -61,6 +86,7 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
     return () => { alive.current = false; epoch.current++; engineRef.current?.destroy(); engineRef.current = null; };
   }, []);
   useEffect(() => { if (graph && !micro) engineRef.current?.update(graph); }, [graph, micro]);
+  useEffect(()=>{if(micro)dialogRef.current?.scrollTo({top:0});},[micro?.id]);
   // Canvas unmounts during a micro-session; rebuild only when returning to graph.
   useEffect(() => {
     if (micro) { engineRef.current?.destroy(); engineRef.current = null; return; }
@@ -77,7 +103,7 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
   async function load(lexeme: string) {
     if (busy) return;
     const version = ++epoch.current;
-    setBusy(true); setError("");
+    setBusy(true); setError("");setStartError("");
     try {
       const [next, candidate, unfinished] = await Promise.all([
         request<FamilyGraph>(`/api/web/family/graph?lexeme=${encodeURIComponent(lexeme)}&depth=1`, {}),
@@ -104,12 +130,12 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
     finally { if (alive.current) setBusy(false); }
   }
   async function start() {
-    if (!graph || busy) return; setBusy(true); setError("");
+    if (!graph || busy) return; setBusy(true);setStarting(true);setStartError("");
     try {
       const next = await request<FamilySessionView>("/api/web/family/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lexeme: graph.center.lexeme_id, request_id: requestId.current }) });
       if (alive.current) { setMicro(next); setFeedbackOpen(false); setAnswer(""); }
-    } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : "练习未开始。"); }
-    finally { if (alive.current) setBusy(false); }
+    } catch (e) { if (alive.current) setStartError(e instanceof Error ? e.message : "练习未开始，请重试。"); }
+    finally { if (alive.current) {setBusy(false);setStarting(false);} }
   }
   async function submit() {
     if (!micro || busy || !answer.trim()) return; setBusy(true); setError("");
@@ -151,7 +177,8 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
       </div></>}
       {decision && <section className="family-recommendation"><p>{decision.reason}</p>
         {pending ? <Button disabled={busy} onClick={() => { setMicro(pending); setFeedbackOpen(false); }}>恢复 {pending.base} 的词族练习</Button>
-          : <Button disabled={busy || !graph.center.user_state || (!decision.eligible_now && decision.stage !== "A")} onClick={() => void start()}>{decision.stage === "A" ? "先巩固当前词 · 约 2 分钟" : decision.stage === "D" ? "词族语境辨析 · 约 2 分钟" : "学习这个词族 · 约 2 分钟"}</Button>}
+          : <Button disabled={busy || !graph.center.user_state || (!decision.eligible_now && decision.stage !== "A")} onClick={() => void start()}>{starting ? "正在启动短练习…" : decision.stage === "A" ? "先巩固当前词 · 约 2 分钟" : decision.stage === "D" ? "词族语境辨析 · 约 2 分钟" : "学习这个词族 · 约 2 分钟"}</Button>}
+          {startError&&<p role="alert" className="family-start-error">{startError}</p>}
       </section>}
       <details className="family-sources"><summary>关系来源与许可</summary>{graph.edges.map((e) => <p key={e.relation_id}>{e.source} {e.source_version} · {e.license} · 置信度 {e.confidence}<br />{e.morphology}
         {typeof e.provenance.url === "string" && <a href={e.provenance.url} target="_blank" rel="noreferrer">查看来源</a>}</p>)}</details>

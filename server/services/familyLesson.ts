@@ -32,12 +32,13 @@ function teachingFor(node: FamilyNode) {
   const matchingExample = (s: FamilyNode["senses"][number]) => (Array.isArray(s.provenance?.example_sentences) ? s.provenance.example_sentences : [])
     .find((x): x is string => typeof x === "string" && x.length <= 500 && wordPattern.test(x));
   const sense = node.senses.find(s => s.definition.trim() && matchingExample(s)) ?? node.senses.find(s => s.definition.trim());
-  if (!sense) throw new Error("FAMILY_CONTENT_UNAVAILABLE");
+  const chinese=node.dictionary?.parts_of_speech.filter(g=>g.part_of_speech===node.part_of_speech&&g.definition_zh).map(g=>g.definition_zh).join("；");
+  if (!sense&&!chinese) throw new Error("FAMILY_CONTENT_UNAVAILABLE");
   // Only dictionary material; no invented lexical facts or generic made-up sentence.
   const token = new RegExp(`\\b${escaped(node.lemma)}\\b`,"gi");
-  const meaning = sense.definition.replace(token,"___").slice(0,400);
-  const example = matchingExample(sense);
-  return { meaning, context: example?.replace(token,"___"), usage: undefined, chinese: false };
+  const meaning = (chinese||sense!.definition).replace(token,"___").slice(0,400);
+  const example = sense?matchingExample(sense):undefined;
+  return { meaning, context: example?.replace(token,"___"), usage: undefined, chinese: !!chinese };
 }
 function recall(node: FamilyNode): FamilyStep {
   const teaching = teachingFor(node);

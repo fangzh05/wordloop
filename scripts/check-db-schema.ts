@@ -15,6 +15,7 @@ type RpcCheck = {
 };
 
 const checks: SchemaCheck[] = [
+  { table: "lexical_dictionary_entries", column: "parts_of_speech", migration: "20261007095603" },
   { table: "lexical_lexemes", column: "family_key", migration: "20261007053500" },
   { table: "lexical_senses", column: "provenance", migration: "20261007053500" },
   { table: "lexical_forms", column: "pronunciation", migration: "20261007053500" },

@@ -106,6 +106,8 @@ import { analyticsQuerySchema } from "../shared/analyticsContracts.js";
 import { vocabularyQuerySchema } from "../shared/analyticsContracts.js";
 import { VocabularyServiceError, getVocabularyDetail, listVocabulary } from "./services/vocabulary.js";
 import { FamilyServiceError, getFamilyGraph, getFamilyCandidate, addFamilyCandidate, startFamilyMicroSession, submitFamilyStep, getFamilyMicroSession } from "./services/familyGraph.js";
+import { getFamilyDictionary } from "./services/familyDictionary.js";
+import { familyDictionaryQuerySchema } from "../shared/familyContracts.js";
 import { familyGraphQuerySchema, familyStartSchema, familyAnswerSchema } from "../shared/familyContracts.js";
 
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
@@ -1659,6 +1661,11 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
 
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/web/family/")) {
+      if (request.method === "GET" && url.pathname === "/api/web/family/dictionary") {
+        const query=familyDictionaryQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+        if(!query.success)throw new WebApiError(400,"INVALID_REQUEST","词典查询参数不正确。");
+        return jsonApiResponse(await getFamilyDictionary(query.data.lemma));
+      }
       if (request.method === "GET" && ["/api/web/family/graph", "/api/web/family/expand", "/api/web/family/candidate"].includes(url.pathname)) {
         const query = familyGraphQuerySchema.safeParse(Object.fromEntries(url.searchParams));
         if (!query.success) throw new WebApiError(400, "INVALID_REQUEST", "词族仅支持一跳查询。");
