@@ -62,6 +62,21 @@ Planner 会综合目标词义、词性、当前错误层、Lesson profile、最�
 
 长难句翻译、完整中译英、情境造句等综合任务与普通 Lesson/Review 分开记录，也不会直接推进 FSRS。
 
+## 延迟优化与重试行为
+
+当前学习链路已经加入一轮专门针对语义 Lesson / consolidation 的延迟与可靠性优化。
+
+- 语义批改正常路径的输出上限从原来的 1200 tokens 收紧到 600，repair 路径从 1800 收紧到 900。
+- 第一次答错不会提前泄露 reference answer；第二次答错仍要求提供参考答案。缺失核心反馈时最多触发一次 repair。
+- 没有被真正评估的 semantic dimension 会保持 not_assessed，不再根据一个全局 verdict 推导出虚假的逐技能正确率。
+- 已冻结的 Lesson plan 在后续单词中直接复用，不再为了生成前 checkpoint 额外写一次 session。生成失败保存 retry cursor，成功写入仍使用 revision 条件保护。
+- Planner 会复用已经加载的 queue vocabulary；Standalone 中彼此独立的 planner 读取会并发执行。
+- `grading_ms` 保存实际测得的批改耗时；设置 `WORDLOOP_PERF_LOG=1` 后，可以输出阶段耗时、模型 attempt 耗时、token usage 和 retry reason 等诊断信息，同时不记录 prompt、用户答案、API key 或 repair 文本。
+
+这些优化不会改变固定答案题的确定性判分、题型选择逻辑、accepted-answer 路由或 FSRS 调度。仓库目前有性能 instrumentation，但没有据此声称任何生产环境“提速百分比”。
+
+完整说明见 `docs/LEARNING_LATENCY_OPTIMIZATION.md`。
+
 ## FSRS 长期记忆调度
 
 WordLoop 通过 `ts-fsrs` 使用 FSRS v6。
@@ -290,6 +305,7 @@ wordloop/
 | `ALLOWED_HOSTS` | 公网部署建议 | DNS rebinding 防护。 |
 | `WORDLOOP_ROOT` | 极少需要 | 显式项目根目录。 |
 | `ENABLE_WIDGET_PREVIEW` | 仅开发 | 开启本地 Widget preview 路由。 |
+| `WORDLOOP_PERF_LOG` | 可选调试 | 设为 `1` 后输出模型/阶段耗时与重试诊断，不记录 prompt 或用户答案。 |
 
 当前 DeepSeek 调用模型为 `deepseek-flash`，并关闭 thinking。所有模型输出必须通过 Zod schema 校验后才能进入正式学习流程。
 
@@ -297,16 +313,17 @@ wordloop/
 
 全新数据库直接应用当前 `setup.sql`。
 
-已经存在真实数据的数据库只按顺序补跑缺少的 migration。最近的 migration 主要加入：
+已经存在真实数据的数据库只按顺序补跑缺少的 migration。当前分支的重要迁移包括：
 
-- exact cloze / semantic activity；
-- 正式 Lesson 完成历史；
-- canonical captured notes 与 occurrence；
-- analytics read models；
-- Stability 统计；
-- 持久化 balanced exercise plan 与索引。
+- `202609290001_capture_notes.sql`：初始 Capture 存储；
+- `20260929120641_captured_notes.sql`：canonical captured-notes 模型；
+- `20260929172617_captured_notes_canonical_adapter.sql`：Capture canonical adapter；
+- `20260929172621_analytics_read_models.sql`：analytics read models；
+- `20260929184221_progress_scheduled_stability_mean.sql`：scheduled Stability 统计；
+- `20260930043404_balanced_exercise_plans.sql`：持久化冻结 exercise plan；
+- `20260930043648_exercise_plan_fk_indexes.sql`：对应索引。
 
-不要把旧版 `setup.sql` 重新覆盖到已经有真实数据的数据库上。
+上面的显式文件名同时属于仓库的 migration / README 测试契约。不要把旧版 `setup.sql` 重新覆盖到已经有真实数据的数据库上。
 
 ## 安装与运行
 
