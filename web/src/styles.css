@@ -171,6 +171,7 @@ input.answer-input::placeholder { color: var(--muted); opacity: 0.72; }
 .question-word { margin: 0.62rem 0 0.35rem; color: var(--text); font-size: 1.8rem; line-height: 1.12; font-weight: 700; letter-spacing: -0.04em; }
 .answer-label { display: block; margin-top: 1rem; color: var(--muted); font-size: 0.78rem; font-weight: 650; }
 .answer-hint { margin: 0.42rem 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.35; }
+.lesson-cloze-hint { font-size: 0.85rem; line-height: 1.6; white-space: pre-wrap; }
 .answer-status { margin: 0.7rem 0 0; color: var(--success); font-size: 0.8125rem; line-height: 1.4; }
 .pretest-actions { display: flex; gap: 0.5rem; margin-top: 0.95rem; }
 .pretest-actions .button { flex: 1; }

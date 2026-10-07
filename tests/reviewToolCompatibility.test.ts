@@ -39,7 +39,7 @@ vi.mock("../server/services/review.js", async (importOriginal) => {
     getSessionLearningQueue: vi.fn(),
   };
 });
-const wordMocks = vi.hoisted(() => ({ getTodayWords: vi.fn() }));
+const wordMocks = vi.hoisted(() => ({ getTodayWords: vi.fn(), getVocabularyItemsByWords: vi.fn() }));
 vi.mock("../server/services/words.js", () => wordMocks);
 const plannerMocks = vi.hoisted(() => ({ planLessonQueue: vi.fn(), cadenceCandidatePlans: vi.fn(() => ({})) }));
 vi.mock("../server/services/exercisePlanner.js", () => plannerMocks);
@@ -158,6 +158,7 @@ describe("Review render tool schema compatibility", () => {
     sessionMocks.persistStudyState.mockReset().mockImplementation(async (state: unknown) => ({ state }));
     sessionMocks.persistStudyStateIfRevision.mockReset().mockImplementation(async (state: unknown) => ({ state }));
     wordMocks.getTodayWords.mockReset().mockResolvedValue([]);
+    wordMocks.getVocabularyItemsByWords.mockReset().mockResolvedValue([]);
     plannerMocks.planLessonQueue.mockReset().mockImplementation(async (words: string[], _relearn: string[], _db: unknown, _user: unknown,
       options?: { preserve_existing_activity?: { index: number; activity_type: string } }) => words.map((word, index) => ({
       plan_version: 1,
@@ -332,6 +333,7 @@ describe("Review render tool schema compatibility", () => {
   });
 
   it("renders the production-shaped legacy exercise as the same current Lesson exercise", async () => {
+    wordMocks.getVocabularyItemsByWords.mockResolvedValue([{ word: "air-conditioning", senses: [{ pos: "n.", definition_cn: "空调" }] }]);
     const studySessions = await vi.importActual<typeof import("../server/services/studySessions.js")>("../server/services/studySessions.js");
     sessionMocks.normalizeStudyStateForRead.mockImplementation((state) =>
       studySessions.normalizeStudyStateForRead(state as Parameters<typeof studySessions.normalizeStudyStateForRead>[0]));
@@ -369,6 +371,7 @@ describe("Review render tool schema compatibility", () => {
 
     await withReviewClient(async (client) => {
       const resumed = payloadOf(await client.callTool({ name: "render_lesson_widget", arguments: { resume: true } }));
+      expect(resumed.cloze_hint).toBe("n. 空调");
       expect(resumed).toMatchObject({
         widget: "lesson",
         mode: "exercise",

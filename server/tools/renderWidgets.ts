@@ -35,6 +35,7 @@ import {
 } from "../services/lessonQueue.js";
 import { normalizeWord } from "../services/wordNormalization.js";
 import { formatMeaningByPartOfSpeech, formatPartOfSpeech } from "../../shared/lexicalDisplay.js";
+import { withLessonClozeHint } from "../services/lessonClozeHint.js";
 import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, VocabularyItem } from "../types.js";
 import {
   REVIEW_SESSION_MAX,
@@ -472,7 +473,7 @@ export async function resumableLessonPayload(session: StudySessionRow | null): P
     ...(!resolved.payload.consolidation && currentPlan ? { plan: currentPlan } : {}),
   };
   const persistedPayload = { ...responseContent, navigation };
-  const responseWithPlan = lessonWidgetPayload(lessonWidgetResponsePayload({ ...responseContent, navigation }));
+  const responseWithPlan = lessonWidgetPayload(lessonWidgetResponsePayload(await withLessonClozeHint({ ...responseContent, navigation })));
   const payloadChanged = JSON.stringify(resolved.payload) !== JSON.stringify(responseContent)
     || JSON.stringify(resolved.flow) !== JSON.stringify(restoredFlow);
   const navigationChanged = JSON.stringify(resolved.payload.navigation) !== JSON.stringify(navigation);
@@ -598,14 +599,14 @@ async function saveWidgetState(input: {
       ...(atomicSubmission.plan.scope === "lesson" ? { cadence_candidates: cadenceCandidatePlans(atomicSubmission.plan, knownActive.state.current_word ?? "") } : {}),
     });
     if (!saved.state) throw new Error("PLANNED_SUBMISSION_STATE_MISSING");
-    return widgetPayloadWithState(lessonWidgetResponsePayload(saved.state.payload), saved.state);
+    return widgetPayloadWithState(lessonWidgetResponsePayload(await withLessonClozeHint(saved.state.payload)), saved.state);
   }
   const persisted = state.payload.consolidation === true && knownActive
     ? await persistStudyStateIfRevision(state, knownActive.updated_at, getDatabase(), getAuthenticatedUserId(), knownActive.id)
     : await persistStudyState(state, getDatabase(), getAuthenticatedUserId(), knownActive);
   const persistedPayload = persisted.state?.payload ?? input.payload;
   return {
-    ...widgetPayloadWithState(input.widget === "lesson" ? lessonWidgetResponsePayload(persistedPayload) : persistedPayload, persisted.state ?? state),
+    ...widgetPayloadWithState(input.widget === "lesson" ? lessonWidgetResponsePayload(await withLessonClozeHint(persistedPayload)) : persistedPayload, persisted.state ?? state),
     ...(input.widget === "pretest" ? { revision: persisted.updated_at } : {}),
   };
 }

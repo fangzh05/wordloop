@@ -74,6 +74,7 @@ vi.mock("../web/src/pronunciation/audio.js", () => ({
 }));
 
 import { LessonWidget } from "../web/src/lesson/LessonWidget.js";
+import { LessonClozeHint } from "../web/src/lesson/LessonClozeHint.js";
 import { callServerTool, sendUserMessage } from "../web/src/mcpBridge.js";
 import { loadDictionaryPronunciationAudio, playPronunciation } from "../web/src/pronunciation/audio.js";
 
@@ -146,6 +147,20 @@ afterEach(() => {
 beforeEach(() => { vi.mocked(loadDictionaryPronunciationAudio).mockResolvedValue({}); });
 
 describe("Lesson pronunciation", () => {
+  it("shows separate POS meanings alongside a cloze without rendering the target word", () => {
+    render();
+    harness.sendPayload({ widget: "lesson", mode: "exercise", word: "water", progress: "1 / 1",
+      activity_type: "exact_cloze", instruction: "填入正确词形。",
+      prompt: "Remember to ___ the plants before leaving.", multiline: false,
+      cloze_hint: "n. 水　v. 灌溉" });
+    const root = render();
+    const hint = descendants(root).find((node) => node.type === LessonClozeHint);
+    expect((hint?.props as { hint?: string })?.hint).toBe("n. 水　v. 灌溉");
+    const text = label(root);
+    expect(text).toContain("Remember to ___ the plants before leaving.");
+    expect(text).not.toContain("water");
+  });
+
   it("preloads dictionary audio and uses the shared player in explain and listening", async () => {
     const audio = "https://media.merriam-webster.com/audio/prons/en/us/mp3/v/vibrate001.mp3";
     vi.mocked(loadDictionaryPronunciationAudio).mockResolvedValue({ vibrate: audio });

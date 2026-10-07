@@ -36,6 +36,7 @@ import {
 } from "./services/lessonQueue.js";
 import { getTodayWords, getVocabularyItemsByWords, recordPretestResult, setDailyNewWordLimit } from "./services/words.js";
 import { formatMeaningByPartOfSpeech, formatPartOfSpeech } from "../shared/lexicalDisplay.js";
+import { withLessonClozeHint } from "./services/lessonClozeHint.js";
 import { buildReviewWidgetPayload } from "./tools/renderWidgets.js";
 import { getPronunciationAudio } from "./tools/getPronunciationAudio.js";
 import { getCompletedLessonWords, recordAttempt } from "./services/attempts.js";
@@ -339,7 +340,10 @@ async function successForSession(
   audioUrl?: string | null,
 ): Promise<Record<string, unknown>> {
   const state = ensureState(session);
-  const response = resultForState(session, state, extra);
+  const displayState = state.widget === "lesson"
+    ? { ...state, payload: await withLessonClozeHint(state.payload) }
+    : state;
+  const response = resultForState(session, displayState, extra);
   if (state.widget === "lesson") response.pronunciation_audio_url = state.phase === "lesson_explain" && state.payload.mode === "explain"
     ? audioUrl === undefined ? await pronunciationUrl(state.current_word) : audioUrl
     : null;

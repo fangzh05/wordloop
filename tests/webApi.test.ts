@@ -965,6 +965,39 @@ describe("Standalone Web API shared-state boundaries", () => {
     });
   });
 
+  it("shows grouped POS hints on cloze entry, refresh and retry while concealing the answer", async () => {
+    const state = lessonState("exact_cloze");
+    state.phase = "lesson_explain";
+    state.payload = {
+      widget: "lesson", mode: "explain", word: "fixture", progress: "1 / 1",
+      part_of_speech: "n./v.", meaning_zh: "n. 设施；固定的事物　v. 安装；提供设施",
+      exercise: { activity_type: "exact_cloze", instruction: "填入正确词形。",
+        prompt: "The new lamp became a permanent ___ in the room.", accepted_answers: ["fixture"], multiline: false },
+    };
+    mocks.active = row(state);
+    const entered = await body(await handleWebApiRequest(post({ action: "lesson_start_exercise" })));
+    expect(entered.state.payload.cloze_hint).toBe("n. 设施；固定的事物　v. 安装；提供设施");
+    expect(entered.state.payload).not.toHaveProperty("word");
+    expect(entered.state.payload).not.toHaveProperty("accepted_answers");
+    const frozen = structuredClone(mocks.active.state);
+    mocks.bootstrap.mockResolvedValue({ action: "resume" });
+    const refreshed = await body(await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    })));
+    expect(refreshed.state.payload.cloze_hint).toBe(entered.state.payload.cloze_hint);
+    expect(mocks.active.state).toEqual(frozen);
+    const submitted = await body(await handleWebApiRequest(post({ action: "lesson_submit", answer: "wrong" }, mocks.active.updated_at)));
+    expect(submitted.state.payload.feedback.reveal_answer).toBe(false);
+    const retried = await body(await handleWebApiRequest(post({ action: "lesson_retry" }, mocks.active.updated_at)));
+    expect(retried.state.payload.cloze_hint).toBe(entered.state.payload.cloze_hint);
+    expect(retried.state.payload.prompt).toBe(entered.state.payload.prompt);
+    expect(retried.state.payload).not.toHaveProperty("word");
+    expect(retried.state.payload).not.toHaveProperty("accepted_answers");
+    const widget = await resumableLessonPayload(mocks.active);
+    expect(widget.cloze_hint).toBe(entered.state.payload.cloze_hint);
+    expect(widget).not.toHaveProperty("accepted_answers");
+  });
+
   it("persists fixed answers in the server Lesson state but omits them from the Web response", async () => {
     const start = makeStudyState({
       date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
