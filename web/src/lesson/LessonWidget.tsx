@@ -13,7 +13,7 @@ import {
   type AdvanceStudySessionInput,
 } from "../../../shared/toolContracts.js";
 import { meaningIncludesPartOfSpeech } from "../../../shared/lexicalDisplay.js";
-import { LessonClozeHint } from "./LessonClozeHint.js";
+import { LessonClozeHint, lessonPromptWithMeaning } from "./LessonClozeHint.js";
 
 export { LESSON_WIDGET_VERSION } from "../../../shared/toolContracts.js";
 
@@ -527,6 +527,7 @@ export function LessonWidget(): React.JSX.Element {
   const exercise = payload ? exerciseFromPayload(payload) : null;
   const activityType = exercise?.activity_type ?? "";
   const exercisePrompt = exercise?.prompt ?? "";
+  const displayedExercisePrompt = lessonPromptWithMeaning(activityType, exercisePrompt, payload?.cloze_hint);
   const instruction = exercise?.instruction ?? "";
   const multiline = exercise?.multiline ?? false;
   const currentWord = payload?.word ?? "";
@@ -772,7 +773,7 @@ export function LessonWidget(): React.JSX.Element {
       <div className="lesson-exercise-heading">
         <strong>{instruction}</strong>
       </div>
-      <div className="lesson-prompt">{exercisePrompt}</div>
+      <div className="lesson-prompt">{displayedExercisePrompt}</div>
       <LessonClozeHint hint={payload.cloze_hint} prompt={exercisePrompt} activityType={activityType} />
       {activityType === "listening" ? <button className="play-button lesson-audio" type="button" onClick={play} disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)} aria-label="播放听力">
         <span className="play-icon"><PlayIcon /></span>{pronunciationButtonLabel(dictionaryAudioAvailable, speechPlaybackAvailable, dictionaryReady, playing)}
