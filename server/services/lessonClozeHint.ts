@@ -1,12 +1,14 @@
 import { formatMeaningByPartOfSpeech, meaningIncludesPartOfSpeech } from "../../shared/lexicalDisplay.js";
 import { getVocabularyItemsByWords } from "./words.js";
 
-const clozeTypes = new Set(["cloze", "exact_cloze"]);
+// The standalone study page labels word_recall/recall/spelling prompts as
+// "填空练习" too; those Chinese-definition prompts need the same POS hint.
+const hintedActivityTypes = new Set(["cloze", "exact_cloze", "word_recall", "recall", "spelling"]);
 
 /** Display-only metadata: keep the frozen question, answer and plan intact. */
 export async function withLessonClozeHint(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   if (payload.mode !== "exercise" || payload.consolidation === true || payload.wrapup === true
-    || !clozeTypes.has(String(payload.activity_type))) return payload;
+    || !hintedActivityTypes.has(String(payload.activity_type))) return payload;
   let meaning = typeof payload.meaning_zh === "string" ? payload.meaning_zh : "";
   const pos = typeof payload.part_of_speech === "string" ? payload.part_of_speech.trim() : "";
   if (!meaningIncludesPartOfSpeech(meaning, pos) && typeof payload.word === "string") {
