@@ -1148,7 +1148,7 @@ export default function StandaloneApp(): React.JSX.Element {
         {phase === "lesson_exercise" && exerciseMode && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
           <div className="lesson-prompt standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase">{String(exercise.prompt ?? "")}</div>
-          <LessonClozeHint hint={payload.cloze_hint} />
+          <LessonClozeHint hint={payload.cloze_hint} prompt={exercise.prompt} />
           {exercise.multiline === true
             ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "lesson_submit", answer }); } }} />
             : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "lesson_submit", answer }); } }} />}

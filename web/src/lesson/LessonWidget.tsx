@@ -773,7 +773,7 @@ export function LessonWidget(): React.JSX.Element {
         <strong>{instruction}</strong>
       </div>
       <div className="lesson-prompt">{exercisePrompt}</div>
-      <LessonClozeHint hint={payload.cloze_hint} />
+      <LessonClozeHint hint={payload.cloze_hint} prompt={exercisePrompt} />
       {activityType === "listening" ? <button className="play-button lesson-audio" type="button" onClick={play} disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)} aria-label="播放听力">
         <span className="play-icon"><PlayIcon /></span>{pronunciationButtonLabel(dictionaryAudioAvailable, speechPlaybackAvailable, dictionaryReady, playing)}
       </button> : null}
