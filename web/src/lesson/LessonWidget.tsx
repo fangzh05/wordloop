@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
-import { callServerTool, sendUserMessage, subscribeToApp } from "../mcpBridge.js";
+import { callServerTool, sendUserMessage, subscribeToApp, toolResultData } from "../mcpBridge.js";
 import { loadDictionaryPronunciationAudio, playPronunciation, pronunciationButtonLabel, selectEnglishVoice } from "../pronunciation/audio.js";
 import { z } from "zod";
 import {
@@ -19,6 +19,45 @@ export { LESSON_WIDGET_VERSION } from "../../../shared/toolContracts.js";
 
 export const LESSON_WIDGET_LOAD_ERROR = "WordLoop 学习卡数据不完整，请重新进入学习。";
 export const LESSON_WIDGET_REFRESH_ERROR = "WordLoop 未能刷新学习卡，请重试。";
+export const LESSON_MOUNT_RECOVERY_DELAY_MS = 600;
+export const LESSON_VISIBILITY_RECOVERY_DELAY_MS = 300;
+
+type LessonRecoveryTimerRef = { current: ReturnType<typeof setTimeout> | null };
+
+export function shouldScheduleLessonRecovery(hasPayload: boolean, isPreview: boolean, inFlight: boolean): boolean {
+  return !hasPayload && !isPreview && !inFlight;
+}
+
+export function scheduleLessonRecovery(
+  timerRef: LessonRecoveryTimerRef,
+  delayMs: number,
+  canRecover: () => boolean,
+  recover: () => Promise<void>,
+): void {
+  if (!canRecover()) return;
+  if (timerRef.current !== null) clearTimeout(timerRef.current);
+  timerRef.current = setTimeout(() => {
+    timerRef.current = null;
+    if (canRecover()) void recover();
+  }, delayMs);
+}
+
+export function attachLessonRecoveryLifecycle(
+  documentTarget: Document,
+  windowTarget: Window,
+  scheduleRecovery: (delayMs: number) => void,
+): () => void {
+  const onVisibilityChange = (): void => {
+    if (documentTarget.visibilityState === "visible") scheduleRecovery(LESSON_VISIBILITY_RECOVERY_DELAY_MS);
+  };
+  const onPageShow = (): void => scheduleRecovery(LESSON_VISIBILITY_RECOVERY_DELAY_MS);
+  documentTarget.addEventListener("visibilitychange", onVisibilityChange);
+  windowTarget.addEventListener("pageshow", onPageShow);
+  return () => {
+    documentTarget.removeEventListener("visibilitychange", onVisibilityChange);
+    windowTarget.removeEventListener("pageshow", onPageShow);
+  };
+}
 
 function validateExactClozePrompt(
   value: { activity_type: string; prompt: string },
@@ -361,6 +400,8 @@ export function LessonWidget(): React.JSX.Element {
   const [widgetLoadError, setWidgetLoadError] = useState("");
   const signatureRef = useRef("");
   const lastGoodPayloadRef = useRef<Payload | null>(null);
+  const recoveryInFlightRef = useRef(false);
+  const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextStatusRef = useRef<NextLessonStatus>("idle");
   const answerRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
   const speechAvailable = typeof window !== "undefined"
@@ -379,10 +420,15 @@ export function LessonWidget(): React.JSX.Element {
   }, [speechAvailable]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToApp((event) => {
-      if (event.type !== "toolinput" && event.type !== "toolresult") return;
+    function clearRecoveryTimer(): void {
+      if (recoveryTimerRef.current === null) return;
+      clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    }
+
+    function applyLessonAppEvent(event: LessonAppEvent): LessonAppEventRoute {
       const routed = routeLessonAppEvent(event, lastGoodPayloadRef.current !== null, signatureRef.current);
-      if (routed.kind === "ignore") return;
+      if (routed.kind === "ignore") return routed;
       if (routed.kind === "invalid") {
         if (typeof process === "undefined" || process.env.NODE_ENV !== "production") {
           console.error(
@@ -392,9 +438,10 @@ export function LessonWidget(): React.JSX.Element {
         }
         if (routed.blocking) setWidgetLoadError(LESSON_WIDGET_LOAD_ERROR);
         else setError(LESSON_WIDGET_REFRESH_ERROR);
-        return;
+        return routed;
       }
-      if (routed.duplicate) return;
+      if (routed.duplicate) return routed;
+      clearRecoveryTimer();
       signatureRef.current = routed.signature;
       lastGoodPayloadRef.current = routed.payload;
       setPayload(routed.payload);
@@ -405,8 +452,56 @@ export function LessonWidget(): React.JSX.Element {
       setNextStatus("idle");
       setError("");
       setWidgetLoadError("");
+      return routed;
+    }
+
+    function canRecover(): boolean {
+      return shouldScheduleLessonRecovery(
+        lastGoodPayloadRef.current !== null,
+        Boolean(window.__WORDLOOP_PREVIEW__),
+        recoveryInFlightRef.current,
+      );
+    }
+
+    async function recoverLesson(): Promise<void> {
+      if (!canRecover()) return;
+      recoveryInFlightRef.current = true;
+      try {
+        const result = await callServerTool("render_lesson_widget", { resume: true });
+        // A replayed host result wins if it arrives while resume is in flight.
+        if (lastGoodPayloadRef.current !== null) return;
+        if (result.isError) throw new Error(LESSON_WIDGET_LOAD_ERROR);
+        const candidate = toolResultData(result);
+        const routed = applyLessonAppEvent({ type: "toolresult", value: { structuredContent: candidate } });
+        if (routed.kind !== "render" || lastGoodPayloadRef.current === null) {
+          setWidgetLoadError(LESSON_WIDGET_LOAD_ERROR);
+        }
+      } catch {
+        if (lastGoodPayloadRef.current === null) setWidgetLoadError(LESSON_WIDGET_LOAD_ERROR);
+      } finally {
+        recoveryInFlightRef.current = false;
+      }
+    }
+
+    function scheduleRecovery(delayMs: number): void {
+      scheduleLessonRecovery(recoveryTimerRef, delayMs, canRecover, recoverLesson);
+    }
+
+    const unsubscribe = subscribeToApp((event) => {
+      if (event.type !== "toolinput" && event.type !== "toolresult") return;
+      applyLessonAppEvent(event);
     });
-    return unsubscribe;
+
+    if (typeof document === "undefined" || typeof window === "undefined") return unsubscribe;
+
+    const unsubscribeLifecycle = attachLessonRecoveryLifecycle(document, window, scheduleRecovery);
+    scheduleRecovery(LESSON_MOUNT_RECOVERY_DELAY_MS);
+
+    return () => {
+      unsubscribe();
+      unsubscribeLifecycle();
+      clearRecoveryTimer();
+    };
   }, []);
 
   const mode = localMode ?? modeForPhase(payload?.phase) ?? payload?.mode ?? "explain";

@@ -77,7 +77,7 @@ try {
     throw new Error("resources/read pronunciation metadata is missing the expected CSP.");
   }
   const widgetUris = {
-    lesson: ["ui://wordloop/lesson-v8.html", "ui://wordloop/lesson-v7.html", "ui://wordloop/lesson-v6.html", "ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"],
+    lesson: ["ui://wordloop/lesson-v9.html", "ui://wordloop/lesson-v8.html", "ui://wordloop/lesson-v7.html", "ui://wordloop/lesson-v6.html", "ui://wordloop/lesson-v5.html", "ui://wordloop/lesson-v4.html", "ui://wordloop/lesson-v3.html", "ui://wordloop/lesson-v2.html", "ui://wordloop/lesson.html"],
     dictation: ["ui://wordloop/dictation-v2.html", "ui://wordloop/dictation.html"],
   };
   const resourceReads = {};
@@ -94,6 +94,14 @@ try {
       if (JSON.stringify(content?._meta?.ui) !== JSON.stringify(expectedPronunciationUi)) throw new Error(`resources/read ${uri} has incorrect CSP.`);
       if (typeof html !== "string" || !html.includes(`content="${kind}"`) || (kind === "lesson" && !html.includes('data-widget-version="3"'))) {
         throw new Error(`resources/read ${uri} did not return the current ${kind} HTML.`);
+      }
+      if (uri === "ui://wordloop/lesson-v9.html" && (
+        !html.includes("visibilitychange")
+        || !html.includes("pageshow")
+        || !/resume\s*:\s*(?:!0|true)/.test(html)
+        || !html.includes("render_lesson_widget")
+      )) {
+        throw new Error("resources/read Lesson v9 is missing the self-resume lifecycle behavior.");
       }
       if (latestHtml !== undefined && html !== latestHtml) throw new Error(`${uri} did not serve the current ${kind} bundle.`);
       latestHtml = html;

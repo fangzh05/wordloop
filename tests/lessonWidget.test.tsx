@@ -1,22 +1,33 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { toolResultData } from "../web/src/mcpBridge.js";
 import {
   buildLessonExerciseHeader,
+  attachLessonRecoveryLifecycle,
   buildLessonSubmissionMessage,
   buildLessonWrapupSubmissionMessage,
   buildRoundCompleteMessage,
   canStartNextLesson,
   feedbackGuidanceLabel,
+  LESSON_MOUNT_RECOVERY_DELAY_MS,
+  LESSON_VISIBILITY_RECOVERY_DELAY_MS,
   LessonFeedbackNextStep,
   LESSON_WIDGET_LOAD_ERROR,
   LESSON_WIDGET_REFRESH_ERROR,
   LESSON_WIDGET_VERSION,
   isLessonRenderCandidate,
   lessonPayloadSchema,
+  scheduleLessonRecovery,
   routeLessonAppEvent,
+  shouldScheduleLessonRecovery,
   LessonWidget,
 } from "../web/src/lesson/LessonWidget.js";
+
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
 
 describe("guided lesson widget", () => {
   it("has the three fixed modes and keeps exercise submission in the card", () => {
@@ -57,6 +68,113 @@ describe("guided lesson widget", () => {
   it("renders a loading card before the host sends lesson data", () => {
     const markup = renderToStaticMarkup(<LessonWidget />);
     expect(markup).toContain("正在加载学习内容");
+  });
+
+  it("waits for the host replay before running the 600ms mount fallback", () => {
+    vi.useFakeTimers();
+    const timerRef = { current: null as ReturnType<typeof setTimeout> | null };
+    let hasPayload = false;
+    let resumeCalls = 0;
+    const canRecover = (): boolean => shouldScheduleLessonRecovery(hasPayload, false, false);
+
+    expect(LESSON_MOUNT_RECOVERY_DELAY_MS).toBe(600);
+    scheduleLessonRecovery(timerRef, LESSON_MOUNT_RECOVERY_DELAY_MS, canRecover, async () => { resumeCalls += 1; });
+    vi.advanceTimersByTime(599);
+    expect(resumeCalls).toBe(0);
+    hasPayload = true;
+    vi.advanceTimersByTime(1);
+    expect(resumeCalls).toBe(0);
+    expect(timerRef.current).toBeNull();
+  });
+
+  it("runs one recovery after the mount fallback when no host payload arrives", () => {
+    vi.useFakeTimers();
+    const timerRef = { current: null as ReturnType<typeof setTimeout> | null };
+    let resumeCalls = 0;
+    scheduleLessonRecovery(
+      timerRef,
+      LESSON_MOUNT_RECOVERY_DELAY_MS,
+      () => shouldScheduleLessonRecovery(false, false, false),
+      async () => { resumeCalls += 1; },
+    );
+
+    vi.advanceTimersByTime(LESSON_MOUNT_RECOVERY_DELAY_MS);
+    expect(resumeCalls).toBe(1);
+    expect(timerRef.current).toBeNull();
+  });
+
+  it("schedules visible and pageshow recovery once, with a 300ms grace window", () => {
+    vi.useFakeTimers();
+    const documentTarget = Object.assign(new EventTarget(), { visibilityState: "hidden" }) as unknown as Document;
+    const windowTarget = new EventTarget() as unknown as Window;
+    const timerRef = { current: null as ReturnType<typeof setTimeout> | null };
+    let resumeCalls = 0;
+    const canRecover = (): boolean => shouldScheduleLessonRecovery(false, false, false);
+    const scheduleRecovery = (delayMs: number): void => scheduleLessonRecovery(
+      timerRef,
+      delayMs,
+      canRecover,
+      async () => { resumeCalls += 1; },
+    );
+    const unsubscribe = attachLessonRecoveryLifecycle(documentTarget, windowTarget, scheduleRecovery);
+
+    expect(LESSON_VISIBILITY_RECOVERY_DELAY_MS).toBe(300);
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    expect(timerRef.current).toBeNull();
+    Object.assign(documentTarget, { visibilityState: "visible" });
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(100);
+    windowTarget.dispatchEvent(new Event("pageshow"));
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(299);
+    expect(resumeCalls).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(resumeCalls).toBe(1);
+    unsubscribe();
+  });
+
+  it("does not schedule recovery for a live payload, preview, or an in-flight request", () => {
+    expect(shouldScheduleLessonRecovery(true, false, false)).toBe(false);
+    expect(shouldScheduleLessonRecovery(false, true, false)).toBe(false);
+    expect(shouldScheduleLessonRecovery(false, false, true)).toBe(false);
+    expect(shouldScheduleLessonRecovery(false, false, false)).toBe(true);
+  });
+
+  it("routes a resumed result through the same Lesson parser for both host transports", () => {
+    const exercise = {
+      widget: "lesson",
+      widget_version: LESSON_WIDGET_VERSION,
+      mode: "exercise",
+      phase: "lesson_exercise",
+      word: "resume",
+      progress: "1 / 1",
+      activity_type: "cloze",
+      instruction: "Complete the sentence.",
+      prompt: "Please ___ the result.",
+      multiline: false,
+    };
+    const candidates = [
+      toolResultData({ content: [], structuredContent: exercise }),
+      toolResultData({ content: [{ type: "text", text: JSON.stringify(exercise) }] }),
+    ];
+    for (const candidate of candidates) {
+      const routed = routeLessonAppEvent({ type: "toolresult", value: { structuredContent: candidate } }, false);
+      expect(routed.kind).toBe("render");
+      if (routed.kind !== "render") throw new Error("expected the resumed Lesson payload to validate");
+      expect(routed.payload).toMatchObject({ mode: "exercise", word: "resume", prompt: "Please ___ the result." });
+    }
+  });
+
+  it("wires recovery only to missing payload events and calls the existing resume tool", () => {
+    const source = readFileSync(new URL("../web/src/lesson/LessonWidget.tsx", import.meta.url), "utf8");
+    expect(source).toContain('callServerTool("render_lesson_widget", { resume: true })');
+    expect(source).toContain("toolResultData(result)");
+    expect(source).toContain("applyLessonAppEvent({ type: \"toolresult\", value: { structuredContent: candidate } })");
+    expect(source).toContain("lastGoodPayloadRef.current !== null) return;");
+    expect(source).toContain("attachLessonRecoveryLifecycle(document, window, scheduleRecovery)");
+    expect(source).toContain("scheduleRecovery(LESSON_MOUNT_RECOVERY_DELAY_MS)");
+    expect(source).not.toContain('callServerTool("get_study_bootstrap"');
+    expect(source).not.toContain('sendUserMessage("@wordloop 继续")');
   });
 
   it("classifies only mode-bearing objects as Lesson render candidates", () => {

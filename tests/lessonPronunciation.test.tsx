@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
 const harness = vi.hoisted(() => {
@@ -38,6 +38,9 @@ const harness = vi.hoisted(() => {
     },
     flush() { for (const effect of pending.splice(0)) effect(); },
     subscribe(callback: (event: unknown) => void) { listener = callback; return () => { listener = undefined; }; },
+    sendPayload(data: Record<string, unknown>) {
+      listener?.({ type: "toolresult", value: { structuredContent: data } });
+    },
     send(word: string, mode: "explain" | "exercise" = "explain") {
       const base = { widget: "lesson", word };
       const data = mode === "explain"
@@ -49,7 +52,19 @@ const harness = vi.hoisted(() => {
 });
 
 vi.mock("react", async (importOriginal) => ({ ...await importOriginal<typeof import("react")>(), useState: harness.useState, useRef: harness.useRef, useEffect: harness.useEffect }));
-vi.mock("../web/src/mcpBridge.js", () => ({ subscribeToApp: harness.subscribe, callServerTool: vi.fn(), sendUserMessage: vi.fn() }));
+vi.mock("../web/src/mcpBridge.js", () => ({
+  subscribeToApp: harness.subscribe,
+  callServerTool: vi.fn(),
+  sendUserMessage: vi.fn(),
+  toolResultData(result: { structuredContent?: unknown; content?: Array<{ type: string; text?: string }> }) {
+    if (result.structuredContent !== undefined) return result.structuredContent;
+    for (const block of result.content ?? []) {
+      if (block.type !== "text" || typeof block.text !== "string") continue;
+      try { return JSON.parse(block.text) as unknown; } catch { /* Keep checking later text blocks. */ }
+    }
+    return undefined;
+  },
+}));
 vi.mock("../web/src/pronunciation/audio.js", () => ({
   loadDictionaryPronunciationAudio: vi.fn(),
   playPronunciation: vi.fn(),
@@ -59,7 +74,35 @@ vi.mock("../web/src/pronunciation/audio.js", () => ({
 }));
 
 import { LessonWidget } from "../web/src/lesson/LessonWidget.js";
+import { callServerTool, sendUserMessage } from "../web/src/mcpBridge.js";
 import { loadDictionaryPronunciationAudio, playPronunciation } from "../web/src/pronunciation/audio.js";
+
+type TestWindow = EventTarget & { __WORDLOOP_PREVIEW__?: Record<string, unknown> };
+type TestDocument = EventTarget & { visibilityState: string };
+
+function stubBrowser(preview = false): { documentTarget: TestDocument; windowTarget: TestWindow } {
+  const documentTarget = Object.assign(new EventTarget(), { visibilityState: "visible" });
+  const windowTarget = new EventTarget() as TestWindow;
+  if (preview) windowTarget.__WORDLOOP_PREVIEW__ = {};
+  vi.stubGlobal("document", documentTarget);
+  vi.stubGlobal("window", windowTarget);
+  return { documentTarget, windowTarget };
+}
+
+function exercisePayload(word: string, prompt: string) {
+  return {
+    widget: "lesson",
+    widget_version: 3,
+    mode: "exercise",
+    phase: "lesson_exercise",
+    word,
+    progress: "1 / 1",
+    activity_type: "cloze",
+    instruction: "Complete the sentence.",
+    prompt,
+    multiline: false,
+  };
+}
 
 type Node = ReactElement<{ children?: unknown; className?: string; onClick?: () => void; disabled?: boolean }>;
 function descendants(node: unknown): Node[] {
@@ -92,7 +135,15 @@ function deferred<T>() {
 }
 async function settle() { await Promise.resolve(); await Promise.resolve(); }
 
-afterEach(() => { harness.reset(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  harness.reset();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
+
+beforeEach(() => { vi.mocked(loadDictionaryPronunciationAudio).mockResolvedValue({}); });
 
 describe("Lesson pronunciation", () => {
   it("preloads dictionary audio and uses the shared player in explain and listening", async () => {
@@ -147,6 +198,162 @@ describe("Lesson pronunciation", () => {
     expect(label(button(root))).toContain("词典发音");
     button(root).props.onClick?.();
     expect(playPronunciation).toHaveBeenLastCalledWith("vibrate", "https://media.merriam-webster.com/vibrate.mp3", expect.any(Function), expect.any(Function));
+  });
+
+  it("automatically resumes a remounted Lesson through render_lesson_widget without chat messages", async () => {
+    vi.useFakeTimers();
+    stubBrowser();
+    const payload = exercisePayload("resume", "RESUMED EXERCISE");
+    vi.mocked(callServerTool).mockResolvedValue({ content: [{ type: "text", text: JSON.stringify(payload) }] });
+
+    expect(label(render())).toContain("正在加载学习内容");
+    await vi.advanceTimersByTimeAsync(599);
+    expect(callServerTool).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await settle();
+
+    expect(callServerTool).toHaveBeenCalledTimes(1);
+    expect(callServerTool).toHaveBeenCalledWith("render_lesson_widget", { resume: true });
+    expect(callServerTool).not.toHaveBeenCalledWith("get_study_bootstrap", expect.anything());
+    expect(sendUserMessage).not.toHaveBeenCalled();
+    expect(label(render())).toContain("RESUMED EXERCISE");
+  });
+
+  it("does not resume when the original host payload arrives before the mount timer", async () => {
+    vi.useFakeTimers();
+    stubBrowser();
+    render();
+    harness.sendPayload(exercisePayload("host", "ORIGINAL HOST EXERCISE"));
+    expect(label(render())).toContain("ORIGINAL HOST EXERCISE");
+    await vi.advanceTimersByTimeAsync(600);
+    expect(callServerTool).not.toHaveBeenCalled();
+  });
+
+  it("recovers after visibility returns and coalesces it with the mount timer", async () => {
+    vi.useFakeTimers();
+    const { documentTarget } = stubBrowser();
+    vi.mocked(callServerTool).mockResolvedValue({ content: [], structuredContent: exercisePayload("visible", "VISIBLE EXERCISE") });
+    render();
+
+    documentTarget.visibilityState = "hidden";
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    documentTarget.visibilityState = "visible";
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(300);
+    await settle();
+
+    expect(callServerTool).toHaveBeenCalledTimes(1);
+    expect(callServerTool).toHaveBeenCalledWith("render_lesson_widget", { resume: true });
+    expect(label(render())).toContain("VISIBLE EXERCISE");
+  });
+
+  it("preserves the live exercise and typed answer across hidden and visible events", async () => {
+    vi.useFakeTimers();
+    const { documentTarget } = stubBrowser();
+    render();
+    harness.sendPayload(exercisePayload("live", "LIVE EXERCISE"));
+    let root = render();
+    const answerControl = descendants(root).find((node) => node.type === "input" && node.props.className === "answer-input");
+    if (!answerControl) throw new Error("Lesson answer input missing");
+    (answerControl.props as { onChange?: (event: { target: { value: string } }) => void }).onChange?.({ target: { value: "my answer" } });
+    root = render();
+
+    documentTarget.visibilityState = "hidden";
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    documentTarget.visibilityState = "visible";
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(1000);
+    root = render();
+
+    const retainedAnswer = descendants(root).find((node) => node.type === "input" && node.props.className === "answer-input");
+    expect((retainedAnswer?.props as { value?: string } | undefined)?.value).toBe("my answer");
+    expect(label(root)).toContain("LIVE EXERCISE");
+    expect(callServerTool).not.toHaveBeenCalled();
+  });
+
+  it("uses pageshow as one delayed recovery trigger and lets the host result win a race", async () => {
+    vi.useFakeTimers();
+    const { documentTarget, windowTarget } = stubBrowser();
+    const pending = deferred<Awaited<ReturnType<typeof callServerTool>>>();
+    vi.mocked(callServerTool).mockReturnValueOnce(pending.promise);
+    render();
+    await vi.advanceTimersByTimeAsync(100);
+    windowTarget.dispatchEvent(new Event("pageshow"));
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(callServerTool).toHaveBeenCalledTimes(1);
+    documentTarget.visibilityState = "hidden";
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    documentTarget.visibilityState = "visible";
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    windowTarget.dispatchEvent(new Event("pageshow"));
+    expect(vi.getTimerCount()).toBe(0);
+
+    harness.sendPayload(exercisePayload("host", "HOST RESULT WINS"));
+    render();
+    pending.resolve({ content: [], structuredContent: exercisePayload("resume", "LATE RESUME MUST NOT REPLACE") });
+    await settle();
+    const root = render();
+    expect(label(root)).toContain("HOST RESULT WINS");
+    expect(label(root)).not.toContain("LATE RESUME MUST NOT REPLACE");
+    expect(callServerTool).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a load error after resume failure and retries only on a later visible event", async () => {
+    vi.useFakeTimers();
+    const { documentTarget } = stubBrowser();
+    vi.mocked(callServerTool).mockResolvedValue({ content: [], isError: true });
+    render();
+    await vi.advanceTimersByTimeAsync(600);
+    await settle();
+    expect(label(render())).toContain("WordLoop 学习卡数据不完整，请重新进入学习。");
+
+    documentTarget.visibilityState = "hidden";
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    documentTarget.visibilityState = "visible";
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(300);
+    await settle();
+    expect(callServerTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the existing load error when a resume result fails Lesson validation", async () => {
+    vi.useFakeTimers();
+    stubBrowser();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(callServerTool).mockResolvedValue({ content: [], structuredContent: { widget: "lesson", mode: "exercise" } });
+    try {
+      render();
+      await vi.advanceTimersByTimeAsync(600);
+      await settle();
+      expect(label(render())).toContain("WordLoop 学习卡数据不完整，请重新进入学习。");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("does not recover in preview and cleans its timer and listeners on unmount", async () => {
+    vi.useFakeTimers();
+    const { documentTarget, windowTarget } = stubBrowser(true);
+    render();
+    await vi.advanceTimersByTimeAsync(1000);
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    windowTarget.dispatchEvent(new Event("pageshow"));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(callServerTool).not.toHaveBeenCalled();
+
+    Object.assign(windowTarget, { __WORDLOOP_PREVIEW__: undefined });
+    harness.reset();
+    vi.useRealTimers();
+    vi.useFakeTimers();
+    render();
+    expect(vi.getTimerCount()).toBe(1);
+    harness.reset();
+    expect(vi.getTimerCount()).toBe(0);
+    documentTarget.dispatchEvent(new Event("visibilitychange"));
+    windowTarget.dispatchEvent(new Event("pageshow"));
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("never constructs SpeechSynthesisUtterance inside LessonWidget", () => {
