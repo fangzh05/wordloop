@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { beforeAll, afterAll, beforeEach, afterEach, describe, it, expect } from "vitest";
 import seed from "../server/data/familySeed.json" with { type: "json" };
 import { buildFamilyLesson } from "../server/services/familyLesson.js";
+import { lexicalInsertSql } from "../scripts/lib/familyImportSql.js";
 import { selectFamilyCandidate } from "../server/services/familyPolicy.js";
 import { getFamilyContext } from "../server/services/familyGraph.js";
 import { cardToDatabase, reviewLogToDatabase, scheduleReview } from "../server/services/fsrsScheduler.js";
@@ -50,6 +51,19 @@ async function answer(id: string,index: number,text: string,content: FamilyLesso
   return (await one("select submit_family_step_v1($1,$2,$3,$4,$5,$6) as value",[u1,id,index,text,JSON.stringify(cardToDatabase(result.card)),JSON.stringify(reviewLogToDatabase(result.log))])).value;
 }
 describe("real PostgreSQL Family transactions", () => {
+  it("imports compact lexical batches losslessly and idempotently without learner mutations", async () => {
+    const card=await one("select to_jsonb(uw) as value from user_words uw where user_id=$1",[u1]);
+    const session=await one("select state,updated_at from study_sessions where id=$1",[sid]);
+    const rows=seed.senses.slice(0,2).map((row,i)=>({...row, definition:`author's definition ${i}`,provenance:{...row.provenance,shared:"quoted ' source",line:i,examples:["don't execute; select 1"]}}));
+    const sql=lexicalInsertSql("lexical_senses",rows);
+    await db.exec(sql); await db.exec(sql);
+    for(const row of rows) {
+      const saved=await one("select definition,provenance from lexical_senses where sense_id=$1",[row.sense_id]);
+      expect(saved).toEqual({definition:row.definition,provenance:row.provenance});
+    }
+    expect(await one("select to_jsonb(uw) as value from user_words uw where user_id=$1",[u1])).toEqual(card);
+    expect(await one("select state,updated_at from study_sessions where id=$1",[sid])).toEqual(session);
+  });
   it("checks schema functions, adjacency indexes and every new table's RLS", async () => {
     expect((await one("select family_graph_schema_v1() as ok")).ok).toBe(true);
   });

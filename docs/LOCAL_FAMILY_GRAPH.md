@@ -1,5 +1,7 @@
 # Local Family Graph v1 交付记录
 
+2026-10-07 数据扩展：原 21 词审核集保留为测试 fixture；生产新增 OEWN 2025 + MorphyNet 英语派生数据库的词表范围导入。导入规则、许可、命令与 generic micro-session 见 [LEXICAL_CORPUS_IMPORT.md](LEXICAL_CORPUS_IMPORT.md)。本次不增加 schema 或依赖，不修改用户卡片与冻结队列。下文记录 v144 初版验收，覆盖及 bulk import 的最新说明以上述文档为准。
+
 ## 实现位置与审计结论
 
 实现位于隔离 checkout `.family-graph`，分支 `codex/local-family-graph`。从 `f29dc9c` 开始审计，发布前已对齐 Sites v143 的基线 `7c5e9b5a188696d306085f19e757d1daaca89ea0`，保留其统一题面与词性提示处理。原工作目录的 `docs/TEACHING_POLICY.md` 等未提交工作未改动。Sites 绑定源码通过官方 workflow 校验；GitHub main 为另一条较旧源码线，本次发布以当前 Sites 基线为准。

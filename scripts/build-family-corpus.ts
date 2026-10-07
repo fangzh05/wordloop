@@ -1,0 +1,12 @@
+import { readFileSync,writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import seed from "../server/data/familySeed.json" with {type:"json"};
+import { buildFamilyCorpus } from "./lib/familyCorpus.js";
+const [xmlPath,tsvPath,vocabularyPath,outPath]=process.argv.slice(2);
+if(!xmlPath||!tsvPath||!vocabularyPath||!outPath)throw new Error("Usage: build-family-corpus OEWN_XML MORPHYNET_TSV PRIVATE_VOCABULARY_JSON OUTPUT_JSON");
+const tsv=readFileSync(tsvPath,"utf8");
+if(createHash("sha256").update(tsv).digest("hex")!=="5920edacc1888b14464fc5cd96beea0a721221d56d1dc0e49de22f4c7c537c50")throw new Error("MorphyNet file does not match the pinned source revision");
+const corpus=buildFamilyCorpus(readFileSync(xmlPath,"utf8"),tsv,JSON.parse(readFileSync(vocabularyPath,"utf8")),seed);
+const {report,...data}=corpus;
+writeFileSync(outPath,JSON.stringify(data));writeFileSync(`${outPath}.report.json`,JSON.stringify(report,null,2)+"\n");
+console.log(JSON.stringify({...report,missing:report.missing.length,sources:undefined}));

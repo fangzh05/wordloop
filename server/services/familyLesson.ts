@@ -24,39 +24,54 @@ export const FAMILY_TEACHING: Record<string, { meaning: string; context: string;
   activation: { meaning: "激活；启动", context: "Account ___ requires a code." },
   actor: { meaning: "演员", context: "The ___ performed on stage." },
 };
+function escaped(word: string): string { return word.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+function teachingFor(node: FamilyNode) {
+  const fixed = FAMILY_TEACHING[node.lemma];
+  if (fixed) return { ...fixed, chinese: true };
+  const wordPattern = new RegExp(`\\b${escaped(node.lemma)}\\b`,"i");
+  const matchingExample = (s: FamilyNode["senses"][number]) => (Array.isArray(s.provenance?.example_sentences) ? s.provenance.example_sentences : [])
+    .find((x): x is string => typeof x === "string" && x.length <= 500 && wordPattern.test(x));
+  const sense = node.senses.find(s => s.definition.trim() && matchingExample(s)) ?? node.senses.find(s => s.definition.trim());
+  if (!sense) throw new Error("FAMILY_CONTENT_UNAVAILABLE");
+  // Only dictionary material; no invented lexical facts or generic made-up sentence.
+  const token = new RegExp(`\\b${escaped(node.lemma)}\\b`,"gi");
+  const meaning = sense.definition.replace(token,"___").slice(0,400);
+  const example = matchingExample(sense);
+  return { meaning, context: example?.replace(token,"___"), usage: undefined, chinese: false };
+}
 function recall(node: FamilyNode): FamilyStep {
-  const teaching = FAMILY_TEACHING[node.lemma];
-  if (!teaching) throw new Error("FAMILY_CONTENT_UNAVAILABLE");
+  const teaching = teachingFor(node);
   return { target_id: node.lexeme_id, activity_type: "word_recall", error_layer: "spelling",
     prompt: `写出表示「${teaching.meaning}」的${node.part_of_speech === "n" ? "名词" : node.part_of_speech === "a" ? "形容词" : node.part_of_speech === "r" ? "副词" : "动词"}。`,
     answer: node.lemma, explanation: `${node.lemma}：${teaching.meaning}。` };
 }
 function context(node: FamilyNode): FamilyStep {
-  const teaching = FAMILY_TEACHING[node.lemma];
-  if (!teaching) throw new Error("FAMILY_CONTENT_UNAVAILABLE");
+  const teaching = teachingFor(node);
+  if (!teaching.context) return { ...recall(node), activity_type: "derivation", error_layer: "meaning" };
   return { target_id: node.lexeme_id, activity_type: "derivation", error_layer: "grammar",
     prompt: `填入正确形式：${teaching.context}`, answer: node.lemma, explanation: `此处需要 ${node.part_of_speech}：${teaching.meaning}。` };
 }
 export function buildFamilyLesson(graph: FamilyGraph, decision: FamilyCandidate): FamilyLesson & { target_meaning_zh?: string } {
   const base = graph.center;
-  if (!FAMILY_TEACHING[base.lemma]) throw new Error("FAMILY_CONTENT_UNAVAILABLE");
+  const baseTeaching = teachingFor(base);
   if (decision.stage !== "A" && !decision.eligible_now) throw new Error("FAMILY_SPACING_REQUIRED");
-  const basePractice: FamilyStep[] = (FAMILY_TEACHING[base.lemma]!.usage ?? []).map(([prompt, answer, explanation]) => ({
+  const basePractice: FamilyStep[] = (baseTeaching.usage ?? []).map(([prompt, answer, explanation]) => ({
     target_id: base.lexeme_id, activity_type: "collocation", error_layer: "collocation", prompt: `填入介词：${prompt}`, answer, explanation,
   }));
   if (decision.stage === "A") return { base_id: base.lexeme_id, target_id: null, stage: "A",
     explanation: "先稳定当前词。今天不激活派生词；词族仍可浏览。", steps: [recall(base), ...basePractice, context(base)].slice(0, 4) };
   if (decision.stage === "D") {
-    const members = graph.nodes.filter((n) => baseStable(n) && FAMILY_TEACHING[n.lemma]).slice(0, 3);
+    const members = graph.nodes.filter((n) => baseStable(n) && (FAMILY_TEACHING[n.lemma] || n.senses.some(s => s.definition.trim()))).slice(0, 3);
     if (members.length < 3) throw new Error("FAMILY_CONTRAST_NOT_READY");
     return { base_id: base.lexeme_id, target_id: null, stage: "D", explanation: "用词性和语境主动选择正确形式。此轮只练习已有词，不引入新词。",
       steps: members.map(context) };
   }
   const target = decision.candidate;
-  if (!target || !decision.relation || !FAMILY_TEACHING[target.lemma]) throw new Error("FAMILY_CONTENT_UNAVAILABLE");
+  if (!target || !decision.relation) throw new Error("FAMILY_CONTENT_UNAVAILABLE");
+  const targetTeaching = teachingFor(target);
   return { base_id: base.lexeme_id, target_id: target.lexeme_id, stage: decision.stage,
-    target_meaning_zh: FAMILY_TEACHING[target.lemma]!.meaning,
-    explanation: `${decision.relation.morphology ?? "比较词性变化。"} ${target.lemma}：${FAMILY_TEACHING[target.lemma]!.meaning}。`,
+    ...(targetTeaching.chinese ? { target_meaning_zh: targetTeaching.meaning } : {}),
+    explanation: `${decision.relation.morphology ?? "比较词性变化。"} ${target.lemma}：${targetTeaching.meaning}。`,
     steps: [
       { target_id: base.lexeme_id, activity_type: "derivation", error_layer: "grammar", prompt: `${target.lemma} 的词性是什么？输入 n / v / a / r。`, answer: target.part_of_speech, explanation: `词性由 ${base.part_of_speech} 变为 ${target.part_of_speech}。` },
       context(target), ...basePractice, ...(basePractice.length ? [] : [context(base)]), recall(target),

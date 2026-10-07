@@ -10,7 +10,7 @@ export interface Lexeme {
   lexeme_id: string; lemma: string; language: string; part_of_speech: string;
   frequency_band: number | null; utility_score: number; exam_relevance: number; family_key: string;
 }
-export interface Sense { sense_id: string; lexeme_id: string; definition: string; synset_id: string | null; register: string | null }
+export interface Sense { sense_id: string; lexeme_id: string; definition: string; synset_id: string | null; register: string | null; provenance?: Record<string, unknown> }
 export interface Form { form_id: string; lexeme_id: string; surface_form: string; form_type: string; pronunciation: string | null }
 export interface Morpheme { morpheme_id: string; surface: string; type: "prefix" | "root" | "suffix"; meaning: string }
 export interface SourceMetadata { source: string; source_version: string; license: string; provenance: Record<string, unknown>; confidence: number }

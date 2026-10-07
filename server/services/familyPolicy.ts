@@ -64,7 +64,7 @@ export function selectFamilyCandidate(graph: FamilyGraph, exposures: readonly Fa
   const cooling = last !== undefined && now.getTime() - last < 3 * 86400000;
   const developing = graph.has_developing_member || eligible.some((n) => n.user_state && !baseStable(n));
   const scored = eligible.filter((node) => stage === "D" ? baseStable(node)
-    : graph.edges.some((r) => r.source_id === graph.center.lexeme_id && r.target_id === node.lexeme_id)).map((node) => {
+    : graph.edges.some((r) => r.direction === "forward" && r.source_id === graph.center.lexeme_id && r.target_id === node.lexeme_id)).map((node) => {
     const relation = graph.edges.find((e) => e.source_id === node.lexeme_id || e.target_id === node.lexeme_id)!;
     const frequency = node.frequency_band === null ? 0.5 : Math.max(0.1, 1 - (node.frequency_band - 1) / 6);
     const userNeed = !node.user_state ? 1 : baseStable(node) ? 0.15 : 0.65;
