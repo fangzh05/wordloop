@@ -2,340 +2,382 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-WordLoop is a personal English-learning system built around durable study state rather than chat history. The same learner state is exposed through two clients:
+WordLoop is a personal English-learning system built around **durable learner state, controlled retrieval practice, and explicit learning policy** rather than chat history.
+
+It exposes the same state through two clients:
 
 - a ChatGPT MCP App with interactive widgets;
-- a standalone responsive Web App served by the same backend.
+- a standalone responsive Web App.
 
-Supabase/Postgres is the source of truth for vocabulary, study sessions, attempts, FSRS state, skill evidence, capture notes, private-beta identity and analytics. WordLoop owns queueing, planning and state transitions. Model calls are constrained to content generation and semantic grading after the server has already decided what should be learned and what task should be shown.
+The product is designed for long-term vocabulary acquisition, active recall, usage practice, reading capture, weak-skill diagnosis, and controlled word-family expansion. Supabase/Postgres is the source of truth. FSRS schedules long-term vocabulary review. BKT estimates skill-level weakness. A deterministic planner decides what task to show. DeepSeek is restricted to content generation and semantic grading after the plan has already been fixed.
 
-> Package version: 0.1.0  
-> Runtime: Node.js 20+, TypeScript, React 19, Supabase/Postgres, MCP Apps, ts-fsrs, Cytoscape.js.  
-> This README reflects the current implementation on the latest feature line, including the 2026-10-07 local Family Graph and bilingual dictionary work.
+> Package: `0.1.0`  
+> Runtime: Node.js 20+, TypeScript, React 19, Supabase/Postgres, MCP Apps, ts-fsrs, Cytoscape.js  
+> Current feature-complete product line: `codex/local-family-graph`
 
-## Core design
+## Product model
 
-WordLoop deliberately separates five responsibilities.
+WordLoop is not a generic AI tutor and not a flashcard wrapper. It separates the learning problem into several independent layers:
 
-- **FSRS decides when vocabulary is due.** ts-fsrs remains the canonical long-term vocabulary scheduler. Ordinary Lesson exercises, consolidation, Capture review and BKT never rewrite a vocabulary card's due date.
-- **WordLoop decides what comes next.** Daily queues, frozen Lesson rounds, formal Review snapshots, study-session cursors and budget admission are backend-owned.
-- **The deterministic planner decides the task type.** It freezes the activity, target, skill IDs, hint level, expected duration and planning reason before generation.
-- **BKT estimates skill weakness; it does not schedule vocabulary.** In active mode it can supply evidence-backed skill signals to the existing Lesson planner. Shadow mode records recommendations without intervention; off disables the projection.
-- **DeepSeek generates and grades inside the frozen contract.** It does not choose the queue, target word, FSRS rating or exercise type.
+| Layer | Responsibility |
+| --- | --- |
+| Vocabulary state | One canonical learner record per normalized word |
+| Long-term memory | FSRS decides when a vocabulary item is due |
+| Study orchestration | WordLoop decides the next durable step |
+| Exercise planning | A deterministic planner freezes task type, target and skill intent |
+| Skill diagnosis | BKT estimates weakness from valid answer evidence |
+| Generation / semantic grading | DeepSeek operates only inside the frozen task contract |
+| Reading capture | Capture stores encounters and context separately from the vocabulary queue |
+| Word-family learning | A verified local lexical graph controls family expansion |
+| Analytics | Read-only metrics expose memory, errors, activity and due workload |
+| Authentication | Supabase Auth + invite allowlist support a small private beta |
 
-The browser never receives the Supabase service-role key, DeepSeek key, Shanbay bridge secret or other server-only credentials.
+The central rule is simple: **no subsystem is allowed to quietly become a second vocabulary scheduler**.
 
-## Word-family learning
+FSRS owns long-term vocabulary due dates. BKT does not move them. Capture does not move them. Family Graph does not move them. Ordinary Lesson exercises do not move them.
 
-WordLoop now treats word families as a first-class learning layer instead of a flat list of “derivatives”.
+## Learning loop
 
-The goal is not to dump every related form onto the learner. The system builds a **small, verified local family graph** around the current word and decides whether the learner should only inspect it, consolidate the base word, or learn one derivative now.
+A normal study session is server-owned and resumable:
 
-### What the Family system does
+~~~text
+Due Review
+   ↓
+Pretest
+   ↓
+Pronunciation / listening recall
+   ↓
+Frozen Lesson round
+   ↓
+Application / consolidation
+   ↓
+Optional Family micro-session
+   ↓
+Continue from durable backend state
+~~~
 
-- Opens from the current Lesson explanation through a dedicated **Family** entry.
-- Loads only a bounded one-hop neighborhood instead of a global graph.
-- Distinguishes different POS nodes in the lexical knowledge layer while keeping the learner's existing lemma-level learning state canonical.
-- Shows verified derivational and contrast relations with source/provenance metadata.
-- Lets the learner deliberately expand another node when more context is needed.
-- Can save a related word as a **future candidate** without creating a vocabulary card.
-- Can start a short **Family micro-session** when the current learner state makes a new derivative appropriate.
-- Activates at most **one** new derivative at the end of a successful introduction flow.
-- Reuses the existing activity types, error layers, attempt history, daily time budget and FSRS initialization path.
+The backend stores the current phase, word, frozen plan, generated payload, retry state and navigation cursor in `study_sessions`. Closing ChatGPT, refreshing the Web App or reopening the product does not require reconstructing progress from conversation text.
 
-Browsing the graph never changes vocabulary state by itself.
+### 1. Formal Review
 
-### Data sources
+Formal Review only uses the current backend due snapshot.
 
-The lexical layer is source-backed rather than model-generated:
+- FSRS v6 is the canonical vocabulary scheduler.
+- Target retention: `0.90`.
+- Maximum interval: `36500` days.
+- `enable_short_term: false`.
+- Only a genuine independent retrieval can advance a vocabulary card.
+- Ordinary Lesson attempts, correction after seeing an answer, Capture review and Family browsing do not advance vocabulary FSRS.
 
-- **Open English WordNet 2025** supplies English senses and verified lexical evidence.
-- **MorphyNet English derivational v1** supplies additional derivational records after lemma/POS validation against OEWN.
-- **ECDICT** supplies lemma-level Chinese glosses and additional English definitions.
-- A small manually reviewed fixture remains in the repository for deterministic regression tests.
+### 2. Pretest and pronunciation
 
-Every imported lexical record keeps source, revision, license and provenance. Similar spelling, embeddings or LLM guesses are not allowed to create a relation.
+New words enter through a pretest before formal teaching.
 
-### Local graph rules
+The current flow supports:
 
-The Family graph is intentionally bounded:
+- Chinese core meaning → English word;
+- English word + POS → simple English definition;
+- pronunciation listening/repetition;
+- listening recall before Lesson handoff.
 
-- server response: at most 24 nodes;
-- accumulated browser graph: at most 40 nodes;
-- default relation depth: one hop;
-- further exploration requires explicit expansion;
-- low-confidence or unsupported relations are filtered rather than guessed.
+When configured, pronunciation uses Merriam-Webster Learner's Dictionary audio. Supported clients fall back to an English `speechSynthesis` voice when dictionary audio is unavailable.
 
-Cytoscape.js is lazy-loaded only when the Family panel opens, so ordinary Lesson startup does not pay the graph-engine cost.
+### 3. Frozen Lesson planning
 
-### A / B / C / D learning stages
+Lesson planning is deterministic and server-owned.
 
-The system uses four deterministic stages to avoid overloading the learner with a whole family at once.
+Before generation, WordLoop freezes:
 
-- **Stage A — consolidate the base.** If the base word is still new, unstable, error-heavy or under-practiced, the micro-session only reinforces the base word. No new derivative card is created.
-- **Stage B — introduce one derivative.** Once the base is sufficiently stable, the system may select one high-value, transparent derivative.
-- **Stage C — spaced family growth.** A later family member can be introduced only after spacing and stability guards pass across the already learned members.
-- **Stage D — discriminate existing members.** When several family members are already stable, the system practices contextual discrimination among them instead of adding another new word.
+- target word / sense;
+- activity type;
+- skill IDs;
+- hint level;
+- expected duration;
+- planning reason;
+- stable plan / exercise IDs.
 
-Candidate scoring considers utility, exam relevance, morphological transparency, learner need and interference risk. These are deterministic v1 heuristics, not psychometric probabilities.
+Typical task families include:
 
-### Family micro-session
-
-A Family micro-session is a short targeted lesson, typically around two minutes. It can include:
-
-- morphology / affix explanation;
-- POS recognition;
-- definition recall;
-- collocation or usage contrast;
-- contextual extraction;
-- unprompted active recall.
-
-The session is resumable and idempotent. Intermediate answers do not create a new card. If the intended introduction is completed, WordLoop can initialize one derivative through the existing vocabulary path and create its normal FSRS state. Competing requests preserve an already-existing card instead of resetting it.
-
-### Boundary with FSRS and BKT
-
-The Family system is **not** a second scheduler and it does not have a separate mastery model.
-
-- FSRS remains the only long-term vocabulary scheduler.
-- BKT may provide skill-level weakness signals to the ordinary Lesson planner, but it does not choose Family due dates.
-- Family candidates are only future intentions; they are not today's queue and they have no due date.
-- Family graph browsing, candidate saving and Stage A consolidation do not advance vocabulary FSRS.
-- Family learning never rewrites the frozen ordinary Lesson queue.
-
-### Current coverage and limits
-
-The current production corpus is built from a vocabulary-scoped OEWN + MorphyNet import with ECDICT enrichment. The system deliberately accepts honest empty states when a word has no verified family relation.
-
-Not implemented yet:
-
-- global/network-wide graph browsing;
-- automatic LLM-created lexical relations;
-- per-sense/POS learner mastery;
-- a second family scheduler;
-- graph-based reordering of the immutable formal Review queue.
-
-Implementation and data details:
-
-- docs/LOCAL_FAMILY_GRAPH.md
-- docs/LEXICAL_CORPUS_IMPORT.md
-- docs/BILINGUAL_FAMILY_DICTIONARY.md
-- server/data/ATTRIBUTION.md
-
-## Current learning flow
-
-A normal session is driven by the backend bootstrap and persisted in study_sessions.
-
-1. **Formal Review** — only cards in the backend due snapshot are reviewed. A genuine independent retrieval can advance the vocabulary FSRS card.
-2. **Pretest** — today's new words are classified before the answer is revealed.
-3. **Pronunciation handoff** — pretest cards can run listening/repetition and exact listening recall before Lesson.
-4. **Lesson** — a frozen round teaches and exercises one word at a time. The model cannot reorder the round or silently replace the saved exercise.
-5. **Application / consolidation** — longer translation, sentence-production or other consolidation tasks can be scheduled separately from ordinary Lesson work.
-6. **Continue** — the server returns the next durable state. Clients do not infer progress from chat history.
-
-Closing ChatGPT or refreshing the Web App does not reset the active flow. The current phase, saved payload, retry state, frozen plan and navigation cursor live in the database.
-
-## Formal Review and FSRS
-
-Vocabulary scheduling uses FSRS v6 through ts-fsrs.
-
-Current vocabulary scheduler configuration:
-
-- target retention: 0.90;
-- maximum interval: 36500 days;
-- short-term FSRS learning steps disabled.
-
-WordLoop handles acquisition and same-day relearning through its Lesson flow instead of creating a parallel minute-level scheduler. Ordinary attempts never advance the long-term card. Formal Review is the only vocabulary flow allowed to write a new FSRS due state.
-
-Capture-note review is intentionally separate. Opt-in note reviews have their own note_review_states / note_review_events and also use the existing FSRS library, but they never overwrite user_words or vocabulary Review state.
-
-## Exercise planning and semantic grading
-
-The Lesson planner lives under server/services/exercisePlanner.ts. It uses target sense/POS, error layers, recent task history, skill evidence, task applicability and frozen-session state.
-
-Typical activity families include:
-
-- word recall and exact cloze;
+- word recall;
+- exact cloze;
 - Chinese-to-English translation;
 - collocation;
 - derivation / word-family work;
 - sentence/application tasks;
-- consolidation tasks.
+- consolidation.
 
-Fixed-answer activities are graded deterministically on the server. Open semantic answers are sent to DeepSeek using strict JSON schemas and Zod validation. The current model is deepseek-flash with thinking disabled.
+A retry restores the same saved plan rather than silently changing the question.
 
-A saved answer and its study transition are idempotent. A retry must restore the same plan/exercise instead of generating a different question.
+### 4. Deterministic grading + DeepSeek
 
-## BKT and learning evidence
+Fixed-answer activities are graded deterministically on the server.
 
-WordLoop now has an evidence layer that is deliberately downstream of real answers and upstream of the existing planner.
+Open semantic answers are sent to DeepSeek only when semantic judgment is necessary. Model output must pass strict JSON schemas and Zod validation before it can affect learning state.
 
-- Independent first answers become observable evidence when the outcome is valid.
-- Assisted completion is learning-only evidence.
-- Contradictory or unassessed outcomes are ignored rather than converted into fake binary labels.
-- One exercise updates a skill at most once.
-- The current fixed-v1 BKT parameters are prior 0.2, learn 0.1, guess 0.2, slip 0.1.
-- At least five independent observations per skill are required before active selection uses that skill state.
+DeepSeek does **not** choose:
 
-The canonical evidence tables are exercise_skill_evidence, bkt_updates and user_skill_state. Historical events can be replayed without touching FSRS.
+- the next word;
+- the Review queue;
+- the exercise type;
+- the FSRS rating;
+- the vocabulary due date.
 
-learning_settings.bkt_mode supports:
+### 5. BKT skill model
 
-- **active** — skill signals can affect future, not-yet-displayed Lesson plans;
-- **shadow** — recommendations are recorded but not used;
-- **off** — BKT projection and selection are disabled.
+BKT sits between validated answer evidence and future Lesson planning.
 
-Displayed questions, formal Review order, ratings and due dates are immutable with respect to BKT.
+The current fixed-v1 model uses:
 
-## Daily time budget
+- prior: `0.2`;
+- learn: `0.1`;
+- guess: `0.2`;
+- slip: `0.1`.
 
-WordLoop uses a default learning budget of 45 minutes per local day. The daily new-word count remains a ceiling rather than a promise to admit all words.
+Evidence policy:
 
-Budget admission estimates task cost before scheduling work. Overdue Review blocks new admissions, and a seven-day FSRS forecast further limits new words. Frozen sessions and already-saved answers survive a budget pause.
+- independent first answers can become `OBSERVE`;
+- assisted completion becomes `LEARN_ONLY`;
+- contradictory or unusable evidence becomes `IGNORE`;
+- one exercise updates one skill at most once;
+- active planning requires at least five independent observations for that skill.
 
-The user can explicitly add 15 minutes and continue. Budget exhaustion means the estimated time budget is full; it does not mean every due task has been completed.
+Modes:
 
-See docs/EVIDENCE_BUDGET.md for the current evidence and budget contract.
+- `active`: skill signals can affect future, not-yet-displayed Lesson plans;
+- `shadow`: recommendations are recorded but not used;
+- `off`: BKT projection and selection are disabled.
 
-## Standalone Web App
+BKT cannot alter already displayed questions, formal Review order, Review ratings or FSRS due dates.
 
-The root Site is a responsive study client backed by the same Supabase state and orchestration as the MCP App.
+### 6. Daily time budget
 
-Main areas include:
+The default learning budget is 45 minutes per local day.
 
-- **Today / Study** — Review, Pretest, Lesson, feedback and pending consolidation;
-- **Capture** — selected words, phrases, collocations, sentences and grammar snippets with source context;
-- **Note Review** — optional Again/Good retrieval for explicitly enabled Capture notes;
-- **Insights** — memory, due distribution, weakness and activity analytics;
-- **Vocabulary** — searchable vocabulary, per-word history and FSRS state;
-- **Private beta settings** — owner-only account creation for invited users.
+The daily new-word limit remains a ceiling. WordLoop estimates task cost before admitting new work, prioritizes overdue Review, and uses a short FSRS workload forecast to avoid overloading future days.
 
-Web requests are authenticated server-side. Private-beta accounts use Supabase Auth email/password plus the public.users allowlist; there is no public registration UI. The legacy WORDLOOP_WEB_TOKEN remains an owner/integration compatibility path and should not be distributed to beta users.
+The user can explicitly add 15 minutes. A budget stop means estimated study time is exhausted; it does not mean every due item has been completed.
 
-## Capture and Notes
+See `docs/EVIDENCE_BUDGET.md`.
 
-Capture is stored independently from vocabulary learning until the user explicitly promotes an item.
+## Word-family learning
 
-The canonical Capture model stores:
+Word-family learning is a first-class product capability.
 
-- selected text and type;
-- surrounding context and source metadata;
-- personal interpretation / notes;
+The goal is not to show an uncontrolled list of derivatives. WordLoop builds a **small, verified local family graph** around the current word and decides whether the learner should:
+
+- only browse;
+- consolidate the base;
+- save a related word for later;
+- learn one derivative now;
+- discriminate among already learned family members.
+
+### Local graph
+
+The graph is intentionally bounded:
+
+- one-hop by default;
+- up to 24 nodes per server response;
+- up to 40 accumulated nodes in the browser;
+- explicit expansion for deeper exploration;
+- Cytoscape.js lazy-loaded only when the Family panel opens.
+
+Relations cannot be created from spelling similarity, embeddings or model guesses.
+
+### Data sources
+
+The lexical layer is source-backed:
+
+- **Open English WordNet 2025** — English senses and verified lexical evidence;
+- **MorphyNet English derivational v1** — validated derivational records;
+- **ECDICT** — lemma-level Chinese glosses and additional English definitions;
+- a small reviewed fixture — deterministic regression coverage.
+
+Imported lexical records retain source, revision, license and provenance.
+
+### A / B / C / D stages
+
+- **A — consolidate the base.** No new derivative is activated while the base is unstable or error-heavy.
+- **B — introduce one derivative.** A stable base can unlock one high-value, transparent derivative.
+- **C — spaced family growth.** Additional members require both spacing and stability guards.
+- **D — discriminate known members.** Once several family members are stable, practice shifts toward contextual discrimination instead of adding another word.
+
+A Family micro-session is short, resumable and idempotent. It can use morphology explanation, POS recognition, definition recall, collocation, contextual extraction and active recall.
+
+Browsing or saving a candidate does not create a vocabulary card. A completed introduction can activate at most one derivative through the existing vocabulary/FSRS path.
+
+Family Graph has no second mastery model and no second scheduler.
+
+Detailed docs:
+
+- `docs/LOCAL_FAMILY_GRAPH.md`
+- `docs/LEXICAL_CORPUS_IMPORT.md`
+- `docs/BILINGUAL_FAMILY_DICTIONARY.md`
+- `server/data/ATTRIBUTION.md`
+
+## Capture and Note Review
+
+Capture records reading encounters without forcing them into the learning queue.
+
+A captured item can store:
+
+- selected text;
+- type: word, phrase, collocation, sentence or grammar;
+- surrounding context;
+- source metadata;
+- personal interpretation / note;
 - repeated occurrence history;
-- inbox/saved/linked/archived state.
+- inbox / saved / linked / archived state.
 
-Repeated encounters are deduplicated into occurrence history. Promoting an existing vocabulary item never resets its learning status or FSRS schedule. Promoting a genuinely new word can create/link the vocabulary record without rewriting the currently frozen Lesson round.
+Repeated encounters are deduplicated into occurrence history.
 
-Note Review is also opt-in. Archive, conversion or an empty personal interpretation removes a note from the candidate list without deleting its saved review history.
+Promotion is explicit:
 
-## Local Family Graph
+- linking an existing vocabulary item does not reset status or FSRS;
+- creating a genuinely new vocabulary item does not rewrite the currently frozen Lesson round.
 
-The standalone Lesson explanation view now includes a local **Family** entry for the current word.
+Note Review is opt-in and separate from vocabulary Review. It uses its own `note_review_states` and `note_review_events` and never overwrites `user_words`.
 
-The graph is intentionally local rather than global:
+See `docs/NOTE_REVIEW_MVP.md`.
 
-- one-hop graph requests;
-- up to 24 nodes per server response and 40 accumulated nodes in the browser;
-- Cytoscape.js is lazy-loaded only when the Family panel opens;
-- explicit expansion is required to explore beyond the initial neighborhood;
-- no spelling similarity, embedding clustering or LLM-generated relation is allowed to create lexical relations.
+## Insights and vocabulary
 
-The lexical layer is separate from learner state. It uses verified sources and keeps source/revision/license/provenance on imported knowledge:
+The standalone product includes read-only analytics and searchable vocabulary views.
 
-- Open English WordNet 2025 for English senses and verified semantic/morphological evidence;
-- MorphyNet English derivational v1 for validated derivational records;
-- ECDICT for lemma-level Chinese and additional English dictionary glosses;
-- a small reviewed fixture for deterministic regression tests.
+Current analytics include:
 
-Family browsing does not create learning cards. A user can save a future candidate, or explicitly start a short Family micro-session. The micro-session uses the existing activity/error infrastructure and daily budget. Only successful completion of the intended introduction can activate one derivative; it never dumps an entire family into today's queue.
+- long-term first-recall success rate;
+- current memory-set size;
+- FSRS Stability, Difficulty and Retrievability;
+- overdue / due / future due distribution;
+- active error layers;
+- historical error matrix by activity type;
+- formal Review activity;
+- first introductions;
+- Capture activity;
+- focus-word ranking.
 
-Family stages preserve interference and spacing:
+Historical values are shown only when stored events can support them. Missing history is reported as unavailable rather than fabricated.
 
-- **A** — consolidate the base only;
-- **B** — introduce one high-value derivative when the base is stable;
-- **C** — introduce another member only after spacing and stability guards pass;
-- **D** — discriminate among already learned stable members without activating a new word.
+Metric definitions live in `docs/WORDLOOP_INSIGHTS_METRICS.md`.
 
-Network View, Global Graph, automatic AI relation generation and a second Family mastery/scheduler model are intentionally out of scope.
+## Product surfaces
 
-Detailed implementation notes:
+### Standalone Web App
 
-- docs/LOCAL_FAMILY_GRAPH.md
-- docs/LEXICAL_CORPUS_IMPORT.md
-- docs/BILINGUAL_FAMILY_DICTIONARY.md
-- server/data/ATTRIBUTION.md
+The root Site is the full responsive study client.
 
-## Pronunciation
+Primary areas:
 
-When MERRIAM_WEBSTER_API_KEY is configured, WordLoop can request Merriam-Webster Learner's Dictionary pronunciation audio. If dictionary audio is unavailable, supported clients fall back to an English speechSynthesis voice.
+- Today / Study;
+- Capture;
+- Note Review;
+- Insights;
+- Vocabulary;
+- private-beta settings.
 
-Pronunciation remains presentation/practice data; it does not independently advance vocabulary FSRS.
+### ChatGPT MCP App
 
-## Shanbay import
-
-WordLoop supports optional one-time Shanbay vocabulary migration.
-
-The current standalone import path is an isolated Cloudflare Browser Worker:
-
-- a per-user Durable Object owns the active import job/browser;
-- the learner logs in to Shanbay inside a short-lived Live View;
-- WordLoop persists bounded chunks and acknowledges them before advancing the remote cursor;
-- retries reuse the pending chunk and database writes remain idempotent;
-- cancellation, completion and expiry close the browser;
-- cookies/passwords are not persisted in WordLoop storage or returned to the app.
-
-Existing learning and FSRS state are preserved. The legacy server-side Shanbay adapter remains admin-only compatibility code.
-
-See cloudflare/shanbay-import/README.md for deployment details.
-
-## ChatGPT MCP App
-
-Local Node development exposes MCP at:
+Local MCP endpoint:
 
 ~~~text
 http://127.0.0.1:3000/mcp
 ~~~
 
-The Sites/Worker deployment exposes MCP at:
+Sites / Worker endpoint:
 
 ~~~text
 https://<your-site>/api/mcp
 ~~~
 
-The important runtime rule for start/continue learning is simple: bootstrap first, then follow the returned backend action. The model must not reconstruct a queue from chat history.
+For “start learning” or “continue learning”, the first operation must be bootstrap. The model follows the backend action; it must not reconstruct the queue from chat history.
 
-MCP widgets and the standalone Web App share the same canonical learning state; render resources are UI surfaces, not alternate sources of truth.
+Both clients use the same canonical learner state.
+
+## Shanbay import
+
+WordLoop supports optional one-time Shanbay vocabulary migration.
+
+The current standalone flow uses an isolated Cloudflare Browser Worker:
+
+- one active Durable Object / browser job per verified WordLoop user;
+- short-lived Live View login;
+- bounded chunk persistence;
+- acknowledgement before remote cursor advance;
+- idempotent retry behavior;
+- browser teardown on completion, cancellation or expiry.
+
+Cookies and passwords are not stored by WordLoop or returned to the Web App.
+
+Existing learning and FSRS state are preserved.
+
+See `cloudflare/shanbay-import/README.md`.
+
+## Private beta authentication
+
+The current product supports a small invite-only multi-user beta.
+
+- Supabase Auth verifies email/password sessions.
+- `public.users` acts as the WordLoop allowlist.
+- There is no public signup UI.
+- The owner can create invited accounts.
+- The legacy `WORDLOOP_WEB_TOKEN` remains an owner/integration compatibility path only.
+- User identity is resolved server-side for Web API and authenticated MCP calls.
+
+See `docs/PRIVATE_BETA.md`.
 
 ## Architecture
 
 ~~~mermaid
 flowchart LR
-  C[ChatGPT MCP App] --> R[WordLoop runtime]
-  W[Standalone Web App] --> R
+  U[User] --> C[ChatGPT MCP App]
+  U --> W[Standalone Web App]
 
-  R --> A[Auth + study orchestration]
-  A --> S[(Supabase Postgres)]
+  C --> R[WordLoop Runtime]
+  W --> R
+
+  R --> A[Auth + Study Orchestration]
+  A --> S[(Supabase/Postgres)]
+
   A --> F[FSRS v6]
-  A --> P[Deterministic planner]
-  A --> B[BKT skill signals]
+  A --> P[Deterministic Exercise Planner]
+  A --> B[BKT Skill State]
 
   P --> D[DeepSeek Flash]
-  R --> M[Merriam-Webster audio]
-  R --> H[Cloudflare Shanbay import bridge]
-  R --> G[Local Family knowledge layer]
 
+  R --> G[Local Family Layer]
   G --> O[OEWN]
-  G --> N[MorphyNet]
+  G --> M[MorphyNet]
   G --> E[ECDICT]
+
+  R --> MW[Merriam-Webster Audio]
+  R --> SH[Cloudflare Shanbay Import Bridge]
 ~~~
 
-server/worker.ts is the Cloudflare Worker-compatible entrypoint. server/index.ts remains the local Node/Express entrypoint.
+The application deliberately separates learner state, lexical knowledge, model generation and UI rendering.
+
+## Core persistence
+
+Representative canonical data areas include:
+
+| Area | Canonical storage |
+| --- | --- |
+| Vocabulary / FSRS | `user_words`, `fsrs_review_logs` |
+| Attempts / error evidence | `attempts`, error progress tables |
+| Durable study flow | `study_sessions.state` |
+| Exercise plans | persisted plan / exercise records |
+| Skill evidence / BKT | `exercise_skill_evidence`, `bkt_updates`, `user_skill_state` |
+| Capture | `captured_notes`, `captured_note_occurrences` |
+| Note Review | `note_review_states`, `note_review_events` |
+| Family knowledge | lexical lexeme/sense/form/relation tables |
+| Family user state | candidates, exposures and micro-sessions |
+| Private beta | Supabase Auth + `public.users` allowlist |
 
 ## Project structure
 
 ~~~text
 wordloop/
-├── build/                         # standalone/GPT Sites shell
-├── cloudflare/shanbay-import/     # isolated browser-based Shanbay bridge
+├── build/                         # standalone / GPT Sites shell
+├── cloudflare/shanbay-import/     # isolated browser import bridge
 ├── docs/
 │   ├── TEACHING_POLICY.md
 │   ├── EVIDENCE_BUDGET.md
@@ -353,18 +395,8 @@ wordloop/
 │   └── replay-learning-evidence.ts
 ├── server/
 │   ├── services/
-│   │   ├── bkt.ts
-│   │   ├── bktPlanner.ts
-│   │   ├── deepseek.ts
-│   │   ├── exercisePlanner.ts
-│   │   ├── familyDictionary.ts
-│   │   ├── familyGraph.ts
-│   │   ├── familyLesson.ts
-│   │   ├── familyPolicy.ts
-│   │   ├── fsrsScheduler.ts
-│   │   ├── learningBudget.ts
-│   │   ├── noteReviews.ts
-│   │   └── studySessions.ts
+│   ├── tools/
+│   ├── mcpCore.ts
 │   ├── webApi.ts
 │   ├── webAuth.ts
 │   └── worker.ts
@@ -372,61 +404,66 @@ wordloop/
 ├── supabase/migrations/
 ├── tests/
 └── web/src/
+    ├── dashboard/
     ├── family/
     ├── lesson/
+    ├── pretest/
     ├── review/
     └── standalone/
 ~~~
 
 ## Environment variables
 
-Copy .env.example to .env for local development and configure the server runtime.
+Copy `.env.example` to `.env` for local development.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| SUPABASE_URL | Yes | Supabase project URL. |
-| SUPABASE_SERVICE_ROLE_KEY | Yes | Server-only database credential. |
-| SUPABASE_PUBLISHABLE_KEY | Private-beta Web | Browser-safe Supabase Auth key. |
-| DEV_USER_ID | Owner / legacy compatibility | Trusted owner UUID used by legacy paths. |
-| DEEPSEEK_API_KEY | Generated Lesson / semantic grading | Server-only DeepSeek credential. |
-| WORDLOOP_WEB_TOKEN | Optional owner compatibility | Legacy owner/integration Bearer token. |
-| MERRIAM_WEBSTER_API_KEY | Optional | Dictionary pronunciation audio. |
-| SHANBAY_IMPORT_WORKER_URL | Optional import | Deployed browser-import Worker URL. |
-| SHANBAY_IMPORT_BRIDGE_SECRET | Optional import | Shared server-to-Worker signing secret. |
-| SHANBAY_AUTH_TOKEN | Legacy import only | Older admin migration adapter credential. |
-| SHANBAY_COOKIE | Legacy fallback | Server-only cookie for the older adapter. |
-| PORT | No | Local HTTP port; defaults to 3000. |
-| HOST | No | Bind address; defaults to 127.0.0.1. |
-| PUBLIC_BASE_URL | Deployment | Public origin used by deployment/configuration. |
-| ALLOWED_HOSTS | Recommended when public | DNS-rebinding protection. |
-| WORDLOOP_ROOT | Rare | Explicit project root. |
-| ENABLE_WIDGET_PREVIEW | Development only | Enables local widget preview routes. |
-| WORDLOOP_PERF_LOG | Optional debugging | Emits opt-in model timing diagnostics. |
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only database credential |
+| `SUPABASE_PUBLISHABLE_KEY` | Private-beta Web | Browser-safe Supabase Auth key |
+| `DEV_USER_ID` | Owner / legacy paths | Trusted owner UUID |
+| `DEEPSEEK_API_KEY` | Generated Lesson / semantic grading | Server-only model credential |
+| `WORDLOOP_WEB_TOKEN` | Optional owner compatibility | Legacy owner/integration Bearer token |
+| `MERRIAM_WEBSTER_API_KEY` | Optional | Dictionary pronunciation audio |
+| `SHANBAY_IMPORT_WORKER_URL` | Optional import | Browser-import Worker URL |
+| `SHANBAY_IMPORT_BRIDGE_SECRET` | Optional import | Server-to-Worker signing secret |
+| `SHANBAY_AUTH_TOKEN` | Legacy import | Older admin adapter credential |
+| `SHANBAY_COOKIE` | Legacy fallback | Older adapter cookie |
+| `PORT` | No | Local HTTP port, default 3000 |
+| `HOST` | No | Bind address, default 127.0.0.1 |
+| `PUBLIC_BASE_URL` | Deployment | Public product origin |
+| `ALLOWED_HOSTS` | Recommended when public | DNS-rebinding protection |
+| `WORDLOOP_ROOT` | Rare | Explicit project root |
+| `ENABLE_WIDGET_PREVIEW` | Development only | Local widget preview routes |
+| `WORDLOOP_PERF_LOG` | Optional debugging | Performance diagnostics on branches that contain the latency instrumentation |
 
-Server-only secrets must never be embedded in build/ or browser bundles.
+Secrets must remain server-side and must not be embedded in browser bundles.
 
-## Database and migrations
+## Database setup and migrations
 
-For a fresh database, apply the current setup.sql.
+For a fresh database, apply the current `setup.sql`.
 
-For an existing database, apply only missing migrations in order. The current feature line includes these relevant migrations:
+For an existing database, apply only missing migrations in order. Important migrations on the current product line include:
 
-- `202609290001_capture_notes.sql` — initial Capture storage;
-- `20260929120641_captured_notes.sql` — canonical captured-notes model;
-- `20260929172617_captured_notes_canonical_adapter.sql` — canonical Capture adapter;
-- `20260929172621_analytics_read_models.sql` — analytics read models;
-- `20260929184221_progress_scheduled_stability_mean.sql` — scheduled Stability analytics;
-- `20260930043404_balanced_exercise_plans.sql` and `20260930043648_exercise_plan_fk_indexes.sql` — durable frozen exercise plans;
-- `20260930141500_consolidation_target_attribution.sql` — consolidation target attribution;
-- `202610020001_note_review_states.sql` — opt-in Note Review state/events;
-- `20261002024106_evidence_budget.sql` — learning evidence, BKT projection and daily budget;
-- `20261004045839_bkt_active_planner.sql` — active/shadow/off BKT planner control;
-- `20261004164746_cross_day_review_handoff.sql` — cross-day Review handoff;
-- `20261007025825_captured_note_deduplication.sql` — Capture deduplication;
-- `20261007053500_local_family_graph.sql` — Local Family Graph knowledge/user tables;
-- `20261007095603_lexical_dictionary_entries.sql` — bilingual lexical dictionary entries.
+- `202609290001_capture_notes.sql`
+- `20260929120641_captured_notes.sql`
+- `20260929172617_captured_notes_canonical_adapter.sql`
+- `20260929172621_analytics_read_models.sql`
+- `20260929184221_progress_scheduled_stability_mean.sql`
+- `20260930043404_balanced_exercise_plans.sql`
+- `20260930043648_exercise_plan_fk_indexes.sql`
+- `20260930141500_consolidation_target_attribution.sql`
+- `202610020001_note_review_states.sql`
+- `20261002024106_evidence_budget.sql`
+- `20261004045839_bkt_active_planner.sql`
+- `20261004164746_cross_day_review_handoff.sql`
+- `20261007025825_captured_note_deduplication.sql`
+- `20261007053500_local_family_graph.sql`
+- `20261007095603_lexical_dictionary_entries.sql`
 
-The lexical knowledge imports are additive and must not rewrite user_words, attempts, FSRS state or frozen study_sessions.
+These explicit filenames are also part of repository migration/test contracts.
+
+Lexical knowledge imports are additive and must not rewrite learner vocabulary, attempts, FSRS state or frozen study sessions.
 
 ## Install and run
 
@@ -448,7 +485,7 @@ npm run build
 npm start
 ~~~
 
-Useful checks:
+Validation:
 
 ~~~bash
 npm run typecheck
@@ -470,47 +507,37 @@ MCP Inspector:
 npx @modelcontextprotocol/inspector --web http://127.0.0.1:3000/mcp
 ~~~
 
-## Private beta and security
+## Development status
 
-The current product supports a small invited multi-user beta.
+The current feature-complete product line is `codex/local-family-graph`.
 
-- Supabase Auth verifies email/password sessions.
-- public.users is the application allowlist; a valid Auth account alone does not grant access.
-- There is no public signup UI.
-- The owner can create beta accounts from the authenticated private-beta settings surface.
-- Every Web API and authenticated MCP tool call resolves identity server-side.
-- Service-role, DeepSeek and import-bridge credentials remain server-only.
-- RLS is enabled on the additive user and lexical tables; privileged RPC access is restricted to the service runtime where applicable.
-- Banning/revoking an Auth user removes access without requiring deletion of their learning data.
+It contains the current BKT, budget, Capture/Note Review, private-beta authentication, Local Family Graph, lexical corpus and bilingual dictionary work.
 
-See docs/PRIVATE_BETA.md for account creation, recovery and revocation procedures.
+PR #2 / the latency-optimization work was merged into the sibling `codex/exercise-balanced-learning-flow` line on 2026-10-07. That code line contains compact semantic grading, reduced model-output ceilings, frozen-plan write reduction and additional timing diagnostics. Those changes are **not claimed as present in this branch until the two lines are actually merged**.
 
-## Data provenance
+This distinction is intentional: the README should describe code that exists, not a conceptual superset that no single branch currently contains.
 
-WordLoop keeps lexical-source attribution with the imported knowledge.
+## Current limits
 
-Application/runtime code and imported datasets have different licenses. In particular, OEWN, Princeton WordNet, MorphyNet, ECDICT and Cytoscape.js each retain their own notices and attribution requirements.
+- No Global / Network-wide Family Graph yet.
+- No LLM-generated lexical relations.
+- No per-sense / per-POS learner mastery model.
+- BKT fixed-v1 parameters are not yet fitted from a large personal dataset.
+- ECDICT glosses are lemma-level and are not asserted to be synset translations.
+- Some historical analytics remain unavailable where older events do not contain enough evidence.
+- Shanbay Browser import still depends on real Shanbay login conditions and Cloudflare browser quota.
+- The two active feature lines still need code-level convergence before there is one single branch containing both Family/BKT/private-beta work and PR #2 latency optimization.
 
-See server/data/ATTRIBUTION.md and server/data/licenses/ before redistributing lexical data or generated bundles.
+## Documentation index
 
-## Current limitations
+- `docs/TEACHING_POLICY.md` — learning behavior and ChatGPT teaching contract
+- `docs/EVIDENCE_BUDGET.md` — evidence semantics, BKT boundaries and daily time budget
+- `docs/NOTE_REVIEW_MVP.md` — Capture Note Review
+- `docs/PRIVATE_BETA.md` — authentication and invited-account operation
+- `docs/LOCAL_FAMILY_GRAPH.md` — Family Graph implementation
+- `docs/LEXICAL_CORPUS_IMPORT.md` — OEWN/MorphyNet corpus import
+- `docs/BILINGUAL_FAMILY_DICTIONARY.md` — ECDICT/OEWN bilingual dictionary enrichment
+- `docs/WORDLOOP_INSIGHTS_METRICS.md` — analytics definitions and evidence limits
+- `server/data/ATTRIBUTION.md` — lexical data provenance and licenses
 
-- Family Graph is local and one-hop by design; Global/Network View is not implemented.
-- Family utility/exam/interference thresholds are deterministic v1 rules, not calibrated psychometric scores.
-- BKT fixed-v1 parameters are not yet fitted from a large personal dataset; active mode is bounded by minimum-evidence guards.
-- Lemma-level learner state is still shared across POS/sense nodes; per-sense mastery is not implemented.
-- ECDICT coverage is high but not complete, and lemma-level Chinese glosses are not asserted to be synset translations.
-- Shanbay Browser import still requires real-user acceptance under Cloudflare browser quota and Shanbay login conditions.
-- Some historical analytics remain unavailable when old events do not contain enough evidence.
-
-## Teaching policy
-
-The human-readable teaching contract is maintained in:
-
-- docs/TEACHING_POLICY.md
-
-The runtime prompt is maintained in:
-
-- server/teachingPrompt.ts
-
-They should stay synchronized whenever learning behavior changes.
+The human-readable teaching policy and `server/teachingPrompt.ts` should remain synchronized when learning behavior changes.
