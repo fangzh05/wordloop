@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
@@ -74,7 +75,7 @@ vi.mock("../web/src/pronunciation/audio.js", () => ({
 }));
 
 import { LessonWidget } from "../web/src/lesson/LessonWidget.js";
-import { LessonClozeHint } from "../web/src/lesson/LessonClozeHint.js";
+import { LessonExercisePrompt } from "../web/src/lesson/LessonExercisePrompt.js";
 import { callServerTool, sendUserMessage } from "../web/src/mcpBridge.js";
 import { loadDictionaryPronunciationAudio, playPronunciation } from "../web/src/pronunciation/audio.js";
 
@@ -116,7 +117,10 @@ function label(node: unknown): string {
   if (Array.isArray(node)) return node.map(label).join("");
   if (typeof node === "string") return node;
   if (!node || typeof node !== "object" || !("props" in node)) return "";
-  return label((node as Node).props.children);
+  const element = node as Node;
+  return element.type === LessonExercisePrompt
+    ? label(LessonExercisePrompt(element.props as Parameters<typeof LessonExercisePrompt>[0]))
+    : label(element.props.children);
 }
 function render() {
   harness.begin();
@@ -147,17 +151,19 @@ afterEach(() => {
 beforeEach(() => { vi.mocked(loadDictionaryPronunciationAudio).mockResolvedValue({}); });
 
 describe("Lesson pronunciation", () => {
-  it("shows separate POS meanings alongside a cloze without rendering the target word", () => {
+  it("uses the combined question for a cloze without rendering the target word", () => {
     render();
     harness.sendPayload({ widget: "lesson", mode: "exercise", word: "water", progress: "1 / 1",
       activity_type: "exact_cloze", instruction: "填入正确词形。",
       prompt: "Remember to ___ the plants before leaving.", multiline: false,
       cloze_hint: "n. 水　v. 灌溉" });
     const root = render();
-    const hint = descendants(root).find((node) => node.type === LessonClozeHint);
-    expect((hint?.props as { hint?: string })?.hint).toBe("n. 水　v. 灌溉");
-    const text = label(root);
+    const question = descendants(root).find((node) => node.type === LessonExercisePrompt);
+    if (!question) throw new Error("Lesson question missing");
+    const text = renderToStaticMarkup(question);
     expect(text).toContain("Remember to ___ the plants before leaving.");
+    expect(text).toContain("n. 水　v. 灌溉");
+    expect(text.match(/class="lesson-prompt"/g)).toHaveLength(1);
     expect(text).not.toContain("water");
   });
 

@@ -12,7 +12,7 @@ import { VocabularyPage } from "./pages/VocabularyPage.js";
 import { WordDetailPanel } from "./components/WordDetailPanel.js";
 import { shouldSubmitMultiline, shouldSubmitSingleLine } from "./studyInput.js";
 import { meaningIncludesPartOfSpeech } from "../../../shared/lexicalDisplay.js";
-import { LessonClozeHint, lessonPromptWithMeaning } from "../lesson/LessonClozeHint.js";
+import { LessonExercisePrompt } from "../lesson/LessonExercisePrompt.js";
 import {
   ApiError,
   StaleStudyStateError,
@@ -1122,7 +1122,6 @@ export default function StandaloneApp(): React.JSX.Element {
       const feedbackMode = payload.mode === "feedback";
       const exerciseMode = payload.mode === "exercise";
       const phase = String(state.phase ?? "");
-      const displayedExercisePrompt = lessonPromptWithMeaning(exercise.activity_type, exercise.prompt, payload.cloze_hint);
       const displayTitle = standaloneLessonDisplayTitle(title, exerciseMode, consolidationKind);
       const progressLabel = String(payload.progress ?? standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, consolidationKind));
       const explaining = phase === "lesson_explain" && payload.mode === "explain";
@@ -1148,8 +1147,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
         {phase === "lesson_exercise" && exerciseMode && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
-          <div className="lesson-prompt standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase">{displayedExercisePrompt}</div>
-          <LessonClozeHint hint={payload.cloze_hint} prompt={exercise.prompt} activityType={exercise.activity_type} />
+          <LessonExercisePrompt hint={payload.cloze_hint} prompt={exercise.prompt} activityType={exercise.activity_type} className="standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase" />
           {exercise.multiline === true
             ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "lesson_submit", answer }); } }} />
             : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "lesson_submit", answer }); } }} />}
