@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 
 import { Button } from "../components/Button.js";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
 import { CaptureNotesPage } from "./CaptureNotesPage.js";
+import { Icon } from "./DesignIcons.js";
 import { SelectionCapture } from "./SelectionCapture.js";
 import { AppNavigation, SettingsSheet, type AppSection, type Appearance } from "./AppShell.js";
 import { TodayPage } from "./pages/TodayPage.js";
@@ -123,9 +124,10 @@ export function standaloneLessonProgressLabel(
   relearnWords: readonly string[],
   queue: readonly string[],
   index: number,
-  consolidationKind: "translation" | "sentence" | boolean | null = null,
+  consolidationKind: "translation" | "translation_cn_to_en" | "sentence" | boolean | null = null,
 ): string {
   if (consolidationKind === "translation" || consolidationKind === true) return "周期巩固 · 英译中";
+  if (consolidationKind === "translation_cn_to_en") return "周期巩固 · 完整中译英";
   if (consolidationKind === "sentence") return "周期巩固 · 主动表达";
   const relearn = new Set(relearnWords.map((word) => word.trim().toLocaleLowerCase()));
   const relearnTotal = queue.filter((word) => relearn.has(word.trim().toLocaleLowerCase())).length;
@@ -134,8 +136,9 @@ export function standaloneLessonProgressLabel(
     : `新词学习 · ${Math.min(index - relearnTotal + 1, Math.max(1, queue.length - relearnTotal))} / ${Math.max(0, queue.length - relearnTotal)}`;
 }
 
-export function standaloneLessonDisplayTitle(word: string, exerciseMode: boolean, consolidationKind: "translation" | "sentence" | boolean | null): string {
+export function standaloneLessonDisplayTitle(word: string, exerciseMode: boolean, consolidationKind: "translation" | "translation_cn_to_en" | "sentence" | boolean | null): string {
   if (consolidationKind === "translation" || consolidationKind === true) return "长难句翻译";
+  if (consolidationKind === "translation_cn_to_en") return "完整中译英";
   if (consolidationKind === "sentence") return "造句练习";
   if (!exerciseMode) return word || "Lesson";
   return "填空练习";
@@ -819,7 +822,10 @@ export default function StandaloneApp(): React.JSX.Element {
     const answerActions = new Set(["review_submit", "pretest_submit", "lesson_submit", "consolidation_submit", "wrapup_submit"]);
     if (answerActions.has(actionName) && fields.mark_unknown !== true
       && (typeof fields.answer !== "string" || !fields.answer.trim())) return null;
-    if (requestInFlightRef.current) return null;
+    if (requestInFlightRef.current) {
+      setNotice("上一个请求仍在处理中，请稍候。超时后会恢复重试。");
+      return null;
+    }
     const stableFields = ["lesson_submit", "consolidation_submit", "wrapup_submit"].includes(actionName)
       ? { ...fields, submission_id: typeof fields.submission_id === "string" ? fields.submission_id : crypto.randomUUID() }
       : fields;
@@ -872,7 +878,7 @@ export default function StandaloneApp(): React.JSX.Element {
           await loadBootstrap();
         } else {
           if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
-            const generationAction = actionName === "continue" || actionName === "lesson_next";
+            const generationAction = ["continue", "lesson_next", "consolidation_start"].includes(actionName);
             if (generationAction) {
               setPage("dashboard");
               setErrorMessage(deepSeekMessage(error.code, "generation"));
@@ -881,7 +887,7 @@ export default function StandaloneApp(): React.JSX.Element {
               setErrorMessage(deepSeekMessage(error.code, "grading"));
             }
           } else {
-            setErrorMessage(messageFor(error, actionName === "continue" || actionName === "lesson_next" ? "generation" : "grading"));
+            setErrorMessage(messageFor(error, ["continue", "lesson_next", "consolidation_start"].includes(actionName) ? "generation" : "grading"));
           }
         }
       } finally {
@@ -932,6 +938,7 @@ export default function StandaloneApp(): React.JSX.Element {
   const busyLabel = busy === "lesson_next"
     ? payload.navigation && record(payload.navigation).action === "round_complete" ? "正在检查本轮任务…" : "正在生成下一词…"
     : busy === "lesson_submit" || busy === "consolidation_submit" || busy === "wrapup_submit" ? "正在批改…"
+      : busy === "consolidation_start" ? "正在打开应用巩固…"
       : busy === "bootstrap" ? "正在加载今日学习…"
         : busy === "pretest_submit" || busy === "review_submit" ? "正在保存…"
           : null;
@@ -977,7 +984,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {visiblePage !== "study" && <header className="wordloop-topbar">
       <div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div>
-      <button type="button" className="settings-open-button" aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>设置</button>
+      <button type="button" className="settings-open-button" aria-haspopup="dialog" aria-label="设置" onClick={() => setSettingsOpen(true)}><Icon name="settings" /></button>
     </header>}
 
     {visiblePage === "dashboard" && appSection === "today" && <TodayPage
@@ -985,7 +992,8 @@ export default function StandaloneApp(): React.JSX.Element {
       busy={busy !== null}
       tokenKey={token}
       onContinue={continueFromDashboard}
-      onStartConsolidation={() => { setAppSection("study"); setPage("study"); void dispatch({ action: "consolidation_start" }); }}
+      onStartConsolidation={() => { void dispatch({ action: "consolidation_start" }); }}
+      busyLabel={busyLabel}
       onOpenCapture={() => navigateSection("capture")}
       onOpenVocabulary={() => navigateSection("vocabulary")}
     />}
@@ -1003,12 +1011,14 @@ export default function StandaloneApp(): React.JSX.Element {
       onDetailChange={setSelectedVocabularyWordId}
     />}
 
+    {busy === "consolidation_start" && visiblePage !== "study" && <p className="standalone-status" role="status">正在打开应用巩固…</p>}
+
     {errorMessage && <section className="widget-card standalone-card" role="alert">
       <p className="standalone-status error">{errorMessage}</p>
       <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={retry}>重试</Button></div>
     </section>}
 
-    {pageStatus === "loading" && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>{busyLabel ?? "正在加载今日学习…"}</p></div></section>}
+    {pageStatus === "loading" && !view && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>{busyLabel ?? "正在加载今日学习…"}</p></div></section>}
 
     {pageStatus === "ready" && !view && !errorMessage && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>正在加载今日学习…</p></div></section>}
 
@@ -1017,7 +1027,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const item = items[currentIndex] ?? {};
       const complete = state.phase === "review_complete";
       const direction = item.direction === "en_definition" ? "en_definition" : "cn_to_en";
-      return <section className="widget-card standalone-card" aria-labelledby="study-title">
+      return <section className="widget-card standalone-card study-task-card" aria-labelledby="study-title">
         <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={backToToday} />
         {complete ? <div className="standalone-content"><p>本轮复习完成。</p><div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
           <StandaloneReviewQuestion item={item} direction={direction} />
@@ -1041,7 +1051,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const resultStage = state.phase === "pretest_result";
       const result = { ...record(view.pretest_result), ...record(view.result) };
       const audioStage = ["listen_repeat", "listen_recall"].includes(String(state.phase));
-      return <section className="widget-card standalone-card" aria-labelledby="study-title">
+      return <section className="widget-card standalone-card study-task-card" aria-labelledby="study-title">
         <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={backToToday} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
         {complete ? <div className="standalone-content">
           <p>预测试完成</p>
@@ -1089,26 +1099,32 @@ export default function StandaloneApp(): React.JSX.Element {
       const navigation = record(payload.navigation);
       const title = String(state.current_word ?? payload.word ?? "Lesson");
       const consolidationKind = payload.consolidation === true
-        ? payload.consolidation_kind === "sentence" ? "sentence" : "translation"
+        ? payload.consolidation_kind === "sentence" ? "sentence" : payload.consolidation_kind === "translation_cn_to_en" ? "translation_cn_to_en" : "translation"
         : null;
       const feedbackMode = payload.mode === "feedback";
       const exerciseMode = payload.mode === "exercise";
       const phase = String(state.phase ?? "");
       const displayTitle = standaloneLessonDisplayTitle(title, exerciseMode, consolidationKind);
       const progressLabel = String(payload.progress ?? standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, consolidationKind));
-      return <section className="widget-card standalone-card lesson-card" aria-labelledby="study-title">
-        <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />
+      const explaining = phase === "lesson_explain" && payload.mode === "explain";
+      return <section className={`widget-card standalone-card lesson-card ${explaining ? "study-explain-card" : "study-task-card"}`} aria-labelledby="study-title">
+        {!explaining && <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />}
 
-        {phase === "lesson_explain" && payload.mode === "explain" && <div className="standalone-content" data-capture-root="true">
+        {explaining && <div className="standalone-content standalone-explain-content" data-capture-root="true">
+          <div className="lesson-overview">
+          <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>核心义</h2><p>{meaningIncludesPartOfSpeech(String(payload.meaning_zh ?? ""), String(payload.part_of_speech ?? "")) ? String(payload.meaning_zh ?? "") : `${String(payload.part_of_speech ?? "")} · ${String(payload.meaning_zh ?? "")}`}</p></section>
+          <div className="standalone-actions lesson-start-action"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
+          </div>
+          <div className="lesson-reading-pane">
+          <section className="lesson-section lesson-example-panel" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
           <div className="lesson-detail-grid">
           <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).slice(0, 3).map((value) => <li key={value}>{value}</li>)}</ul></section>
             <section className="lesson-section"><h2>常见派生</h2><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
           </div>
-          <section className="lesson-section" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
           <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width">{String(payload.note ?? "")}</p></section>
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
+          </div>
         </div>}
 
         {phase === "lesson_exercise" && exerciseMode && <div className="standalone-content">
@@ -1121,6 +1137,7 @@ export default function StandaloneApp(): React.JSX.Element {
         </div>}
 
         {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
+          {busy !== null && <p className="standalone-status" role="status">{busyLabel ?? "正在处理，请稍候…"}</p>}
           <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           {notice && <p className="standalone-status" role="status">{notice}</p>}
           <div className="standalone-actions">
@@ -1128,18 +1145,18 @@ export default function StandaloneApp(): React.JSX.Element {
               ? <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_retry" })}>重做当前题</Button>
               : navigation.action === "next_word"
                 ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>下一词</Button>
-                : <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>完成本轮并继续</Button>}
+                : <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>{busy === "lesson_next" ? "正在完成本轮…" : "完成本轮并继续"}</Button>}
           </div>
         </div>}
 
         {phase === "lesson_complete" && exerciseMode && consolidationKind && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
           <div className="lesson-prompt standalone-reading-width">{String(exercise.prompt ?? "")}</div>
-          <textarea className={`standalone-input consolidation-input ${consolidationKind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={consolidationKind === "sentence" ? 2 : 5} aria-label={consolidationKind === "translation" ? "长难句翻译与结构分析" : "造句练习答案"} value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "consolidation_submit", answer }); } }} />
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "translation" ? "提交翻译" : "提交句子"}</Button></div>
+          <textarea className={`standalone-input consolidation-input ${consolidationKind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={consolidationKind === "sentence" ? 2 : 5} aria-label={consolidationKind === "translation" ? "长难句翻译与结构分析" : consolidationKind === "translation_cn_to_en" ? "完整中译英答案" : "造句练习答案"} value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "consolidation_submit", answer }); } }} />
+          <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "sentence" ? "提交句子" : "提交翻译"}</Button></div>
         </div>}
 
-        {phase === "lesson_complete" && feedbackMode && consolidationKind && <div className="standalone-content">
+        {phase === "lesson_complete" && feedbackMode && consolidationKind && payload.consolidation_status === "feedback" && <div className="standalone-content">
           <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
           <div className="standalone-actions">
             {feedback.is_correct === true || feedback.reveal_answer === true

@@ -1,3 +1,4 @@
+import type { VocabularyItem } from "../types.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { getVocabularyItemsByWords } from "./words.js";
@@ -348,12 +349,21 @@ export async function planLessonQueue(
   userId = getAuthenticatedUserId(),
   options: {
     id_factory?: () => string;
+    vocabulary_items?: readonly VocabularyItem[];
     skill_signals?: readonly SkillSignal[];
     preserve_existing_activity?: { index: number; activity_type: string };
   } = {},
 ): Promise<LessonExercisePlan[]> {
   if (queue.length < 1 || queue.length > 200) throw new Error("LESSON_QUEUE_INVALID");
-  const items = await getVocabularyItemsByWords([...queue], db, userId);
+  const [items, { data, error }] = await Promise.all([
+    options.vocabulary_items ?? getVocabularyItemsByWords([...queue], db, userId),
+    db.from("exercise_submission_events")
+      .select("exercise_id,scope,activity_type,error_focus,coverage_exception_reason,created_at")
+      .eq("user_id", userId)
+      .eq("scope", "lesson")
+      .order("created_at", { ascending: false })
+      .limit(60),
+  ]);
   const byWord = new Map(items.map((item) => [normalizeWord(item.word), item]));
   const relearn = new Set(relearnWords.map(normalizeWord));
   const plannerWords = queue.map((word) => {
@@ -376,12 +386,6 @@ export async function planLessonQueue(
       is_relearn: relearn.has(normalizeWord(word)),
     } satisfies PlannerWord;
   });
-  const { data, error } = await db.from("exercise_submission_events")
-    .select("exercise_id,scope,activity_type,error_focus,coverage_exception_reason,created_at")
-    .eq("user_id", userId)
-    .eq("scope", "lesson")
-    .order("created_at", { ascending: false })
-    .limit(60);
   if (error) throw new Error(`LESSON_PLAN_HISTORY_READ_FAILED: ${error.message}`);
   const seen = new Set<string>();
   const recent = ((data ?? []) as Array<{

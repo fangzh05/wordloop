@@ -28,23 +28,15 @@ export const LESSON_GENERATION_PROMPT = `为考研英语一与 IELTS Academic �
   }
 }`;
 
-export const SEMANTIC_GRADING_PROMPT = `严格按服务端提供的原题、目标词义、skill_ids 和评分要求批改本次答案。不得改题、换词、重排任务或代替用户决定是否推进。task_fulfillment 判断题目主要命题是否完成；target_word_results 按计划中的 target_word_ids 逐词评估词义、搭配、语法和自然度，每项使用 word_id 指向对应 ID；skill_results 只列出答案中确实能单独判断的技能，并给出各自证据，不要把总体正确机械复制到每项技能。多词题的 skill_result 必须提供对应 word_id；句法结构技能可以不关联某个词。没有足够证据的技能标记 not_assessed。
-
-总体 is_correct 只在目标词义、核心搭配、主要命题、否定与关键修饰关系均正确时为 true。无关的小冠词、标点或轻微自然度建议可以核心通过，并放入 naturalness/suggestion；不能因此判定目标词遗忘。meaning、collocation、grammar、naturalness 结果区分核心错误和建议。is_correct=false 时 error_layer 必须是 meaning、collocation、grammar、spelling 或 pronunciation 之一，不能是 none。首次提交（输入 retry_count=0）答错时只给一个具体错误片段和简短修改提示，reference_answer 必须省略；第二次提交仍错时才给非空 reference_answer。可选字段不适用时省略，不要输出 null 或空字符串。message 与 explanation 各用一两句简短中文，分项 note 只写最必要证据。使用简体中文反馈。只返回 JSON，不要 Markdown：
+export const SEMANTIC_GRADING_PROMPT = `严格按服务端原题、目标词义和评分要求批改，不改题、不换词、不决定推进。总体 is_correct 仅在目标词义、核心搭配、主要命题、否定与关键修饰关系正确时为 true；自然准确的不同表达均可通过。无关的小冠词、标点或轻微自然度建议不能判作目标词遗忘。task_fulfillment 表示主要命题是否完成。核心错误选择 meaning、collocation、grammar、spelling 或 pronunciation；正确时 error_layer=none。
+只返回一个 JSON 对象，不要 Markdown。每次只独立评估本次 answer。retry_count 只控制答错时是否显示答案，不表示本次仍然错误，不得照搬第一次的错误提示。先判定答案，再决定反馈；不能一边判错一边把用户原答案作为正确参考答案。
+首次答错（retry_count=0）只给一个具体错误片段与短提示，禁止提供参考答案；第二次仍错必须给非空 reference_answer。message 与 short_hint 各用一句简短中文。不要输出分项评分、target_word_results、skill_results 或分析报告。以下只是结构示例，不能默认使用示例的判分；可选 reference_answer 仅在第二次答错时提供：
 {
-  "is_correct": false,
-  "task_fulfillment": false,
-  "error_layer": "meaning",
-  "meaning": {"passed": false, "note": "..."},
-  "collocation": {"passed": true, "note": "..."},
-  "grammar": {"passed": true, "note": "..."},
-  "naturalness": {"passed": true, "note": "..."},
-  "target_word_results": [{"word_id": "...", "word": "...", "outcome": "incorrect", "meaning": "...", "collocation": "...", "grammar": "...", "naturalness": "...", "error_excerpt": "...", "hint": "...", "reference_expression": "..."}],
-  "skill_results": [{"skill_id": "...", "word_id": "...", "outcome": "incorrect", "evidence": "..."}],
-  "error_excerpt": "...",
-  "short_hint": "...",
-  "message": "...",
-  "explanation": "..."
+  "is_correct": true,
+  "error_layer": "none",
+  "task_fulfillment": true,
+  "message": "答案正确。",
+  "short_hint": "核心含义和用法表达准确。"
 }`;
 
 export const ENGLISH_DEFINITION_GRADING_PROMPT = `判断用户给出的简短英文释义是否准确表达目标词的核心义；接受自然的同义表达，不要求复述词典原句。feedback 必须使用简体中文，可引用必要的英文词句。只返回一个符合以下目标 JSON shape 的 JSON 对象，不要 Markdown：
@@ -53,7 +45,7 @@ export const ENGLISH_DEFINITION_GRADING_PROMPT = `判断用户给出的简短英
   "feedback": "..."
 }`;
 
-export const WRAPUP_GENERATION_PROMPT = `生成一道考研英语一或 IELTS Academic 难度的长难句英译中任务。若输入包含 plan.skill_goal，句子主要结构必须自然体现这个训练点；不得擅自替换为其他技能目标。句子通常 25–40 个英文词，只有一个主要结构训练点，如修饰范围、让步、指代、非谓语或名词性从句；优先自然使用一个适配目标词，第二个可选，不要硬塞两个词。提供完整英文原句和简洁指令，不返回中文译文、解析或答案。只返回 JSON：
+export const WRAPUP_GENERATION_PROMPT = `生成一道考研英语一或 IELTS Academic 难度的长难句英译中任务。若输入包含 plan.skill_goal，句子主要结构必须自然体现这个训练点；不得擅自替换为其他技能目标。prompt 只能包含完整英文原句，不得包含编号、中文提示、译文或解析；必须为 25–40 个英文词（生成后先核对词数），只有一个主要结构训练点，如修饰范围、让步、指代、非谓语或名词性从句；优先自然使用一个适配目标词，第二个可选，不要硬塞两个词。提供完整英文原句和简洁指令，不返回中文译文、解析或答案。只返回 JSON：
 {
   "activity_type": "translation_en_to_cn",
   "instruction": "请翻译成自然中文；主干分析可选。",
@@ -77,20 +69,5 @@ export const SENTENCE_CONSOLIDATION_GENERATION_PROMPT = `生成一道情境造�
   "multiline": true
 }`;
 
-export const WRAPUP_GRADING_PROMPT = `批改用户对英文长难句的中文翻译，主干分析为可选提示。判断整体命题、关键修饰与逻辑关系；自然准确的不同译法均可通过。小冠词或标点建议不能判作目标词遗忘。第一次核心错误给一个具体片段与短提示，不显示译文；第二次才提供参考译文。只返回 JSON：
-{
-  "is_correct": false,
-  "task_fulfillment": false,
-  "error_layer": "grammar",
-  "meaning": {"passed": false, "note": "..."},
-  "collocation": {"passed": true, "note": "..."},
-  "grammar": {"passed": false, "note": "..."},
-  "naturalness": {"passed": true, "note": "..."},
-  "target_word_results": [],
-  "skill_results": [],
-  "error_excerpt": "...",
-  "short_hint": "...",
-  "message": "...",
-  "explanation": "...",
-  "reference_answer": "..."
-}`;
+export const WRAPUP_GRADING_PROMPT = `${SEMANTIC_GRADING_PROMPT}
+本任务是英文长难句英译中；主干分析为可选提示。重点检查整体命题、关键修饰与逻辑关系，接受自然准确的不同译法。主干、从句与修饰范围错误用 grammar，原意、指代或逻辑误译用 meaning；不要输出 structure、logic、translation 或 naturalness 等其他分类。第二次仍错提供完整参考译文。参考答案字段示例：{"reference_answer":"完整中文译文"}。`;

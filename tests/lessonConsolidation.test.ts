@@ -103,6 +103,24 @@ describe("persistent consolidation cadence", () => {
     expect(db.from).toHaveBeenCalledTimes(1);
   });
 
+  it("uses UUID equality for subsequent reminders, never an invalid IS UUID filter", async () => {
+    const previous = "3907fcc9-b3eb-4172-a2a0-f0e8dbf66e3e";
+    const read: any = {};
+    read.select = vi.fn(() => read);
+    read.eq = vi.fn(() => read);
+    read.maybeSingle = vi.fn(async () => ({ data: { pending_task: pendingTask(), last_reminder_task_id: previous }, error: null }));
+    const write: any = {};
+    write.update = vi.fn(() => write);
+    write.eq = vi.fn(() => write);
+    write.is = vi.fn(() => { throw new Error("PostgREST IS does not accept a UUID"); });
+    write.then = (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve);
+    const db = { from: vi.fn().mockReturnValueOnce(read).mockReturnValueOnce(write) };
+    const result = await decideLessonConsolidation(state(), db as any, "user");
+    expect(result.payload).toMatchObject({ consolidation: true, consolidation_status: "pending" });
+    expect(write.eq).toHaveBeenCalledWith("last_reminder_task_id", previous);
+    expect(write.is).not.toHaveBeenCalled();
+  });
+
   it("ignores a not-yet-finished Lesson word", async () => {
     const input = state({ phase: "lesson_feedback" });
     const db = { from: vi.fn() };
