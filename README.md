@@ -25,6 +25,102 @@ WordLoop deliberately separates five responsibilities.
 
 The browser never receives the Supabase service-role key, DeepSeek key, Shanbay bridge secret or other server-only credentials.
 
+## Word-family learning
+
+WordLoop now treats word families as a first-class learning layer instead of a flat list of “derivatives”.
+
+The goal is not to dump every related form onto the learner. The system builds a **small, verified local family graph** around the current word and decides whether the learner should only inspect it, consolidate the base word, or learn one derivative now.
+
+### What the Family system does
+
+- Opens from the current Lesson explanation through a dedicated **Family** entry.
+- Loads only a bounded one-hop neighborhood instead of a global graph.
+- Distinguishes different POS nodes in the lexical knowledge layer while keeping the learner's existing lemma-level learning state canonical.
+- Shows verified derivational and contrast relations with source/provenance metadata.
+- Lets the learner deliberately expand another node when more context is needed.
+- Can save a related word as a **future candidate** without creating a vocabulary card.
+- Can start a short **Family micro-session** when the current learner state makes a new derivative appropriate.
+- Activates at most **one** new derivative at the end of a successful introduction flow.
+- Reuses the existing activity types, error layers, attempt history, daily time budget and FSRS initialization path.
+
+Browsing the graph never changes vocabulary state by itself.
+
+### Data sources
+
+The lexical layer is source-backed rather than model-generated:
+
+- **Open English WordNet 2025** supplies English senses and verified lexical evidence.
+- **MorphyNet English derivational v1** supplies additional derivational records after lemma/POS validation against OEWN.
+- **ECDICT** supplies lemma-level Chinese glosses and additional English definitions.
+- A small manually reviewed fixture remains in the repository for deterministic regression tests.
+
+Every imported lexical record keeps source, revision, license and provenance. Similar spelling, embeddings or LLM guesses are not allowed to create a relation.
+
+### Local graph rules
+
+The Family graph is intentionally bounded:
+
+- server response: at most 24 nodes;
+- accumulated browser graph: at most 40 nodes;
+- default relation depth: one hop;
+- further exploration requires explicit expansion;
+- low-confidence or unsupported relations are filtered rather than guessed.
+
+Cytoscape.js is lazy-loaded only when the Family panel opens, so ordinary Lesson startup does not pay the graph-engine cost.
+
+### A / B / C / D learning stages
+
+The system uses four deterministic stages to avoid overloading the learner with a whole family at once.
+
+- **Stage A — consolidate the base.** If the base word is still new, unstable, error-heavy or under-practiced, the micro-session only reinforces the base word. No new derivative card is created.
+- **Stage B — introduce one derivative.** Once the base is sufficiently stable, the system may select one high-value, transparent derivative.
+- **Stage C — spaced family growth.** A later family member can be introduced only after spacing and stability guards pass across the already learned members.
+- **Stage D — discriminate existing members.** When several family members are already stable, the system practices contextual discrimination among them instead of adding another new word.
+
+Candidate scoring considers utility, exam relevance, morphological transparency, learner need and interference risk. These are deterministic v1 heuristics, not psychometric probabilities.
+
+### Family micro-session
+
+A Family micro-session is a short targeted lesson, typically around two minutes. It can include:
+
+- morphology / affix explanation;
+- POS recognition;
+- definition recall;
+- collocation or usage contrast;
+- contextual extraction;
+- unprompted active recall.
+
+The session is resumable and idempotent. Intermediate answers do not create a new card. If the intended introduction is completed, WordLoop can initialize one derivative through the existing vocabulary path and create its normal FSRS state. Competing requests preserve an already-existing card instead of resetting it.
+
+### Boundary with FSRS and BKT
+
+The Family system is **not** a second scheduler and it does not have a separate mastery model.
+
+- FSRS remains the only long-term vocabulary scheduler.
+- BKT may provide skill-level weakness signals to the ordinary Lesson planner, but it does not choose Family due dates.
+- Family candidates are only future intentions; they are not today's queue and they have no due date.
+- Family graph browsing, candidate saving and Stage A consolidation do not advance vocabulary FSRS.
+- Family learning never rewrites the frozen ordinary Lesson queue.
+
+### Current coverage and limits
+
+The current production corpus is built from a vocabulary-scoped OEWN + MorphyNet import with ECDICT enrichment. The system deliberately accepts honest empty states when a word has no verified family relation.
+
+Not implemented yet:
+
+- global/network-wide graph browsing;
+- automatic LLM-created lexical relations;
+- per-sense/POS learner mastery;
+- a second family scheduler;
+- graph-based reordering of the immutable formal Review queue.
+
+Implementation and data details:
+
+- docs/LOCAL_FAMILY_GRAPH.md
+- docs/LEXICAL_CORPUS_IMPORT.md
+- docs/BILINGUAL_FAMILY_DICTIONARY.md
+- server/data/ATTRIBUTION.md
+
 ## Current learning flow
 
 A normal session is driven by the backend bootstrap and persisted in study_sessions.
