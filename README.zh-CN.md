@@ -318,16 +318,22 @@ wordloop/
 
 新数据库运行当前 setup.sql。
 
-已有数据库只按顺序执行缺失 migration。近期功能线主要增加：
+已有数据库只按顺序执行缺失 migration。当前功能线的重要迁移包括：
 
-- 冻结后的 balanced exercise plan 与 attribution；
-- Canonical Capture / occurrence 存储与去重；
-- Note Review state / event；
-- learning evidence、BKT state 与 daily budget；
-- active BKT planner 控制；
-- cross-day Review handoff；
-- Local Family Graph lexical / user 表；
-- 双语 lexical dictionary entry。
+- `202609290001_capture_notes.sql`：初始 Capture 存储；
+- `20260929120641_captured_notes.sql`：canonical captured-notes 模型；
+- `20260929172617_captured_notes_canonical_adapter.sql`：Capture canonical adapter；
+- `20260929172621_analytics_read_models.sql`：analytics read models；
+- `20260929184221_progress_scheduled_stability_mean.sql`：scheduled Stability 统计；
+- `20260930043404_balanced_exercise_plans.sql` 与 `20260930043648_exercise_plan_fk_indexes.sql`：持久化冻结 exercise plan；
+- `20260930141500_consolidation_target_attribution.sql`：综合任务 target attribution；
+- `202610020001_note_review_states.sql`：显式启用的 Note Review state / event；
+- `20261002024106_evidence_budget.sql`：learning evidence、BKT projection 与 daily budget；
+- `20261004045839_bkt_active_planner.sql`：BKT active / shadow / off 控制；
+- `20261004164746_cross_day_review_handoff.sql`：跨日 Review handoff；
+- `20261007025825_captured_note_deduplication.sql`：Capture 去重；
+- `20261007053500_local_family_graph.sql`：Local Family Graph knowledge / user 表；
+- `20261007095603_lexical_dictionary_entries.sql`：双语 lexical dictionary entries。
 
 词汇知识导入是 additive 的，不能改写 user_words、attempts、FSRS state 或已经冻结的 study_sessions。
 
