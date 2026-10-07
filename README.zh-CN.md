@@ -2,340 +2,373 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-WordLoop 是一个以“持久化学习状态”为核心的个人英语学习系统。它不依赖聊天记录猜测学习进度，同一套学习状态可以通过两个入口使用：
+WordLoop 是一个围绕**持久化学习状态、主动回忆和明确教学策略**构建的个人英语学习系统。它不依赖聊天记录猜测“你学到哪了”，而是把学习进度、复习调度、题型计划、错误证据、划词笔记和词族知识统一放在可恢复的后端状态里。
+
+同一套学习状态目前有两个入口：
 
 - ChatGPT 内的 MCP App + 交互式 Widget；
 - 独立响应式 Web App。
 
-Supabase/Postgres 是词汇、学习会话、作答记录、FSRS 状态、技能证据、划词笔记、私测账号与统计数据的唯一持久化事实来源。WordLoop 自己负责排队、选题、状态转换和恢复；模型只在服务端已经确定目标、题型和流程之后参与内容生成与复杂语义批改。
+它的目标不是做一个“会聊天的背单词机器人”，而是把长期记忆、主动输出、用法训练、阅读积累、薄弱技能诊断和词族扩展拆成可控的模块。Supabase/Postgres 是事实来源；FSRS 负责长期词汇调度；BKT 估计技能薄弱点；确定性 planner 决定题型；DeepSeek 只在计划已经冻结之后生成内容或做必要的语义批改。
 
-> 当前 package 版本：0.1.0  
-> 技术栈：Node.js 20+、TypeScript、React 19、Supabase/Postgres、MCP Apps、ts-fsrs、Cytoscape.js。  
-> 本 README 对应当前最新功能线，包含 2026-10-07 的 Local Family Graph 与双语词典能力。
+> 当前 package：`0.1.0`  
+> 技术栈：Node.js 20+、TypeScript、React 19、Supabase/Postgres、MCP Apps、ts-fsrs、Cytoscape.js  
+> 当前功能最完整的产品线：`codex/local-family-graph`
 
-## 核心设计
+## 产品模型
 
-WordLoop 把五类职责明确拆开。
+WordLoop 把学习问题拆成多层，每一层只负责自己的事情：
 
-- **FSRS 决定词汇什么时候复习。** ts-fsrs 仍然是词汇长期记忆的唯一调度器。普通 Lesson、综合练习、Capture 笔记复习和 BKT 都不能改写词汇卡的 due date。
-- **WordLoop 决定下一步做什么。** 每日队列、冻结后的 Lesson 轮次、正式 Review 快照、学习会话游标和时间预算都由后端持有。
-- **确定性 planner 决定出什么题。** 调用模型前，服务端已经冻结 activity、目标、技能 ID、提示程度、预计耗时和选题理由。
-- **BKT 估计技能薄弱点，但不调度单词。** active 模式下，它只把基于真实作答的技能信号交给现有 Lesson planner；shadow 只记录建议；off 完全关闭。
-- **DeepSeek 只在冻结契约内生成和批改。** 它不选词、不决定 FSRS 评分、不改变 Review 顺序，也不自行换题型。
+| 层 | 职责 |
+| --- | --- |
+| 词汇状态 | 每个 normalized word 只有一份 canonical 用户学习记录 |
+| 长期记忆 | FSRS 决定词汇什么时候该复习 |
+| 学习编排 | WordLoop 后端决定下一步 durable state |
+| 题型规划 | deterministic planner 冻结题型、目标和技能意图 |
+| 技能诊断 | BKT 根据有效作答证据估计薄弱技能 |
+| 内容生成 / 语义批改 | DeepSeek 只在冻结后的题目契约里工作 |
+| 阅读积累 | Capture 保存词、短语、句子及上下文，不强制进入词汇队列 |
+| 词族学习 | verified local lexical graph 控制派生词扩展 |
+| 数据洞察 | 只读指标展示记忆、错误、活动和到期负荷 |
+| 身份认证 | Supabase Auth + allowlist 支持小范围私测 |
 
-浏览器永远拿不到 Supabase service-role key、DeepSeek key、Shanbay bridge secret 或其他服务端密钥。
+整个系统最重要的原则是：**任何模块都不能偷偷变成第二套词汇 scheduler。**
 
-## 词族学习系统
+FSRS 负责长期 due date。BKT 不改 due date。Capture 不改 due date。Family Graph 不改 due date。普通 Lesson 练习也不改 due date。
 
-WordLoop 现在把“词族”当成一个独立的学习层，而不只是给当前单词列一排派生词。
+## 完整学习闭环
 
-目标不是一次把整个 family 灌给用户，而是围绕当前词构建一个**小而可信的局部词族图**，再根据当前学习状态决定：只浏览、只巩固原词，还是现在引入一个新的派生词。
+一次正常学习由后端驱动，并且可以恢复：
 
-### 词族系统现在能做什么
+~~~text
+到期 Review
+   ↓
+Pretest
+   ↓
+发音 / 听音还原
+   ↓
+冻结后的 Lesson
+   ↓
+Application / consolidation
+   ↓
+可选 Family micro-session
+   ↓
+从持久化状态继续
+~~~
 
-- 在当前 Lesson 解释页通过专门的 **词族** 入口打开。
-- 默认只加载当前词的一跳关系，而不是直接展示全局词网。
-- lexical knowledge 层区分不同 POS 节点，同时继续沿用现有 lemma-level 用户学习状态。
-- 展示经过验证的派生、对比等关系，并保留 source / provenance。
-- 用户可以主动展开某个节点，继续看下一跳。
-- 可以把某个相关词保存为 **future candidate**，但此时不会创建词卡。
-- 当用户当前状态适合学习新派生词时，可以启动一个短的 **Family micro-session**。
-- 一次 introduction 最多只激活 **一个** 新 derivative。
-- 继续复用现有 activity type、错误层、attempt、每日时间预算和 FSRS 初始化逻辑。
+当前 phase、正在学的词、冻结 plan、题面 payload、retry state 和 navigation cursor 都保存在 `study_sessions`。关闭 ChatGPT、刷新网页或下次重新打开，不需要依赖聊天记录重新猜进度。
 
-单纯浏览词族图不会改变任何学习状态。
+### 1. 正式 Review
 
-### 数据来源
+正式 Review 只处理后端当前 due snapshot 里的词。
 
-词族知识不是模型临时生成的，而是有来源的数据层：
+- 长期调度使用 FSRS v6。
+- target retention：`0.90`。
+- maximum interval：`36500` 天。
+- `enable_short_term: false`。
+- 只有新的、无提示、独立 retrieval 才能推进词汇卡。
+- 普通 Lesson、看答案后的纠正、Capture 笔记复习、浏览词族都不会推进词汇 FSRS。
 
-- **Open English WordNet 2025**：提供英文 sense 和经过验证的 lexical evidence；
-- **MorphyNet English derivational v1**：提供额外派生关系，但必须先通过 OEWN lemma/POS 校验；
-- **ECDICT**：提供 lemma-level 中文释义和补充英文释义；
-- 仓库保留一个小型人工审核 fixture，用于确定性回归测试。
+### 2. Pretest 与发音
 
-每条导入的 lexical record 都保留 source、revision、license 和 provenance。拼写相似、embedding 聚类或 LLM 猜测不能直接生成 relation。
+新词在正式教学前先做预测试。
 
-### 局部图规则
+当前流程支持：
 
-Family Graph 刻意限制规模：
+- 中文核心义 → 英文单词；
+- 英文单词 + 词性 → 简单英文定义；
+- 听音跟读；
+- Lesson 前的听音还原。
 
-- 单次服务端最多返回 24 个节点；
-- 浏览器累计最多保留 40 个节点；
-- 默认只展示一跳；
-- 想继续看必须由用户主动展开；
-- 低置信度或来源不足的关系直接过滤，不自动补造。
+配置 `MERRIAM_WEBSTER_API_KEY` 后优先使用 Merriam-Webster Learner's Dictionary 音频；不可用时，支持的客户端回退到英文 `speechSynthesis`。
 
-Cytoscape.js 只有打开 Family 面板时才懒加载，因此普通 Lesson 启动不承担图引擎成本。
+### 3. 冻结式 Lesson 规划
 
-### A / B / C / D 四阶段
+Lesson 题型由服务端确定性 planner 决定。
 
-系统用四个确定性阶段控制词族扩展，防止一次引入太多同族词造成干扰。
+模型生成前，WordLoop 已经冻结：
 
-- **A 阶段：只巩固 base。** 如果原词还很新、稳定性不足、错误层明显或练习不足，micro-session 只练原词，不创建新 derivative。
-- **B 阶段：引入一个 derivative。** 当 base 足够稳定时，系统才可能选择一个高价值、形态透明的派生词。
-- **C 阶段：间隔后继续扩展。** 已经学过一个或多个 family member 后，必须同时满足 spacing 和稳定性门槛，才允许引入下一个。
-- **D 阶段：只做辨析。** 当同族已经有多个稳定成员时，系统优先做语境辨析，不继续增加新词。
+- target word / sense；
+- activity type；
+- skill IDs；
+- hint level；
+- expected duration；
+- planning reason；
+- plan / exercise ID。
 
-候选评分综合 utility、考试相关性、形态透明度、用户需要和 interference risk。这些是 deterministic v1 规则，不是心理测量意义上的“掌握概率”。
+常见题型包括：
 
-### Family micro-session
-
-Family micro-session 是一个短而集中的词族小课，通常约两分钟，可以包含：
-
-- 词根/词缀与形态说明；
-- 词性识别；
-- definition recall；
-- collocation / usage 对比；
-- contextual extraction；
-- 无提示主动回忆。
-
-短课可以中断恢复，并且提交幂等。中间步骤不会提前创建新卡。只有完整完成预定 introduction 后，WordLoop 才会通过现有 vocabulary 路径初始化一个 derivative，并建立它自己的正常 FSRS 状态。
-
-如果并发情况下这个词已经存在，系统保留已有卡片和 schedule，不会重置。
-
-### 与 FSRS / BKT 的边界
-
-词族系统**不是第二套 scheduler**，也没有单独的 mastery 模型。
-
-- FSRS 仍然是唯一长期词汇调度器。
-- BKT 可以给普通 Lesson planner 提供 skill weakness 信号，但它不决定 Family 的 due date。
-- future candidate 只是未来可能学习的意向，不属于今日队列，也没有 due date。
-- 浏览词族、保存 candidate、Stage A 巩固都不会推进词汇 FSRS。
-- Family 学习不会重排已经冻结的普通 Lesson queue。
-
-### 当前覆盖和限制
-
-当前生产词族语料来自 vocabulary-scoped 的 OEWN + MorphyNet corpus，并由 ECDICT 补充双语词典内容。某个词没有可靠 family relation 时，系统会明确显示空状态，而不是自动猜。
-
-目前还没有：
-
-- Global / Network View；
-- LLM 自动生成 lexical relation；
-- per-sense / per-POS 独立学习状态；
-- 第二套 family scheduler；
-- 用图结构去重排正式 Review 队列。
-
-实现与数据文档：
-
-- docs/LOCAL_FAMILY_GRAPH.md
-- docs/LEXICAL_CORPUS_IMPORT.md
-- docs/BILINGUAL_FAMILY_DICTIONARY.md
-- server/data/ATTRIBUTION.md
-
-## 当前学习流程
-
-一次正常学习由后端 bootstrap 驱动，并持久化到 study_sessions。
-
-1. **正式 Review**：只复习后端 due snapshot 中真正到期的卡；只有一次新的、无提示的独立 retrieval 才能推进词汇 FSRS。
-2. **Pretest**：在不提前暴露答案的前提下判断当天新词熟悉度。
-3. **发音交接**：预测试后可以在原卡片完成听音跟读与听音还原。
-4. **Lesson**：冻结 5–7 词轮次，一次只处理一个词。模型不能重排、换词或偷偷替换已经保存的题。
-5. **Application / consolidation**：长句翻译、中译英、造句等较长任务独立于普通 Lesson。
-6. **Continue**：下一步永远由服务端返回的 durable state 决定，客户端不根据聊天上下文自行推断。
-
-关闭 ChatGPT 或刷新网页不会重置学习。当前 phase、题面 payload、重试状态、冻结 plan 和 navigation cursor 都保存在数据库。
-
-## 正式 Review 与 FSRS
-
-词汇长期调度使用 ts-fsrs 的 FSRS v6。
-
-当前配置：
-
-- target retention：0.90；
-- maximum interval：36500 天；
-- 关闭 short-term FSRS learning steps。
-
-新词习得和同日 relearning 由 WordLoop Lesson 负责，不再额外维护一套分钟级 scheduler。普通 attempt 永远不推进长期卡片；正式 Review 是唯一可以更新词汇 FSRS due state 的流程。
-
-Capture 笔记复习是独立体系。用户显式启用后，note_review_states / note_review_events 使用同一套 FSRS 库保存“笔记级”复习状态，但绝不会覆盖 user_words 中的词汇卡。
-
-## 题型规划与语义批改
-
-Lesson planner 位于 server/services/exercisePlanner.ts。它综合目标词义、词性、错误层、最近题型历史、技能证据、题型适配性和冻结会话状态决定 activity。
-
-常见任务包括：
-
-- word recall / exact cloze；
+- word recall；
+- exact cloze；
 - 中译英；
 - collocation；
 - derivation / word-family；
-- sentence/application；
+- sentence / application；
 - consolidation。
 
-固定答案题在服务端确定性判分。需要语义理解的开放题才发送给 DeepSeek，并通过严格 JSON schema + Zod 校验结果。当前模型为 deepseek-flash，thinking 关闭。
+重试时必须恢复同一道已保存 exercise，不能悄悄换题。
 
-一次提交及其学习状态转换是幂等的。网络重试必须恢复原 plan / exercise，不能生成另一道题。
+### 4. 确定性判分 + DeepSeek
 
-## BKT 与学习证据
+固定答案题由服务端直接确定性判分。
 
-BKT 位于真实作答证据之后、现有 planner 之前，它不是第二套学习系统。
+只有真正需要语义理解的开放题才交给 DeepSeek。模型输出必须通过严格 JSON schema 和 Zod 校验，才能进入正式学习状态。
 
-- 独立首答在结果有效时形成 OBSERVE 证据；
-- 有提示或讲解后的完成只形成 LEARN_ONLY；
-- 冲突、未评估或无法解释的结果直接 IGNORE；
-- 同一道 exercise 对同一 skill 最多更新一次；
-- 当前 fixed-v1 参数：prior 0.2、learn 0.1、guess 0.2、slip 0.1；
-- active 模式至少要求每个 skill 有 5 次独立观察。
+DeepSeek 不负责决定：
 
-核心证据存储包括 exercise_skill_evidence、bkt_updates 和 user_skill_state。历史 evidence 可以 replay，不改原始 attempt，也不碰 FSRS。
+- 下一个单词；
+- Review 队列；
+- 题型；
+- FSRS rating；
+- due date。
 
-learning_settings.bkt_mode 支持：
+### 5. BKT 技能模型
 
-- **active**：技能信号可影响尚未展示的未来 Lesson plan；
-- **shadow**：只记录建议，不干预；
-- **off**：关闭 BKT projection 和选题信号。
+BKT 位于“有效作答证据”和“未来 Lesson plan”之间。
 
-已经展示的题、正式 Review 顺序、Review rating 和 due date 都不能被 BKT 改写。
+当前 fixed-v1 参数：
 
-## 每日时间预算
+- prior：`0.2`；
+- learn：`0.1`；
+- guess：`0.2`；
+- slip：`0.1`。
 
-默认每日学习预算为 45 分钟。每日新词上限只是 ceiling，不代表系统必须把所有词塞进当天。
+Evidence 规则：
 
-系统在安排任务前估算成本；有 overdue Review 时优先处理 Review，并结合未来 7 天 FSRS 负荷进一步限制新词。已经冻结的 session 和已经保存的作答不会因为预算耗尽而丢失。
+- 独立首答在证据有效时可成为 `OBSERVE`；
+- 有提示完成属于 `LEARN_ONLY`；
+- 冲突或无法解释的结果是 `IGNORE`；
+- 一道 exercise 对同一 skill 最多更新一次；
+- active 模式至少需要该 skill 有 5 次独立观察。
 
-用户可以显式加练 15 分钟后继续。budget_complete 只表示“预计时间预算已用完”，不代表所有到期任务已经完成。
+模式：
 
-完整规则见 docs/EVIDENCE_BUDGET.md。
+- `active`：技能信号可以影响未来尚未展示的 Lesson plan；
+- `shadow`：只记录建议，不实际干预；
+- `off`：关闭 BKT projection 和选题信号。
 
-## Standalone Web App
+BKT 不能改变已经展示的题、正式 Review 顺序、Review rating 或 FSRS due date。
 
-根站点是与 MCP App 共用同一套后端状态的响应式学习客户端。
+### 6. 每日时间预算
 
-主要区域包括：
+默认每日学习预算为 45 分钟。
 
-- **Today / Study**：Review、Pretest、Lesson、反馈和待做综合任务；
-- **Capture**：划词记录单词、短语、搭配、句子、语法片段及上下文；
-- **Note Review**：对显式启用的 Capture 笔记做 Again / Good 检索复习；
-- **Insights**：记忆状态、到期分布、薄弱点和行为统计；
-- **Vocabulary**：词库检索、单词详情、历史与 FSRS 状态；
-- **Private beta 设置**：owner 创建内测账号。
+每日新词上限只是 ceiling。WordLoop 在安排新任务前估算成本，优先处理 overdue Review，并结合短期 FSRS workload forecast 控制后续新词量。
 
-Web 请求由服务端认证。内测账号使用 Supabase Auth 邮箱/密码登录，同时 public.users 作为应用 allowlist；没有公开注册入口。旧的 WORDLOOP_WEB_TOKEN 只保留 owner / integration 兼容用途，不应该发给内测用户。
+用户可以显式加练 15 分钟。budget stop 只表示预计学习时间已用完，不代表所有 due task 已完成。
 
-## Capture / Notes
+完整规则见 `docs/EVIDENCE_BUDGET.md`。
 
-Capture 在加入正式词汇学习前与 user_words 保持分离。
+## 词族学习系统
 
-它可以保存：
+词族现在是 WordLoop 的一级核心能力。
 
-- selected text 与类型；
-- 周围上下文和来源；
-- 用户自己的理解 / 笔记；
-- 重复出现记录；
-- inbox / saved / linked / archived 状态。
+目标不是给当前词堆一排 derivative，而是围绕当前词构建一个**小而可信的局部词族图**，再决定用户现在应该：
 
-同一内容反复遇到时会累计 occurrence，而不是无限制造重复 note。
+- 只浏览；
+- 只巩固 base；
+- 保存一个相关词以后再学；
+- 现在引入一个 derivative；
+- 对已经学过的同族词做辨析。
 
-显式“加入学习”时：
+### 局部词族图
 
-- 如果词已经存在，只建立关联，不重置 status 或 FSRS；
-- 如果确实是新词，可以创建/连接词汇记录，但不会改写当前冻结 Lesson round。
+Family Graph 刻意限制规模：
 
-Note Review 同样是 opt-in。归档、转换或清空“我的理解”会让它暂时退出复习候选，但不会删除已经存在的 Card 或复习事件。
+- 默认一跳；
+- 单次服务端最多 24 个节点；
+- 浏览器累计最多 40 个；
+- 更深关系必须用户主动展开；
+- Cytoscape.js 只有打开 Family 面板时才懒加载。
 
-## Local Family Graph
+拼写相似、embedding 聚类或 LLM 猜测不能直接生成 lexical relation。
 
-Standalone Lesson 的解释页现在带有当前单词的 **词族** 入口。
+### 数据来源
 
-这个图刻意做成局部图，而不是全局知识网络：
+词族知识有明确来源：
 
-- 每次只请求一跳；
-- 服务端每次最多 24 个节点，浏览器累计最多 40 个；
-- 只有打开 Family 面板时才懒加载 Cytoscape.js；
-- 进一步关系必须由用户主动展开；
-- 拼写相似、embedding 聚类或 LLM 推测都不能创建 lexical relation。
-
-词汇知识层与用户学习状态严格分离。当前数据来源包括：
-
-- Open English WordNet 2025：英语 sense 与经过验证的语义/形态证据；
-- MorphyNet English derivational v1：经过 OEWN 校验的派生记录；
-- ECDICT：lemma-level 中文释义和补充英文释义；
+- **Open English WordNet 2025**：英文 sense 和 verified lexical evidence；
+- **MorphyNet English derivational v1**：经过校验的派生关系；
+- **ECDICT**：lemma-level 中文释义和补充英文释义；
 - 小型人工审核 fixture：用于确定性回归测试。
 
-浏览词族本身不会创建词卡。用户可以保存 future candidate，也可以显式开始约 2 分钟的 Family micro-session。短课复用现有 activity、错误层和每日预算；只有完成预期引入流程后才最多激活一个 derivative，绝不会把整个词族塞进当天队列。
+导入数据保留 source、revision、license 和 provenance。
 
-Family stage：
+### A / B / C / D 四阶段
 
-- **A**：base 还不稳定，只巩固原词；
-- **B**：base 足够稳定时，引入一个高价值 derivative；
-- **C**：已经学过同族成员后，只有 spacing 与稳定门槛都通过才引入下一个；
-- **D**：已有多个稳定成员时做辨析，不再激活新词。
+- **A：巩固 base。** 原词不稳定或错误明显时，不激活新 derivative。
+- **B：引入一个 derivative。** base 稳定后，才可能引入一个高价值且形态透明的新词。
+- **C：间隔扩展。** 想继续学下一个同族词，必须满足 spacing 与稳定性门槛。
+- **D：同族辨析。** 已经有多个稳定成员时，优先做语境辨析，不继续加词。
 
-Network View、Global Graph、AI 自动造关系和第二套 Family mastery / scheduler 都明确不在当前版本范围内。
+Family micro-session 是短时、可恢复、幂等的小课，可以包含形态说明、词性识别、definition recall、搭配、语境提取和主动回忆。
+
+浏览图或保存 candidate 都不会创建词卡。只有完成预定 introduction 后，最多激活一个 derivative，并继续走现有 vocabulary / FSRS 路径。
+
+Family 没有第二套 mastery 模型，也没有第二套 scheduler。
 
 详细文档：
 
-- docs/LOCAL_FAMILY_GRAPH.md
-- docs/LEXICAL_CORPUS_IMPORT.md
-- docs/BILINGUAL_FAMILY_DICTIONARY.md
-- server/data/ATTRIBUTION.md
+- `docs/LOCAL_FAMILY_GRAPH.md`
+- `docs/LEXICAL_CORPUS_IMPORT.md`
+- `docs/BILINGUAL_FAMILY_DICTIONARY.md`
+- `server/data/ATTRIBUTION.md`
 
-## 发音
+## Capture 与 Note Review
 
-配置 MERRIAM_WEBSTER_API_KEY 后，WordLoop 可以请求 Merriam-Webster Learner's Dictionary 音频。词典音频不可用时，支持的客户端回退到本地英文 speechSynthesis。
+Capture 用来记录阅读中遇到的内容，但不会强制进入学习队列。
 
-发音只属于教学/展示，不会独立推进词汇 FSRS。
+一条 Capture 可以保存：
 
-## 扇贝导入
+- selected text；
+- word / phrase / collocation / sentence / grammar 类型；
+- 周围上下文；
+- 来源；
+- 用户自己的理解 / 笔记；
+- 多次 occurrence；
+- inbox / saved / linked / archived 状态。
 
-WordLoop 支持可选的一次性扇贝词书迁移。
+重复遇到同一内容时会累计 occurrence，而不是无限制造重复 note。
 
-当前 Standalone 导入路径使用隔离的 Cloudflare Browser Worker：
+加入学习必须显式触发：
 
-- 每个经过验证的 WordLoop 用户拥有独立 Durable Object / browser job；
-- 用户在短时 Live View 中亲自登录扇贝；
-- WordLoop 按 bounded chunk 持久化，再 acknowledgement 后推进远端 cursor；
-- 重试复用 pending chunk，数据库写入保持幂等；
-- 完成、取消或超时都会关闭浏览器；
-- Cookie 和密码不会持久化到 WordLoop，也不会回传给前端。
+- 已存在的词只建立关联，不重置状态或 FSRS；
+- 真正的新词可以创建/连接 vocabulary，但不会改写当前冻结的 Lesson round。
 
-已有学习状态与 FSRS 不会被导入覆盖。旧的服务端 Shanbay adapter 仅保留管理员兼容路径。
+Note Review 也是 opt-in，并且与词汇 Review 分离。它有自己的 `note_review_states` / `note_review_events`，不会覆盖 `user_words`。
 
-部署说明见 cloudflare/shanbay-import/README.md。
+见 `docs/NOTE_REVIEW_MVP.md`。
 
-## ChatGPT MCP App
+## Insights 与词库
 
-本地 Node 开发 MCP 地址：
+Standalone 里有只读 analytics 和完整词库视图。
+
+当前指标包括：
+
+- 长期首次回忆成功率；
+- 当前 memory set；
+- FSRS Stability / Difficulty / Retrievability；
+- overdue / due / future due 分布；
+- active error layers；
+- 按题型统计的历史 error matrix；
+- 正式 Review 活动；
+- first introduction；
+- Capture activity；
+- focus-word ranking。
+
+旧数据不足以支持某项指标时会显示 unavailable，不补造历史。
+
+指标定义见 `docs/WORDLOOP_INSIGHTS_METRICS.md`。
+
+## 产品入口
+
+### Standalone Web App
+
+根站点是完整响应式学习客户端。
+
+主要区域：
+
+- Today / Study；
+- Capture；
+- Note Review；
+- Insights；
+- Vocabulary；
+- 私测账号设置。
+
+### ChatGPT MCP App
+
+本地 MCP：
 
 ~~~text
 http://127.0.0.1:3000/mcp
 ~~~
 
-Sites / Worker 部署地址：
+Sites / Worker：
 
 ~~~text
 https://<your-site>/api/mcp
 ~~~
 
-“开始学习 / 继续学习”的核心规则只有一条：先 bootstrap，再严格按照后端返回的 action 走。模型不能根据聊天记录自己重建队列。
+用户说“开始学习 / 继续学习”时，第一步必须 bootstrap，再按后端 action 继续。模型不能根据聊天历史自己重建队列。
 
-MCP Widget 和 Standalone Web App 只是两个客户端，真正的学习状态始终在同一套后端和数据库里。
+两个客户端共享同一套 canonical learner state。
+
+## 扇贝导入
+
+WordLoop 支持可选的一次性扇贝词汇迁移。
+
+当前 Standalone 路径使用隔离的 Cloudflare Browser Worker：
+
+- 每个已验证 WordLoop 用户有独立 active Durable Object / browser job；
+- 用户通过短时 Live View 登录；
+- bounded chunk 持久化；
+- acknowledgement 后再推进远端 cursor；
+- retry 幂等；
+- 完成、取消或超时关闭 browser。
+
+Cookie 和密码不会保存到 WordLoop，也不会返回给 Web App。
+
+已有学习状态和 FSRS 不会被覆盖。
+
+见 `cloudflare/shanbay-import/README.md`。
+
+## 私测认证
+
+当前产品支持小范围邀请制多用户 beta。
+
+- Supabase Auth 验证邮箱/密码 session；
+- `public.users` 是 WordLoop allowlist；
+- 没有公开 signup UI；
+- owner 可以创建内测账号；
+- 旧的 `WORDLOOP_WEB_TOKEN` 只保留 owner / integration 兼容用途；
+- Web API 和需要身份的 MCP call 都在服务端解析用户身份。
+
+见 `docs/PRIVATE_BETA.md`。
 
 ## 架构
 
 ~~~mermaid
 flowchart LR
-  C[ChatGPT MCP App] --> R[WordLoop runtime]
-  W[Standalone Web App] --> R
+  U[User] --> C[ChatGPT MCP App]
+  U --> W[Standalone Web App]
 
-  R --> A[Auth + study orchestration]
-  A --> S[(Supabase Postgres)]
+  C --> R[WordLoop Runtime]
+  W --> R
+
+  R --> A[Auth + Study Orchestration]
+  A --> S[(Supabase/Postgres)]
+
   A --> F[FSRS v6]
-  A --> P[Deterministic planner]
-  A --> B[BKT skill signals]
+  A --> P[Deterministic Exercise Planner]
+  A --> B[BKT Skill State]
 
   P --> D[DeepSeek Flash]
-  R --> M[Merriam-Webster audio]
-  R --> H[Cloudflare Shanbay import bridge]
-  R --> G[Local Family knowledge layer]
 
+  R --> G[Local Family Layer]
   G --> O[OEWN]
-  G --> N[MorphyNet]
+  G --> M[MorphyNet]
   G --> E[ECDICT]
+
+  R --> MW[Merriam-Webster Audio]
+  R --> SH[Cloudflare Shanbay Import Bridge]
 ~~~
 
-server/worker.ts 是 Cloudflare Worker-compatible 入口；server/index.ts 保留本地 Node/Express 开发入口。
+学习状态、词汇知识、模型生成和 UI rendering 被明确分层，不互相替代。
+
+## 核心持久化数据
+
+| 模块 | Canonical storage |
+| --- | --- |
+| Vocabulary / FSRS | `user_words`, `fsrs_review_logs` |
+| Attempts / error evidence | `attempts` 与错误进度表 |
+| Durable study flow | `study_sessions.state` |
+| Exercise plans | 持久化 plan / exercise records |
+| Skill evidence / BKT | `exercise_skill_evidence`, `bkt_updates`, `user_skill_state` |
+| Capture | `captured_notes`, `captured_note_occurrences` |
+| Note Review | `note_review_states`, `note_review_events` |
+| Family knowledge | lexical lexeme / sense / form / relation tables |
+| Family user state | candidates / exposures / micro-sessions |
+| Private beta | Supabase Auth + `public.users` allowlist |
 
 ## 项目结构
 
@@ -360,18 +393,8 @@ wordloop/
 │   └── replay-learning-evidence.ts
 ├── server/
 │   ├── services/
-│   │   ├── bkt.ts
-│   │   ├── bktPlanner.ts
-│   │   ├── deepseek.ts
-│   │   ├── exercisePlanner.ts
-│   │   ├── familyDictionary.ts
-│   │   ├── familyGraph.ts
-│   │   ├── familyLesson.ts
-│   │   ├── familyPolicy.ts
-│   │   ├── fsrsScheduler.ts
-│   │   ├── learningBudget.ts
-│   │   ├── noteReviews.ts
-│   │   └── studySessions.ts
+│   ├── tools/
+│   ├── mcpCore.ts
 │   ├── webApi.ts
 │   ├── webAuth.ts
 │   └── worker.ts
@@ -379,68 +402,73 @@ wordloop/
 ├── supabase/migrations/
 ├── tests/
 └── web/src/
+    ├── dashboard/
     ├── family/
     ├── lesson/
+    ├── pretest/
     ├── review/
     └── standalone/
 ~~~
 
 ## 环境变量
 
-本地开发先复制 .env.example 到 .env，再配置服务端运行环境。
+本地开发先复制 `.env.example` 到 `.env`。
 
 | 变量 | 是否需要 | 用途 |
 | --- | --- | --- |
-| SUPABASE_URL | 是 | Supabase 项目地址。 |
-| SUPABASE_SERVICE_ROLE_KEY | 是 | 仅服务端使用的数据库凭据。 |
-| SUPABASE_PUBLISHABLE_KEY | 私测 Web | 浏览器可见的 Supabase Auth key。 |
-| DEV_USER_ID | owner / 兼容路径 | 旧路径使用的可信 owner UUID。 |
-| DEEPSEEK_API_KEY | Lesson 生成 / 语义批改 | 仅服务端 DeepSeek key。 |
-| WORDLOOP_WEB_TOKEN | 可选 owner 兼容 | 旧的 owner/integration Bearer token。 |
-| MERRIAM_WEBSTER_API_KEY | 可选 | 词典发音音频。 |
-| SHANBAY_IMPORT_WORKER_URL | 可选导入 | Browser import Worker 地址。 |
-| SHANBAY_IMPORT_BRIDGE_SECRET | 可选导入 | WordLoop ↔ Worker 签名密钥。 |
-| SHANBAY_AUTH_TOKEN | 仅旧导入 | 旧管理员迁移 adapter。 |
-| SHANBAY_COOKIE | 旧路径备用 | 旧 adapter 的服务端 cookie。 |
-| PORT | 否 | 本地端口，默认 3000。 |
-| HOST | 否 | 默认 127.0.0.1。 |
-| PUBLIC_BASE_URL | 部署 | 对外 origin。 |
-| ALLOWED_HOSTS | 公网部署建议配置 | DNS-rebinding 防护。 |
-| WORDLOOP_ROOT | 少数场景 | 显式项目根目录。 |
-| ENABLE_WIDGET_PREVIEW | 仅开发 | 开启本地 Widget preview。 |
-| WORDLOOP_PERF_LOG | 可选调试 | 输出 opt-in 模型耗时诊断。 |
+| `SUPABASE_URL` | 是 | Supabase 项目地址 |
+| `SUPABASE_SERVICE_ROLE_KEY` | 是 | 仅服务端数据库凭据 |
+| `SUPABASE_PUBLISHABLE_KEY` | 私测 Web | 浏览器可用的 Supabase Auth key |
+| `DEV_USER_ID` | owner / 旧路径 | 可信 owner UUID |
+| `DEEPSEEK_API_KEY` | Lesson 生成 / 语义批改 | 服务端模型 key |
+| `WORDLOOP_WEB_TOKEN` | 可选 owner 兼容 | 旧 owner/integration Bearer token |
+| `MERRIAM_WEBSTER_API_KEY` | 可选 | 词典发音音频 |
+| `SHANBAY_IMPORT_WORKER_URL` | 可选导入 | Browser import Worker 地址 |
+| `SHANBAY_IMPORT_BRIDGE_SECRET` | 可选导入 | Server-to-Worker 签名密钥 |
+| `SHANBAY_AUTH_TOKEN` | 旧导入 | 旧管理员 adapter |
+| `SHANBAY_COOKIE` | 旧路径备用 | 旧 adapter cookie |
+| `PORT` | 否 | 本地端口，默认 3000 |
+| `HOST` | 否 | 默认 127.0.0.1 |
+| `PUBLIC_BASE_URL` | 部署 | 对外产品 origin |
+| `ALLOWED_HOSTS` | 公网部署建议 | DNS-rebinding 防护 |
+| `WORDLOOP_ROOT` | 少数场景 | 显式项目根目录 |
+| `ENABLE_WIDGET_PREVIEW` | 仅开发 | 本地 Widget preview |
+| `WORDLOOP_PERF_LOG` | 可选调试 | 仅在包含 latency instrumentation 的代码线上提供性能诊断 |
 
-任何服务端 secret 都不应该出现在 build/ 或浏览器 bundle 中。
+任何 secret 都必须留在服务端，不能进入 browser bundle。
 
 ## 数据库与迁移
 
-新数据库运行当前 setup.sql。
+全新数据库运行当前 `setup.sql`。
 
-已有数据库只按顺序执行缺失 migration。当前功能线的重要迁移包括：
+已有数据库只按顺序执行缺失 migration。当前产品线的重要迁移包括：
 
-- `202609290001_capture_notes.sql`：初始 Capture 存储；
-- `20260929120641_captured_notes.sql`：canonical captured-notes 模型；
-- `20260929172617_captured_notes_canonical_adapter.sql`：Capture canonical adapter；
-- `20260929172621_analytics_read_models.sql`：analytics read models；
-- `20260929184221_progress_scheduled_stability_mean.sql`：scheduled Stability 统计；
-- `20260930043404_balanced_exercise_plans.sql` 与 `20260930043648_exercise_plan_fk_indexes.sql`：持久化冻结 exercise plan；
-- `20260930141500_consolidation_target_attribution.sql`：综合任务 target attribution；
-- `202610020001_note_review_states.sql`：显式启用的 Note Review state / event；
-- `20261002024106_evidence_budget.sql`：learning evidence、BKT projection 与 daily budget；
-- `20261004045839_bkt_active_planner.sql`：BKT active / shadow / off 控制；
-- `20261004164746_cross_day_review_handoff.sql`：跨日 Review handoff；
-- `20261007025825_captured_note_deduplication.sql`：Capture 去重；
-- `20261007053500_local_family_graph.sql`：Local Family Graph knowledge / user 表；
-- `20261007095603_lexical_dictionary_entries.sql`：双语 lexical dictionary entries。
+- `202609290001_capture_notes.sql`
+- `20260929120641_captured_notes.sql`
+- `20260929172617_captured_notes_canonical_adapter.sql`
+- `20260929172621_analytics_read_models.sql`
+- `20260929184221_progress_scheduled_stability_mean.sql`
+- `20260930043404_balanced_exercise_plans.sql`
+- `20260930043648_exercise_plan_fk_indexes.sql`
+- `20260930141500_consolidation_target_attribution.sql`
+- `202610020001_note_review_states.sql`
+- `20261002024106_evidence_budget.sql`
+- `20261004045839_bkt_active_planner.sql`
+- `20261004164746_cross_day_review_handoff.sql`
+- `20261007025825_captured_note_deduplication.sql`
+- `20261007053500_local_family_graph.sql`
+- `20261007095603_lexical_dictionary_entries.sql`
 
-词汇知识导入是 additive 的，不能改写 user_words、attempts、FSRS state 或已经冻结的 study_sessions。
+这些显式文件名同时属于仓库 migration / README 测试契约。
+
+Lexical knowledge import 是 additive 的，不能改写 learner vocabulary、attempt、FSRS state 或 frozen study session。
 
 ## 安装与运行
 
 要求：
 
 - Node.js 20+；
-- 已迁移的 Supabase 项目。
+- 已完成 migration 的 Supabase 项目。
 
 ~~~bash
 npm install
@@ -455,7 +483,7 @@ npm run build
 npm start
 ~~~
 
-常用检查：
+验证：
 
 ~~~bash
 npm run typecheck
@@ -477,50 +505,37 @@ MCP Inspector：
 npx @modelcontextprotocol/inspector --web http://127.0.0.1:3000/mcp
 ~~~
 
-## 私测认证与安全
+## 当前开发状态
 
-当前产品支持小规模邀请制多用户 beta。
+当前功能最完整的产品线是 `codex/local-family-graph`。
 
-- Supabase Auth 验证邮箱/密码 session；
-- public.users 是应用 allowlist，只有 Auth 账号并不自动获得访问权；
-- 没有公开 signup UI；
-- owner 可在已认证的内测管理入口创建测试账号；
-- Web API 与需要身份的 MCP tool call 都在服务端解析用户身份；
-- service-role、DeepSeek 和 import bridge credential 永远留在服务端；
-- 新增用户表和 lexical 表开启 RLS；需要特权的 RPC 只交给服务端运行时；
-- ban / revoke Auth 用户即可撤销访问，不必同步删除其学习数据。
+它包含当前的 BKT、时间预算、Capture / Note Review、私测认证、Local Family Graph、词汇语料与双语词典。
 
-账号创建、恢复与撤销流程见 docs/PRIVATE_BETA.md。
+PR #2 的 latency optimization 已在 2026-10-07 合入兄弟分支 `codex/exercise-balanced-learning-flow`。那条代码线包含更紧凑的 semantic grading、较低的模型输出上限、减少 frozen-plan 写入以及额外 timing diagnostics。**在两条代码线真正合流之前，本 README 不把这些实现描述成当前分支已经具备。**
 
-## 数据来源与许可
-
-WordLoop 会把词汇知识来源、版本和许可与数据一起保存。
-
-应用代码与外部词汇数据并不共享同一许可。OEWN、Princeton WordNet、MorphyNet、ECDICT、Cytoscape.js 都有各自的 notice / attribution 要求。
-
-重新分发 lexical data 或生成 bundle 前，请阅读：
-
-- server/data/ATTRIBUTION.md
-- server/data/licenses/
+这个区分是刻意的：README 应该描述实际存在的代码，而不是描述一个目前没有任何单一 branch 真正包含的“概念全集”。
 
 ## 当前限制
 
-- Family Graph 目前只做局部一跳图；Global / Network View 尚未实现。
-- Family 的 utility / exam / interference 阈值是 deterministic v1 规则，不是经过长期校准的心理测量分数。
-- BKT fixed-v1 参数还没有用大规模个人数据拟合；active 模式依赖 minimum-evidence guard。
-- 用户学习状态仍以 lemma 为基本粒度，不支持每个 sense / POS 独立 mastery。
-- ECDICT 覆盖很高但不是 100%，lemma-level 中文释义也不能等同于 synset translation。
-- Shanbay Browser import 仍需要在真实 Cloudflare browser quota 与真实扇贝登录条件下继续验收。
-- 旧事件缺乏足够证据时，一部分历史 analytics 会明确显示 unavailable，而不是补造数据。
+- 还没有 Global / Network-wide Family Graph。
+- 不允许 LLM 自动生成 lexical relation。
+- 还没有 per-sense / per-POS learner mastery。
+- BKT fixed-v1 参数还没有用大规模个人数据拟合。
+- ECDICT 中文释义是 lemma-level，不等同于 synset translation。
+- 旧事件证据不足时，部分历史 analytics 仍然 unavailable。
+- Shanbay Browser import 仍受真实扇贝登录条件和 Cloudflare browser quota 影响。
+- 当前两条 active feature line 仍需要代码级合流，才能得到同时包含 Family/BKT/private-beta 与 PR #2 latency optimization 的唯一最终 branch。
 
-## 教学策略
+## 文档索引
 
-面向人的教学契约：
+- `docs/TEACHING_POLICY.md`：教学行为与 ChatGPT teaching contract
+- `docs/EVIDENCE_BUDGET.md`：evidence、BKT 边界与每日预算
+- `docs/NOTE_REVIEW_MVP.md`：Capture Note Review
+- `docs/PRIVATE_BETA.md`：认证与邀请账号
+- `docs/LOCAL_FAMILY_GRAPH.md`：词族图实现
+- `docs/LEXICAL_CORPUS_IMPORT.md`：OEWN / MorphyNet corpus import
+- `docs/BILINGUAL_FAMILY_DICTIONARY.md`：ECDICT / OEWN 双语词典
+- `docs/WORDLOOP_INSIGHTS_METRICS.md`：analytics 指标定义与证据边界
+- `server/data/ATTRIBUTION.md`：词汇数据来源与许可
 
-- docs/TEACHING_POLICY.md
-
-运行时 prompt：
-
-- server/teachingPrompt.ts
-
-学习行为发生变化时，这两处应该保持同步。
+人类可读的教学规则和 `server/teachingPrompt.ts` 应该在学习行为变化时保持同步。
