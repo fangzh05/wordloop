@@ -60,6 +60,21 @@ These are planning defaults, not validated psychometric thresholds.
 
 Longer application tasks are recorded separately from ordinary Lesson/Review and may include long-sentence translation, full Chinese-to-English translation, and contextual sentence production. They never update FSRS directly.
 
+## Latency and retry behavior
+
+The current learning path includes a focused latency/reliability pass for semantic Lesson and consolidation work.
+
+- Semantic grading now requests compact feedback with a 600-token output ceiling in the normal path and 900 tokens for repair, instead of the previous 1200/1800 ceilings.
+- A first miss does not expose a reference answer; a second miss still requires one. Missing required core feedback can trigger one repair attempt.
+- Unassessed semantic dimensions remain unassessed. WordLoop no longer fabricates per-skill correctness from a global verdict.
+- Frozen Lesson plans are reused across later words without an unnecessary pre-generation session write. Generation failure persists a retry cursor; successful persistence remains revision-conditional.
+- Planner inputs reuse the already loaded queue vocabulary, and standalone planner reads that are independent are issued concurrently.
+- `grading_ms` stores measured grading duration. When `WORDLOOP_PERF_LOG=1`, the server emits opt-in phase/model-attempt timing, token-usage and retry-reason diagnostics without logging prompts, answers, API keys or repair text.
+
+These changes do not alter deterministic fixed-answer grading, activity selection, accepted-answer routing or FSRS scheduling. They also do not justify a claimed production latency percentage: the repository has instrumentation, but no production benchmark is asserted.
+
+See `docs/LEARNING_LATENCY_OPTIMIZATION.md` for the exact trade-offs and validation notes.
+
 ## Long-term scheduling
 
 WordLoop uses FSRS v6 through `ts-fsrs`.
@@ -288,6 +303,7 @@ Copy `.env.example` to `.env`, then configure the server runtime.
 | `ALLOWED_HOSTS` | Recommended when public | DNS-rebinding protection. |
 | `WORDLOOP_ROOT` | Rare | Explicit project root. |
 | `ENABLE_WIDGET_PREVIEW` | Development only | Enables local widget preview routes. |
+| `WORDLOOP_PERF_LOG` | Optional debugging | Set to `1` to emit model/phase timing and retry diagnostics without logging prompts or answers. |
 
 DeepSeek is currently called with model `deepseek-flash` and thinking disabled. Generated output is validated by Zod before it is accepted into the study flow.
 
@@ -295,16 +311,17 @@ DeepSeek is currently called with model `deepseek-flash` and thinking disabled. 
 
 For a fresh database, apply the current `setup.sql`.
 
-For an existing database, apply only the missing migrations in order. Recent migrations add:
+For an existing database, apply only the missing migrations in order. Relevant migrations on this branch include:
 
-- exact-cloze / semantic activity support;
-- formal Lesson completion history;
-- canonical captured notes and occurrence history;
-- analytics read models;
-- scheduled Stability metrics;
-- durable balanced exercise plans and supporting indexes.
+- `202609290001_capture_notes.sql` — initial Capture storage;
+- `20260929120641_captured_notes.sql` — canonical captured-notes model;
+- `20260929172617_captured_notes_canonical_adapter.sql` — canonical Capture adapter;
+- `20260929172621_analytics_read_models.sql` — analytics read models;
+- `20260929184221_progress_scheduled_stability_mean.sql` — scheduled Stability analytics;
+- `20260930043404_balanced_exercise_plans.sql` — durable frozen exercise plans;
+- `20260930043648_exercise_plan_fk_indexes.sql` — supporting plan indexes.
 
-Do not run an old `setup.sql` over a live database that already contains user data.
+The explicit filenames above are also part of the repository migration/test contract. Do not run an old `setup.sql` over a live database that already contains user data.
 
 ## Install and run
 
