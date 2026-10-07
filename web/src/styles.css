@@ -1747,8 +1747,9 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .family-micro form { display: grid; gap: .75rem; }
 .family-micro form > p { font-size: 1.2rem; line-height: 1.7; margin: .75rem 0; }
 .family-micro form > label { color: var(--muted); font-size: .8125rem; }
-.family-entry { margin-top: .55rem; }
-.wordloop-shell .family-entry { width: 100%; order: 3; }
+.lesson-family-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 14px; }
+.wordloop-shell .lesson-family-heading h2 { margin-bottom: 0; }
+.wordloop-shell .family-entry { width: auto; min-height: 44px; flex-shrink: 0; padding: .5rem .85rem; }
 @media (min-width: 768px) { .family-content { grid-template-columns: minmax(0, 1.1fr) minmax(16rem, .9fr); gap: 1.5rem; } .family-canvas { height: 20rem; } }
 @media (max-width: 540px) { .family-dialog { width: calc(100vw - 1.25rem); padding: 1rem; } .family-header h2 { font-size: 1.25rem; } .family-header { gap: .75rem; padding-bottom: 1rem; } .family-actions > button { flex: 1 1 40%; } }
 @media (prefers-reduced-motion: reduce) { .family-dialog .button, .family-node-list button { transition: none; } }

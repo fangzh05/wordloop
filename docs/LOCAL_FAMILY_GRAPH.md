@@ -2,7 +2,7 @@
 
 ## 实现位置与审计结论
 
-实现位于隔离 checkout `.family-graph`，分支 `codex/local-family-graph`。从 `f29dc9c` 开始审计，交付前已对齐本机最新干净 standalone 基线 `218030676718363ec77ebf258a8a9af3f11677cb`，保留其词性提示与重复释义处理。原工作目录的 `docs/TEACHING_POLICY.md` 等未提交工作未改动。远端 Git 凭据不可用，本次没有确认远端 PR/HEAD 对齐。
+实现位于隔离 checkout `.family-graph`，分支 `codex/local-family-graph`。从 `f29dc9c` 开始审计，发布前已对齐 Sites v143 的基线 `7c5e9b5a188696d306085f19e757d1daaca89ea0`，保留其统一题面与词性提示处理。原工作目录的 `docs/TEACHING_POLICY.md` 等未提交工作未改动。Sites 绑定源码通过官方 workflow 校验；GitHub main 为另一条较旧源码线，本次发布以当前 Sites 基线为准。
 
 开发前审计了仓库和只读生产 schema/RPC：`words` 是共享词汇表；`user_words` 是唯一词汇学习/FSRS 状态；`user_word_error_progress` 保存五个错误层的连续正确证据；`attempts` 保存练习；`study_sessions.state` 保存冻结队列及当前流程。FSRS 继续使用现有 `fsrsScheduler.ts`，保留 `enable_short_term: false` 等全部参数。没有第二套 vocabulary state、review scheduler 或 Family mastery。
 
@@ -38,7 +38,6 @@
 | `tests/familyGraph.test.ts` | 规范化、过滤、节点/环、评分、分阶段等策略测试 |
 | `tests/familyDatabase.test.ts` | 真实 PostgreSQL 事务、用户隔离、幂等、FSRS/冻结队列回归 |
 | `tests/familyApi.test.ts` | 实际 Web router 的认证/限额/请求边界 |
-| `tests/lessonClozeHint.test.tsx` | 对齐最新基线的 recall 词性提示行为，保留冻结题目并防止重复释义 |
 | `docs/LOCAL_FAMILY_GRAPH.md` | 本交付与验收说明 |
 
 浏览器 QA 的合成用户、临时服务、日志和截图保存在被忽略的 `.qa/`，不包含生产凭据。
@@ -102,18 +101,18 @@ UI 对齐现有 `.wordloop-shell`：使用已有系统字体、灰白材质、20
 
 本地 Chromium 的 390×844 touch / 820×1180 touch 验收包含真实 touch tap、双击、长按、拖动、位置保存和 pinch（UI 对齐后 zoom 0.82→1.67），无 pageerror、无横向溢出；另外检查 1440×1000 桌面布局、浅色/深色/系统主题、Escape 焦点恢复，以及完整 reconcile 提交、关闭/恢复、主动回忆不泄露、只有一个新卡及一个 FSRS log。浏览器使用实际 FamilyPanel/engine、现有学习页布局 CSS 和真实 PGlite SQL、合成身份，不代表生产认证或 Safari 实机证据。
 
-验证结果：typecheck 通过；web/server/Sites 三段构建通过；全量 **753 passed / 2 skipped**。新增 Family **34 项**（策略 15、真实 PostgreSQL 14、API 5）覆盖规范化、DERIVATION/置信度、一跳/展开、去重/环、用户 join/隔离、评分稳定性、A/B/C/D、远分支干扰、预算/重试、激活竞争、Good/Again、冻结队列和「不激活整个词族」。另有 2 项最新基线的词性提示兼容回归。最终 SQL 邻接查询优化后另外重跑 14 项数据库测试通过。
+验证结果：typecheck 通过；web/server/Sites 三段构建通过；MCP Inspector 与全部 Lesson resource alias 通过；全量 **767 passed / 2 skipped**。新增 Family **34 项**（策略 15、真实 PostgreSQL 14、API 5）覆盖规范化、DERIVATION/置信度、一跳/展开、去重/环、用户 join/隔离、评分稳定性、A/B/C/D、远分支干扰、预算/重试、激活竞争、Good/Again、冻结队列和「不激活整个词族」。另外用真实 StandaloneApp Lesson 组件检查 1440×1000、390×844、820×1180：入口在「常见派生」同一标题行、44px 点击区域、初始无图谱请求、打开只有 3 个 reconcile 一跳节点、关闭恢复焦点、无横向溢出或 pageerror。
 
 ## 安装与尚未完成的验证
 
-本次完成实现和本地验收，**未对生产执行 migration/seed，未发布 Sites**。发布时应按项目已有迁移流程应用 `20261007053500_local_family_graph.sql`，再以服务器管理员环境运行：
+Lesson 的「常见派生」标题旁提供「词族」入口，点击后按需加载局部图谱。发布时按项目已有迁移流程应用 `20261007053500_local_family_graph.sql`，再以服务器管理员环境运行：
 
 ```powershell
 node --import tsx scripts/import-family-seed.ts
 npm run check:db
 ```
 
-环境变量应通过既有安全服务端配置提供，不放入前端、命令输出或仓库。Importer 只 upsert lexical tables，可重复运行。`check:db` 在这个隔离 checkout 缺少 Supabase URL/service role 配置，因此当前为未验证；2 个既有 Supabase 集成测试也跳过。生产迁移、真实账号点击/提交、真实 iPhone/iPad Safari 和生产性能仍需发布验收，不能用本地测试代替。
+环境变量应通过既有安全服务端配置提供，不放入前端、命令输出或仓库。Importer 只 upsert lexical tables，可重复运行。2026-10-07 已通过 Supabase connector 应用生产 migration 与 seed，`family_graph_schema_v1()` 返回 true，21 lexeme / 16 DERIVATION / 1 CONTRAST；微课与候选初始均为 0。重复导入在同一 repeatable-read 事务内比较全部 `user_words` 与 `study_sessions`，确认没有改变任何学习状态或会话。`check:db` 在隔离 checkout 缺少 service role 配置，因此该命令未执行；2 个既有 Supabase 集成测试跳过。真实账号点击/提交、真实 iPhone/iPad Safari 和生产性能需要分别记录发布验收证据，不能用本地测试代替。
 
 ## Network View 与已知限制
 
