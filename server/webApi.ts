@@ -105,6 +105,8 @@ import {
 import { analyticsQuerySchema } from "../shared/analyticsContracts.js";
 import { vocabularyQuerySchema } from "../shared/analyticsContracts.js";
 import { VocabularyServiceError, getVocabularyDetail, listVocabulary } from "./services/vocabulary.js";
+import { FamilyServiceError, getFamilyGraph, getFamilyCandidate, addFamilyCandidate, startFamilyMicroSession, submitFamilyStep, getFamilyMicroSession } from "./services/familyGraph.js";
+import { familyGraphQuerySchema, familyStartSchema, familyAnswerSchema } from "../shared/familyContracts.js";
 
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
@@ -167,6 +169,7 @@ function legacyCaptureResponse(note: CaptureNote) {
 }
 
 function toApiError(error: unknown): WebApiError {
+  if (error instanceof FamilyServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof WebApiError) return error;
   if (error instanceof WebAuthError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof CaptureServiceError) return new WebApiError(error.status, error.code, error.message);
@@ -1655,6 +1658,30 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
   try {
 
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/web/family/")) {
+      if (request.method === "GET" && ["/api/web/family/graph", "/api/web/family/expand", "/api/web/family/candidate"].includes(url.pathname)) {
+        const query = familyGraphQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+        if (!query.success) throw new WebApiError(400, "INVALID_REQUEST", "词族仅支持一跳查询。");
+        return jsonApiResponse(url.pathname.endsWith("candidate") ? await getFamilyCandidate(query.data.lexeme) : await getFamilyGraph(query.data.lexeme));
+      }
+      if (request.method === "GET" && url.pathname === "/api/web/family/session") return jsonApiResponse(await getFamilyMicroSession());
+      if (request.method === "POST" && url.pathname === "/api/web/family/start") {
+        const input = familyStartSchema.safeParse(await request.json());
+        if (!input.success) throw new WebApiError(400, "INVALID_REQUEST", "词族请求无效。");
+        return jsonApiResponse(await startFamilyMicroSession(input.data.lexeme, input.data.request_id));
+      }
+      if (request.method === "POST" && url.pathname === "/api/web/family/answer") {
+        const input = familyAnswerSchema.safeParse(await request.json());
+        if (!input.success) throw new WebApiError(400, "INVALID_REQUEST", "词族答案无效。");
+        return jsonApiResponse(await submitFamilyStep(input.data.session_id, input.data.index, input.data.answer));
+      }
+      if (request.method === "POST" && url.pathname === "/api/web/family/candidates") {
+        const input = z.object({ lexeme_id: z.string().max(120).regex(/^en:[a-z'-]+:[nvar]$/) }).strict().safeParse(await request.json());
+        if (!input.success) throw new WebApiError(400, "INVALID_REQUEST", "词族候选无效。");
+        return jsonApiResponse(await addFamilyCandidate(input.data.lexeme_id));
+      }
+      throw new WebApiError(404, "NOT_FOUND", "词族接口不存在。");
+    }
     if (url.pathname.startsWith("/api/web/shanbay-import/")) return handleShanbayImportRequest(request);
     if (request.method === "GET" && url.pathname === "/api/web/account") return jsonApiResponse({ is_owner: getAuthenticatedUserId() === getLegacyOwnerId() });
     if (request.method === "POST" && url.pathname === "/api/web/accounts") {

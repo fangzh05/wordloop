@@ -147,7 +147,7 @@ export function clearToken(): void {
   }
 }
 
-async function request<T = WebApiResponse>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
+export async function request<T = WebApiResponse>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
   const token = await currentAccessToken() ?? tokenOverride ?? storedToken();
   if (!token) throw new UnauthorizedError();
   const headers = new Headers(init.headers);

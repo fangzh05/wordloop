@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../components/Button.js";
+import { FamilyEntry } from "../family/FamilyPanel.js";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
 import { CaptureNotesPage } from "./CaptureNotesPage.js";
 import { NoteReviewPage } from "./NoteReviewPage.js";
@@ -1134,6 +1135,7 @@ export default function StandaloneApp(): React.JSX.Element {
           <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
           <section className="lesson-section"><h2>核心义</h2><p>{meaningIncludesPartOfSpeech(String(payload.meaning_zh ?? ""), String(payload.part_of_speech ?? "")) ? String(payload.meaning_zh ?? "") : `${String(payload.part_of_speech ?? "")} · ${String(payload.meaning_zh ?? "")}`}</p></section>
           <div className="standalone-actions lesson-start-action"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
+          <FamilyEntry word={title} disabled={busy !== null} />
           </div>
           <div className="lesson-reading-pane">
           <section className="lesson-section lesson-example-panel" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>

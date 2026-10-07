@@ -1,0 +1,1776 @@
+{
+  "lexemes": [
+    {
+      "lexeme_id": "en:persuade:v",
+      "lemma": "persuade",
+      "language": "en",
+      "part_of_speech": "v",
+      "frequency_band": null,
+      "utility_score": 0.9,
+      "exam_relevance": 0.9,
+      "family_key": "persuade"
+    },
+    {
+      "lexeme_id": "en:persuasion:n",
+      "lemma": "persuasion",
+      "language": "en",
+      "part_of_speech": "n",
+      "frequency_band": null,
+      "utility_score": 0.9,
+      "exam_relevance": 0.9,
+      "family_key": "persuade"
+    },
+    {
+      "lexeme_id": "en:persuasive:a",
+      "lemma": "persuasive",
+      "language": "en",
+      "part_of_speech": "a",
+      "frequency_band": null,
+      "utility_score": 0.85,
+      "exam_relevance": 0.8,
+      "family_key": "persuade"
+    },
+    {
+      "lexeme_id": "en:persuasively:r",
+      "lemma": "persuasively",
+      "language": "en",
+      "part_of_speech": "r",
+      "frequency_band": null,
+      "utility_score": 0.65,
+      "exam_relevance": 0.65,
+      "family_key": "persuade"
+    },
+    {
+      "lexeme_id": "en:convince:v",
+      "lemma": "convince",
+      "language": "en",
+      "part_of_speech": "v",
+      "frequency_band": null,
+      "utility_score": 0.85,
+      "exam_relevance": 0.8,
+      "family_key": "convince"
+    },
+    {
+      "lexeme_id": "en:dissuade:v",
+      "lemma": "dissuade",
+      "language": "en",
+      "part_of_speech": "v",
+      "frequency_band": null,
+      "utility_score": 0.7,
+      "exam_relevance": 0.7,
+      "family_key": "dissuade"
+    },
+    {
+      "lexeme_id": "en:reconcile:v",
+      "lemma": "reconcile",
+      "language": "en",
+      "part_of_speech": "v",
+      "frequency_band": null,
+      "utility_score": 0.85,
+      "exam_relevance": 0.95,
+      "family_key": "reconcile"
+    },
+    {
+      "lexeme_id": "en:reconciliation:n",
+      "lemma": "reconciliation",
+      "language": "en",
+      "part_of_speech": "n",
+      "frequency_band": null,
+      "utility_score": 0.88,
+      "exam_relevance": 0.9,
+      "family_key": "reconcile"
+    },
+    {
+      "lexeme_id": "en:reconcilable:a",
+      "lemma": "reconcilable",
+      "language": "en",
+      "part_of_speech": "a",
+      "frequency_band": null,
+      "utility_score": 0.62,
+      "exam_relevance": 0.7,
+      "family_key": "reconcile"
+    },
+    {
+      "lexeme_id": "en:economy:n",
+      "lemma": "economy",
+      "language": "en",
+      "part_of_speech": "n",
+      "frequency_band": null,
+      "utility_score": 0.95,
+      "exam_relevance": 0.95,
+      "family_key": "economy"
+    },
+    {
+      "lexeme_id": "en:economic:a",
+      "lemma": "economic",
+      "language": "en",
+      "part_of_speech": "a",
+      "frequency_band": null,
+      "utility_score": 0.95,
+      "exam_relevance": 0.95,
+      "family_key": "economy"
+    },
+    {
+      "lexeme_id": "en:economical:a",
+      "lemma": "economical",
+      "language": "en",
+      "part_of_speech": "a",
+      "frequency_band": null,
+      "utility_score": 0.85,
+      "exam_relevance": 0.9,
+      "family_key": "economy"
+    },
+    {
+      "lexeme_id": "en:economics:n",
+      "lemma": "economics",
+      "language": "en",
+      "part_of_speech": "n",
+      "frequency_band": null,
+      "utility_score": 0.8,
+      "exam_relevance": 0.85,
+      "family_key": "economy"
+    },
+    {
+      "lexeme_id": "en:act:v",
+      "lemma": "act",
+      "language": "en",
+      "part_of_speech": "v",
+      "frequency_band": null,
+      "utility_score": 0.95,
+      "exam_relevance": 0.8,
+      "family_key": "act"
+    },
+    {
+      "lexeme_id": "en:action:n",
+      "lemma": "action",
+      "language": "en",
+      "part_of_speech": "n",
+      "frequency_band": null,
+      "utility_score": 0.95,
+      "exam_relevance": 0.9,
+      "family_key": "act"
+    },
+    {
+      "lexeme_id": "en:active:a",
+      "lemma": "active",
+      "language": "en",
+      "part_of_speech": "a",
+      "frequency_band": null,
+      "utility_score": 0.9,
+      "exam_relevance": 0.85,
+      "family_key": "act"
+    },
+    {
+      "lexeme_id": "en:actively:r",
+      "lemma": "actively",
+      "language": "en",
+      "part_of_speech": "r",
+      "frequency_band": null,
+      "utility_score": 0.7,
+      "exam_relevance": 0.7,
+      "family_key": "act"
+    },
+    {
+      "lexeme_id": "en:activity:n",
+      "lemma": "activity",
+      "language": "en",
+      "part_of_speech": "n",
+      "frequency_band": null,
+      "utility_score": 0.85,
+      "exam_relevance": 0.85,
+      "family_key": "act"
+    },
+    {
+      "lexeme_id": "en:activate:v",
+      "lemma": "activate",
+      "language": "en",
+      "part_of_speech": "v",
+      "frequency_band": null,
+      "utility_score": 0.75,
+      "exam_relevance": 0.75,
+      "family_key": "act"
+    },
+    {
+      "lexeme_id": "en:activation:n",
+      "lemma": "activation",
+      "language": "en",
+      "part_of_speech": "n",
+      "frequency_band": null,
+      "utility_score": 0.65,
+      "exam_relevance": 0.65,
+      "family_key": "act"
+    },
+    {
+      "lexeme_id": "en:actor:n",
+      "lemma": "actor",
+      "language": "en",
+      "part_of_speech": "n",
+      "frequency_band": null,
+      "utility_score": 0.85,
+      "exam_relevance": 0.8,
+      "family_key": "act"
+    }
+  ],
+  "senses": [
+    {
+      "sense_id": "oewn-persuade__2.41.00..",
+      "lexeme_id": "en:persuade:v",
+      "definition": "win approval or support for",
+      "synset_id": "oewn-02592213-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-persuade__2.32.00..",
+      "lexeme_id": "en:persuade:v",
+      "definition": "cause somebody to adopt a certain position, belief, or course of action; twist somebody's arm",
+      "synset_id": "oewn-00768463-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-persuasion__1.10.00..",
+      "lexeme_id": "en:persuasion:n",
+      "definition": "the act of persuading (or attempting to persuade); communication intended to induce belief or action",
+      "synset_id": "oewn-07259785-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-persuasion__1.09.00..",
+      "lexeme_id": "en:persuasion:n",
+      "definition": "a personal belief or judgment that is not founded on proof or certainty",
+      "synset_id": "oewn-05954491-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-persuasive__3.00.00..",
+      "lexeme_id": "en:persuasive:a",
+      "definition": "intended or having the power to induce action or belief",
+      "synset_id": "oewn-01774367-a",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-persuasively__4.02.00..",
+      "lexeme_id": "en:persuasively:r",
+      "definition": "in a persuasive manner",
+      "synset_id": "oewn-00422738-r",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-convince__2.32.00..",
+      "lexeme_id": "en:convince:v",
+      "definition": "make (someone) agree, understand, or realize the truth or validity of something",
+      "synset_id": "oewn-00771598-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-dissuade__2.32.00..",
+      "lexeme_id": "en:dissuade:v",
+      "definition": "turn away from by persuasion",
+      "synset_id": "oewn-00772186-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-reconcile__2.30.01..",
+      "lexeme_id": "en:reconcile:v",
+      "definition": "make (one thing) compatible with (another)",
+      "synset_id": "oewn-00483824-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-reconcile__2.30.00..",
+      "lexeme_id": "en:reconcile:v",
+      "definition": "bring into consonance or accord",
+      "synset_id": "oewn-00483404-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-reconciliation__1.04.01..",
+      "lexeme_id": "en:reconciliation:n",
+      "definition": "the reestablishing of cordial relations",
+      "synset_id": "oewn-01208317-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-reconciliation__1.04.00..",
+      "lexeme_id": "en:reconciliation:n",
+      "definition": "getting two things to correspond",
+      "synset_id": "oewn-00185953-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-reconcilable__3.00.00..",
+      "lexeme_id": "en:reconcilable:a",
+      "definition": "capable of being reconciled",
+      "synset_id": "oewn-01993565-a",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-economy__1.14.00..",
+      "lexeme_id": "en:economy:n",
+      "definition": "the system of production and distribution and consumption",
+      "synset_id": "oewn-08383680-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-economy__1.09.01..",
+      "lexeme_id": "en:economy:n",
+      "definition": "the efficient use of resources",
+      "synset_id": "oewn-05652572-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-economic__3.01.01..",
+      "lexeme_id": "en:economic:a",
+      "definition": "of or relating to an economy, the system of production and management of material wealth",
+      "synset_id": "oewn-02727475-a",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-economic__3.01.00..",
+      "lexeme_id": "en:economic:a",
+      "definition": "of or relating to the science of economics",
+      "synset_id": "oewn-02727341-a",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-economical__5.00.00.efficient.00",
+      "lexeme_id": "en:economical:a",
+      "definition": "using the minimum of time or resources necessary for effectiveness",
+      "synset_id": "oewn-00843751-s",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-economical__3.01.00..",
+      "lexeme_id": "en:economical:a",
+      "definition": "of or relating to an economy, the system of production and management of material wealth",
+      "synset_id": "oewn-02727475-a",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-economics__1.09.00..",
+      "lexeme_id": "en:economics:n",
+      "definition": "the branch of social science that deals with the production and distribution and consumption of goods and services and their management",
+      "synset_id": "oewn-06158935-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-act__2.41.00..",
+      "lexeme_id": "en:act:v",
+      "definition": "perform an action, or work out or perform (an action)",
+      "synset_id": "oewn-02372362-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-act__2.29.00..",
+      "lexeme_id": "en:act:v",
+      "definition": "behave in a certain manner; show a certain behavior; conduct or comport oneself",
+      "synset_id": "oewn-00010428-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-action__1.04.02..",
+      "lexeme_id": "en:action:n",
+      "definition": "something done (usually as opposed to something said)",
+      "synset_id": "oewn-00038116-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-action__1.26.00..",
+      "lexeme_id": "en:action:n",
+      "definition": "the state of being active",
+      "synset_id": "oewn-14030430-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-active__3.00.02..",
+      "lexeme_id": "en:active:a",
+      "definition": "tending to become more severe or wider in scope",
+      "synset_id": "oewn-00037570-a",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-active__5.00.00.operational.00",
+      "lexeme_id": "en:active:a",
+      "definition": "engaged in or ready for military or naval operations",
+      "synset_id": "oewn-01664870-s",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-actively__4.02.00..",
+      "lexeme_id": "en:actively:r",
+      "definition": "in an active manner",
+      "synset_id": "oewn-00079883-r",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-activity__1.04.00..",
+      "lexeme_id": "en:activity:n",
+      "definition": "any specific behavior",
+      "synset_id": "oewn-00408356-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-activity__1.26.00..",
+      "lexeme_id": "en:activity:n",
+      "definition": "the state of being active",
+      "synset_id": "oewn-14030430-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-activate__2.36.00..",
+      "lexeme_id": "en:activate:v",
+      "definition": "put in motion or move to act",
+      "synset_id": "oewn-01647199-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-activate__2.30.00..",
+      "lexeme_id": "en:activate:v",
+      "definition": "make active or more active",
+      "synset_id": "oewn-00191014-v",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-activation__1.22.00..",
+      "lexeme_id": "en:activation:n",
+      "definition": "stimulation of activity in an organism or chemical",
+      "synset_id": "oewn-13447549-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-activation__1.04.00..",
+      "lexeme_id": "en:activation:n",
+      "definition": "the activity of causing to have energy and be active",
+      "synset_id": "oewn-01048908-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-actor__1.18.00..",
+      "lexeme_id": "en:actor:n",
+      "definition": "a theatrical performer",
+      "synset_id": "oewn-09784701-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "sense_id": "oewn-actor__1.18.01..",
+      "lexeme_id": "en:actor:n",
+      "definition": "a person who acts and gets things done",
+      "synset_id": "oewn-09786620-n",
+      "register": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    }
+  ],
+  "forms": [
+    {
+      "form_id": "en:persuade:v:lemma",
+      "lexeme_id": "en:persuade:v",
+      "surface_form": "persuade",
+      "form_type": "lemma",
+      "pronunciation": "pɚˈsweɪd",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:persuasion:n:lemma",
+      "lexeme_id": "en:persuasion:n",
+      "surface_form": "persuasion",
+      "form_type": "lemma",
+      "pronunciation": "pɚˈsweɪʒən",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:persuasive:a:lemma",
+      "lexeme_id": "en:persuasive:a",
+      "surface_form": "persuasive",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:persuasively:r:lemma",
+      "lexeme_id": "en:persuasively:r",
+      "surface_form": "persuasively",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:convince:v:lemma",
+      "lexeme_id": "en:convince:v",
+      "surface_form": "convince",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:dissuade:v:lemma",
+      "lexeme_id": "en:dissuade:v",
+      "surface_form": "dissuade",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:reconcile:v:lemma",
+      "lexeme_id": "en:reconcile:v",
+      "surface_form": "reconcile",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:reconciliation:n:lemma",
+      "lexeme_id": "en:reconciliation:n",
+      "surface_form": "reconciliation",
+      "form_type": "lemma",
+      "pronunciation": "ˌɹɛkənˌsɪliˈeɪʃ(ə)n",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:reconcilable:a:lemma",
+      "lexeme_id": "en:reconcilable:a",
+      "surface_form": "reconcilable",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:economy:n:lemma",
+      "lexeme_id": "en:economy:n",
+      "surface_form": "economy",
+      "form_type": "lemma",
+      "pronunciation": "iːˈkɑn.ə.mi",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:economic:a:lemma",
+      "lexeme_id": "en:economic:a",
+      "surface_form": "economic",
+      "form_type": "lemma",
+      "pronunciation": "ˌɛkəˈnɑmɪk",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:economical:a:lemma",
+      "lexeme_id": "en:economical:a",
+      "surface_form": "economical",
+      "form_type": "lemma",
+      "pronunciation": "ˌɛkəˈnɑmɪkəl",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:economics:n:lemma",
+      "lexeme_id": "en:economics:n",
+      "surface_form": "economics",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:act:v:lemma",
+      "lexeme_id": "en:act:v",
+      "surface_form": "act",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:action:n:lemma",
+      "lexeme_id": "en:action:n",
+      "surface_form": "action",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:active:a:lemma",
+      "lexeme_id": "en:active:a",
+      "surface_form": "active",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:actively:r:lemma",
+      "lexeme_id": "en:actively:r",
+      "surface_form": "actively",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:activity:n:lemma",
+      "lexeme_id": "en:activity:n",
+      "surface_form": "activity",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:activate:v:lemma",
+      "lexeme_id": "en:activate:v",
+      "surface_form": "activate",
+      "form_type": "lemma",
+      "pronunciation": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:activation:n:lemma",
+      "lexeme_id": "en:activation:n",
+      "surface_form": "activation",
+      "form_type": "lemma",
+      "pronunciation": "ˌæktəˈveɪʃən",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    },
+    {
+      "form_id": "en:actor:n:lemma",
+      "lexeme_id": "en:actor:n",
+      "surface_form": "actor",
+      "form_type": "lemma",
+      "pronunciation": "ˈæk.tɚ",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    }
+  ],
+  "morphemes": [
+    {
+      "morpheme_id": "sion",
+      "surface": "-sion",
+      "type": "suffix",
+      "meaning": "动作或结果的名词"
+    },
+    {
+      "morpheme_id": "ation",
+      "surface": "-ation",
+      "type": "suffix",
+      "meaning": "动作或结果的名词"
+    },
+    {
+      "morpheme_id": "ly",
+      "surface": "-ly",
+      "type": "suffix",
+      "meaning": "方式副词"
+    },
+    {
+      "morpheme_id": "able",
+      "surface": "-able",
+      "type": "suffix",
+      "meaning": "可以……的"
+    },
+    {
+      "morpheme_id": "or",
+      "surface": "-or",
+      "type": "suffix",
+      "meaning": "做某事的人"
+    },
+    {
+      "morpheme_id": "ity",
+      "surface": "-ity",
+      "type": "suffix",
+      "meaning": "状态或性质的名词"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "en:persuade:v>en:persuasion:n:DERIVATION:OEWN",
+      "source_id": "en:persuade:v",
+      "target_id": "en:persuasion:n",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-persuade__2.32.00..",
+            "target_sense_id": "oewn-persuasion__1.10.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-persuasion__1.10.00..",
+            "target_sense_id": "oewn-persuade__2.32.00..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.9,
+      "interference_risk": 0.2,
+      "morphology": "persuade → persuasion：-sion 构成名词；词干拼写改变。"
+    },
+    {
+      "relation_id": "en:persuade:v>en:persuasive:a:DERIVATION:OEWN",
+      "source_id": "en:persuade:v",
+      "target_id": "en:persuasive:a",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-persuade__2.41.00..",
+            "target_sense_id": "oewn-persuasive__3.00.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-persuade__2.32.00..",
+            "target_sense_id": "oewn-persuasive__3.00.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-persuasive__3.00.00..",
+            "target_sense_id": "oewn-persuade__2.32.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-persuasive__3.00.00..",
+            "target_sense_id": "oewn-persuade__2.41.00..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.9,
+      "interference_risk": 0.2,
+      "morphology": "persuade → persuasive：-sive 构成形容词；词干拼写改变。"
+    },
+    {
+      "relation_id": "en:persuasive:a>en:persuasively:r:DERIVATION:OEWN",
+      "source_id": "en:persuasive:a",
+      "target_id": "en:persuasively:r",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-persuasively__4.02.00..",
+            "target_sense_id": "oewn-persuasive__3.00.00..",
+            "raw_type": "pertainym"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.9,
+      "interference_risk": 0.2,
+      "morphology": "persuasive + -ly → persuasively：形容词变为副词。"
+    },
+    {
+      "relation_id": "en:persuade:v>en:dissuade:v:CONTRAST:OEWN",
+      "source_id": "en:persuade:v",
+      "target_id": "en:dissuade:v",
+      "relation_type": "CONTRAST",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-persuade__2.32.00..",
+            "target_sense_id": "oewn-dissuade__2.32.00..",
+            "raw_type": "antonym"
+          },
+          {
+            "source_sense_id": "oewn-dissuade__2.32.00..",
+            "target_sense_id": "oewn-persuade__2.32.00..",
+            "raw_type": "antonym"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0,
+      "interference_risk": 0,
+      "morphology": null
+    },
+    {
+      "relation_id": "en:reconcile:v>en:reconciliation:n:DERIVATION:OEWN",
+      "source_id": "en:reconcile:v",
+      "target_id": "en:reconciliation:n",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-reconcile__2.30.01..",
+            "target_sense_id": "oewn-reconciliation__1.04.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-reconcile__2.30.00..",
+            "target_sense_id": "oewn-reconciliation__1.04.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-reconcile__2.32.00..",
+            "target_sense_id": "oewn-reconciliation__1.04.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-reconciliation__1.04.01..",
+            "target_sense_id": "oewn-reconcile__2.32.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-reconciliation__1.04.00..",
+            "target_sense_id": "oewn-reconcile__2.30.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-reconciliation__1.04.00..",
+            "target_sense_id": "oewn-reconcile__2.30.00..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.9,
+      "interference_risk": 0.2,
+      "morphology": "reconcile → reconciliation：-ation 构成名词，注意词干变化。"
+    },
+    {
+      "relation_id": "en:economy:n>en:economic:a:DERIVATION:OEWN",
+      "source_id": "en:economy:n",
+      "target_id": "en:economic:a",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-economy__1.14.00..",
+            "target_sense_id": "oewn-economic__3.01.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economy__1.14.00..",
+            "target_sense_id": "oewn-economic__3.01.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economy__1.09.01..",
+            "target_sense_id": "oewn-economic__5.00.00.efficient.00",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economy__1.04.00..",
+            "target_sense_id": "oewn-economic__5.00.00.worldly.00",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economic__3.01.01..",
+            "target_sense_id": "oewn-economy__1.14.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economic__3.01.01..",
+            "target_sense_id": "oewn-economy__1.14.00..",
+            "raw_type": "pertainym"
+          },
+          {
+            "source_sense_id": "oewn-economic__3.01.00..",
+            "target_sense_id": "oewn-economy__1.14.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economic__5.00.00.efficient.00",
+            "target_sense_id": "oewn-economy__1.09.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economic__5.00.00.worldly.00",
+            "target_sense_id": "oewn-economy__1.04.00..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.8,
+      "interference_risk": 0.8,
+      "morphology": "economy → economic：形容词常表示经济方面的。"
+    },
+    {
+      "relation_id": "en:economy:n>en:economical:a:DERIVATION:OEWN",
+      "source_id": "en:economy:n",
+      "target_id": "en:economical:a",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-economy__1.14.00..",
+            "target_sense_id": "oewn-economical__3.01.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economy__1.09.01..",
+            "target_sense_id": "oewn-economical__5.00.00.efficient.00",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economy__1.07.00..",
+            "target_sense_id": "oewn-economical__5.00.00.thrifty.00",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economy__1.04.00..",
+            "target_sense_id": "oewn-economical__5.00.00.efficient.00",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economical__5.00.00.efficient.00",
+            "target_sense_id": "oewn-economy__1.09.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economical__5.00.00.efficient.00",
+            "target_sense_id": "oewn-economy__1.04.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economical__3.01.00..",
+            "target_sense_id": "oewn-economy__1.14.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-economical__3.01.00..",
+            "target_sense_id": "oewn-economy__1.14.00..",
+            "raw_type": "pertainym"
+          },
+          {
+            "source_sense_id": "oewn-economical__5.00.00.thrifty.00",
+            "target_sense_id": "oewn-economy__1.07.00..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.75,
+      "interference_risk": 0.9,
+      "morphology": "economy → economical：形容词常表示节约的。"
+    },
+    {
+      "relation_id": "en:economics:n>en:economic:a:DERIVATION:OEWN",
+      "source_id": "en:economics:n",
+      "target_id": "en:economic:a",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-economic__3.01.00..",
+            "target_sense_id": "oewn-economics__1.09.00..",
+            "raw_type": "pertainym"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.7,
+      "interference_risk": 0.9,
+      "morphology": "economics / economic：学科名词与形容词，须结合词性和语境。"
+    },
+    {
+      "relation_id": "en:act:v>en:action:n:DERIVATION:OEWN",
+      "source_id": "en:act:v",
+      "target_id": "en:action:n",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-act__2.41.00..",
+            "target_sense_id": "oewn-action__1.26.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-act__2.41.00..",
+            "target_sense_id": "oewn-action__1.04.02..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-action__1.04.02..",
+            "target_sense_id": "oewn-act__2.41.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-action__1.26.00..",
+            "target_sense_id": "oewn-act__2.41.00..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.9,
+      "interference_risk": 0.3,
+      "morphology": "act → action：-ion 构成名词。"
+    },
+    {
+      "relation_id": "en:act:v>en:actor:n:DERIVATION:OEWN",
+      "source_id": "en:act:v",
+      "target_id": "en:actor:n",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-act__2.36.00..",
+            "target_sense_id": "oewn-actor__1.18.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-act__2.33.00..",
+            "target_sense_id": "oewn-actor__1.18.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-act__2.36.03..",
+            "target_sense_id": "oewn-actor__1.18.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-actor__1.18.00..",
+            "target_sense_id": "oewn-act__2.36.03..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-actor__1.18.00..",
+            "target_sense_id": "oewn-act__2.36.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-actor__1.18.01..",
+            "target_sense_id": "oewn-act__2.33.00..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.9,
+      "interference_risk": 0.25,
+      "morphology": "act + -or → actor：表示做这个动作的人。"
+    },
+    {
+      "relation_id": "en:active:a>en:actively:r:DERIVATION:OEWN",
+      "source_id": "en:active:a",
+      "target_id": "en:actively:r",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-actively__4.02.00..",
+            "target_sense_id": "oewn-active__3.00.03..",
+            "raw_type": "pertainym"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.9,
+      "interference_risk": 0.2,
+      "morphology": "active + -ly → actively：形容词变为副词。"
+    },
+    {
+      "relation_id": "en:active:a>en:activity:n:DERIVATION:OEWN",
+      "source_id": "en:active:a",
+      "target_id": "en:activity:n",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-active__3.00.02..",
+            "target_sense_id": "oewn-activity__1.22.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__5.00.00.operational.00",
+            "target_sense_id": "oewn-activity__1.26.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__3.00.03..",
+            "target_sense_id": "oewn-activity__1.07.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__5.00.00.involved.00",
+            "target_sense_id": "oewn-activity__1.04.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__3.00.01..",
+            "target_sense_id": "oewn-activity__1.07.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__3.00.07..",
+            "target_sense_id": "oewn-activity__1.26.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__3.00.06..",
+            "target_sense_id": "oewn-activity__1.07.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__5.00.00.existent.00",
+            "target_sense_id": "oewn-activity__1.04.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__3.00.10..",
+            "target_sense_id": "oewn-activity__1.22.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__3.00.04..",
+            "target_sense_id": "oewn-activity__1.22.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-active__3.00.08..",
+            "target_sense_id": "oewn-activity__1.26.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.04.00..",
+            "target_sense_id": "oewn-active__5.00.00.involved.00",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.04.00..",
+            "target_sense_id": "oewn-active__5.00.00.existent.00",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.26.00..",
+            "target_sense_id": "oewn-active__5.00.00.operational.00",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.26.00..",
+            "target_sense_id": "oewn-active__3.00.08..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.22.00..",
+            "target_sense_id": "oewn-active__3.00.02..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.26.01..",
+            "target_sense_id": "oewn-active__3.00.07..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.22.01..",
+            "target_sense_id": "oewn-active__3.00.10..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.22.01..",
+            "target_sense_id": "oewn-active__3.00.04..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.07.00..",
+            "target_sense_id": "oewn-active__3.00.06..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.07.00..",
+            "target_sense_id": "oewn-active__3.00.03..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activity__1.07.00..",
+            "target_sense_id": "oewn-active__3.00.01..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.85,
+      "interference_risk": 0.6,
+      "morphology": "active → activity：-ity 构成名词。"
+    },
+    {
+      "relation_id": "en:activate:v>en:activation:n:DERIVATION:OEWN",
+      "source_id": "en:activate:v",
+      "target_id": "en:activation:n",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+        "evidence": [
+          {
+            "source_sense_id": "oewn-activate__2.36.00..",
+            "target_sense_id": "oewn-activation__1.22.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activate__2.30.00..",
+            "target_sense_id": "oewn-activation__1.04.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activate__2.30.03..",
+            "target_sense_id": "oewn-activation__1.22.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activate__2.30.02..",
+            "target_sense_id": "oewn-activation__1.22.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activate__2.30.01..",
+            "target_sense_id": "oewn-activation__1.22.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activation__1.22.00..",
+            "target_sense_id": "oewn-activate__2.30.03..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activation__1.22.00..",
+            "target_sense_id": "oewn-activate__2.30.02..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activation__1.22.00..",
+            "target_sense_id": "oewn-activate__2.30.01..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activation__1.22.00..",
+            "target_sense_id": "oewn-activate__2.36.00..",
+            "raw_type": "derivation"
+          },
+          {
+            "source_sense_id": "oewn-activation__1.04.00..",
+            "target_sense_id": "oewn-activate__2.30.00..",
+            "raw_type": "derivation"
+          }
+        ],
+        "normalization": "explicit reviewed morphology allowlist v1; source pertainym is not generally derivation"
+      },
+      "confidence": 0.95,
+      "transparency": 0.9,
+      "interference_risk": 0.7,
+      "morphology": "activate → activation：-ation 构成名词。"
+    },
+    {
+      "relation_id": "en:reconcile:v>en:reconcilable:a:DERIVATION:Wiktionary",
+      "source_id": "en:reconcile:v",
+      "target_id": "en:reconcilable:a",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "Wiktionary",
+      "source_version": "91698837",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=reconcilable&oldid=91698837",
+        "section": "English etymology",
+        "normalization": "explicit morphology, reviewed allowlist v1"
+      },
+      "confidence": 0.9,
+      "transparency": 0.95,
+      "interference_risk": 0.25,
+      "morphology": "reconcile + -able → reconcilable：可以调和的；去掉词尾 e。"
+    },
+    {
+      "relation_id": "en:act:v>en:active:a:DERIVATION:Wiktionary",
+      "source_id": "en:act:v",
+      "target_id": "en:active:a",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "Wiktionary",
+      "source_version": "92768449",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=active&oldid=92768449",
+        "section": "English etymology",
+        "normalization": "explicit morphology, reviewed allowlist v1"
+      },
+      "confidence": 0.9,
+      "transparency": 0.85,
+      "interference_risk": 0.4,
+      "morphology": "act + -ive → active：表层形态分析；历史上经法语借入，不把它解释成直接在现代英语中造词。"
+    },
+    {
+      "relation_id": "en:active:a>en:activate:v:DERIVATION:Wiktionary",
+      "source_id": "en:active:a",
+      "target_id": "en:activate:v",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "Wiktionary",
+      "source_version": "92355748",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=activate&oldid=92355748",
+        "section": "English etymology",
+        "normalization": "explicit morphology, reviewed allowlist v1"
+      },
+      "confidence": 0.9,
+      "transparency": 0.85,
+      "interference_risk": 0.55,
+      "morphology": "active + -ate → activate：使活跃、使启动。"
+    },
+    {
+      "relation_id": "en:economic:a>en:economical:a:DERIVATION:Wiktionary",
+      "source_id": "en:economic:a",
+      "target_id": "en:economical:a",
+      "relation_type": "DERIVATION",
+      "direction": "forward",
+      "source": "Wiktionary",
+      "source_version": "92744007",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=economical&oldid=92744007",
+        "section": "English etymology",
+        "normalization": "explicit morphology, reviewed allowlist v1"
+      },
+      "confidence": 0.9,
+      "transparency": 0.8,
+      "interference_risk": 0.9,
+      "morphology": "economic + -al → economical：现代用法中 economic 指经济方面，economical 指节约、实惠。"
+    }
+  ]
+}

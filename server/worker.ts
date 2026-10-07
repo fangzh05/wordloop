@@ -9,6 +9,7 @@ import { handleWebApiRequest } from "./webApi.js";
 declare const __SITE_HTML__: string;
 declare const __SITE_CSS__: string;
 declare const __SITE_JS__: string;
+declare const __FAMILY_JS__: string;
 declare const __SITE_MANIFEST__: string;
 declare const __WIDGET_JS__: Record<WidgetKind, string>;
 declare const __WIDGET_CSS__: string;
@@ -26,6 +27,7 @@ type WorkerEnv = {
 const siteHtml = typeof __SITE_HTML__ === "string" ? __SITE_HTML__ : "<!doctype html><title>Wordloop</title>";
 const siteCss = typeof __SITE_CSS__ === "string" ? __SITE_CSS__ : "";
 const siteJs = typeof __SITE_JS__ === "string" ? __SITE_JS__ : "";
+const familyJs = typeof __FAMILY_JS__ === "string" ? __FAMILY_JS__ : "";
 const siteManifest = typeof __SITE_MANIFEST__ === "string" ? __SITE_MANIFEST__ : "{}";
 const widgetJs: Partial<Record<WidgetKind, string>> = typeof __WIDGET_JS__ === "object" && __WIDGET_JS__ !== null ? __WIDGET_JS__ : {};
 const widgetCss = typeof __WIDGET_CSS__ === "string" ? __WIDGET_CSS__ : "";
@@ -61,6 +63,7 @@ export const worker = {
   async fetch(request: Request, env: WorkerEnv, _context?: unknown): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && ["/", "/login", "/owner", "/reset-password", "/update-password"].includes(url.pathname)) return response(siteHtml, "text/html; charset=utf-8");
+    if (request.method === "GET" && url.pathname === "/family.js") return response(familyJs, "application/javascript; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/styles.css") return response(siteCss, "text/css; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/app.js") return response(siteJs, "text/javascript; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/manifest.webmanifest") return response(siteManifest, "application/manifest+json; charset=utf-8");

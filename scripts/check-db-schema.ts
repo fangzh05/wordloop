@@ -15,6 +15,14 @@ type RpcCheck = {
 };
 
 const checks: SchemaCheck[] = [
+  { table: "lexical_lexemes", column: "family_key", migration: "20261007053500" },
+  { table: "lexical_senses", column: "provenance", migration: "20261007053500" },
+  { table: "lexical_forms", column: "pronunciation", migration: "20261007053500" },
+  { table: "lexical_morphemes", column: "type", migration: "20261007053500" },
+  { table: "lexical_relations", column: "confidence", migration: "20261007053500" },
+  { table: "family_candidates", column: "lexeme_id", migration: "20261007053500" },
+  { table: "family_exposures", column: "introduced_at", migration: "20261007053500" },
+  { table: "family_micro_sessions", column: "study_session_id", migration: "20261007053500" },
   { table: "exercise_skill_evidence", column: "evidence_version", migration: "20261002024106" },
   { table: "user_skill_state", column: "p_mastery", migration: "20261002024106" },
   { table: "learning_settings", column: "daily_minutes", migration: "20261002024106" },
@@ -41,6 +49,8 @@ const checks: SchemaCheck[] = [
 ];
 
 const rpcChecks: RpcCheck[] = [
+  { name: "family_graph_schema_v1", args: {}, migration: "20261007053500", expectTrue: true },
+  { name: "get_family_graph_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_lexeme: "en:reconcile:v", p_limit: 1 }, migration: "20261007053500" },
   { name: "learning_budget_snapshot_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000" }, migration: "20261002024106" },
   { name: "pending_skill_evidence_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000" }, migration: "20261002024106" },
   {
@@ -122,7 +132,7 @@ async function main(): Promise<void> {
   for (const failure of rpcFailures) {
     const message = failure.error?.message ?? (failure.check.expectTrue ? "schema function reported missing objects" : "unknown database error");
     if (!failure.error && failure.check.expectTrue && failure.data !== true) {
-      console.error(`Capture Notes schema is incomplete; deploy migration ${failure.check.migration}.`);
+      console.error(`Schema check ${failure.check.name} is incomplete; deploy migration ${failure.check.migration}.`);
       continue;
     }
     if (isSchemaMismatch(message) || /function .* does not exist|schema cache/i.test(message)) {

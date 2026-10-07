@@ -6,13 +6,14 @@ import { build } from "esbuild";
 const root = process.cwd();
 const outputRoot = path.join(root, "dist");
 const widgetKinds = ["import", "pretest", "review", "dashboard", "pronunciation", "dictation", "lesson"] as const;
-const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, ...migrationSql] = await Promise.all([
+const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, familyJs, ...migrationSql] = await Promise.all([
   readFile(path.join(root, "build", "index.html"), "utf8"),
   readFile(path.join(root, "web", "dist", "widget.css"), "utf8"),
   readFile(path.join(root, "web", "dist", "standalone.js"), "utf8"),
   readFile(path.join(root, "build", "manifest.webmanifest"), "utf8"),
   Promise.all(widgetKinds.map((kind) => readFile(path.join(root, "web", "dist", `${kind}.js`), "utf8"))),
   readFile(path.join(root, "web", "dist", "widget.css"), "utf8"),
+  readFile(path.join(root, "web", "dist", "family.js"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609130001_initial_wordloop.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609130002_fsrs_shanbay.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "202609140003_daily_queue_ui_fix.sql"), "utf8"),
@@ -34,6 +35,7 @@ const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, ...migratio
   readFile(path.join(root, "supabase", "migrations", "20261002024106_evidence_budget.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20261004164746_cross_day_review_handoff.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20261007025825_captured_note_deduplication.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "20261007053500_local_family_graph.sql"), "utf8"),
 ]);
 
 const assetHash = (asset: string): string => createHash("sha256").update(asset).digest("hex").slice(0, 12);
@@ -64,6 +66,7 @@ await build({
     __SITE_HTML__: JSON.stringify(versionedSiteHtml),
     __SITE_CSS__: JSON.stringify(siteCss),
     __SITE_JS__: JSON.stringify(siteJs),
+    __FAMILY_JS__: JSON.stringify(familyJs),
     __SITE_MANIFEST__: JSON.stringify(siteManifest),
     __WIDGET_JS__: JSON.stringify(Object.fromEntries(widgetKinds.map((kind, index) => [kind, widgetJs[index] ?? ""]))),
     __WIDGET_CSS__: JSON.stringify(widgetCss),

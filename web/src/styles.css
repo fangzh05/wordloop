@@ -1706,3 +1706,50 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .shanbay-import-panel p { margin: 8px 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .shanbay-import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .shanbay-import-actions a { text-decoration: none; }
+/* Local Family Graph stays in an explicit, dismissible learning layer. */
+.family-dialog { position: fixed; inset: 0; width: min(58rem, calc(100vw - 2rem)); max-height: calc(var(--visual-viewport-height, 100dvh) - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); margin: auto; padding: 1.5rem; border: 1px solid var(--separator); border-radius: var(--radius-large); background: var(--material-solid); color: var(--text); box-shadow: 0 18px 60px #0002; overflow: auto; overscroll-behavior: contain; font: inherit; }
+.family-dialog::backdrop { background: rgb(0 0 0 / 36%); }
+.family-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-bottom: 1.25rem; background: var(--material-solid); }
+.family-header > div { min-width: 0; }
+.family-header h2 { margin: .25rem 0 0; font-size: 1.5rem; font-weight: 650; letter-spacing: -.035em; line-height: 1.2; overflow-wrap: anywhere; }
+.family-header > button { flex-shrink: 0; }
+.family-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+.family-graph-pane, .family-detail-pane { min-width: 0; }
+.family-graph-pane > .family-reason { margin: 0 0 .75rem; }
+.family-canvas { height: clamp(220px, 29dvh, 320px); width: 100%; border: 1px solid var(--separator); background: var(--page-bg); border-radius: 16px; touch-action: none; }
+.family-node-list, .family-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+.family-node-list button { min-height: 44px; padding: .4rem .75rem; border: 1px solid var(--separator); border-radius: var(--radius-control); background: var(--material-solid); color: var(--muted); font-size: .8125rem; cursor: pointer; }
+.family-node-list button[aria-pressed="true"] { color: var(--accent); background: var(--control); border-color: var(--accent); }
+.family-node-list button:active { background: var(--control-hover); }
+.family-node-list button:focus-visible, .family-dialog summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.family-mini-card { padding: 1rem; border: 1px solid var(--separator); border-radius: 16px; background: var(--material-solid); }
+.family-mini-card h3 { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; margin: 0 0 .55rem; font-size: 1.25rem; font-weight: 650; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.family-mini-card p { margin: .45rem 0; font-size: .875rem; line-height: 1.65; overflow-wrap: anywhere; }
+.family-pronunciation { color: var(--muted); }
+.family-learning-label, .family-learning-state { color: var(--muted); font-size: .8125rem; }
+.family-learning-state { margin-top: .75rem; padding-top: .6rem; border-top: 1px solid var(--separator); }
+.family-dialog summary { min-height: 44px; padding-block: .55rem; color: var(--muted); cursor: pointer; }
+.family-layers { display: grid; gap: .4rem; margin: .75rem 0 0; font-size: .8125rem; }
+.family-layers > div { display: flex; justify-content: space-between; gap: 1rem; }
+.family-layers dt { color: var(--text); }
+.family-layers dd { margin: 0; text-align: right; }
+.family-reason, .family-sources, .family-help { font-size: .8125rem; color: var(--muted); line-height: 1.6; }
+.family-help p { margin: .25rem 0; }
+.family-actions > .button { flex: 1 1 auto; font-size: .8125rem; }
+.family-recommendation { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--separator); }
+.family-recommendation p { margin: 0 0 .75rem; font-size: .875rem; line-height: 1.65; }
+.family-recommendation > .button { width: 100%; }
+.family-sources { margin-top: .5rem; }
+.family-sources a { margin-left: .5rem; color: var(--accent); }
+.family-micro { max-width: 34rem; margin: 0 auto; padding: .75rem 0; line-height: 1.7; }
+.family-micro-progress { display: flex; justify-content: space-between; color: var(--muted); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.family-micro .pretest-progress { margin: .5rem 0 1.5rem; }
+.family-micro form { display: grid; gap: .75rem; }
+.family-micro form > p { font-size: 1.2rem; line-height: 1.7; margin: .75rem 0; }
+.family-micro form > label { color: var(--muted); font-size: .8125rem; }
+.family-entry { margin-top: .55rem; }
+.wordloop-shell .family-entry { width: 100%; order: 3; }
+@media (min-width: 768px) { .family-content { grid-template-columns: minmax(0, 1.1fr) minmax(16rem, .9fr); gap: 1.5rem; } .family-canvas { height: 20rem; } }
+@media (max-width: 540px) { .family-dialog { width: calc(100vw - 1.25rem); padding: 1rem; } .family-header h2 { font-size: 1.25rem; } .family-header { gap: .75rem; padding-bottom: 1rem; } .family-actions > button { flex: 1 1 40%; } }
+@media (prefers-reduced-motion: reduce) { .family-dialog .button, .family-node-list button { transition: none; } }
+@media (prefers-contrast: more) { .family-dialog, .family-mini-card, .family-canvas, .family-node-list button { border-color: var(--separator-strong); } }
