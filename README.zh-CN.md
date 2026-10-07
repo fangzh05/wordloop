@@ -25,6 +25,104 @@ WordLoop 把五类职责明确拆开。
 
 浏览器永远拿不到 Supabase service-role key、DeepSeek key、Shanbay bridge secret 或其他服务端密钥。
 
+## 词族学习系统
+
+WordLoop 现在把“词族”当成一个独立的学习层，而不只是给当前单词列一排派生词。
+
+目标不是一次把整个 family 灌给用户，而是围绕当前词构建一个**小而可信的局部词族图**，再根据当前学习状态决定：只浏览、只巩固原词，还是现在引入一个新的派生词。
+
+### 词族系统现在能做什么
+
+- 在当前 Lesson 解释页通过专门的 **词族** 入口打开。
+- 默认只加载当前词的一跳关系，而不是直接展示全局词网。
+- lexical knowledge 层区分不同 POS 节点，同时继续沿用现有 lemma-level 用户学习状态。
+- 展示经过验证的派生、对比等关系，并保留 source / provenance。
+- 用户可以主动展开某个节点，继续看下一跳。
+- 可以把某个相关词保存为 **future candidate**，但此时不会创建词卡。
+- 当用户当前状态适合学习新派生词时，可以启动一个短的 **Family micro-session**。
+- 一次 introduction 最多只激活 **一个** 新 derivative。
+- 继续复用现有 activity type、错误层、attempt、每日时间预算和 FSRS 初始化逻辑。
+
+单纯浏览词族图不会改变任何学习状态。
+
+### 数据来源
+
+词族知识不是模型临时生成的，而是有来源的数据层：
+
+- **Open English WordNet 2025**：提供英文 sense 和经过验证的 lexical evidence；
+- **MorphyNet English derivational v1**：提供额外派生关系，但必须先通过 OEWN lemma/POS 校验；
+- **ECDICT**：提供 lemma-level 中文释义和补充英文释义；
+- 仓库保留一个小型人工审核 fixture，用于确定性回归测试。
+
+每条导入的 lexical record 都保留 source、revision、license 和 provenance。拼写相似、embedding 聚类或 LLM 猜测不能直接生成 relation。
+
+### 局部图规则
+
+Family Graph 刻意限制规模：
+
+- 单次服务端最多返回 24 个节点；
+- 浏览器累计最多保留 40 个节点；
+- 默认只展示一跳；
+- 想继续看必须由用户主动展开；
+- 低置信度或来源不足的关系直接过滤，不自动补造。
+
+Cytoscape.js 只有打开 Family 面板时才懒加载，因此普通 Lesson 启动不承担图引擎成本。
+
+### A / B / C / D 四阶段
+
+系统用四个确定性阶段控制词族扩展，防止一次引入太多同族词造成干扰。
+
+- **A 阶段：只巩固 base。** 如果原词还很新、稳定性不足、错误层明显或练习不足，micro-session 只练原词，不创建新 derivative。
+- **B 阶段：引入一个 derivative。** 当 base 足够稳定时，系统才可能选择一个高价值、形态透明的派生词。
+- **C 阶段：间隔后继续扩展。** 已经学过一个或多个 family member 后，必须同时满足 spacing 和稳定性门槛，才允许引入下一个。
+- **D 阶段：只做辨析。** 当同族已经有多个稳定成员时，系统优先做语境辨析，不继续增加新词。
+
+候选评分综合 utility、考试相关性、形态透明度、用户需要和 interference risk。这些是 deterministic v1 规则，不是心理测量意义上的“掌握概率”。
+
+### Family micro-session
+
+Family micro-session 是一个短而集中的词族小课，通常约两分钟，可以包含：
+
+- 词根/词缀与形态说明；
+- 词性识别；
+- definition recall；
+- collocation / usage 对比；
+- contextual extraction；
+- 无提示主动回忆。
+
+短课可以中断恢复，并且提交幂等。中间步骤不会提前创建新卡。只有完整完成预定 introduction 后，WordLoop 才会通过现有 vocabulary 路径初始化一个 derivative，并建立它自己的正常 FSRS 状态。
+
+如果并发情况下这个词已经存在，系统保留已有卡片和 schedule，不会重置。
+
+### 与 FSRS / BKT 的边界
+
+词族系统**不是第二套 scheduler**，也没有单独的 mastery 模型。
+
+- FSRS 仍然是唯一长期词汇调度器。
+- BKT 可以给普通 Lesson planner 提供 skill weakness 信号，但它不决定 Family 的 due date。
+- future candidate 只是未来可能学习的意向，不属于今日队列，也没有 due date。
+- 浏览词族、保存 candidate、Stage A 巩固都不会推进词汇 FSRS。
+- Family 学习不会重排已经冻结的普通 Lesson queue。
+
+### 当前覆盖和限制
+
+当前生产词族语料来自 vocabulary-scoped 的 OEWN + MorphyNet corpus，并由 ECDICT 补充双语词典内容。某个词没有可靠 family relation 时，系统会明确显示空状态，而不是自动猜。
+
+目前还没有：
+
+- Global / Network View；
+- LLM 自动生成 lexical relation；
+- per-sense / per-POS 独立学习状态；
+- 第二套 family scheduler；
+- 用图结构去重排正式 Review 队列。
+
+实现与数据文档：
+
+- docs/LOCAL_FAMILY_GRAPH.md
+- docs/LEXICAL_CORPUS_IMPORT.md
+- docs/BILINGUAL_FAMILY_DICTIONARY.md
+- server/data/ATTRIBUTION.md
+
 ## 当前学习流程
 
 一次正常学习由后端 bootstrap 驱动，并持久化到 study_sessions。
