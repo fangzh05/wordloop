@@ -38,9 +38,9 @@ function noteRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe("canonical Capture adapter", () => {
-  it("creates only through the idempotent RPC and strips query credentials from source URLs", async () => {
+  it.each([true, false])("creates only through the RPC and carries new_occurrence=%s without leaking source credentials", async (newOccurrence) => {
     const rpc = vi.fn().mockResolvedValue({
-      data: { note_id: noteId, occurrence_count: 1, new_occurrence: true }, error: null,
+      data: { note_id: noteId, occurrence_count: 1, new_occurrence: newOccurrence }, error: null,
     });
     const noteQuery = queryBuilder({ data: noteRow(), error: null });
     const occurrenceQuery = queryBuilder({
@@ -78,6 +78,8 @@ describe("canonical Capture adapter", () => {
     }));
     expect(from.mock.calls.map(([table]) => table)).toEqual(["captured_notes", "captured_note_occurrences", "note_review_states"]);
     expect(result.user_word_id).toBeNull();
+    expect(result.new_occurrence).toBe(newOccurrence);
+    expect(occurrenceQuery.eq).toHaveBeenCalledWith("is_duplicate", false);
     expect(result.latest_occurrence?.created_at).toBe("2026-09-29T10:05:00.000Z");
   });
 

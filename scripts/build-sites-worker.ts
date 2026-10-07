@@ -33,6 +33,7 @@ const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, ...migratio
   readFile(path.join(root, "supabase", "migrations", "202610020001_note_review_states.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20261002024106_evidence_budget.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20261004164746_cross_day_review_handoff.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "20261007025825_captured_note_deduplication.sql"), "utf8"),
 ]);
 
 const assetHash = (asset: string): string => createHash("sha256").update(asset).digest("hex").slice(0, 12);

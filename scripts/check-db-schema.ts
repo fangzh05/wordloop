@@ -33,6 +33,7 @@ const checks: SchemaCheck[] = [
   { table: "captured_notes", column: "converted_user_word_id", migration: "20260929172617" },
   { table: "captured_note_occurrences", column: "idempotency_key", migration: "20260929172617" },
   { table: "captured_note_occurrences", column: "context_text", migration: "20260929172617" },
+  { table: "captured_note_occurrences", column: "is_duplicate", migration: "20261007025825" },
   { table: "note_review_states", column: "card", migration: "202610020001" },
   { table: "note_review_states", column: "due", migration: "202610020001" },
   { table: "note_review_states", column: "revision", migration: "202610020001" },

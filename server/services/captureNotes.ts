@@ -313,6 +313,7 @@ async function readOne(
       .select("id,context_text,source_type,source_ref,source_title,source_url,captured_at", { count: "exact" })
       .eq("user_id", userId)
       .eq("captured_note_id", id)
+      .eq("is_duplicate", false)
       .order("captured_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(3),
@@ -529,10 +530,10 @@ export async function listCaptureNoteOccurrences(
   if (owner.error) databaseFailure(owner.error);
   if (!owner.data) throw new CaptureServiceError(404, "CAPTURE_NOT_FOUND", "这条划词笔记不存在或已被移除。");
   const countQuery = db.from("captured_note_occurrences").select("id", { count: "exact", head: true })
-    .eq("user_id", userId).eq("captured_note_id", noteId.data);
+    .eq("user_id", userId).eq("captured_note_id", noteId.data).eq("is_duplicate", false);
   let pageQuery = db.from("captured_note_occurrences")
     .select("id,context_text,source_type,source_ref,source_title,source_url,captured_at")
-    .eq("user_id", userId).eq("captured_note_id", noteId.data);
+    .eq("user_id", userId).eq("captured_note_id", noteId.data).eq("is_duplicate", false);
   if (cursor) {
     pageQuery = pageQuery.or(`captured_at.lt.${cursor.captured_at},and(captured_at.eq.${cursor.captured_at},id.lt.${cursor.id})`);
   }

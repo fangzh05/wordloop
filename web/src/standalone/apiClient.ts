@@ -256,6 +256,7 @@ export interface CaptureNote {
   latest_occurrence: CaptureOccurrence | null;
   occurrences: CaptureOccurrence[];
   note_review: { enabled: boolean; due: string | null; revision: number } | null;
+  new_occurrence?: boolean;
 }
 
 export interface CaptureListResponse {

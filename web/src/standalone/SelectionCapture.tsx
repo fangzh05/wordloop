@@ -1,3 +1,4 @@
+import { captureSavedMessage } from "../../../shared/captureContracts.js";
 import { useEffect, useRef, useState } from "react";
 import { createCaptureNote, type CaptureNote, type CaptureSelectionType, type CaptureSourceType } from "./apiClient.js";
 
@@ -148,7 +149,7 @@ export function SelectionCapture({ enabled, sourceType, sourceRef, onCaptured }:
         idempotency_key: captureKeyFor(requested),
       });
       onCaptured?.(response.item);
-      setToast(response.item.occurrence_count > 1 ? `已记录 · 第 ${response.item.occurrence_count} 次遇到` : "已记录到划词笔记");
+      setToast(captureSavedMessage(response.item));
       pendingKey.current = null;
       setCandidate(null);
       window.getSelection()?.removeAllRanges();

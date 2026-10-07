@@ -1,3 +1,4 @@
+import { captureSavedMessage } from "../../../shared/captureContracts.js";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, createCapturedNote, getCapturedNotes, newCaptureIdempotencyKey, promoteCapturedNote, UnauthorizedError, updateCapturedNote, type CaptureSelectionType, type LegacyCaptureStatus, type CapturedNote } from "./apiClient.js";
 
@@ -172,7 +173,7 @@ export function CaptureInboxPage({ onBack, onUnauthorized }: {
     setError("");
     setNotice("");
     try {
-      await createCapturedNote({
+      const result = await createCapturedNote({
         selected_text: selectedText,
         selection_type: manualType,
         context_text: manualContext,
@@ -186,7 +187,7 @@ export function CaptureInboxPage({ onBack, onUnauthorized }: {
       setManualText("");
       setManualContext("");
       setManualNote("");
-      setNotice("已保存到 Inbox。");
+      setNotice(captureSavedMessage(result));
       await loadInitial();
     } catch (saveError) {
       if (saveError instanceof UnauthorizedError) onUnauthorized();

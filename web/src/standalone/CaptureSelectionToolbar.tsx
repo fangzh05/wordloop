@@ -1,3 +1,4 @@
+import { captureSavedMessage } from "../../../shared/captureContracts.js";
 import { useEffect, useRef, useState } from "react";
 import { newCaptureIdempotencyKey, type CaptureCreateInput, type CaptureSelectionType, type CaptureSourceType } from "./apiClient.js";
 
@@ -57,7 +58,7 @@ export function CaptureSelectionToolbar({
   onCapture,
 }: {
   enabled: boolean;
-  onCapture: (input: CaptureCreateInput) => Promise<unknown>;
+  onCapture: (input: CaptureCreateInput) => Promise<{ new_occurrence: boolean; occurrence_count: number }>;
 }): React.JSX.Element | null {
   const [capture, setCapture] = useState<CaptureSelection | null>(null);
   const captureRef = useRef<CaptureSelection | null>(null);
@@ -127,7 +128,7 @@ export function CaptureSelectionToolbar({
     setSaving(true);
     setMessage("");
     try {
-      await onCapture({
+      const result = await onCapture({
         selected_text: capture.selected_text,
         selection_type: capture.selection_type,
         context_text: capture.context_text,
@@ -139,7 +140,7 @@ export function CaptureSelectionToolbar({
       window.getSelection()?.removeAllRanges();
       captureRef.current = null;
       setCapture(null);
-      setMessage("已记录到 Notes Inbox");
+      setMessage(captureSavedMessage(result));
       window.setTimeout(() => setMessage(""), 2200);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "记录失败，请重试。");

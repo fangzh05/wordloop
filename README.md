@@ -373,3 +373,9 @@ The full runtime teaching behavior lives in [`server/teachingPrompt.ts`](server/
 ### Evidence and daily time budget
 
 The additive migration `20261002024106_evidence_budget.sql` adds versioned skill evidence, a fixed-parameter BKT projection, and a default 45-minute estimated daily budget. `202610020001_note_review_states.sql` remains the independent Capture note-review migration. The budget does not change FSRS due dates or ratings. `20261004045839_bkt_active_planner.sql` allows per-learner `active` mode to use observed skill states in the existing Lesson planner. Details and operational recovery are in `docs/EVIDENCE_BUDGET.md`.
+
+### 划词笔记去重
+
+20261007025825_captured_note_deduplication.sql 为同一用户、同一笔记的来源增加数据库唯一约束。上下文统一 Unicode NFC 和空白后，来源类型、引用和地址均相同的再次划词只返回已有笔记，不增加出现计数、不覆盖个人笔记，也不改变复习状态。不同上下文继续归到同一笔记下。历史重复来源和请求编号保留为幂等记录，从列表和计数中排除。
+
+参考：[划词文本与位置精确去重](https://github.com/sjelms/pdf-highlight-extraction/blob/main/TECHNICAL.md)、[稳定划词 ID 防止重复同步](https://github.com/renehernandez/obsidian-readwise)。

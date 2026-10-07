@@ -66,3 +66,9 @@ export function toCanonicalCaptureSource(value: z.infer<typeof canonicalCaptureS
     default: return { source_type: "manual", source_title: null };
   }
 }
+
+export function captureSavedMessage(result: { new_occurrence?: boolean; occurrence_count?: number }): string {
+  if (result.new_occurrence === false) return "这条笔记已存在，未重复添加";
+  if ((result.occurrence_count ?? 0) > 1) return "笔记已存在，已补充新来源";
+  return "已记录到划词笔记";
+}
