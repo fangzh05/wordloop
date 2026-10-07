@@ -313,16 +313,22 @@ Server-only secrets must never be embedded in build/ or browser bundles.
 
 For a fresh database, apply the current setup.sql.
 
-For an existing database, apply only missing migrations in order. Recent feature-line migrations cover:
+For an existing database, apply only missing migrations in order. The current feature line includes these relevant migrations:
 
-- balanced frozen exercise plans and attribution;
-- canonical Capture/occurrence storage and deduplication;
-- Note Review state/events;
-- learning evidence, BKT state and daily budget;
-- active BKT planner controls;
-- cross-day Review handoff;
-- Local Family Graph lexical/user tables;
-- bilingual lexical dictionary entries.
+- `202609290001_capture_notes.sql` — initial Capture storage;
+- `20260929120641_captured_notes.sql` — canonical captured-notes model;
+- `20260929172617_captured_notes_canonical_adapter.sql` — canonical Capture adapter;
+- `20260929172621_analytics_read_models.sql` — analytics read models;
+- `20260929184221_progress_scheduled_stability_mean.sql` — scheduled Stability analytics;
+- `20260930043404_balanced_exercise_plans.sql` and `20260930043648_exercise_plan_fk_indexes.sql` — durable frozen exercise plans;
+- `20260930141500_consolidation_target_attribution.sql` — consolidation target attribution;
+- `202610020001_note_review_states.sql` — opt-in Note Review state/events;
+- `20261002024106_evidence_budget.sql` — learning evidence, BKT projection and daily budget;
+- `20261004045839_bkt_active_planner.sql` — active/shadow/off BKT planner control;
+- `20261004164746_cross_day_review_handoff.sql` — cross-day Review handoff;
+- `20261007025825_captured_note_deduplication.sql` — Capture deduplication;
+- `20261007053500_local_family_graph.sql` — Local Family Graph knowledge/user tables;
+- `20261007095603_lexical_dictionary_entries.sql` — bilingual lexical dictionary entries.
 
 The lexical knowledge imports are additive and must not rewrite user_words, attempts, FSRS state or frozen study_sessions.
 
