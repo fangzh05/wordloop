@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import type { GraphEdge, KnowledgeNode, LexicalGraph, NetworkType } from "../../../shared/lexicalContracts.js";
+import type { GraphEdge, KnowledgeNode, LexicalGraph } from "../../../shared/lexicalContracts.js";
 import { RELATION_LABELS } from "../../../shared/lexicalContracts.js";
 import { FAMILY_VISIBLE_LIMIT } from "../../../shared/familyContracts.js";
 import { request } from "../standalone/apiClient.js";
 import { Button } from "../components/Button.js";
 import { FamilyMiniCard, loadEngine } from "./FamilyPanel.js";
 import type { FamilyEngine } from "./familyEngine.js";
+import { SenseNetworkExplorer } from "./SenseNetworkExplorer.js";
 
-const FILTERS: Array<[string, NetworkType[]]> = [["近义",["SYNONYM"]],["反义",["ANTONYM"]],
-  ["对比",["CONTRAST"]],["易混",["CONFUSABLE"]],["搭配",["COLLOCATION"]],["上下位",["HYPERNYM","HYPONYM"]]];
 export function mergeLexicalGraph(current: LexicalGraph, next: LexicalGraph): LexicalGraph {
-  if (current.view !== next.view) return next;
+  if (current.view !== next.view || current.view === "network") return next;
   const all = new Map(current.nodes.map(n=>[n.node_id,n]));
   for (const n of next.nodes) if (all.has(n.node_id) || all.size < FAMILY_VISIBLE_LIMIT) all.set(n.node_id,n);
   const edges = new Map(current.edges.map(e=>[e.relation_id,e]));
@@ -50,16 +49,20 @@ function RelationCard({ edge, graph }: { edge: GraphEdge; graph: LexicalGraph })
   return <article className="lexical-relation"><p><strong>{RELATION_LABELS[edge.relation_type]}</strong> · {name(edge.source_id)} {edge.direction==="forward"?"→":"↔"} {name(edge.target_id)}</p>
     <p>{edge.explanation}</p>{definitions.map((d,i)=><p className="family-reason" key={i}>{d}</p>)}<Source value={edge}/></article>;
 }
-export function LexicalExplorer({view,word}:{view:"root"|"network";word:string}) {
+export function LexicalExplorer({view,word,contextSenseId}:{view:"root"|"network";word:string;contextSenseId?:string}) {
+  return view === "network" ? <SenseNetworkExplorer word={word} contextSenseId={contextSenseId} /> : <RootExplorer word={word} />;
+}
+
+function RootExplorer({word}:{word:string}) {
+  const view = "root" as const;
   const [graph,setGraph]=useState<LexicalGraph|null>(null),[selected,setSelected]=useState("");
-  const [types,setTypes]=useState<NetworkType[]>(["SYNONYM","ANTONYM","CONTRAST","COLLOCATION"]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("");
   const canvas=useRef<HTMLDivElement>(null),engine=useRef<FamilyEngine|null>(null),epoch=useRef(0),alive=useRef(true);
   const graphRef=useRef(graph);graphRef.current=graph;
   const controls=useRef({load:(id:string)=>void load(id),save:(id:string)=>void save(id)});
   controls.current={load:id=>void load(id),save:id=>void save(id)};
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;epoch.current++;engine.current?.destroy();engine.current=null;};},[]);
-  useEffect(()=>{void load(graphRef.current?.center.node_id ?? word);},[types]);
+  useEffect(()=>{void load(word);},[word]);
   useEffect(()=>{
     if(!graph||!canvas.current)return;
     if(engine.current){engine.current.update(graph);return;}
@@ -74,9 +77,7 @@ export function LexicalExplorer({view,word}:{view:"root"|"network";word:string})
     // Clear old data immediately on a filter change; a stale response cannot restore it.
     if(!expand){engine.current?.destroy();engine.current=null;setGraph(null);}
     try {
-      const filter=view==="network"?`&relation_types=${types.join(",")}`:"";
-      // Empty filter deliberately yields an empty, center-only graph.
-      const next=await request<LexicalGraph>(`/api/web/lexical/graph?lexeme=${encodeURIComponent(id)}&view=${view}&depth=1${filter}`,{});
+      const next=await request<LexicalGraph>(`/api/web/lexical/graph?lexeme=${encodeURIComponent(id)}&view=${view}&depth=1`,{});
       if(!alive.current||version!==epoch.current)return;
       setGraph(old=>expand&&old?mergeLexicalGraph(old,next):next);if(!expand)setSelected(next.center.node_id);
     }catch(e){if(alive.current&&version===epoch.current)setError(e instanceof Error?e.message:"加载失败。");}
@@ -89,11 +90,10 @@ export function LexicalExplorer({view,word}:{view:"root"|"network";word:string})
     catch(e){if(alive.current)setError(e instanceof Error?e.message:"保存失败。");}finally{if(alive.current)setBusy(false);}
   }
   const node=graph?.nodes.find(n=>n.node_id===selected);
-  return <section className="lexical-explorer" aria-label={view==="root"?"词根同源图谱":"语义网络图谱"}>
-    {view==="network"&&<nav className="lexical-filters" aria-label="语义关系过滤">{FILTERS.map(([label,group])=><button type="button" key={label} aria-pressed={group.every(t=>types.includes(t))} onClick={()=>setTypes(old=>group.every(t=>old.includes(t))?old.filter(t=>!group.includes(t)):[...new Set([...old,...group])])}>{label}</button>)}</nav>}
+  return <section className="lexical-explorer" aria-label="词根同源图谱">
     {busy&&<p role="status">正在加载…</p>}{error&&<p role="alert">{error} <button onClick={()=>void load(word)}>重试</button></p>}{message&&<p role="status">{message}</p>}
     {graph&&<div className="family-content"><section className="family-graph-pane"><div className="family-graph-toolbar"><div><span className="eyebrow">RELATION MAP</span><p className="family-reason">一跳关系 · {view==="root"?"方框是历史词源；共同祖源不表示直接派生":"虚线：反义／对比／搭配；点线：近义"}</p></div><Button className="secondary" onClick={()=>engine.current?.fit()}>适合窗口</Button></div>
-      {graph.edges.length===0&&<p>{view==="root"?"暂无已核验的词源关系":"暂无所选类型的已核验关系"}</p>}
+      {graph.edges.length===0&&<p>暂无已核验的词源关系</p>}
       <div ref={canvas} className="family-canvas" aria-label="局部词汇知识图"/>
       <nav className="family-node-list" aria-label="图谱节点">{graph.nodes.map(n=><button type="button" key={n.node_id} aria-pressed={n.node_id===selected} onClick={()=>setSelected(n.node_id)}>{n.lemma}{n.node_type==="etymon"?` · ${n.language}`:n.node_type==="pattern"?" · 搭配":""}</button>)}</nav>
       {graph.truncated&&<p>已限制节点或关系数量；切换中心查看其他分支。</p>}

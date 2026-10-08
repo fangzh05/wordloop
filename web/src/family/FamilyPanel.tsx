@@ -71,7 +71,7 @@ export function FamilyMiniCard({ node }: { node: FamilyNode }) {
       })}</dl></details>}
   </div>;
 }
-export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onClose(): void }) {
+export function FamilyPanel({ initialWord, onClose, contextSenseId }: { initialWord: string; onClose(): void; contextSenseId?: string }) {
   const [view, setView] = useState<GraphView>("family");
   const dialogRef = useRef<HTMLDialogElement>(null), canvasRef = useRef<HTMLDivElement>(null), engineRef = useRef<FamilyEngine | null>(null);
   const [graph, setGraph] = useState<FamilyGraph | null>(null), [selectedId, setSelectedId] = useState<string | null>(null);
@@ -155,7 +155,8 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
     <header className="family-header"><div className="family-header-copy"><span className="eyebrow">WORDLOOP / LEXICAL ATLAS</span><h2 id="family-title">{micro ? "词族短练习" : graph?.center.lemma ?? initialWord}</h2><p className="family-header-subtitle">从一个词出发，看清词形、词源与语义之间的关系。</p></div>
       <Button type="button" className="secondary" onClick={onClose}>返回学习</Button></header>
     {!micro && <><nav className="lexical-view-tabs" aria-label="图谱视图">{([['family','词族'],['root','词根同源'],['network','语义网络']] as const).map(([key,label]) => <button type="button" key={key} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav><div className="family-view-note" role="note"><span>{view==="family"?"MODERN DERIVATION":view==="root"?"HISTORICAL ORIGIN":"SEMANTIC RELATIONS"}</span><p>{view==="family"?"展示现代派生关系；相似拼写不自动等于同源。":view==="root"?"仅展示有来源证据的祖源关系；共享祖源不等于直接派生。":"依关系类型筛选已核验关联；近义、反义与搭配不可混为一类。"}</p></div></>}
-    {view !== "family" && !micro ? <LexicalExplorer key={view} view={view} word={graph?.center.lemma ?? initialWord} /> : <>
+    {view !== "family" && !micro ? <LexicalExplorer key={view} view={view} word={graph?.center.lemma ?? initialWord}
+      contextSenseId={!graph || graph.center.lemma === initialWord.trim().toLowerCase() || graph.center.lexeme_id === initialWord ? contextSenseId : undefined} /> : <>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {busy && <p role="status">正在处理…</p>}
     {micro ? <section className="family-micro">

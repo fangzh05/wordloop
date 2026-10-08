@@ -1,4 +1,4 @@
-async (page) => {
+async (page, outputDirectory) => {
   const results=[];
   const assert=(value,message)=>{if(!value)throw Error(message);};
   const browser=page.context().browser();
@@ -6,20 +6,20 @@ async (page) => {
     const ctx=await browser.newContext({viewport:{width,height},hasTouch:touch,isMobile:touch,deviceScaleFactor:1});
     const p=await ctx.newPage(),errors=[],warnings=[],requests=[];
     p.on('pageerror',e=>errors.push(e.message));p.on('console',m=>{if(m.type()==='error')errors.push(m.text());if(m.type()==='warning')warnings.push(m.text());});p.on('request',r=>requests.push(r.url()));
-    await p.goto('http://127.0.0.1:4328/?word=circle');
+    await p.goto('http://127.0.0.1:4329/?word=circle');
     assert(await p.title()==='WordLoop local lexical QA','Wrong page');
     assert(!requests.some(u=>u.includes('/family.js')||u.includes('/lexical/graph')),'Eager graph load');
-    const before=await (await p.request.get('http://127.0.0.1:4328/fixture/evidence')).json();
+    const before=await (await p.request.get('http://127.0.0.1:4329/fixture/evidence')).json();
     await p.getByRole('button',{name:'词族',exact:true}).click();
     await p.getByRole('button',{name:'词根同源',exact:true}).click();
     await p.getByRole('navigation',{name:'图谱节点'}).getByRole('button',{name:'circulate',exact:true}).waitFor();
     await p.waitForFunction(()=>!!document.querySelector('.family-canvas')?._cyreg?.cy);
     const initial=await p.evaluate(()=>{const cy=document.querySelector('.family-canvas')._cyreg.cy;window.__qa_cy=cy;return {nodes:cy.nodes().length,zoom:cy.zoom(),kinds:cy.nodes().map(n=>n.classes())};});
     assert(initial.nodes<=24,'Initial node cap');assert(initial.kinds.some(k=>k.includes('etymon')),'Historical type style missing');
-    await p.screenshot({path:`.qa/root-${width}.png`});
+    await p.screenshot({path:`${outputDirectory}/root-${width}.png`});
     const light=await p.locator('.family-canvas').evaluate(el=>getComputedStyle(el).backgroundColor);
     await p.evaluate(()=>document.documentElement.dataset.theme='dark');
-    await p.screenshot({path:`.qa/root-dark-${width}.png`});
+    await p.screenshot({path:`${outputDirectory}/root-dark-${width}.png`});
     assert(await p.locator('.family-canvas').evaluate(el=>getComputedStyle(el).backgroundColor)!==light,'Dark theme not applied');
     await p.evaluate(()=>document.documentElement.dataset.theme='light');
     await p.getByRole('navigation',{name:'图谱节点'}).getByRole('button',{name:'circulus · Latin',exact:true}).click();
@@ -81,18 +81,20 @@ async (page) => {
     assert(await p.evaluate(()=>window.__qa_cy.destroyed()),'Root engine not released on view switch');
     await p.getByRole('button',{name:'返回学习',exact:true}).click();
     assert(await p.locator('dialog').count()===0,'Dialog not closed');
-    await p.goto('http://127.0.0.1:4328/?word=persuade');
+    await p.goto('http://127.0.0.1:4329/?word=persuade');
     await p.getByRole('button',{name:'词族',exact:true}).click();
     await p.getByRole('navigation',{name:'词族节点'}).getByRole('button',{name:'persuasion',exact:true}).waitFor();
     await p.getByRole('button',{name:'语义网络',exact:true}).click();
+    await p.getByLabel('当前义项',{exact:true}).selectOption('wikt:persuade:v:agree');
     await p.getByRole('navigation',{name:'图谱节点'}).getByRole('button',{name:'convince',exact:true}).waitFor();
-    await p.getByRole('navigation',{name:'图谱节点'}).getByRole('button',{name:'persuade someone to do something · 搭配',exact:true}).click();
-    assert(await p.getByRole('region',{name:'词条与关系详情'}).getByRole('button',{name:'加入未来候选'}).count()===0,'Pattern candidate control');
-    await p.screenshot({path:`.qa/network-${width}.png`});
+    await p.getByLabel('当前义项',{exact:true}).selectOption('oewn-persuade__2.32.00..');
+    await p.getByRole('navigation',{name:'图谱节点'}).getByRole('button',{name:'persuade someone to do something',exact:true}).click();
+    assert(await p.getByRole('region',{name:'词条概览'}).count()===0,'Pattern candidate control');
+    await p.screenshot({path:`${outputDirectory}/network-${width}.png`});
     await p.getByRole('navigation',{name:'语义关系过滤'}).getByRole('button',{name:'近义',exact:true}).click();
     await p.waitForFunction(()=>!document.querySelector('[aria-label="图谱节点"]')?.textContent.includes('convince'));
     for(const name of ['反义','对比','搭配'])await p.getByRole('navigation',{name:'语义关系过滤'}).getByRole('button',{name,exact:true}).click();
-    await p.getByText('暂无所选类型的已核验关系',{exact:true}).waitFor();
+    await p.getByText('暂无所选类型的已核验关系。',{exact:true}).waitFor();
     await p.getByRole('button',{name:'词族',exact:true}).last().click();
     await p.getByRole('navigation',{name:'词族节点'}).getByRole('button',{name:'persuasive',exact:true}).waitFor();
     assert(await p.getByRole('button',{name:'学习这个词族 · 约 2 分钟'}).isEnabled(),'Family micro-session disabled');
@@ -100,7 +102,7 @@ async (page) => {
     assert(!overflow,'Horizontal overflow');
     await p.keyboard.press('Escape');assert(await p.locator('dialog').count()===0,'Escape did not close');
     await p.waitForFunction(()=>document.activeElement?.textContent==='词族');
-    const after=await (await p.request.get('http://127.0.0.1:4328/fixture/evidence')).json();
+    const after=await (await p.request.get('http://127.0.0.1:4329/fixture/evidence')).json();
     assert(before.cards===after.cards&&before.reviews===after.reviews&&JSON.stringify(before.frozen)===JSON.stringify(after.frozen),'Learning state changed');
     assert(errors.length===0,'Browser errors: '+errors.join('\n'));
     results.push({width,height,touch,initialNodes:initial.nodes,overflow,errors,warnings,importedLexemes:after.lexemes,importedSenseRelations:after.sense_relations,cards:after.cards,fsrsLogs:after.reviews});

@@ -12,19 +12,25 @@ import {lexicalGraphQuerySchema,type NetworkType} from '../../shared/lexicalCont
 import {getFamilyContext,familySessionView} from '../../server/services/familyGraph.js';
 import {selectFamilyCandidate} from '../../server/services/familyPolicy.js';
 import {buildFamilyLesson} from '../../server/services/familyLesson.js';
+import {buildNetworkCorpus} from '../lib/networkCorpus.js';
 const db=new PGlite(),user='00000000-0000-4000-8000-000000000001';
 await db.exec('create role anon;create role authenticated;create role service_role bypassrls;');
-for(const name of ['202609130001_initial_wordloop.sql','202609130002_fsrs_shanbay.sql','202609150004_study_session_state.sql','20260927143358_exact_cloze_activity_type.sql','20260929120641_captured_notes.sql','20260930043404_balanced_exercise_plans.sql','20261002024106_evidence_budget.sql','20261007053500_local_family_graph.sql','20261007095603_lexical_dictionary_entries.sql','20261008052820_lexical_root_network.sql'])await db.exec(readFileSync(`supabase/migrations/${name}`,'utf8').replace('create extension if not exists pgcrypto;',''));
+for(const name of ['202609130001_initial_wordloop.sql','202609130002_fsrs_shanbay.sql','202609150004_study_session_state.sql','20260927143358_exact_cloze_activity_type.sql','20260929120641_captured_notes.sql','20260930043404_balanced_exercise_plans.sql','20261002024106_evidence_budget.sql','20261007053500_local_family_graph.sql','20261007095603_lexical_dictionary_entries.sql','20261008052820_lexical_root_network.sql','20261008093933_lexical_sense_network_v2.sql'])await db.exec(readFileSync(`supabase/migrations/${name}`,'utf8').replace('create extension if not exists pgcrypto;',''));
 const data=process.argv[2]?JSON.parse(readFileSync(process.argv[2],'utf8')):core;
-const tables={morphemes:'lexical_morphemes',lexemes:'lexical_lexemes',senses:'lexical_senses',forms:'lexical_forms',relations:'lexical_relations',etymons:'lexical_etymons',etymological_links:'lexical_etymological_links',sense_relations:'lexical_sense_relations',usage_patterns:'lexical_usage_patterns',lexeme_morphemes:'lexical_lexeme_morphemes'} as const;
-for(const corpus of [family,data])for(const [key,table] of Object.entries(tables))for(let i=0;i<(corpus[key]?.length??0);i+=100)await db.exec(lexicalInsertSql(table,corpus[key].slice(i,i+100)).replace(/do update set [\s\S]*;$/,'do nothing;'));
+const senseFixture=buildNetworkCorpus(readFileSync('tests/data/oewn-bear-bearing-2025.xml','utf8'),['bear','bearing'],{etymons:[],etymological_links:[],senses:[],sense_relations:[],usage_patterns:[],lexeme_morphemes:[],spelling_pairs:[['harbor','harbour']]});
+const tables={morphemes:'lexical_morphemes',lexemes:'lexical_lexemes',senses:'lexical_senses',forms:'lexical_forms',relations:'lexical_relations',etymons:'lexical_etymons',etymological_links:'lexical_etymological_links',sense_relations:'lexical_sense_relations',usage_patterns:'lexical_usage_patterns',lexeme_morphemes:'lexical_lexeme_morphemes',spelling_variants:'lexical_spelling_variants'} as const;
+for(const corpus of [family,data,senseFixture] as any[])for(const [key,table] of Object.entries(tables))for(let i=0;i<(corpus[key]?.length??0);i+=100)await db.exec(lexicalInsertSql(table,corpus[key].slice(i,i+100)).replace(/do update set [\s\S]*;$/,'do nothing;'));
 await db.exec(lexicalInsertSql('lexical_dictionary_entries',dictionary));
 await db.query('insert into users(id) values($1)',[user]);
-for(const word of ['circle','persuade'])await db.query('select ensure_user_word_v1($1,$2,$2,\'test\',false)',[user,word]);
+for(const word of ['circle','persuade','bear'])await db.query('select ensure_user_word_v1($1,$2,$2,\'test\',false)',[user,word]);
 await db.exec("update user_words set status='review',fsrs_reps=3,fsrs_stability=8,consecutive_correct=3,meaning_error=false,spelling_error=false,next_review_at=now()+interval '8 days'");
+await db.query("insert into user_skill_state(user_id,skill_id,p_mastery,evidence_count,revision) values($1,'target_sense_retrieval',0.63,4,2)",[user]);
+await db.query("insert into learning_budget_events(user_id,task_key,local_date,estimated_seconds,activity_type) values($1,'synthetic-existing-exercise',current_date,90,'word_recall')",[user]);
+await db.query("insert into user_word_error_progress(user_word_id,error_layer,consecutive_correct) select id,'meaning',1 from user_words where user_id=$1",[user]);
 await db.query('insert into study_sessions(user_id,state) values($1,$2)',[user,JSON.stringify({current_word:'persuade',current_index:0,flow:{lesson_words:['persuade'],review_queue:['circle']}})]);
 const rpc=async(name:string,args:any[]) => (await db.query<any>(`select ${name}(${args.map((_,i)=>`$${i+1}`).join(',')}) value`,args)).rows[0]!.value;
-const adapter={rpc:async(name:string,a:any)=>({data:await rpc(name,name==='get_family_graph_v1'?[a.p_user_id,a.p_lexeme,a.p_limit]:[a.p_user_id,a.p_entity,a.p_view,a.p_types,a.p_limit]),error:null})} as unknown as SupabaseClient;
+const adapter={rpc:async(name:string,a:any)=>({data:await rpc(name,name==='get_family_graph_v1'?[a.p_user_id,a.p_lexeme,a.p_limit]:name==='get_lexical_graph_v2'?
+ [a.p_user_id,a.p_entity,a.p_types,a.p_pos,a.p_sense_id,a.p_scope,a.p_offset,a.p_limit,a.p_include_folded,a.p_evidence_offset]:[a.p_user_id,a.p_entity,a.p_view,a.p_types,a.p_limit]),error:null})} as unknown as SupabaseClient;
 mkdirSync('.qa',{recursive:true});
 await build({entryPoints:['scripts/qa/lexicalHarness.tsx'],outfile:'.qa/lexical-harness.js',bundle:true,minify:true,format:'iife',target:['es2022'],jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'}});
 const app=express();app.use(express.json());
@@ -36,7 +42,8 @@ app.get('/family.js',(_,res)=>res.sendFile(process.cwd()+'/web/dist/family.js',{
 app.all(/^\/api\/web\/.*/,async(req,res)=>{try{
  if(req.headers.authorization!=='Bearer local-lexical-fixture-only')return res.status(401).json({});
  const url=new URL(req.url,'http://localhost'),p=url.pathname;
- if(p==='/api/web/lexical/graph'){const q=lexicalGraphQuerySchema.parse(Object.fromEntries(url.searchParams));return res.json(await getLexicalGraph(q.lexeme,q.view,q.relation_types===''?[]:q.relation_types?.split(',') as NetworkType[],adapter,user));}
+ if(p==='/api/web/lexical/graph'){const q=lexicalGraphQuerySchema.parse(Object.fromEntries(url.searchParams));return res.json(await getLexicalGraph(q.lexeme,q.view,q.relation_types===''?[]:q.relation_types?.split(',') as NetworkType[],adapter,user,
+  q.version===2?{version:2,pos:q.pos,sense_id:q.sense_id,scope:q.scope,offset:q.offset,limit:q.limit,include_folded:q.include_folded,evidence_offset:q.evidence_offset}:undefined));}
  if(p.endsWith('/dictionary'))return res.json(dictionary.find(d=>d.lemma===url.searchParams.get('lemma'))??null);
  if(p.endsWith('/session'))return res.json(null);
  if(p.endsWith('/graph')||p.endsWith('/expand')||p.endsWith('/candidate')){const c=await getFamilyContext(url.searchParams.get('lexeme')!,adapter,user);return res.json(p.endsWith('/candidate')?selectFamilyCandidate(c.graph,c.exposures,new Date()):c.graph);}
@@ -45,9 +52,22 @@ app.all(/^\/api\/web\/.*/,async(req,res)=>{try{
  return res.status(404).json({});
 }catch(e){res.status(409).json({error:{message:e instanceof Error?e.message:'Local fixture failure'}});}});
 app.get('/fixture/evidence',async(_,res)=>res.json((await db.query("select (select count(*) from lexical_lexemes) lexemes,(select count(*) from lexical_sense_relations) sense_relations,(select count(*) from user_words) cards,(select count(*) from fsrs_review_logs) reviews,(select state from study_sessions limit 1) frozen,(select count(*) from family_candidates) candidates")).rows[0]));
+app.get('/fixture/learning',async(_,res)=>res.json((await db.query("select (select jsonb_agg(to_jsonb(t)) from user_words t) cards,(select jsonb_agg(to_jsonb(t)) from study_sessions t) sessions,(select jsonb_agg(to_jsonb(t)) from fsrs_review_logs t) fsrs,(select jsonb_agg(to_jsonb(t)) from user_skill_state t) bkt,(select jsonb_agg(to_jsonb(t)) from user_word_error_progress t) errors,(select jsonb_agg(to_jsonb(t)) from exercise_skill_evidence t) evidence,(select jsonb_agg(to_jsonb(t)) from learning_budget_events t) budget")).rows[0]));
+app.get('/fixture/sense-performance',async(_,res)=>{
+ const report=[];
+ for(const [entity,sense] of [['en:bear:v','oewn-bear__2.29.15..'],['en:bearing:n','oewn-bearing__1.07.00..']] as const)for(const version of [1,2]){
+  const times:number[]=[];let graph:any;
+  for(let i=0;i<26;i++){const at=performance.now();graph=await getLexicalGraph(entity,'network',['SYNONYM','ANTONYM','CONTRAST','COLLOCATION'],adapter,user,
+   version===2?{version:2,sense_id:sense}:undefined);if(i>0)times.push(performance.now()-at);}
+  times.sort((a,b)=>a-b);report.push({entity,version,p50_ms:times[12],p95_ms:times[23],nodes:graph.nodes.length,edges:graph.edges.length,
+    groups:graph.network?.groups.length,bytes:Buffer.byteLength(JSON.stringify(graph))});
+ }
+ res.json(report);
+});
 app.get('/fixture/performance',async(_,res)=>{
  const report=[];
  for(const [entity,view] of [['circle','root'],['persuade','network'],['economic','network'],['adopt','network']] as const){const times:number[]=[];let graph:any;for(let i=0;i<25;i++){const at=performance.now();graph=await getLexicalGraph(entity,view,['SYNONYM','ANTONYM','CONTRAST','CONFUSABLE','COLLOCATION','HYPERNYM','HYPONYM'],adapter,user);times.push(performance.now()-at);}times.sort((a,b)=>a-b);report.push({entity,view,p50_ms:times[12],p95_ms:times[23],nodes:graph.nodes.length,edges:graph.edges.length,truncated:graph.truncated,bytes:Buffer.byteLength(JSON.stringify(graph))});}
  res.json(report);
 });
-app.listen(4328,'127.0.0.1',()=>console.log('Synthetic local graph fixture http://127.0.0.1:4328'));
+const port=Number(process.env.LEXICAL_QA_PORT??4329);
+app.listen(port,'127.0.0.1',()=>console.log(`Public OEWN dictionary / synthetic local user QA http://127.0.0.1:${port}`));

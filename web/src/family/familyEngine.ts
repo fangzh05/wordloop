@@ -10,7 +10,7 @@ export interface FamilyEngine {
   update(graph: CanvasGraph): void; destroy(): void; fit(): void;
 }
 export type FamilyEngineFactory = (container: HTMLElement, graph: CanvasGraph, callbacks: {
-  select(id: string): void; recenter(id: string): void; candidate(id: string): void;
+  select(id: string): void; selectEdge?(id: string): void; recenter(id: string): void; candidate(id: string): void;
 }) => FamilyEngine;
 declare global { interface Window { WordLoopFamilyEngine?: FamilyEngineFactory } }
 
@@ -34,6 +34,10 @@ function familyStyle(container: HTMLElement): StylesheetJson {
     { selector: "node.pattern", style: { shape: "rectangle", width: 120, height: 42,
       "text-wrap": "wrap", "text-max-width": "106px" } },
     { selector: "node.morpheme", style: { shape: "rectangle" } },
+    { selector: "node.network", style: { shape: "rectangle", width: 112, height: 56,
+      "text-valign": "center", "text-margin-y": 0, "text-wrap": "wrap",
+      "text-overflow-wrap": "anywhere", "text-max-width": "100px", "font-size": 14,
+      "text-background-opacity": 0 } },
     { selector: "edge.forward", style: { "target-arrow-shape": "triangle", "arrow-scale": .7, "target-arrow-color": color("--separator-strong") } },
     { selector: "edge.shared, edge.synonym", style: { "line-style": "dotted" } },
     { selector: "edge.contrast, edge.confusable, edge.antonym", style: { "line-style": "dashed", "line-color": color("--accent") } },
@@ -58,6 +62,7 @@ const createEngine: FamilyEngineFactory = (container, initial, callbacks) => {
   const update = (next: CanvasGraph) => {
     const recentered = nodeId(graph.center) !== nodeId(next.center);
     graph = next;
+    const network = "view" in graph && graph.view === "network";
     cy.batch(() => {
       cy.elements().remove();
       const others = graph.nodes.filter((n) => nodeId(n) !== nodeId(graph.center));
@@ -72,7 +77,7 @@ const createEngine: FamilyEngineFactory = (container, initial, callbacks) => {
         const theta = (slot / ringCount) * Math.PI * 2 - Math.PI / 2 + ring * 0.12;
         const radius = Math.max(158, Math.min(202, container.clientWidth * .39)) + ring * 112;
         const point = center ? { x: 0, y: 0 } : { x: radius * Math.cos(theta), y: radius * Math.sin(theta) };
-        cy.add({ group: "nodes", data: { id: nodeId(n), label: kind === "etymon" ? `${n.lemma} · ${"language" in n ? n.language : ""}` : n.lemma, size: center ? 130 : 116, priority }, position: center ? point : saved.get(positionKey(nodeId(n))) ?? point, classes: `${center ? "center" : ""} ${kind} ${"user_state" in n && !n.user_state && !center ? "unlearned" : ""}` });
+        cy.add({ group: "nodes", data: { id: nodeId(n), label: kind === "etymon" ? `${n.lemma} · ${"language" in n ? n.language : ""}` : n.lemma, size: center ? 130 : 116, priority }, position: center ? point : saved.get(positionKey(nodeId(n))) ?? point, classes: `${network ? "network" : ""} ${center ? "center" : ""} ${kind} ${"user_state" in n && !n.user_state && !center ? "unlearned" : ""}` });
       });
       graph.edges.forEach((e) => cy.add({ group: "edges", data: { id: e.relation_id, source: e.source_id, target: e.target_id, confidence: e.confidence }, classes: `${e.direction === "forward" ? "forward" : ""} ${e.relation_type === "SHARED_ETYMON" ? "shared" : e.relation_type.toLowerCase()}` }));
     });
@@ -87,6 +92,10 @@ const createEngine: FamilyEngineFactory = (container, initial, callbacks) => {
     cy.nodes().removeClass("selected"); event.target.addClass("selected");
     if (lastTap.id === id && now - lastTap.at < 320) { callbacks.recenter(id); lastTap = { id: "", at: 0 }; }
     else { callbacks.select(id); lastTap = { id, at: now }; }
+  });
+  cy.on("tap", "edge", (event) => {
+    if (callbacks.selectEdge) callbacks.selectEdge(event.target.id());
+    else callbacks.select(event.target.id());
   });
   cy.on("taphold cxttap", "node", (event) => { if (graph.nodes.some(n => nodeId(n) === event.target.id() && (!("node_type" in n) || n.node_type === "lexeme"))) callbacks.candidate(event.target.id()); });
   cy.on("dragfree", "node", (event) => {

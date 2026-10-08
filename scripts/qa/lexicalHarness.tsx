@@ -1,3 +1,3 @@
 import React from 'react';import {createRoot} from 'react-dom/client';import {FamilyEntry} from '../../web/src/family/FamilyPanel.js';
 localStorage.setItem('wordloop_web_token','local-lexical-fixture-only');const word=new URL(location.href).searchParams.get('word')??'circle';
-createRoot(document.getElementById('root')!).render(<div className="standalone-shell wordloop-shell"><main className="standalone-main"><section className="widget-card standalone-card"><h1>{word}</h1><p>合成用户 · 本地 PostgreSQL 图谱验收</p><FamilyEntry word={word}/></section></main></div>);
+createRoot(document.getElementById('root')!).render(<div className="standalone-shell wordloop-shell"><main className="standalone-main"><section className="widget-card standalone-card"><h1>{word}</h1><p>合成用户 · 本地 PostgreSQL 图谱验收</p><FamilyEntry word={word} contextSenseId={new URL(location.href).searchParams.get('sense')??undefined}/></section></main></div>);
