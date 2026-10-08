@@ -1405,6 +1405,8 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
  .wordloop-shell { padding:20px 20px calc(88px + env(safe-area-inset-bottom)); }
  .wordloop-shell[data-study-open="true"] { background:var(--material-solid); padding-bottom:40px; }
  .wordloop-shell .lesson-card { padding:0; border:0; box-shadow:none; }
+ .wordloop-shell .lesson-card.study-explain-card { padding:16px; }
+ .wordloop-shell .lesson-card.study-explain-card .lesson-section { padding:0; border:0; }
  .wordloop-shell .today-focus-card,.wordloop-shell .today-progress-card,.wordloop-shell .insight-panel,.wordloop-shell .today-capture-card { padding:22px; }
  .wordloop-shell .today-capture-card { grid-template-columns:1fr; }
  .wordloop-shell .today-capture-card .button { grid-column:1; grid-row:auto; justify-self:start; }
