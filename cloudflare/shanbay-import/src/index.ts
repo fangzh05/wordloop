@@ -3,6 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { verifyBridgeRequest } from "../../../shared/importBridgeAuth.js";
 import { ShanbayClient, ShanbayError, type ShanbayImportCursor, type ShanbayWordChunk } from "../../../server/integrations/shanbay/client.js";
 import type { ShanbayBook } from "../../../server/integrations/shanbay/types.js";
+import { mobileLoginResponse, mobileLoginUrl } from "./mobileLogin.js";
 
 interface Env { BROWSER: Fetcher; IMPORTS: DurableObjectNamespace<ShanbayImportSession>; BRIDGE_SECRET: string }
 type Action = "start" | "status" | "chunk" | "ack" | "cancel";
@@ -25,6 +26,7 @@ function browserReason(error: unknown): string {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (request.method === "GET" && new URL(request.url).pathname === "/login") return mobileLoginResponse();
     if (request.method === "GET" && new URL(request.url).pathname === "/health") return reply({ ok: true });
     if (request.method !== "POST" || new URL(request.url).pathname !== "/import" || !env.BRIDGE_SECRET) return reply({ error: "UNAUTHORIZED" }, 401);
     const body = await request.text();
@@ -33,7 +35,13 @@ export default {
     try { input = JSON.parse(body); } catch { return reply({ error: "INVALID_REQUEST" }, 400); }
     if (!/^[0-9a-f-]{36}$/i.test(input.userId ?? "") || !["start", "status", "chunk", "ack", "cancel"].includes(input.action)) return reply({ error: "INVALID_REQUEST" }, 400);
     // Only the authenticated WordLoop backend chooses this identity.
-    return env.IMPORTS.get(env.IMPORTS.idFromName(input.userId)).fetch("https://internal/import", { method: "POST", body });
+    const response = await env.IMPORTS.get(env.IMPORTS.idFromName(input.userId)).fetch("https://internal/import", { method: "POST", body });
+    if (response.ok && input.action === "start") {
+      const result = await response.json<{ liveUrl?: string }>();
+      if (result.liveUrl) result.liveUrl = mobileLoginUrl(new URL(request.url).origin, result.liveUrl);
+      return reply(result);
+    }
+    return response;
   },
 };
 
