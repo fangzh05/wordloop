@@ -27,6 +27,7 @@ describe("verified corpus and bounded UI policy",()=>{
   const second={...edge,relation_id:"two",source:"Wiktionary",source_id:edge.target_id,target_id:edge.source_id,source_sense_id:edge.target_sense_id,target_sense_id:edge.source_sense_id};
   const merged=mergeGraphEvidence([edge,second,{...edge,relation_id:"other-sense",source_sense_id:"act-perform"},{...edge,relation_id:"ant",relation_type:"ANTONYM"},{...edge,source_id:edge.target_id}]);
   expect(merged).toHaveLength(3);expect(merged[0]!.provenance.additional_sources).toHaveLength(1);expect(edge.provenance).not.toHaveProperty("additional_sources");
+  expect(mergeGraphEvidence([edge,{...edge,relation_id:"crossed-senses",source_sense_id:edge.target_sense_id,target_sense_id:edge.source_sense_id}])).toHaveLength(2);
  });
  it("limits browser accumulation to 40 nodes with valid deduplicated edges and preserved center",()=>{
   const n=(i:number)=>({node_id:`en:test${i}:n`,node_type:"lexeme",lemma:`test${i}`} as LexicalWordNode);
@@ -34,6 +35,7 @@ describe("verified corpus and bounded UI policy",()=>{
   const next={...current,center:n(23),nodes:Array.from({length:24},(_,i)=>n(i+23)),edges:[{...edge,source_id:n(23).node_id,target_id:n(46).node_id}]};
   const merged=mergeLexicalGraph(current,next);expect(merged.nodes).toHaveLength(40);expect(merged.truncated).toBe(true);expect(merged.center).toEqual(current.center);expect(merged.edges).toHaveLength(0);
   expect(mergeLexicalGraph(merged,next).nodes).toHaveLength(40);
+  expect(mergeLexicalGraph({...current,view:"network"},{...next,view:"network"})).toEqual({...next,view:"network"});
  });
  it("core evidence is public, sourced, and patterns never enter canonical lexemes",()=>{
   expect(core.lexemes.some(l=>l.lemma.includes(" "))).toBe(false);

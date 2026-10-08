@@ -11,6 +11,7 @@ export interface FamilyEngine {
 }
 export type FamilyEngineFactory = (container: HTMLElement, graph: CanvasGraph, callbacks: {
   select(id: string): void; recenter(id: string): void; candidate(id: string): void;
+  selectEdge?(id: string): void;
 }) => FamilyEngine;
 declare global { interface Window { WordLoopFamilyEngine?: FamilyEngineFactory } }
 
@@ -28,6 +29,8 @@ function familyStyle(container: HTMLElement): StylesheetJson {
     { selector: "node.etymon", style: { "font-size": 11, "text-wrap": "wrap", "text-max-width": "90px", shape: "round-rectangle", "border-style": "double", width: 68, height: 36 } },
     { selector: "node.pattern", style: { shape: "round-rectangle", width: 92, height: 32, "text-wrap": "wrap", "text-max-width": "145px" } },
     { selector: "node.morpheme", style: { shape: "diamond" } },
+    { selector: "node.network", style: {shape:"round-rectangle",width:112,height:56,"text-valign":"center","text-margin-y":0,
+      "text-wrap":"wrap","text-overflow-wrap":"anywhere","text-max-width":"100px","font-size":14,"text-background-opacity":0} },
     { selector: "edge.forward", style: { "target-arrow-shape": "triangle", "arrow-scale": .8, "target-arrow-color": color("--separator-strong") } },
     { selector: "edge.shared, edge.synonym", style: { "line-style": "dotted" } },
     { selector: "edge.contrast, edge.confusable, edge.antonym", style: { "line-style": "dashed", "line-color": color("--accent") } },
@@ -48,19 +51,21 @@ const createEngine: FamilyEngineFactory = (container, initial, callbacks) => {
     boxSelectionEnabled: false, autounselectify: true,
     style: familyStyle(container),
   });
-  const positionKey = (id: string) => `${"view" in graph ? graph.view : "family"}|${nodeId(graph.center)}|${id}`;
+  const positionKey = (id: string) => `${"view" in graph ? graph.view : "family"}|${nodeId(graph.center)}|${"network" in graph?graph.network?.selected_sense_id??"":""}|${id}`;
   const update = (next: CanvasGraph) => {
     const recentered = nodeId(graph.center) !== nodeId(next.center);
     graph = next;
     cy.batch(() => {
       cy.elements().remove();
       const others = graph.nodes.filter((n) => nodeId(n) !== nodeId(graph.center));
+      const network = "view" in graph && graph.view==="network";
       graph.nodes.forEach((n) => {
         const index = others.findIndex((o) => nodeId(o) === nodeId(n)), center = index < 0;
         const kind = "node_type" in n ? n.node_type : "lexeme", priority = "priority" in n ? n.priority : .65;
         const radius = Math.min(others.length > 8 ? 180 : 135, Math.max(65, container.clientWidth / 2 - 65));
-        const point = center ? { x: 0, y: 0 } : { x: radius * Math.cos(index / Math.max(1, others.length) * Math.PI * 2), y: radius * Math.sin(index / Math.max(1, others.length) * Math.PI * 2) };
-        cy.add({ group: "nodes", data: { id: nodeId(n), label: kind === "etymon" ? `${n.lemma} · ${"language" in n ? n.language : ""}` : n.lemma, size: center ? 52 : 24 + priority * 14, priority }, position: center ? point : saved.get(positionKey(nodeId(n))) ?? point, classes: `${center ? "center" : ""} ${kind} ${"user_state" in n && !n.user_state && !center ? "unlearned" : ""}` });
+        const point = center ? { x: 0, y: 0 } : network ? {x:index%2===0?-76:76,y:100+Math.floor(index/2)*90}
+          : { x: radius * Math.cos(index / Math.max(1, others.length) * Math.PI * 2), y: radius * Math.sin(index / Math.max(1, others.length) * Math.PI * 2) };
+        cy.add({ group: "nodes", data: { id: nodeId(n), label: kind === "etymon" ? `${n.lemma} · ${"language" in n ? n.language : ""}` : n.lemma, size: center ? 52 : 24 + priority * 14, priority }, position: center ? point : saved.get(positionKey(nodeId(n))) ?? point, classes: `${network?"network":""} ${center ? "center" : ""} ${kind} ${"user_state" in n && !n.user_state && !center ? "unlearned" : ""}` });
       });
       graph.edges.forEach((e) => cy.add({ group: "edges", data: { id: e.relation_id, source: e.source_id, target: e.target_id, confidence: e.confidence }, classes: `${e.direction === "forward" ? "forward" : ""} ${e.relation_type === "SHARED_ETYMON" ? "shared" : e.relation_type.toLowerCase()}` }));
     });
@@ -77,9 +82,12 @@ const createEngine: FamilyEngineFactory = (container, initial, callbacks) => {
     else { callbacks.select(id); lastTap = { id, at: now }; }
   });
   cy.on("taphold cxttap", "node", (event) => { if (graph.nodes.some(n => nodeId(n) === event.target.id() && (!("node_type" in n) || n.node_type === "lexeme"))) callbacks.candidate(event.target.id()); });
+  cy.on("tap", "edge", event=>callbacks.selectEdge?.(event.target.id()));
   cy.on("dragfree", "node", (event) => {
     const node = event.target as NodeSingular;
     if (node.id() === nodeId(graph.center)) { node.position({ x: 0, y: 0 }); return; }
+    // Network preview always starts readable; a dragged position is session-local.
+    if("view" in graph&&graph.view==="network")return;
     saved.set(positionKey(node.id()), node.position());
     try { localStorage.setItem("wordloop_family_positions_v1", JSON.stringify(Object.fromEntries([...saved].slice(-160)))); } catch { /* optional */ }
   });

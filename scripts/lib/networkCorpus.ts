@@ -48,6 +48,31 @@ export function buildNetworkCorpus(xml: string, vocabulary: readonly string[], r
   const relations = [...all.values()].filter(r=>visible.has(owners.get(r.source_sense_id)!.lexeme) || visible.has(owners.get(r.target_sense_id)!.lexeme));
   const ids = new Set([...visible,...relations.flatMap(r=>[owners.get(r.source_sense_id)!.lexeme,owners.get(r.target_sense_id)!.lexeme])]);
   const senseIds = new Set(relations.flatMap(r=>[r.source_sense_id,r.target_sense_id]));
+  // Explicitly reviewed spelling pairs, corroborated by OEWN same-POS/synset
+  // and spelling exemplification. Synonymy alone is never variant evidence.
+  const spelling_variants: any[]=[];
+  for(const [first,second] of reviewed.spelling_pairs??[]) {
+    for(const [a,owner] of owners) {
+      const x=o.entries.get(owner.lexeme)!;
+      if(x.lemma!==first)continue;
+      for(const [b,other] of owners) {
+        const y=o.entries.get(other.lexeme)!;
+        if(y.lemma!==second || x.pos!==y.pos || owner.synset!==other.synset)continue;
+        const raw=(id:string)=>{
+          const at=xml.indexOf(`id="${id}"`);if(at<0)return "";
+          const start=xml.lastIndexOf("<Sense ",at),tagEnd=xml.indexOf(">",at);if(start<0||tagEnd<0)return "";
+          const tag=xml.slice(start,tagEnd+1);return tag.endsWith("/>")?tag:xml.slice(start,xml.indexOf("</Sense>",tagEnd)+8);
+        };
+        const ar=raw(a),br=raw(b);
+        if(!ar.includes('relType="exemplifies" target="oewn-american_spelling__')||!br.includes('relType="exemplifies" target="oewn-british_spelling__'))continue;
+        if(!ids.has(x.id)||!ids.has(y.id))continue;
+        const [s,t]=[a,b].sort();senseIds.add(s!);senseIds.add(t!);
+        spelling_variants.push({variant_id:`oewn-spelling:${hash(`${s}:${t}`).slice(0,24)}`,first_sense_id:s,second_sense_id:t,
+          first_label:s===a?"美式":"英式",second_label:t===b?"英式":"美式",...source,confidence:.95,
+          provenance:{...source.provenance,reviewed_pair:[first,second],synset_id:owner.synset,evidence:[ar,br]}});
+      }
+    }
+  }
   // Every reviewed endpoint must be real dictionary material, including all Root words.
   for (const l of reviewed.etymological_links) for (const id of [l.source_lexeme_id,l.target_lexeme_id]) if(id)ids.add(id);
   for (const s of reviewed.senses) ids.add(s.lexeme_id);
@@ -61,7 +86,7 @@ export function buildNetworkCorpus(xml: string, vocabulary: readonly string[], r
     }
     forms.push({form_id:`${id}:lemma`,lexeme_id:id,surface_form:e.lemma,form_type:"lemma",pronunciation:e.pronunciation,...source});
   }
-  return {lexemes,senses:[...senses,...reviewed.senses],forms,morphemes:reviewed.morphemes??[],sense_relations:[...relations,...reviewed.sense_relations],
+  return {lexemes,senses:[...senses,...reviewed.senses],forms,morphemes:reviewed.morphemes??[],spelling_variants,sense_relations:[...relations,...reviewed.sense_relations],
     etymons:reviewed.etymons,etymological_links:reviewed.etymological_links,usage_patterns:reviewed.usage_patterns,
     lexeme_morphemes:reviewed.lexeme_morphemes,report:{roots:vocabulary.length,lexemes:lexemes.length,sense_relations:relations.length,sha256_xml:o.sha256}};
 }

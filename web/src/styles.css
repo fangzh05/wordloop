@@ -1771,3 +1771,21 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .lexical-relation { border-top:1px solid var(--separator-strong); padding:10px 0; overflow-wrap:anywhere; }
 .lexical-evidence { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; max-height:240px; overflow:auto; }
 .family-node-list button { overflow-wrap:anywhere; }
+.network-selection { padding:1rem; border:1px solid var(--separator); border-radius:16px; min-width:0; }
+.network-selection label { display:grid; gap:.4rem; margin-bottom:.8rem; font-size:.875rem; min-width:0; }
+.network-selection select { width:100%; min-width:0; max-width:100%; min-height:44px; padding:.6rem; color:var(--text); background:var(--material-solid); border:1px solid var(--separator-strong); border-radius:8px; font:inherit; }
+.network-selection h3 { margin:.5rem 0; }
+.network-definition, .network-card p { overflow-wrap:anywhere; line-height:1.6; }
+.network-canvas { height:320px; }
+.network-groups { display:grid; grid-template-columns:minmax(0,1fr); gap:1rem; margin-block:1rem; }
+.network-groups > section { min-width:0; }
+.network-card { min-width:0; padding:1rem; margin-bottom:.75rem; border:1px solid var(--separator); border-radius:12px; }
+.network-card h4 { margin:0; display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; }
+.network-card h4 button { min-height:44px; max-width:100%; overflow-wrap:anywhere; text-align:left; font:inherit; font-weight:600; border:0; padding:.35rem .5rem; color:var(--accent); background:var(--control-hover); border-radius:8px; cursor:pointer; }
+.network-card p { font-size:.875rem; }
+.network-sense-pair + .network-sense-pair { border-top:1px solid var(--separator); margin-top:.75rem; padding-top:.5rem; }
+.network-overview { margin-top:1.5rem; }
+.sense-network { min-width:0; }
+.sense-network .family-node-list button { max-width:100%; }
+.family-header { position:relative; }
+@media(min-width:768px) { .network-groups {grid-template-columns:repeat(2,minmax(0,1fr));} .network-canvas {height:440px;} }

@@ -1,0 +1,14 @@
+{
+  "source": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+  "edition": 2025,
+  "license": "CC-BY-4.0 + Princeton-WordNet",
+  "upstream_sha256": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2",
+  "fixture_sha256": "5a886acb81b982e458aa5ef8cdce67f2f0a45e9ce0148d519205441b3f787823",
+  "roots": [
+    "bear",
+    "bearing"
+  ],
+  "selection": "Complete root entries and all members of root synsets plus direct hypernym/hyponym synsets; retain complete chosen entries and their synsets.",
+  "entries": 236,
+  "bytes": 885064
+}

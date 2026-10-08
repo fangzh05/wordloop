@@ -1,0 +1,2 @@
+# Keep pinned public dictionary bytes stable across Windows/Linux checkouts.
+tests/data/oewn-bear-bearing-2025.xml -text

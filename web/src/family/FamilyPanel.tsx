@@ -26,11 +26,11 @@ export function mergeFamilyGraph(current: FamilyGraph, next: FamilyGraph): Famil
   for (const e of next.edges) if (nodes.has(e.source_id) && nodes.has(e.target_id)) edges.set(e.relation_id, e);
   return { ...current, nodes: [...nodes.values()], edges: [...edges.values()], truncated: current.truncated || next.truncated || current.nodes.length + next.nodes.length > FAMILY_VISIBLE_LIMIT };
 }
-export function FamilyEntry({ word, disabled = false }: { word: string; disabled?: boolean }) {
+export function FamilyEntry({ word, disabled = false, contextSenseId }: { word: string; disabled?: boolean; contextSenseId?: string }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement | null>(null);
   return <><Button type="button" className="secondary family-entry" disabled={disabled} onClick={(event) => { trigger.current = event.currentTarget; setOpen(true); }}>词族</Button>
-    {open && <FamilyPanel initialWord={word} onClose={() => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); }} />}</>;
+    {open && <FamilyPanel initialWord={word} contextSenseId={contextSenseId} onClose={() => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); }} />}</>;
 }
 export function FamilyMiniCard({ node }: { node: FamilyNode }) {
   const [dictionary,setDictionary]=useState<LexicalDictionaryEntry|null>(node.dictionary??null);
@@ -71,7 +71,7 @@ export function FamilyMiniCard({ node }: { node: FamilyNode }) {
       })}</dl></details>}
   </div>;
 }
-export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onClose(): void }) {
+export function FamilyPanel({ initialWord, onClose, contextSenseId }: { initialWord: string; onClose(): void; contextSenseId?: string }) {
   const [view, setView] = useState<GraphView>("family");
   const dialogRef = useRef<HTMLDialogElement>(null), canvasRef = useRef<HTMLDivElement>(null), engineRef = useRef<FamilyEngine | null>(null);
   const [graph, setGraph] = useState<FamilyGraph | null>(null), [selectedId, setSelectedId] = useState<string | null>(null);
@@ -155,7 +155,8 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
     <header className="family-header"><div><span className="eyebrow">词汇知识图谱</span><h2 id="family-title">{micro ? "词族短练习" : graph?.center.lemma ?? initialWord}</h2></div>
       <Button type="button" className="secondary" onClick={onClose}>返回学习</Button></header>
     {!micro && <nav className="lexical-view-tabs" aria-label="图谱视图">{([['family','词族'],['root','词根同源'],['network','语义网络']] as const).map(([key,label]) => <button type="button" key={key} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>}
-    {view !== "family" && !micro ? <LexicalExplorer key={view} view={view} word={graph?.center.lemma ?? initialWord} /> : <>
+    {view !== "family" && !micro ? <LexicalExplorer key={view} view={view} word={graph?.center.lemma ?? initialWord}
+      contextSenseId={!graph||graph.center.lemma===initialWord.trim().toLowerCase()||graph.center.lexeme_id===initialWord?contextSenseId:undefined}/> : <>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {busy && <p role="status">正在处理…</p>}
     {micro ? <section className="family-micro">

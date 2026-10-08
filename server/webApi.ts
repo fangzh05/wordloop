@@ -1666,8 +1666,12 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
       const query = lexicalGraphQuerySchema.safeParse(Object.fromEntries(url.searchParams));
       if (!query.success || new Set(url.searchParams.keys()).size !== [...url.searchParams.keys()].length)
         throw new WebApiError(400, "INVALID_REQUEST", "图谱仅支持一跳及已核验的关系类型。");
-      return jsonApiResponse(await getLexicalGraph(query.data.lexeme, query.data.view,
-        query.data.relation_types === "" ? [] : query.data.relation_types?.split(",") as NetworkType[] | undefined));
+      const types=query.data.relation_types === "" ? [] : query.data.relation_types?.split(",") as NetworkType[] | undefined;
+      return jsonApiResponse(query.data.version===2
+        ? await getLexicalGraph(query.data.lexeme,query.data.view,types,undefined,undefined,{version:2,pos:query.data.pos,
+          sense_id:query.data.sense_id,scope:query.data.scope,offset:query.data.offset,limit:query.data.limit,
+          include_folded:query.data.include_folded,evidence_offset:query.data.evidence_offset})
+        : await getLexicalGraph(query.data.lexeme,query.data.view,types));
     }
     if (url.pathname.startsWith("/api/web/family/")) {
       if (request.method === "GET" && url.pathname === "/api/web/family/dictionary") {

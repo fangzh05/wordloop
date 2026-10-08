@@ -1,13 +1,18 @@
 // Client-side SQL transport for administrators using the Supabase connector.
 // The only write targets are lexical tables; all data values remain JSON literals.
 export const LEXICAL_TABLES=["lexical_morphemes","lexical_lexemes","lexical_senses","lexical_forms","lexical_relations"] as const;
-export const GRAPH_TABLES=["lexical_etymons","lexical_etymological_links","lexical_sense_relations","lexical_usage_patterns","lexical_lexeme_morphemes"] as const;
+export const GRAPH_TABLES=["lexical_etymons","lexical_etymological_links","lexical_sense_relations","lexical_usage_patterns","lexical_lexeme_morphemes","lexical_spelling_variants"] as const;
 export type LexicalTable=typeof LEXICAL_TABLES[number] | typeof GRAPH_TABLES[number];
 export type DictionaryTable="lexical_dictionary_entries";
 const literal=(s: string)=>`'${s.replaceAll("'","''")}'`;
 export function lexicalInsertSql(table: LexicalTable | DictionaryTable,rows: Record<string,any>[]): string {
   if(!(table==="lexical_dictionary_entries" || ([...LEXICAL_TABLES,...GRAPH_TABLES] as readonly string[]).includes(table))||!rows.length)throw new Error("Invalid lexical batch");
-  const columns=Object.keys(rows[0]!),pk=columns[0]!;
+  const primaryKeys:Record<LexicalTable|DictionaryTable,string>={lexical_morphemes:"morpheme_id",lexical_lexemes:"lexeme_id",lexical_senses:"sense_id",
+    lexical_forms:"form_id",lexical_relations:"relation_id",lexical_etymons:"etymon_id",lexical_etymological_links:"link_id",
+    lexical_sense_relations:"relation_id",lexical_usage_patterns:"pattern_id",lexical_lexeme_morphemes:"association_id",
+    lexical_spelling_variants:"variant_id",lexical_dictionary_entries:"entry_id"};
+  const columns=Object.keys(rows[0]!),pk=primaryKeys[table];
+  if(!columns.includes(pk))throw new Error("Missing lexical primary key");
   if(columns.some(c=>!/^\w+$/.test(c)))throw new Error("Unsafe lexical column");
   const same=(a:any,b:any)=>JSON.stringify(a)===JSON.stringify(b),common:Record<string,any>={},prov:Record<string,any>={};
   for(const col of columns)if(col!==pk&&col!=="provenance"&&rows.every(r=>same(r[col],rows[0]![col])))common[col]=rows[0]![col];
