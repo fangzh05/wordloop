@@ -15,6 +15,11 @@ type RpcCheck = {
 };
 
 const checks: SchemaCheck[] = [
+  { table: "lexical_etymons", column: "uncertain", migration: "20261008052820" },
+  { table: "lexical_etymological_links", column: "provenance", migration: "20261008052820" },
+  { table: "lexical_sense_relations", column: "source_sense_id", migration: "20261008052820" },
+  { table: "lexical_usage_patterns", column: "sense_id", migration: "20261008052820" },
+  { table: "lexical_lexeme_morphemes", column: "morpheme_id", migration: "20261008052820" },
   { table: "lexical_dictionary_entries", column: "parts_of_speech", migration: "20261007095603" },
   { table: "lexical_lexemes", column: "family_key", migration: "20261007053500" },
   { table: "lexical_senses", column: "provenance", migration: "20261007053500" },
@@ -90,6 +95,11 @@ const rpcChecks: RpcCheck[] = [
     args: {},
     migration: "202610020001",
     expectTrue: true,
+  },
+  {
+    name: "get_lexical_graph_v1",
+    args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_entity: "__schema_probe__", p_view: "root", p_types: [], p_limit: 1 },
+    migration: "20261008052820",
   },
 ];
 

@@ -1,0 +1,11 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { buildNetworkCorpus } from "./lib/networkCorpus.js";
+import reviewed from "../server/data/lexicalReviewed.json" with {type:"json"};
+const [xmlPath,vocabPath,outPath]=process.argv.slice(2);
+if(!xmlPath||!vocabPath||!outPath)throw new Error("Usage: build-lexical-corpus OEWN_2025_XML PUBLIC_OR_PRIVATE_VOCAB_JSON OUTPUT_JSON");
+const xml=readFileSync(xmlPath,"utf8");
+if(createHash("sha256").update(xml).digest("hex")!=="6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2")throw new Error("OEWN XML does not match pinned 2025 checksum");
+const {report,...corpus}=buildNetworkCorpus(xml,JSON.parse(readFileSync(vocabPath,"utf8")),reviewed);
+writeFileSync(outPath,JSON.stringify(corpus));writeFileSync(`${outPath}.report.json`,JSON.stringify(report,null,2));
+console.log(JSON.stringify(report));

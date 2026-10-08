@@ -1764,3 +1764,10 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 @media (max-width: 540px) { .family-dialog { width: calc(100vw - 1.25rem); padding: 1rem; } .family-header h2 { font-size: 1.25rem; } .family-header { gap: .75rem; padding-bottom: 1rem; } .family-actions > button { flex: 1 1 40%; } }
 @media (prefers-reduced-motion: reduce) { .family-dialog .button, .family-node-list button { transition: none; } }
 @media (prefers-contrast: more) { .family-dialog, .family-mini-card, .family-canvas, .family-node-list button { border-color: var(--separator-strong); } }
+/* Shared local lexical graph controls follow the existing material/theme tokens. */
+.lexical-view-tabs, .lexical-filters { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+.lexical-view-tabs button, .lexical-filters button { min-height:44px; padding:8px 12px; border:1px solid var(--separator-strong); border-radius:10px; background:var(--material-raised); color:var(--text); font:inherit; cursor:pointer; }
+.lexical-view-tabs button[aria-pressed="true"], .lexical-filters button[aria-pressed="true"] { color:var(--accent); background:var(--control-hover); border-color:var(--accent); }
+.lexical-relation { border-top:1px solid var(--separator-strong); padding:10px 0; overflow-wrap:anywhere; }
+.lexical-evidence { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; max-height:240px; overflow:auto; }
+.family-node-list button { overflow-wrap:anywhere; }

@@ -5,9 +5,12 @@ import { request } from "../standalone/apiClient.js";
 import type { FamilyEngine } from "./familyEngine.js";
 import { Button } from "../components/Button.js";
 
+import { LexicalExplorer } from "./LexicalExplorer.js";
+import type { GraphView } from "../../../shared/lexicalContracts.js";
+
 let engineLoad: Promise<void> | null = null;
 declare const __FAMILY_ASSET_VERSION__: string;
-function loadEngine(): Promise<void> {
+export function loadEngine(): Promise<void> {
   if (window.WordLoopFamilyEngine) return Promise.resolve();
   if (!engineLoad) engineLoad = new Promise((resolve, reject) => {
     const script = document.createElement("script"); script.src = `/family.js?v=${typeof __FAMILY_ASSET_VERSION__ === "string" ? __FAMILY_ASSET_VERSION__ : "dev"}`; script.async = true;
@@ -56,11 +59,12 @@ export function FamilyMiniCard({ node }: { node: FamilyNode }) {
     {dictionaryStatus==="ready"&&!dictionary?.chinese_translation&&<p className="family-reason">公开词典暂未收录中文释义，可查看英文释义。</p>}
     {(node.senses.length>0||dictionary?.english_definition)&&<details className="family-english-definitions"><summary>英文释义</summary>
       {dictionary?.english_definition&&<><h4>ECDICT · 词条释义</h4><p className="family-dictionary-english">{dictionary.english_definition}</p></>}
-      {node.senses.length>0&&<><h4>WordNet · {posLabels[node.part_of_speech]??node.part_of_speech}</h4><ol>{node.senses.map(s=><li key={s.sense_id}>{s.definition}</li>)}</ol></>}
+      {node.senses.length>0&&<><h4>来源词义 · {posLabels[node.part_of_speech]??node.part_of_speech}</h4><ol>{node.senses.map(s=><li key={s.sense_id}>{s.definition}</li>)}</ol></>}
     </details>}
     <p className="family-reason">{node.reason}</p>
     {!node.user_state ? <p className="family-learning-label">未学习 · Unlearned</p> : <details className="family-learning-state"><summary>学习状态 · {stateLabel}</summary>
       <p className="family-reason">记忆稳定度 {node.user_state.stability.toFixed(1)} 天</p>
+      {node.user_state.next_review_at && <p className="family-reason">下次复习：{new Date(node.user_state.next_review_at).toLocaleString()}</p>}
       <dl className="family-layers">{(["meaning", "spelling", "pronunciation", "collocation", "grammar"] as const).map((layer) => {
         const evidence = node.user_state!.layers[layer];
         return <div key={layer}><dt>{layerLabels[layer]}</dt><dd>{evidence.needs_practice ? "需要练习" : evidence.correct_streak === null ? "尚无分层证据" : `连续正确 ${evidence.correct_streak} 次`}</dd></div>;
@@ -68,6 +72,7 @@ export function FamilyMiniCard({ node }: { node: FamilyNode }) {
   </div>;
 }
 export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onClose(): void }) {
+  const [view, setView] = useState<GraphView>("family");
   const dialogRef = useRef<HTMLDialogElement>(null), canvasRef = useRef<HTMLDivElement>(null), engineRef = useRef<FamilyEngine | null>(null);
   const [graph, setGraph] = useState<FamilyGraph | null>(null), [selectedId, setSelectedId] = useState<string | null>(null);
   const [decision, setDecision] = useState<FamilyCandidate | null>(null), [micro, setMicro] = useState<FamilySessionView | null>(null);
@@ -85,11 +90,11 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
     void load(initialWord);
     return () => { alive.current = false; epoch.current++; engineRef.current?.destroy(); engineRef.current = null; };
   }, []);
-  useEffect(() => { if (graph && !micro) engineRef.current?.update(graph); }, [graph, micro]);
+  useEffect(() => { if (graph && !micro && view === "family") engineRef.current?.update(graph); }, [graph, micro, view]);
   useEffect(()=>{if(micro)dialogRef.current?.scrollTo({top:0});},[micro?.id]);
   // Canvas unmounts during a micro-session; rebuild only when returning to graph.
   useEffect(() => {
-    if (micro) { engineRef.current?.destroy(); engineRef.current = null; return; }
+    if (micro || view !== "family") { engineRef.current?.destroy(); engineRef.current = null; return; }
     if (!graph || !canvasRef.current || engineRef.current) return;
     let cancelled = false;
     void loadEngine().then(() => {
@@ -99,7 +104,7 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
       });
     }).catch((e) => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
-  }, [graph, micro]);
+  }, [graph, micro, view]);
   async function load(lexeme: string) {
     if (busy) return;
     const version = ++epoch.current;
@@ -147,8 +152,10 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
   }
   const selected = graph?.nodes.find((n) => n.lexeme_id === selectedId);
   return <dialog ref={dialogRef} className="family-dialog" aria-labelledby="family-title" onCancel={(e) => { e.preventDefault(); onClose(); }}>
-    <header className="family-header"><div><span className="eyebrow">词族学习</span><h2 id="family-title">{micro ? "词族短练习" : `${graph?.center.lemma ?? initialWord} · 词族`}</h2></div>
+    <header className="family-header"><div><span className="eyebrow">词汇知识图谱</span><h2 id="family-title">{micro ? "词族短练习" : graph?.center.lemma ?? initialWord}</h2></div>
       <Button type="button" className="secondary" onClick={onClose}>返回学习</Button></header>
+    {!micro && <nav className="lexical-view-tabs" aria-label="图谱视图">{([['family','词族'],['root','词根同源'],['network','语义网络']] as const).map(([key,label]) => <button type="button" key={key} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}</nav>}
+    {view !== "family" && !micro ? <LexicalExplorer key={view} view={view} word={graph?.center.lemma ?? initialWord} /> : <>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {busy && <p role="status">正在处理…</p>}
     {micro ? <section className="family-micro">
@@ -166,6 +173,7 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
       <div className="family-content"><section className="family-graph-pane" aria-label="词族关系">
       <p className="family-reason">一跳派生关系 · 点击查看，按需展开</p>
       <div ref={canvasRef} className="family-canvas" aria-label="局部形态派生词族图" />
+      <Button className="secondary" onClick={()=>engineRef.current?.fit()}>适合窗口</Button>
       <nav className="family-node-list" aria-label="词族节点">{graph.nodes.map((n) => <button type="button" key={n.lexeme_id} aria-pressed={n.lexeme_id === selectedId} onClick={() => setSelectedId(n.lexeme_id)}>{n.lemma}</button>)}</nav>
       {graph.truncated && <p>已限制可见节点数量；切换中心查看其他分支。</p>}
       <details className="family-help"><summary>操作提示</summary><p>拖动调整位置，双指缩放。双击节点切换中心，长按加入未来候选；也可使用词卡下方的按钮。</p></details>
@@ -185,5 +193,6 @@ export function FamilyPanel({ initialWord, onClose }: { initialWord: string; onC
       </section></div>
     </>}
     {!graph && !busy && <Button onClick={() => void load(initialWord)}>重试</Button>}
+  </>}
   </dialog>;
 }

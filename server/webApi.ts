@@ -107,6 +107,8 @@ import { vocabularyQuerySchema } from "../shared/analyticsContracts.js";
 import { VocabularyServiceError, getVocabularyDetail, listVocabulary } from "./services/vocabulary.js";
 import { FamilyServiceError, getFamilyGraph, getFamilyCandidate, addFamilyCandidate, startFamilyMicroSession, submitFamilyStep, getFamilyMicroSession } from "./services/familyGraph.js";
 import { getFamilyDictionary } from "./services/familyDictionary.js";
+import { getLexicalGraph } from "./services/lexicalGraph.js";
+import { lexicalGraphQuerySchema, type NetworkType } from "../shared/lexicalContracts.js";
 import { familyDictionaryQuerySchema } from "../shared/familyContracts.js";
 import { familyGraphQuerySchema, familyStartSchema, familyAnswerSchema } from "../shared/familyContracts.js";
 
@@ -1660,6 +1662,13 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
   try {
 
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/api/web/lexical/graph") {
+      const query = lexicalGraphQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+      if (!query.success || new Set(url.searchParams.keys()).size !== [...url.searchParams.keys()].length)
+        throw new WebApiError(400, "INVALID_REQUEST", "图谱仅支持一跳及已核验的关系类型。");
+      return jsonApiResponse(await getLexicalGraph(query.data.lexeme, query.data.view,
+        query.data.relation_types === "" ? [] : query.data.relation_types?.split(",") as NetworkType[] | undefined));
+    }
     if (url.pathname.startsWith("/api/web/family/")) {
       if (request.method === "GET" && url.pathname === "/api/web/family/dictionary") {
         const query=familyDictionaryQuerySchema.safeParse(Object.fromEntries(url.searchParams));

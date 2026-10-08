@@ -1,0 +1,1404 @@
+{
+  "etymons": [
+    {
+      "etymon_id": "ety:la:circulus",
+      "historical_form": "circulus",
+      "language": "Latin",
+      "gloss": "圆；小环",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "93409097",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+        "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+      }
+    },
+    {
+      "etymon_id": "ety:fro:cercle",
+      "historical_form": "cercle",
+      "language": "Old French",
+      "gloss": "圆",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "93409097",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+        "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+      }
+    },
+    {
+      "etymon_id": "ety:enm:circle",
+      "historical_form": "circle",
+      "language": "Middle English",
+      "gloss": "圆",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "93409097",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+        "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+      }
+    },
+    {
+      "etymon_id": "ety:la-lat:circularis",
+      "historical_form": "circularis",
+      "language": "Late Latin",
+      "gloss": "圆的",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "93132743",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+        "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+      }
+    },
+    {
+      "etymon_id": "ety:fro:circulier",
+      "historical_form": "circulier",
+      "language": "Old French",
+      "gloss": "圆的",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "93132743",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+        "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+      }
+    },
+    {
+      "etymon_id": "ety:enm:circuler",
+      "historical_form": "circuler",
+      "language": "Middle English",
+      "gloss": "圆的",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "93132743",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+        "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+      }
+    },
+    {
+      "etymon_id": "ety:la:circulor",
+      "historical_form": "circulor",
+      "language": "Latin",
+      "gloss": "形成一圈",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "91219741",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulor&oldid=91219741",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulor&action=history",
+        "sha256_wikitext": "28bfbdc2d1992187638783b74dc8ad28aebc87ccfa36a872617fbdfe97ed31b4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology 1===\n{{ety|la|title=circulor|:af|circulus<t:circle>|-ō<id:denominative>|text=+|tree=1}}"
+      }
+    },
+    {
+      "etymon_id": "ety:la-lat:circulo",
+      "historical_form": "circulō",
+      "language": "Late Latin",
+      "gloss": "使成圆；围绕",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "91662424",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+        "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}."
+      }
+    },
+    {
+      "etymon_id": "ety:la-lat:circulatus",
+      "historical_form": "circulātus",
+      "language": "Late Latin",
+      "gloss": "circulō 的完成被动分词",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "91662424",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+        "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}."
+      }
+    },
+    {
+      "etymon_id": "ety:la:circulatio",
+      "historical_form": "circulātiō",
+      "language": "Latin",
+      "gloss": "环行；循环",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "91796316",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulation&oldid=91796316",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulation&action=history",
+        "sha256_wikitext": "4bcd2eadce0e6d8bfe232206f24bc18b1d34d636b8766b08a7999b7ec48f3030",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circulacioun}}, from {{der|en|la|circulatio}}. Morphologically {{suffix|en|circulate|ion}}."
+      }
+    },
+    {
+      "etymon_id": "ety:enm:circulacioun",
+      "historical_form": "circulacioun",
+      "language": "Middle English",
+      "gloss": "循环",
+      "period": null,
+      "explanation": "见关联边的核验路径。",
+      "uncertain": false,
+      "source": "English Wiktionary contributors",
+      "source_version": "91796316",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulation&oldid=91796316",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulation&action=history",
+        "sha256_wikitext": "4bcd2eadce0e6d8bfe232206f24bc18b1d34d636b8766b08a7999b7ec48f3030",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circulacioun}}, from {{der|en|la|circulatio}}. Morphologically {{suffix|en|circulate|ion}}."
+      }
+    }
+  ],
+  "etymological_links": [
+    {
+      "link_id": "wikt:dc1d0b145df49c83d9afdb93",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:fro:cercle",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93409097",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+        "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+      }
+    },
+    {
+      "link_id": "wikt:a052dae280960a49b584c7d0",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:fro:cercle",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:enm:circle",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93409097",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+        "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+      }
+    },
+    {
+      "link_id": "wikt:fc3979630c30fb37ea98418e",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:enm:circle",
+      "target_lexeme_id": "en:circle:n",
+      "target_etymon_id": null,
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93409097",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+        "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+      }
+    },
+    {
+      "link_id": "wikt:72b35edc8b2a9f505f0bbbce",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:la-lat:circularis",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93132743",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+        "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+      }
+    },
+    {
+      "link_id": "wikt:ed6403c1172a948aab242ee2",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la-lat:circularis",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:fro:circulier",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93132743",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+        "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+      }
+    },
+    {
+      "link_id": "wikt:30cbabb1f9881d0e6a7f94bb",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:fro:circulier",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:enm:circuler",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93132743",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+        "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+      }
+    },
+    {
+      "link_id": "wikt:4a31fa7c31e03f19dc34d438",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:enm:circuler",
+      "target_lexeme_id": "en:circular:a",
+      "target_etymon_id": null,
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93132743",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+        "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+      }
+    },
+    {
+      "link_id": "wikt:280ea64f51624f251ded397f",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:la:circulor",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91219741",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulor&oldid=91219741",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulor&action=history",
+        "sha256_wikitext": "28bfbdc2d1992187638783b74dc8ad28aebc87ccfa36a872617fbdfe97ed31b4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology 1===\n{{ety|la|title=circulor|:af|circulus<t:circle>|-ō<id:denominative>|text=+|tree=1}}"
+      }
+    },
+    {
+      "link_id": "wikt:6ec9b4461989d8ee0ee5304a",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulor",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:la-lat:circulo",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "Late Latin circulō 是 circulor 的后期旁系形式。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91662424",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+        "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}."
+      }
+    },
+    {
+      "link_id": "wikt:11642169433c16c9667fa503",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la-lat:circulo",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:la-lat:circulatus",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91662424",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+        "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}."
+      }
+    },
+    {
+      "link_id": "wikt:43b9947655f2dd0859b7ba4f",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la-lat:circulatus",
+      "target_lexeme_id": "en:circulate:v",
+      "target_etymon_id": null,
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91662424",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+        "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}."
+      }
+    },
+    {
+      "link_id": "wikt:60164d5b3b78e69363e6013e",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulor",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:la:circulatio",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "90490548",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulatio&oldid=90490548",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulatio&action=history",
+        "sha256_wikitext": "d1de628cb862872a16fa606bcb83331500fc7254c18d0d96f63d0c3ced966d09",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{ety|la|title=circulātiō|:af|circulor|-tiō|text=+|tree=1}}"
+      }
+    },
+    {
+      "link_id": "wikt:d9fc41b9f9af5206f676666a",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulatio",
+      "target_lexeme_id": null,
+      "target_etymon_id": "ety:enm:circulacioun",
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91796316",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulation&oldid=91796316",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulation&action=history",
+        "sha256_wikitext": "4bcd2eadce0e6d8bfe232206f24bc18b1d34d636b8766b08a7999b7ec48f3030",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circulacioun}}, from {{der|en|la|circulatio}}. Morphologically {{suffix|en|circulate|ion}}."
+      }
+    },
+    {
+      "link_id": "wikt:2aaf26ec8f1eed44c61d76f3",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:enm:circulacioun",
+      "target_lexeme_id": "en:circulation:n",
+      "target_etymon_id": null,
+      "relation_type": "ETYMOLOGICAL_ORIGIN",
+      "direction": "forward",
+      "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91796316",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulation&oldid=91796316",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulation&action=history",
+        "sha256_wikitext": "4bcd2eadce0e6d8bfe232206f24bc18b1d34d636b8766b08a7999b7ec48f3030",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circulacioun}}, from {{der|en|la|circulatio}}. Morphologically {{suffix|en|circulate|ion}}."
+      }
+    },
+    {
+      "link_id": "wikt:7476afe9f7661ddca365510d",
+      "source_lexeme_id": "en:circular:a",
+      "source_etymon_id": null,
+      "target_lexeme_id": "en:circularity:n",
+      "target_etymon_id": null,
+      "relation_type": "MORPHOLOGICAL_DERIVATION",
+      "direction": "forward",
+      "explanation": "circular + -ity → circularity。",
+      "source": "English Wiktionary contributors",
+      "source_version": "90600841",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circularity&oldid=90600841",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circularity&action=history",
+        "sha256_wikitext": "3afb1fbc45485fec534f0c4fa0e0db74fe53ae237ef6cf047ef792b6a4d1da0c",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{ety|en|:af|circular|-ity|text=+|tree=1}}"
+      }
+    },
+    {
+      "link_id": "wikt:471f5b8d430b491a047f19b1",
+      "source_lexeme_id": "en:circle:n",
+      "source_etymon_id": null,
+      "target_lexeme_id": "en:encircle:v",
+      "target_etymon_id": null,
+      "relation_type": "MORPHOLOGICAL_DERIVATION",
+      "direction": "forward",
+      "explanation": "en- + circle → encircle。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91528949",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=encircle&oldid=91528949",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=encircle&action=history",
+        "sha256_wikitext": "dafe811644626f65e214bfbdcc0bfa1c175640c467219596606456eae1ada779",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{ety|en|:af|en-|circle|text=+|tree=1}}"
+      }
+    },
+    {
+      "link_id": "wikt:21905bd508ad1d7a9958ffa2",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": "en:circle:n",
+      "target_etymon_id": null,
+      "relation_type": "SHARED_ETYMON",
+      "direction": "undirected",
+      "explanation": "共同祖源 circulus；中间借词和派生路径见来源。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93409097",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+        "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}.",
+        "verified_path": [
+          {
+            "link_id": "wikt:dc1d0b145df49c83d9afdb93",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulus",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:fro:cercle",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93409097",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+              "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+            }
+          },
+          {
+            "link_id": "wikt:a052dae280960a49b584c7d0",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:fro:cercle",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:enm:circle",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93409097",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+              "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+            }
+          },
+          {
+            "link_id": "wikt:fc3979630c30fb37ea98418e",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:enm:circle",
+            "target_lexeme_id": "en:circle:n",
+            "target_etymon_id": null,
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93409097",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+              "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "link_id": "wikt:189677dc3d7d88fa9e3fd8fe",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": "en:circular:a",
+      "target_etymon_id": null,
+      "relation_type": "SHARED_ETYMON",
+      "direction": "undirected",
+      "explanation": "共同祖源 circulus；中间借词和派生路径见来源。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93132743",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+        "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}.",
+        "verified_path": [
+          {
+            "link_id": "wikt:72b35edc8b2a9f505f0bbbce",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulus",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:la-lat:circularis",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93132743",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+              "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+            }
+          },
+          {
+            "link_id": "wikt:ed6403c1172a948aab242ee2",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la-lat:circularis",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:fro:circulier",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93132743",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+              "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+            }
+          },
+          {
+            "link_id": "wikt:30cbabb1f9881d0e6a7f94bb",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:fro:circulier",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:enm:circuler",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93132743",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+              "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+            }
+          },
+          {
+            "link_id": "wikt:4a31fa7c31e03f19dc34d438",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:enm:circuler",
+            "target_lexeme_id": "en:circular:a",
+            "target_etymon_id": null,
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93132743",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+              "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "link_id": "wikt:c6449643b668a3c16298e415",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": "en:circulate:v",
+      "target_etymon_id": null,
+      "relation_type": "SHARED_ETYMON",
+      "direction": "undirected",
+      "explanation": "共同祖源 circulus；中间借词和派生路径见来源。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91662424",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+        "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}.",
+        "verified_path": [
+          {
+            "link_id": "wikt:280ea64f51624f251ded397f",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulus",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:la:circulor",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "91219741",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circulor&oldid=91219741",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circulor&action=history",
+              "sha256_wikitext": "28bfbdc2d1992187638783b74dc8ad28aebc87ccfa36a872617fbdfe97ed31b4",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology 1===\n{{ety|la|title=circulor|:af|circulus<t:circle>|-ō<id:denominative>|text=+|tree=1}}"
+            }
+          },
+          {
+            "link_id": "wikt:6ec9b4461989d8ee0ee5304a",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulor",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:la-lat:circulo",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "Late Latin circulō 是 circulor 的后期旁系形式。",
+            "source": "English Wiktionary contributors",
+            "source_version": "91662424",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+              "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}."
+            }
+          },
+          {
+            "link_id": "wikt:11642169433c16c9667fa503",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la-lat:circulo",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:la-lat:circulatus",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "91662424",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+              "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}."
+            }
+          },
+          {
+            "link_id": "wikt:43b9947655f2dd0859b7ba4f",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la-lat:circulatus",
+            "target_lexeme_id": "en:circulate:v",
+            "target_etymon_id": null,
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "91662424",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circulate&oldid=91662424",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circulate&action=history",
+              "sha256_wikitext": "094e78292e08baf111976b1cfeb91e54615361029ec1fffdc527c6a3fd96ef69",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{bor+|en|la-lat|circulātus}}, {{glossary|perfect}} {{glossary|passive}} {{glossary|participle}} of {{der|en|la-lat|circulō||to make circular, encircle}} (see {{af|en|-ate|id1=verb|pos1=verb-forming suffix}}), a later collateral form of {{m|la|circulor||form a circle (of men) around oneself}}, from {{m|la|circulus||a circle}}. See also {{cog|enm|circulat|circulat(e)|t=(''alchemy'') changed by continuous distillation in a closed vessel}}."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "link_id": "wikt:311a5f55625e2cee52e0b012",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": "en:circulation:n",
+      "target_etymon_id": null,
+      "relation_type": "SHARED_ETYMON",
+      "direction": "undirected",
+      "explanation": "共同祖源 circulus；中间借词和派生路径见来源。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91796316",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circulation&oldid=91796316",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circulation&action=history",
+        "sha256_wikitext": "4bcd2eadce0e6d8bfe232206f24bc18b1d34d636b8766b08a7999b7ec48f3030",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\nFrom {{inh|en|enm|circulacioun}}, from {{der|en|la|circulatio}}. Morphologically {{suffix|en|circulate|ion}}.",
+        "verified_path": [
+          {
+            "link_id": "wikt:280ea64f51624f251ded397f",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulus",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:la:circulor",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "91219741",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circulor&oldid=91219741",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circulor&action=history",
+              "sha256_wikitext": "28bfbdc2d1992187638783b74dc8ad28aebc87ccfa36a872617fbdfe97ed31b4",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology 1===\n{{ety|la|title=circulor|:af|circulus<t:circle>|-ō<id:denominative>|text=+|tree=1}}"
+            }
+          },
+          {
+            "link_id": "wikt:60164d5b3b78e69363e6013e",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulor",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:la:circulatio",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "90490548",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circulatio&oldid=90490548",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circulatio&action=history",
+              "sha256_wikitext": "d1de628cb862872a16fa606bcb83331500fc7254c18d0d96f63d0c3ced966d09",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{ety|la|title=circulātiō|:af|circulor|-tiō|text=+|tree=1}}"
+            }
+          },
+          {
+            "link_id": "wikt:d9fc41b9f9af5206f676666a",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulatio",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:enm:circulacioun",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "91796316",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circulation&oldid=91796316",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circulation&action=history",
+              "sha256_wikitext": "4bcd2eadce0e6d8bfe232206f24bc18b1d34d636b8766b08a7999b7ec48f3030",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circulacioun}}, from {{der|en|la|circulatio}}. Morphologically {{suffix|en|circulate|ion}}."
+            }
+          },
+          {
+            "link_id": "wikt:2aaf26ec8f1eed44c61d76f3",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:enm:circulacioun",
+            "target_lexeme_id": "en:circulation:n",
+            "target_etymon_id": null,
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "91796316",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circulation&oldid=91796316",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circulation&action=history",
+              "sha256_wikitext": "4bcd2eadce0e6d8bfe232206f24bc18b1d34d636b8766b08a7999b7ec48f3030",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circulacioun}}, from {{der|en|la|circulatio}}. Morphologically {{suffix|en|circulate|ion}}."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "link_id": "wikt:b0ea03092b09652c7a2b82da",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": "en:circularity:n",
+      "target_etymon_id": null,
+      "relation_type": "SHARED_ETYMON",
+      "direction": "undirected",
+      "explanation": "共同祖源 circulus；中间借词和派生路径见来源。",
+      "source": "English Wiktionary contributors",
+      "source_version": "90600841",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circularity&oldid=90600841",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circularity&action=history",
+        "sha256_wikitext": "3afb1fbc45485fec534f0c4fa0e0db74fe53ae237ef6cf047ef792b6a4d1da0c",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{ety|en|:af|circular|-ity|text=+|tree=1}}",
+        "verified_path": [
+          {
+            "link_id": "wikt:72b35edc8b2a9f505f0bbbce",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulus",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:la-lat:circularis",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93132743",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+              "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+            }
+          },
+          {
+            "link_id": "wikt:ed6403c1172a948aab242ee2",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la-lat:circularis",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:fro:circulier",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93132743",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+              "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+            }
+          },
+          {
+            "link_id": "wikt:30cbabb1f9881d0e6a7f94bb",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:fro:circulier",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:enm:circuler",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93132743",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+              "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+            }
+          },
+          {
+            "link_id": "wikt:4a31fa7c31e03f19dc34d438",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:enm:circuler",
+            "target_lexeme_id": "en:circular:a",
+            "target_etymon_id": null,
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93132743",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circular&oldid=93132743",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circular&action=history",
+              "sha256_wikitext": "7e985a65865560a8c30aac2fd1358417a6d35d92b32f0e94d2e8e96e939dbd8e",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\nFrom {{inh|en|enm|circuler}}, {{m|enm|circuleer}}, {{m|enm|circulere}}, from {{der|en|fro|circulier}} ({{cog|fr|circulaire}}), from {{der|en|la-lat|circularis}}, from {{der|en|la|circulus}}, diminutive of {{m|la|circus|t=ring}}. {{surf|en|circle|-ar|id2=adjective}}."
+            }
+          },
+          {
+            "link_id": "wikt:7476afe9f7661ddca365510d",
+            "source_lexeme_id": "en:circular:a",
+            "source_etymon_id": null,
+            "target_lexeme_id": "en:circularity:n",
+            "target_etymon_id": null,
+            "relation_type": "MORPHOLOGICAL_DERIVATION",
+            "direction": "forward",
+            "explanation": "circular + -ity → circularity。",
+            "source": "English Wiktionary contributors",
+            "source_version": "90600841",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circularity&oldid=90600841",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circularity&action=history",
+              "sha256_wikitext": "3afb1fbc45485fec534f0c4fa0e0db74fe53ae237ef6cf047ef792b6a4d1da0c",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{ety|en|:af|circular|-ity|text=+|tree=1}}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "link_id": "wikt:27ee63706b90a018f19ca49f",
+      "source_lexeme_id": null,
+      "source_etymon_id": "ety:la:circulus",
+      "target_lexeme_id": "en:encircle:v",
+      "target_etymon_id": null,
+      "relation_type": "SHARED_ETYMON",
+      "direction": "undirected",
+      "explanation": "共同祖源 circulus；中间借词和派生路径见来源。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91528949",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=encircle&oldid=91528949",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=encircle&action=history",
+        "sha256_wikitext": "dafe811644626f65e214bfbdcc0bfa1c175640c467219596606456eae1ada779",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{ety|en|:af|en-|circle|text=+|tree=1}}",
+        "verified_path": [
+          {
+            "link_id": "wikt:dc1d0b145df49c83d9afdb93",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:la:circulus",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:fro:cercle",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93409097",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+              "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+            }
+          },
+          {
+            "link_id": "wikt:a052dae280960a49b584c7d0",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:fro:cercle",
+            "target_lexeme_id": null,
+            "target_etymon_id": "ety:enm:circle",
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93409097",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+              "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+            }
+          },
+          {
+            "link_id": "wikt:fc3979630c30fb37ea98418e",
+            "source_lexeme_id": null,
+            "source_etymon_id": "ety:enm:circle",
+            "target_lexeme_id": "en:circle:n",
+            "target_etymon_id": null,
+            "relation_type": "ETYMOLOGICAL_ORIGIN",
+            "direction": "forward",
+            "explanation": "历史来源 → 后来形式；不是现代英语直接派生。",
+            "source": "English Wiktionary contributors",
+            "source_version": "93409097",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=circle&oldid=93409097",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=circle&action=history",
+              "sha256_wikitext": "c9adff36ae34c808250bfcaf722dd180a635637917621fc8ee1260166601cab4",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{etymon|en|:inh|enm:circle<ety:bor<fro:cercle>>|tree=1}}\n{{root|en|ine-pro|*(s)ker- (turn)}}\nFrom {{inh|en|enm|circle}}, {{m|enm|cercle}}, from {{der|en|fro|cercle}} and {{der|en|la|circulus}}, diminutive of {{der|en|la|circus|t=circle, circus}}, from {{der|en|grc|κίρκος|t=circle, ring}}, related to {{cog|ang|hring|t=ring}}. Compare also {{cog|ang|ċircul|t=circle, zodiac}}, which came from the same Latin source. {{surf|en|la:circus|alt1=circ(us)|-ule|alt2=-(u)le}}."
+            }
+          },
+          {
+            "link_id": "wikt:471f5b8d430b491a047f19b1",
+            "source_lexeme_id": "en:circle:n",
+            "source_etymon_id": null,
+            "target_lexeme_id": "en:encircle:v",
+            "target_etymon_id": null,
+            "relation_type": "MORPHOLOGICAL_DERIVATION",
+            "direction": "forward",
+            "explanation": "en- + circle → encircle。",
+            "source": "English Wiktionary contributors",
+            "source_version": "91528949",
+            "license": "CC-BY-SA-4.0",
+            "confidence": 0.95,
+            "provenance": {
+              "url": "https://en.wiktionary.org/w/index.php?title=encircle&oldid=91528949",
+              "history_url": "https://en.wiktionary.org/w/index.php?title=encircle&action=history",
+              "sha256_wikitext": "dafe811644626f65e214bfbdcc0bfa1c175640c467219596606456eae1ada779",
+              "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+              "evidence": "===Etymology===\n{{ety|en|:af|en-|circle|text=+|tree=1}}"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "senses": [
+    {
+      "sense_id": "wikt:persuade:v:agree",
+      "lexeme_id": "en:persuade:v",
+      "definition": "Lead someone to agree or act through reasoning or verbal influence.",
+      "synset_id": null,
+      "register": null,
+      "source": "English Wiktionary contributors",
+      "source_version": "92177127",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=persuade&oldid=92177127",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=persuade&action=history",
+        "sha256_wikitext": "3a8a5709dbab67ca7204014845c30fb8deb5af081d5b200207d57f98cd5c304c",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "{{syn|en|convince|draw|coax|wheedle|Thesaurus:persuade}}"
+      }
+    },
+    {
+      "sense_id": "wikt:convince:v:persuade",
+      "lexeme_id": "en:convince:v",
+      "definition": "Persuade someone.",
+      "synset_id": null,
+      "register": null,
+      "source": "English Wiktionary contributors",
+      "source_version": "92463707",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=convince&oldid=92463707",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=convince&action=history",
+        "sha256_wikitext": "0e4780c8ce529fdc2e392943555fcb8f8e23d6be50b8fa7c5f4b7ab1cc1c3032",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "# To [[persuade]]."
+      }
+    },
+    {
+      "sense_id": "wikt:economic:a:economy",
+      "lexeme_id": "en:economic:a",
+      "definition": "Relating to the economy.",
+      "synset_id": null,
+      "register": null,
+      "source": "English Wiktionary contributors",
+      "source_version": "93026894",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=economical&oldid=93026894",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=economical&action=history",
+        "sha256_wikitext": "fc35d8ceb29b15604db83684f858c2b90e1e8451dbf19d4b7fbf22d9ae9d39e7",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "Modern usage prefers {{m|en|economic}} when describing the economy of a region or country"
+      }
+    },
+    {
+      "sense_id": "wikt:economical:a:thrifty",
+      "lexeme_id": "en:economical:a",
+      "definition": "Saving money or resources.",
+      "synset_id": null,
+      "register": null,
+      "source": "English Wiktionary contributors",
+      "source_version": "93026894",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=economical&oldid=93026894",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=economical&action=history",
+        "sha256_wikitext": "fc35d8ceb29b15604db83684f858c2b90e1e8451dbf19d4b7fbf22d9ae9d39e7",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "# Saving money or resources."
+      }
+    }
+  ],
+  "sense_relations": [
+    {
+      "relation_id": "reviewed:1e462aeaf340cddf9618ba39",
+      "source_sense_id": "wikt:persuade:v:agree",
+      "target_sense_id": "wikt:convince:v:persuade",
+      "relation_type": "SYNONYM",
+      "direction": "undirected",
+      "explanation": "只对应说服采取行动的词义；不声称所有词义或句法可以互换。",
+      "source": "English Wiktionary contributors",
+      "source_version": "92177127",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=persuade&oldid=92177127",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=persuade&action=history",
+        "sha256_wikitext": "3a8a5709dbab67ca7204014845c30fb8deb5af081d5b200207d57f98cd5c304c",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "{{syn|en|convince|draw|coax|wheedle|Thesaurus:persuade}}"
+      }
+    },
+    {
+      "relation_id": "reviewed:06b74f515e8abb83c76cf5f3",
+      "source_sense_id": "wikt:economic:a:economy",
+      "target_sense_id": "wikt:economical:a:thrifty",
+      "relation_type": "CONFUSABLE",
+      "direction": "undirected",
+      "explanation": "economic 通常指经济；economical 通常指节省。历史用法有重叠，请结合具体词义。",
+      "source": "English Wiktionary contributors",
+      "source_version": "93026894",
+      "license": "CC-BY-SA-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=economical&oldid=93026894",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=economical&action=history",
+        "sha256_wikitext": "fc35d8ceb29b15604db83684f858c2b90e1e8451dbf19d4b7fbf22d9ae9d39e7",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "Modern usage prefers {{m|en|economic}} when describing the economy of a region or country; {{m|en|economical|Economical}} is preferred when referring to [[thrift]] or [[value]] for money."
+      }
+    },
+    {
+      "relation_id": "reviewed:adapt-adopt-confusable",
+      "source_sense_id": "oewn-adapt__2.30.01..",
+      "target_sense_id": "oewn-adopt__2.40.02..",
+      "relation_type": "CONFUSABLE",
+      "direction": "undirected",
+      "explanation": "adapt：为新条件调整或改编；adopt：选择、采用。易混提示依据已出版用法说明，不是拼写推断的词源边。",
+      "source": "Enago, Commonly Confused Words, Part I",
+      "source_version": "sha256:398cdbd50a53083c74594c948093daf011616506346db7574a586c236096a8e4",
+      "license": "Source copyright Enago; factual annotation only, no PDF redistribution; WordLoop explanation CC-BY-4.0",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://www.enago.com.tr/downloads/commonly-confused-terms-part1.pdf",
+        "sha256_pdf": "398cdbd50a53083c74594c948093daf011616506346db7574a586c236096a8e4",
+        "section": "II. adapt and adopt",
+        "pdf_page": 6,
+        "evidence": "The verbs adapt and adopt are often confused.",
+        "adaptation": "Factual pair annotation with original Chinese explanation; no source examples copied."
+      }
+    }
+  ],
+  "usage_patterns": [
+    {
+      "pattern_id": "pattern:persuade:someone-to-inf",
+      "lexeme_id": "en:persuade:v",
+      "sense_id": "oewn-persuade__2.32.00..",
+      "pattern": "persuade someone to do something",
+      "explanation": "说服某人做某事：宾语 + to 不定式。",
+      "example": null,
+      "source": "OEWN",
+      "source_version": "2025",
+      "license": "CC-BY-4.0 + Princeton-WordNet",
+      "confidence": 0.95,
+      "provenance": {
+        "url": "https://en-word.net/static/english-wordnet-2025.xml.gz",
+        "evidence": "<Sense id=\"oewn-persuade__2.32.00..\" subcat=\"vtaa vtaa-into-ger vtaa-to-inf\" synset=\"oewn-00768463-v\">",
+        "adaptation": "Expansion of OEWN subcategorization vtaa-to-inf; Chinese explanation by WordLoop",
+        "sha256_xml": "6f49adeec174ab3092169fb25cf4a925226b63975a5d29a691a5dff88f0673b2"
+      }
+    }
+  ],
+  "lexeme_morphemes": [
+    {
+      "association_id": "morph-association:encircle",
+      "lexeme_id": "en:encircle:v",
+      "morpheme_id": "morph:en:prefix:en-",
+      "explanation": "en- + circle → encircle。",
+      "source": "English Wiktionary contributors",
+      "source_version": "91528949",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=encircle&oldid=91528949",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=encircle&action=history",
+        "sha256_wikitext": "dafe811644626f65e214bfbdcc0bfa1c175640c467219596606456eae1ada779",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{ety|en|:af|en-|circle|text=+|tree=1}}"
+      },
+      "confidence": 0.95
+    },
+    {
+      "association_id": "morph-association:circularity",
+      "lexeme_id": "en:circularity:n",
+      "morpheme_id": "morph:en:suffix:-ity",
+      "explanation": "circular + -ity → circularity。",
+      "source": "English Wiktionary contributors",
+      "source_version": "90600841",
+      "license": "CC-BY-SA-4.0",
+      "provenance": {
+        "url": "https://en.wiktionary.org/w/index.php?title=circularity&oldid=90600841",
+        "history_url": "https://en.wiktionary.org/w/index.php?title=circularity&action=history",
+        "sha256_wikitext": "3afb1fbc45485fec534f0c4fa0e0db74fe53ae237ef6cf047ef792b6a4d1da0c",
+        "adaptation": "WordLoop reviewed normalization and Chinese explanation; CC-BY-SA-4.0",
+        "evidence": "===Etymology===\n{{ety|en|:af|circular|-ity|text=+|tree=1}}"
+      },
+      "confidence": 0.95
+    }
+  ],
+  "morphemes": [
+    {
+      "morpheme_id": "morph:en:prefix:en-",
+      "surface": "en-",
+      "type": "prefix",
+      "meaning": "使处于；围住"
+    },
+    {
+      "morpheme_id": "morph:en:suffix:-ity",
+      "surface": "-ity",
+      "type": "suffix",
+      "meaning": "性质或状态"
+    }
+  ]
+}

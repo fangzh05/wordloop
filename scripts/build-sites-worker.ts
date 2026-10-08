@@ -37,6 +37,7 @@ const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, familyJs, .
   readFile(path.join(root, "supabase", "migrations", "20261007025825_captured_note_deduplication.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20261007053500_local_family_graph.sql"), "utf8"),
   readFile(path.join(root, "supabase", "migrations", "20261007095603_lexical_dictionary_entries.sql"), "utf8"),
+  readFile(path.join(root, "supabase", "migrations", "20261008052820_lexical_root_network.sql"), "utf8"),
 ]);
 
 const assetHash = (asset: string): string => createHash("sha256").update(asset).digest("hex").slice(0, 12);

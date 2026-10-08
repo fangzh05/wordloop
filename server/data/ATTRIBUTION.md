@@ -28,3 +28,33 @@ Corpus confidence/transparency/interference and neutral utility/exam values are 
 Chinese and additional English word-level definitions are adapted from **ECDICT**, https://github.com/skywind3000/ECDICT, pinned revision `bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b`. Repository license: **MIT**, Copyright (c) 2025 Linwei. Full notice: `licenses/ECDICT-MIT.txt`. CSV SHA-256: `1a6947e04785db63613a92e14903cdae7954f7e84860b10e68e5c7cbb3f9c3cf`.
 
 Adaptations: vocabulary-scoped selection, lemma normalization, source-row merging, explicit POS-label parsing and escaped-line normalization. Each entry retains original row numbers, surface forms, raw POS, file checksum, source/revision/license and attribution. These are lemma-level bilingual glosses, not claimed translations of OEWN synsets. The enrichment creates no lexical relations or learning state. OEWN import also retains all available Sense elements, including self-closing XML records, under its existing notices.
+
+## Root and Network extension (2026-10-08 development branch)
+
+`lexicalReviewed.json` contains reviewed adaptations from 11 pinned English
+Wiktionary revisions (English Wiktionary contributors, CC BY-SA 4.0), with source
+history links, SHA-256 of the original wikitext, raw evidence and changes.
+The adapted records remain under CC BY-SA 4.0; see
+`licenses/Wiktionary-CC-BY-SA-4.0.md`. They are independent of MorphyNet's older
+CC BY-SA 3.0 records and of application code licensing. No Kaikki dump has been
+imported. Source and licensing research, coverage and fixed revision verification
+are documented in `docs/LEXICAL_GRAPH.md`.
+
+`lexicalCore.json` is a public bounded fixture derived from the same checksum
+verified OEWN 2025 XML: sense-specific synset synonyms, explicit antonyms and
+synset hypernyms/hyponyms, with original IDs/evidence retained. `lexicalCoreVocabulary.json`
+is a public 13-word scope, not a private account export. `lexicalCoreDictionary.json`
+contains the 13 matching ECDICT entries under the existing pinned MIT notice.
+Lemma-level Chinese definitions do not claim synset alignment.
+
+The adapt/adopt confusable pair cites Enago's *Commonly Confused Words, Part I*,
+PDF page 6, pinned by SHA-256. Enago retains copyright in the original source.
+Only a short factual evidence sentence and original WordLoop annotation are
+included; the PDF and source examples are not redistributed or relicensed as
+open data. Its fact annotation and WordLoop explanation carry separate terms.
+
+Normalized lexical facts are generated from documented source data, never from
+DeepSeek, embeddings or substring similarity. Confidence is an editorial evidence
+threshold rather than a measured historical probability. Historical etymons and
+synchronic morphemes are distinct. All source paths and notices must accompany
+distributed data adaptations.

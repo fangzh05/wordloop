@@ -214,6 +214,12 @@ Family 没有第二套 mastery 模型，也没有第二套 scheduler。
 - `docs/BILINGUAL_FAMILY_DICTIONARY.md`
 - `server/data/ATTRIBUTION.md`
 
+### 词根同源与语义网络
+
+同一个局部弹层现在提供 **词族 | 词根同源 | 语义网络**。词族保留原微课和 A/B/C/D 间隔；词根同源区分经过核验的历史借词路径、共同祖源和现代派生；语义网络展示具体 Sense 的近义、反义、对比、易混、独立搭配与上下位关系。新增两种视图仅浏览现有学习状态，只有明确操作才保存未来候选。
+
+Root 核心覆盖 circle 等六个目标词，未核验词源保持空态。OEWN 2025、固定 Wiktionary 修订与用法资料保留证据和各自许可。图谱仍默认一跳、每次最多 24 节点、浏览器最多 40 节点、Cytoscape 懒加载。本开发分支不会自动部署。详见[图谱交付、覆盖范围、迁移及回滚](docs/LEXICAL_GRAPH.md)。
+
 ## Capture 与 Note Review
 
 Capture 用来记录阅读中遇到的内容，但不会强制进入学习队列。
@@ -458,6 +464,7 @@ wordloop/
 - `20261007025825_captured_note_deduplication.sql`
 - `20261007053500_local_family_graph.sql`
 - `20261007095603_lexical_dictionary_entries.sql`
+- `20261008052820_lexical_root_network.sql`
 
 这些显式文件名同时属于仓库 migration / README 测试契约。
 
@@ -517,7 +524,7 @@ PR #2 的 latency optimization 已在 2026-10-07 合入兄弟分支 `codex/exerc
 
 ## 当前限制
 
-- 还没有 Global / Network-wide Family Graph。
+- 未做全局词网；Root 词源覆盖仅限已经核验的路径。
 - 不允许 LLM 自动生成 lexical relation。
 - 还没有 per-sense / per-POS learner mastery。
 - BKT fixed-v1 参数还没有用大规模个人数据拟合。

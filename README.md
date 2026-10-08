@@ -214,6 +214,12 @@ Detailed docs:
 - `docs/BILINGUAL_FAMILY_DICTIONARY.md`
 - `server/data/ATTRIBUTION.md`
 
+### Root and Network exploration
+
+The same local graph panel now offers **Family | Root | Network**. Family preserves the existing micro-sessions and A/B/C/D spacing. Root separates verified historical borrowing paths, shared etymons and modern derivation; Network distinguishes sense-level synonyms, antonyms, contrasts, confusables, usage patterns and taxonomy. Both added views only browse existing learning state and save explicit future candidates.
+
+Core Root coverage is the six circle-family targets; missing ancestry stays empty. OEWN 2025, fixed Wiktionary revisions and source-backed usage annotations retain evidence and licenses. Queries remain one hop, at most 24 nodes and 40 accumulated browser nodes, with lazy Cytoscape. This development branch is not automatically deployed. See [lexical graph delivery, data coverage, migration and rollback](docs/LEXICAL_GRAPH.md).
+
 ## Capture and Note Review
 
 Capture records reading encounters without forcing them into the learning queue.
@@ -460,6 +466,7 @@ For an existing database, apply only missing migrations in order. Important migr
 - `20261007025825_captured_note_deduplication.sql`
 - `20261007053500_local_family_graph.sql`
 - `20261007095603_lexical_dictionary_entries.sql`
+- `20261008052820_lexical_root_network.sql`
 
 These explicit filenames are also part of repository migration/test contracts.
 
@@ -519,7 +526,7 @@ This distinction is intentional: the README should describe code that exists, no
 
 ## Current limits
 
-- No Global / Network-wide Family Graph yet.
+- No global graph; Root etymology coverage is deliberately limited to reviewed source paths.
 - No LLM-generated lexical relations.
 - No per-sense / per-POS learner mastery model.
 - BKT fixed-v1 parameters are not yet fitted from a large personal dataset.
