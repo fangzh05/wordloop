@@ -2778,3 +2778,27 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   .family-dialog .lexical-view-tabs button,.family-dialog .family-node-list button {transition:none;}
 }
 
+
+/* Press surfaces respect all three user-selected appearance modes. */
+:root[data-theme="dark"] .wordloop-shell .today-page {
+  --press-ink:#f1ece6;--press-paper:#171c1d;--press-rule:#454343;
+  --press-muted:#b9b1a9;--press-accent:#d4a085;
+}
+@media(prefers-color-scheme:dark) {
+  :root[data-theme="system"] .wordloop-shell .today-page,
+  :root:not([data-theme]) .wordloop-shell .today-page {
+    --press-ink:#f1ece6;--press-paper:#171c1d;--press-rule:#454343;
+    --press-muted:#b9b1a9;--press-accent:#d4a085;
+  }
+}
+/* The light-paper dictionary stays legible even over a dark app theme. */
+.family-dialog {
+  --page-bg:#f4f2ec;--text:#282420;--muted:#6e6860;
+  --material-solid:#f4f2ec;--material-raised:#e9e4db;
+  --separator:#dcd8d0;--separator-strong:#ccc8c0;
+  --control:#e9e4db;--control-hover:#ddd7cd;
+  --accent:#a6533f;--accent-text:#fff;--focus:#a6533f44;
+  color-scheme:light;
+}
+.family-dialog .family-canvas {color-scheme:dark;}
+
