@@ -18,15 +18,15 @@ function familyStyle(container: HTMLElement): StylesheetJson {
   const theme = getComputedStyle(container);
   const color = (name: string) => theme.getPropertyValue(name).trim();
   return [
-    { selector: "node", style: { label: "data(label)", width: "data(size)", height: "data(size)", "font-family": theme.fontFamily, "font-size": 14,
-      color: color("--text"), "background-color": color("--control-hover"), "border-width": 1.5, "border-color": color("--muted"),
-      "text-valign": "bottom", "text-margin-y": 8, "text-background-color": color("--material-solid"), "text-background-opacity": .95, "text-background-padding": "3px" } },
-    { selector: "node.unlearned", style: { "background-color": color("--material-raised"), "border-style": "dashed" } },
-    { selector: "node.center", style: { "background-color": color("--accent"), "border-width": 4, "border-color": color("--control-hover"), "font-weight": "bold", "font-size": 16 } },
-    { selector: "node.selected", style: { "border-color": color("--accent"), "border-width": 3 } },
-    { selector: "edge", style: { width: 1.5, "line-color": color("--separator-strong"), "curve-style": "bezier", "target-arrow-shape": "none" } },
+    { selector: "node", style: { label: "data(label)", width: "data(size)", height: "data(size)", "font-family": theme.fontFamily, "font-size": 13,
+      color: color("--text"), "background-color": color("--control"), "border-width": 1.7, "border-color": color("--separator-strong"),
+      "text-valign": "bottom", "text-margin-y": 10, "text-background-color": color("--material-solid"), "text-background-opacity": .98, "text-background-padding": "4px" } },
+    { selector: "node.unlearned", style: { "background-color": color("--material-raised"), "border-color": color("--muted"), "border-style": "dashed" } },
+    { selector: "node.center", style: { "background-color": color("--accent"), "border-width": 5, "border-color": color("--material-solid"), "font-weight": 700, "font-size": 16 } },
+    { selector: "node.selected", style: { "border-color": color("--accent"), "border-width": 3.6 } },
+    { selector: "edge", style: { width: 1.65, "line-color": color("--separator-strong"), "curve-style": "bezier", "target-arrow-shape": "none" } },
     { selector: "node.etymon", style: { "font-size": 11, "text-wrap": "wrap", "text-max-width": "90px", shape: "round-rectangle", "border-style": "double", width: 68, height: 36 } },
-    { selector: "node.pattern", style: { shape: "round-rectangle", width: 92, height: 32, "text-wrap": "wrap", "text-max-width": "145px" } },
+    { selector: "node.pattern", style: { shape: "round-rectangle", width: 92, height: 32, "text-wrap": "wrap", "text-max-width": "145px", "border-width": 1.5 } },
     { selector: "node.morpheme", style: { shape: "diamond" } },
     { selector: "edge.forward", style: { "target-arrow-shape": "triangle", "arrow-scale": .8, "target-arrow-color": color("--separator-strong") } },
     { selector: "edge.shared, edge.synonym", style: { "line-style": "dotted" } },
