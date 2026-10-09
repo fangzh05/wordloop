@@ -18,17 +18,23 @@ function familyStyle(container: HTMLElement): StylesheetJson {
   const theme = getComputedStyle(container);
   const color = (name: string) => theme.getPropertyValue(name).trim();
   return [
-    { selector: "node", style: { label: "data(label)", width: "data(size)", height: "data(size)", "font-family": theme.fontFamily, "font-size": 13,
-      color: color("--text"), "background-color": color("--control"), "border-width": 1.7, "border-color": color("--separator-strong"),
-      "text-valign": "bottom", "text-margin-y": 10, "text-background-color": color("--material-solid"), "text-background-opacity": .98, "text-background-padding": "4px" } },
-    { selector: "node.unlearned", style: { "background-color": color("--material-raised"), "border-color": color("--muted"), "border-style": "dashed" } },
-    { selector: "node.center", style: { "background-color": color("--accent"), "border-width": 5, "border-color": color("--material-solid"), "font-weight": 700, "font-size": 16 } },
-    { selector: "node.selected", style: { "border-color": color("--accent"), "border-width": 3.6 } },
-    { selector: "edge", style: { width: 1.65, "line-color": color("--separator-strong"), "curve-style": "bezier", "target-arrow-shape": "none" } },
-    { selector: "node.etymon", style: { "font-size": 11, "text-wrap": "wrap", "text-max-width": "90px", shape: "round-rectangle", "border-style": "double", width: 68, height: 36 } },
-    { selector: "node.pattern", style: { shape: "round-rectangle", width: 92, height: 32, "text-wrap": "wrap", "text-max-width": "145px", "border-width": 1.5 } },
-    { selector: "node.morpheme", style: { shape: "diamond" } },
-    { selector: "edge.forward", style: { "target-arrow-shape": "triangle", "arrow-scale": .8, "target-arrow-color": color("--separator-strong") } },
+    // A typographic index, not a cloud of circles. Shape still exposes a generous tap area.
+    { selector: "node", style: { label: "data(label)", width: "data(size)", height: 42,
+      shape: "rectangle", "font-family": "Georgia, serif", "font-size": 14,
+      color: color("--text"), "background-color": color("--control"), "border-width": 1,
+      "border-color": color("--separator-strong"), "text-valign": "center", "text-halign": "center",
+      "text-wrap": "ellipsis", "text-max-width": "100px" } },
+    { selector: "node.unlearned", style: { "background-color": color("--material-raised"), "border-style": "dashed" } },
+    { selector: "node.center", style: { "background-color": color("--accent"), color: color("--accent-text"),
+      "border-width": 2, "border-color": color("--accent"), "font-weight": "bold", "font-size": 17 } },
+    { selector: "node.selected", style: { "border-color": color("--accent"), "border-width": 3 } },
+    { selector: "edge", style: { width: 1.2, "line-color": color("--separator-strong"), "curve-style": "bezier", "target-arrow-shape": "none" } },
+    { selector: "node.etymon", style: { "font-size": 11, "text-wrap": "wrap", "text-max-width": "106px",
+      shape: "rectangle", "border-style": "double", width: 120, height: 52 } },
+    { selector: "node.pattern", style: { shape: "rectangle", width: 120, height: 42,
+      "text-wrap": "wrap", "text-max-width": "106px" } },
+    { selector: "node.morpheme", style: { shape: "rectangle" } },
+    { selector: "edge.forward", style: { "target-arrow-shape": "triangle", "arrow-scale": .7, "target-arrow-color": color("--separator-strong") } },
     { selector: "edge.shared, edge.synonym", style: { "line-style": "dotted" } },
     { selector: "edge.contrast, edge.confusable, edge.antonym", style: { "line-style": "dashed", "line-color": color("--accent") } },
     { selector: "edge.collocation", style: { "line-style": "dashed" } },
@@ -58,9 +64,15 @@ const createEngine: FamilyEngineFactory = (container, initial, callbacks) => {
       graph.nodes.forEach((n) => {
         const index = others.findIndex((o) => nodeId(o) === nodeId(n)), center = index < 0;
         const kind = "node_type" in n ? n.node_type : "lexeme", priority = "priority" in n ? n.priority : .65;
-        const radius = Math.min(others.length > 8 ? 180 : 135, Math.max(65, container.clientWidth / 2 - 65));
-        const point = center ? { x: 0, y: 0 } : { x: radius * Math.cos(index / Math.max(1, others.length) * Math.PI * 2), y: radius * Math.sin(index / Math.max(1, others.length) * Math.PI * 2) };
-        cy.add({ group: "nodes", data: { id: nodeId(n), label: kind === "etymon" ? `${n.lemma} · ${"language" in n ? n.language : ""}` : n.lemma, size: center ? 52 : 24 + priority * 14, priority }, position: center ? point : saved.get(positionKey(nodeId(n))) ?? point, classes: `${center ? "center" : ""} ${kind} ${"user_state" in n && !n.user_state && !center ? "unlearned" : ""}` });
+        // Stable, bounded concentric indexes: up to eight editorial word labels per ring.
+        // No physics layout, extra graph traversal or new persistence.
+        const ring = Math.floor(Math.max(0, index) / 8);
+        const slot = Math.max(0, index) % 8;
+        const ringCount = Math.min(8, Math.max(1, others.length - ring * 8));
+        const theta = (slot / ringCount) * Math.PI * 2 - Math.PI / 2 + ring * 0.12;
+        const radius = Math.max(158, Math.min(202, container.clientWidth * .39)) + ring * 112;
+        const point = center ? { x: 0, y: 0 } : { x: radius * Math.cos(theta), y: radius * Math.sin(theta) };
+        cy.add({ group: "nodes", data: { id: nodeId(n), label: kind === "etymon" ? `${n.lemma} · ${"language" in n ? n.language : ""}` : n.lemma, size: center ? 130 : 116, priority }, position: center ? point : saved.get(positionKey(nodeId(n))) ?? point, classes: `${center ? "center" : ""} ${kind} ${"user_state" in n && !n.user_state && !center ? "unlearned" : ""}` });
       });
       graph.edges.forEach((e) => cy.add({ group: "edges", data: { id: e.relation_id, source: e.source_id, target: e.target_id, confidence: e.confidence }, classes: `${e.direction === "forward" ? "forward" : ""} ${e.relation_type === "SHARED_ETYMON" ? "shared" : e.relation_type.toLowerCase()}` }));
     });
