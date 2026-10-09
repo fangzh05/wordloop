@@ -82,15 +82,18 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
   const stage = active ? phaseLabel(today!.active_session.phase) : null;
 
   return <section className="today-page" aria-labelledby="today-title">
-    <header className="page-heading">
-      <span className="eyebrow">WordLoop</span>
-      <h1 id="today-title">今日</h1>
-      <p>{today ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "full", timeZone: today.timezone }).format(new Date(today.as_of)) : "学习进度与当前任务"}</p>
+    <header className="page-heading today-editorial-heading">
+      <div className="today-editorial-title">
+        <span className="eyebrow">WORDLOOP / DAILY</span>
+        <h1 id="today-title">今日学习<span className="today-title-period">.</span></h1>
+        <p>{today ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "full", timeZone: today.timezone }).format(new Date(today.as_of)) : "学习进度与当前任务"}</p>
+      </div>
+      <p className="today-editorial-quiet">REVIEW · RECALL · LEARN</p>
     </header>
 
     <section className="today-focus-card" aria-label="继续今日学习">
-      <div>
-        <span className="eyebrow">{stage ? `当前阶段 · ${stage}` : "今日学习"}</span>
+      <div className="today-focus-copy">
+        <span className="eyebrow">{stage ? `当前阶段 · ${stage}` : "当前任务"}</span>
         <h2>{view?.budget_paused ? "今日预计预算已完成" : view?.round_complete ? "本轮学习完成" : stage ? "把这一轮学完。" : tasksComplete ? "本轮任务已完成" : "先复习，再学一点新的。"}</h2>
         <p>{active ? `会话开始于 ${today?.active_session.started_at ? new Date(today.active_session.started_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: today.timezone }) : "今天"}。继续上次停下的位置。` : "从今天该做的任务开始。"}</p>
       </div>
@@ -112,7 +115,7 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
     </section>}
 
     <section className="today-progress-card" aria-labelledby="today-progress-title">
-      <div className="section-heading"><h2 id="today-progress-title">今日进度</h2><span>北京时间 · 服务器记录</span></div>
+      <div className="section-heading"><div><span className="eyebrow">LEARNING RECORD</span><h2 id="today-progress-title">今日进度</h2></div><span>北京时间 · 服务器记录</span></div>
       {todayError && <p className="standalone-status error" role="alert">{todayError}</p>}
       {!today && !todayError && <p className="standalone-status" role="status">正在读取今日进度…</p>}
       {today && <div className="today-progress-list">
