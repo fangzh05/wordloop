@@ -89,13 +89,12 @@ export function LexicalExplorer({view,word}:{view:"root"|"network";word:string})
     catch(e){if(alive.current)setError(e instanceof Error?e.message:"保存失败。");}finally{if(alive.current)setBusy(false);}
   }
   const node=graph?.nodes.find(n=>n.node_id===selected);
-  return <section aria-label={view==="root"?"词根同源图谱":"语义网络图谱"}>
+  return <section className="lexical-explorer" aria-label={view==="root"?"词根同源图谱":"语义网络图谱"}>
     {view==="network"&&<nav className="lexical-filters" aria-label="语义关系过滤">{FILTERS.map(([label,group])=><button type="button" key={label} aria-pressed={group.every(t=>types.includes(t))} onClick={()=>setTypes(old=>group.every(t=>old.includes(t))?old.filter(t=>!group.includes(t)):[...new Set([...old,...group])])}>{label}</button>)}</nav>}
     {busy&&<p role="status">正在加载…</p>}{error&&<p role="alert">{error} <button onClick={()=>void load(word)}>重试</button></p>}{message&&<p role="status">{message}</p>}
-    {graph&&<div className="family-content"><section className="family-graph-pane"><p className="family-reason">一跳关系 · {view==="root"?"方框是历史词源；共同祖源不表示直接派生":"虚线：反义／对比／搭配；点线：近义"}</p>
+    {graph&&<div className="family-content"><section className="family-graph-pane"><div className="family-graph-toolbar"><div><span className="eyebrow">RELATION MAP</span><p className="family-reason">一跳关系 · {view==="root"?"方框是历史词源；共同祖源不表示直接派生":"虚线：反义／对比／搭配；点线：近义"}</p></div><Button className="secondary" onClick={()=>engine.current?.fit()}>适合窗口</Button></div>
       {graph.edges.length===0&&<p>{view==="root"?"暂无已核验的词源关系":"暂无所选类型的已核验关系"}</p>}
       <div ref={canvas} className="family-canvas" aria-label="局部词汇知识图"/>
-      <Button className="secondary" onClick={()=>engine.current?.fit()}>适合窗口</Button>
       <nav className="family-node-list" aria-label="图谱节点">{graph.nodes.map(n=><button type="button" key={n.node_id} aria-pressed={n.node_id===selected} onClick={()=>setSelected(n.node_id)}>{n.lemma}{n.node_type==="etymon"?` · ${n.language}`:n.node_type==="pattern"?" · 搭配":""}</button>)}</nav>
       {graph.truncated&&<p>已限制节点或关系数量；切换中心查看其他分支。</p>}
       <details className="family-help"><summary>操作提示</summary><p>点击查看；双击词条或词源设为中心；明确展开下一跳。拖动调整位置，双指缩放。长按现代英语词可加入未来候选。</p></details>
