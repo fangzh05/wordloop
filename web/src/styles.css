@@ -1771,3 +1771,274 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .lexical-relation { border-top:1px solid var(--separator-strong); padding:10px 0; overflow-wrap:anywhere; }
 .lexical-evidence { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; max-height:240px; overflow:auto; }
 .family-node-list button { overflow-wrap:anywhere; }
+
+
+/* WordLoop 2026 Editorial Refresh: presentation-only override. */
+:root {
+  --page-bg:#f5f6f3;--material:#fff;--material-solid:#fff;--material-raised:#fff;
+  --text:#202b30;--muted:#64737a;--separator:#e3e9e8;--separator-strong:#cbd6d7;
+  --control:#eff3f2;--control-hover:#e5eceb;--accent:#365e71;
+  --accent-pressed:#294b5d;--accent-text:#fff;--success:#247b63;--error:#b73f42;
+  --focus:rgba(54,94,113,.32);--shadow:0 14px 38px #1c2f350c,0 2px 7px #1c2f3506;
+  --radius-large:22px;--radius-control:12px;color-scheme:light;
+}
+:root[data-theme="dark"] {
+  --page-bg:#10191c;--material:#1b272b;--material-solid:#1b272b;--material-raised:#233137;
+  --text:#f0f4f2;--muted:#a9bac0;--separator:#334347;--separator-strong:#4b6066;
+  --control:#253439;--control-hover:#304349;--accent:#a0cbd8;--accent-pressed:#bfdce4;
+  --accent-text:#12262f;--success:#7bd0ad;--error:#ff9fa2;--focus:#a0cbd86b;
+  --shadow:0 16px 45px #0003;color-scheme:dark;
+}
+@media (prefers-color-scheme:dark) {
+  :root[data-theme="system"],:root:not([data-theme]) {
+    --page-bg:#10191c;--material:#1b272b;--material-solid:#1b272b;--material-raised:#233137;
+    --text:#f0f4f2;--muted:#a9bac0;--separator:#334347;--separator-strong:#4b6066;
+    --control:#253439;--control-hover:#304349;--accent:#a0cbd8;--accent-pressed:#bfdce4;
+    --accent-text:#12262f;--success:#7bd0ad;--error:#ff9fa2;--focus:#a0cbd86b;
+    --shadow:0 16px 45px #0003;color-scheme:dark;
+  }
+}
+.widget-card {border-color:var(--separator);border-radius:var(--radius-large);box-shadow:var(--shadow);}
+.widget-header h1 {font-weight:630;letter-spacing:-.035em;}
+.eyebrow {font-weight:620;letter-spacing:.09em;}
+.button {border-radius:var(--radius-control);}
+.button:active:not(:disabled) {transform:translateY(1px);}
+input.answer-input,textarea {border:1px solid var(--separator-strong);background:var(--material-solid);}
+input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0 0 0 3px var(--focus);}
+.pretest-progress,.progress-track,.standalone-progress-track {height:5px;}
+.question-block,.lesson-prompt {border-color:var(--separator);background:var(--control);}
+.question-word,.lesson-word-heading strong {
+  font-family:"Iowan Old Style","Baskerville","Palatino Linotype",Georgia,serif;
+  font-weight:500;letter-spacing:-.025em;
+}
+.lesson-section h2 {letter-spacing:.055em;}
+.lesson-example {line-height:1.85;}
+.lesson-feedback,.standalone-feedback {border:1px solid var(--separator);}
+
+/* Standalone app overrides must follow the historical v1.1 rules. */
+.wordloop-shell {
+  --page-bg:#f5f6f3;--material:#fff;--material-solid:#fff;--material-raised:#fff;
+  --text:#202b30;--muted:#64737a;--separator:#e3e9e8;--separator-strong:#cbd6d7;
+  --control:#eff3f2;--control-hover:#e5eceb;--accent:#365e71;
+  --accent-pressed:#294b5d;--accent-text:#fff;--success:#247b63;--error:#b73f42;
+  --focus:rgba(54,94,113,.32);--nav-bg:#ebf0ee;
+  --shadow:0 14px 38px #1c2f350c,0 2px 7px #1c2f3506;
+  --radius-large:22px;--radius-control:12px;
+  background:var(--page-bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:.9375rem;line-height:1.65;-webkit-font-smoothing:antialiased;
+}
+:root[data-theme="dark"] .wordloop-shell {
+  --page-bg:#10191c;--material:#1b272b;--material-solid:#1b272b;--material-raised:#233137;
+  --text:#f0f4f2;--muted:#a9bac0;--separator:#334347;--separator-strong:#4b6066;
+  --control:#253439;--control-hover:#304349;--accent:#a0cbd8;--accent-pressed:#bfdce4;
+  --accent-text:#12262f;--success:#7bd0ad;--error:#ff9fa2;--focus:#a0cbd86b;
+  --nav-bg:#152124;--shadow:0 14px 42px #0003;background:var(--page-bg);
+}
+@media (prefers-color-scheme:dark) {
+  :root[data-theme="system"] .wordloop-shell,:root:not([data-theme]) .wordloop-shell {
+    --page-bg:#10191c;--material:#1b272b;--material-solid:#1b272b;--material-raised:#233137;
+    --text:#f0f4f2;--muted:#a9bac0;--separator:#334347;--separator-strong:#4b6066;
+    --control:#253439;--control-hover:#304349;--accent:#a0cbd8;--accent-pressed:#bfdce4;
+    --accent-text:#12262f;--success:#7bd0ad;--error:#ff9fa2;--focus:#a0cbd86b;
+    --nav-bg:#152124;--shadow:0 14px 42px #0003;background:var(--page-bg);
+  }
+}
+.wordloop-shell .page-heading {margin-bottom:1.9rem;}
+.wordloop-shell .page-heading h1 {
+  font-size:clamp(2.05rem,3.6vw,2.65rem);font-weight:620;line-height:1.14;letter-spacing:-.046em;
+}
+.wordloop-shell .page-heading p {max-width:64ch;font-size:.9rem;}
+.wordloop-shell .eyebrow {font-size:.6875rem;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+.wordloop-shell .wordloop-topbar {margin-bottom:2rem;}
+.wordloop-shell .nav-brand > span,.wordloop-shell .standalone-mark {
+  background:var(--accent);color:var(--accent-text);border-radius:10px;
+}
+.wordloop-shell .app-navigation-desktop {background:var(--nav-bg);border-color:var(--separator);}
+.wordloop-shell .app-nav-item {
+  border-radius:12px;font-size:.75rem;
+  transition:color 150ms ease,background-color 150ms ease,transform 100ms ease;
+}
+.wordloop-shell .app-nav-item:hover {background:var(--control-hover);color:var(--text);}
+.wordloop-shell .app-nav-item[aria-current="page"],
+.wordloop-shell .app-navigation-desktop .app-nav-item[aria-current="page"] {
+  background:color-mix(in srgb,var(--accent) 11%,var(--material-solid));
+  color:var(--accent);font-weight:650;
+}
+.wordloop-shell .app-nav-item:active {transform:translateY(1px);}
+.wordloop-shell .nav-caption {letter-spacing:.085em;text-transform:uppercase;}
+.wordloop-shell .settings-open-button:hover {color:var(--text);background:var(--control);}
+.wordloop-shell .button {
+  border-radius:12px;min-height:44px;padding:.74rem 1.2rem;
+  background:var(--accent);color:var(--accent-text);font-weight:650;
+}
+.wordloop-shell .button:hover:not(:disabled) {background:var(--accent-pressed);}
+.wordloop-shell .button.secondary,.wordloop-shell .secondary-button {
+  border-color:var(--separator-strong);background:var(--material-solid);color:var(--text);
+}
+.wordloop-shell .button.secondary:hover:not(:disabled),.wordloop-shell .secondary-button:hover {
+  background:var(--control-hover);
+}
+.wordloop-shell :where(button,a,input,textarea,select,summary):focus-visible {
+  outline:3px solid var(--focus);outline-offset:3px;
+}
+.wordloop-shell .widget-card,.wordloop-shell .today-focus-card,
+.wordloop-shell .today-progress-card,.wordloop-shell .today-capture-card,
+.wordloop-shell .today-lower-section,.wordloop-shell .insight-panel,
+.wordloop-shell .vocabulary-list-pane,.wordloop-shell .capture-list-pane,
+.wordloop-shell .capture-detail {
+  background:var(--material-solid);border:1px solid var(--separator);
+  border-radius:22px;box-shadow:var(--shadow);
+}
+.wordloop-shell .today-focus-card {
+  gap:1.5rem;
+  border-color:color-mix(in srgb,var(--accent) 15%,var(--separator));
+  background:linear-gradient(127deg,var(--material-solid) 50%,
+    color-mix(in srgb,var(--accent) 4%,var(--material-solid)));
+}
+.wordloop-shell .today-focus-card h2 {
+  margin:.65rem 0 .4rem;font-size:clamp(1.55rem,2.6vw,2.05rem);
+  font-weight:635;line-height:1.22;letter-spacing:-.047em;
+}
+.wordloop-shell .today-focus-card p {font-size:.875rem;line-height:1.7;}
+.wordloop-shell .today-primary-action {
+  min-height:48px;min-width:10rem;
+  box-shadow:0 7px 18px color-mix(in srgb,var(--accent) 15%,transparent);
+}
+.wordloop-shell .today-progress-card {margin-bottom:1.25rem;}
+.wordloop-shell .today-progress-row b {
+  font-size:1.7rem;line-height:1.15;font-weight:615;letter-spacing:-.04em;
+  font-variant-numeric:tabular-nums;
+}
+.wordloop-shell .today-progress-row span {font-size:.78rem;}
+.wordloop-shell .today-capture-card {gap:1.1rem;}
+.wordloop-shell .today-capture-card > div > strong {font-size:2rem;letter-spacing:-.04em;}
+.wordloop-shell .today-consolidation {border-style:dashed;background:var(--material-solid);box-shadow:none;}
+.wordloop-shell .section-heading h2,.wordloop-shell .today-capture-card h2,
+.wordloop-shell .insight-panel h2 {font-size:1.02rem;font-weight:660;letter-spacing:-.018em;}
+.wordloop-shell .today-disclosure {transition:background-color 140ms ease;}
+.wordloop-shell .today-disclosure:hover {background:var(--control);}
+.wordloop-shell .insight-tabs,.wordloop-shell .capture-tabs {gap:.35rem;}
+.wordloop-shell .insight-tabs button,.wordloop-shell .capture-tabs button {
+  border-radius:10px;transition:background-color 150ms ease,color 150ms ease;
+}
+.wordloop-shell .insight-tabs button[aria-current="page"],
+.wordloop-shell .capture-tabs button.active {
+  background:var(--control);color:var(--accent);font-weight:650;
+}
+.wordloop-shell .insight-controls button {
+  min-height:40px;border-color:var(--separator);border-radius:10px;background:var(--material-solid);
+}
+.wordloop-shell .insight-controls button[aria-pressed="true"] {
+  border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--material-solid));
+}
+.wordloop-shell .insight-metric {
+  border-color:var(--separator);
+  background:color-mix(in srgb,var(--page-bg) 45%,var(--material-solid));
+  border-radius:16px;padding:clamp(1rem,2vw,1.5rem);
+}
+.wordloop-shell .insight-metric strong {
+  font-size:clamp(1.65rem,2.7vw,2.05rem);font-weight:620;
+  font-variant-numeric:tabular-nums;letter-spacing:-.044em;line-height:1.15;
+}
+.wordloop-shell .insight-panel .trend-chart {min-height:11rem;}
+.wordloop-shell .table-wrap tr:hover td {background:var(--control);}
+.wordloop-shell .vocabulary-toolbar {border:0;background:transparent;box-shadow:none;}
+.wordloop-shell .vocabulary-search-row input,.wordloop-shell .standalone-input,
+.wordloop-shell .capture-search input,.wordloop-shell .capture-note-editor textarea {
+  border:1px solid var(--separator-strong);border-radius:12px;
+  background:var(--material-solid);color:var(--text);
+}
+.wordloop-shell .vocabulary-search-row input:focus,.wordloop-shell .standalone-input:focus,
+.wordloop-shell .capture-search input:focus,.wordloop-shell .capture-note-editor textarea:focus {
+  border-color:var(--accent);outline:3px solid var(--focus);outline-offset:1px;
+}
+.wordloop-shell .vocabulary-list-item {border-radius:10px;}
+.wordloop-shell .vocabulary-list-item:hover {background:var(--control);}
+.wordloop-shell .vocabulary-list-item[aria-current="true"] {
+  background:color-mix(in srgb,var(--accent) 10%,var(--material-solid));
+}
+.wordloop-shell .vocabulary-word-main strong {font-size:1.07rem;letter-spacing:-.015em;font-weight:620;}
+.wordloop-shell .word-detail-header h2,.wordloop-shell .capture-detail h2,
+.wordloop-shell .note-review-front h2,.wordloop-shell .lesson-word-heading strong,
+.wordloop-shell .question-word {
+  font-family:"Iowan Old Style","Baskerville","Palatino Linotype",Georgia,serif;
+  font-weight:500;letter-spacing:-.035em;
+}
+.wordloop-shell .word-detail-header h2 {font-size:clamp(1.65rem,3vw,2.2rem);}
+.wordloop-shell .word-detail-scroll,.wordloop-shell .capture-detail {line-height:1.78;}
+.wordloop-shell .word-memory-grid dd {font-variant-numeric:tabular-nums;}
+.wordloop-shell .capture-note-card {transition:background-color 150ms ease;}
+.wordloop-shell .capture-note-card:hover,.wordloop-shell .capture-note-card.active {
+  background:var(--control);
+}
+.wordloop-shell .capture-occurrence,.wordloop-shell .capture-context {
+  border-color:var(--separator);background:var(--control);
+}
+.wordloop-shell .note-review-card {border-color:var(--separator);border-radius:22px;box-shadow:var(--shadow);}
+.wordloop-shell .study-task-card > .standalone-content,
+.wordloop-shell .lesson-reading-pane > .lesson-section,
+.wordloop-shell .lesson-reading-pane .lesson-detail-grid > .lesson-section {
+  border-color:var(--separator);border-radius:18px;background:var(--material-solid);
+}
+.wordloop-shell .lesson-ipa {color:var(--muted);}
+.wordloop-shell .lesson-example {line-height:1.83;letter-spacing:-.018em;}
+.wordloop-shell .lesson-section h2 {font-weight:630;letter-spacing:.075em;}
+.wordloop-shell .lesson-prompt,.wordloop-shell .question-prompt {
+  border:1px solid var(--separator);border-radius:14px;
+  background:var(--control);line-height:1.8;
+}
+.wordloop-shell .standalone-feedback {
+  border:1px solid var(--separator);border-radius:15px;background:var(--control);line-height:1.85;
+}
+.wordloop-shell .pretest-progress {height:5px;}
+.wordloop-shell .family-dialog,.family-dialog {
+  border-color:var(--separator);border-radius:24px;background:var(--material-solid);
+  box-shadow:0 28px 90px #0003;
+}
+.family-node-list button[aria-pressed="true"],.lexical-view-tabs button[aria-pressed="true"],
+.lexical-filters button[aria-pressed="true"] {
+  background:color-mix(in srgb,var(--accent) 9%,var(--material-solid));
+  color:var(--accent);border-color:var(--accent);
+}
+.family-canvas {border-color:var(--separator);border-radius:18px;}
+.family-mini-card {border-color:var(--separator);border-radius:16px;}
+.auth-shell {background:var(--page-bg);}
+.auth-card {background:var(--material-solid);border:1px solid var(--separator);border-radius:24px;}
+@media (min-width:768px) {
+  .wordloop-shell .standalone-main {padding-top:3.3rem;}
+  .wordloop-shell .app-navigation-desktop {padding-top:2.1rem;}
+  .wordloop-shell .today-focus-card {padding:clamp(2rem,3vw,3rem);}
+  .wordloop-shell .today-progress-card,.wordloop-shell .today-capture-card,
+  .wordloop-shell .insight-panel {padding:clamp(1.5rem,2.4vw,2rem);}
+}
+@media (max-width:767px) {
+  .wordloop-shell {padding-inline:1rem;}
+  .wordloop-shell .page-heading {margin-bottom:1.5rem;}
+  .wordloop-shell .page-heading h1 {font-size:2.05rem;}
+  .wordloop-shell .today-focus-card,.wordloop-shell .today-progress-card,
+  .wordloop-shell .today-capture-card,.wordloop-shell .insight-panel {
+    padding:1.3rem;border-radius:19px;
+  }
+  .wordloop-shell .today-focus-card h2 {font-size:1.6rem;}
+  .wordloop-shell .app-navigation-mobile {
+    background:var(--material-solid);border-top-color:var(--separator);
+    box-shadow:0 -9px 32px #142a3012;
+  }
+  .wordloop-shell .app-nav-item {min-height:3.3rem;}
+  .wordloop-shell .insight-metric-grid {gap:.65rem;}
+  .wordloop-shell .insight-metric {padding:1rem;}
+  .wordloop-shell .note-review-card {border-radius:18px;}
+}
+@media (prefers-reduced-motion:reduce) {
+  .wordloop-shell .button,.wordloop-shell .app-nav-item,
+  .wordloop-shell .vocabulary-list-item,.wordloop-shell .capture-note-card {
+    transition:none;
+  }
+}
+@media (prefers-contrast:more) {
+  .wordloop-shell .widget-card,.wordloop-shell .today-focus-card,
+  .wordloop-shell .today-progress-card,.wordloop-shell .today-capture-card,
+  .wordloop-shell .insight-panel,.wordloop-shell .vocabulary-list-pane,
+  .family-dialog {border-color:var(--separator-strong);}
+}
