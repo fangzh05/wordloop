@@ -513,14 +513,20 @@ function StandaloneStudyBackButton({ onBack }: { onBack: () => void }): React.JS
 }
 
 export function StandaloneReviewHeader({ currentIndex, total, complete, onBack }: {
-  currentIndex: number;
-  total: number;
+  currentIndex: number; total: number;
   complete: boolean;
   onBack: () => void;
 }): React.JSX.Element {
-  return <header className="widget-header compact-header">
-    <div className="standalone-study-heading"><StandaloneStudyBackButton onBack={onBack} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">复习</h1></div></div>
-    <span className="standalone-count">{complete ? total : `${Math.min(currentIndex + 1, total)} / ${total}`}</span>
+  const current = complete ? total : Math.min(currentIndex + 1, total);
+  return <header className="widget-header compact-header review-editorial-header">
+    <div className="review-reference-topline">
+      <StandaloneStudyBackButton onBack={onBack} />
+      <span>正式复习 · {current} / {total}</span>
+    </div>
+    <h1 id="study-title" className="sr-only">正式复习</h1>
+    <div className="review-page-progress" role="progressbar" aria-label="复习进度" aria-valuemin={0} aria-valuemax={Math.max(1,total)} aria-valuenow={current}>
+      <span style={{width:`${total>0?Math.min(100,current/total*100):0}%`}} />
+    </div>
   </header>;
 }
 
@@ -532,6 +538,124 @@ export function StandaloneLessonHeader({ title, progressLabel, onBack }: {
   return <header className="widget-header compact-header">
     <div className="standalone-study-heading"><StandaloneStudyBackButton onBack={onBack} /><div><span className="eyebrow">{progressLabel}</span><div className="lesson-word-heading"><strong id="study-title">{title}</strong></div></div></div>
   </header>;
+}
+
+
+/**
+ * Presentation-only study surfaces shared by the authenticated app and
+ * the isolated visual-review fixture. Actions remain owned by StandaloneApp.
+ */
+export function StandaloneReviewWorkspace({ item, direction, currentIndex, total, answer, busy, notice, noticeIndex, onBack, onAnswerChange, onUnknown, onSubmit }: {
+  item: Record<string, unknown>;
+  direction: "cn_to_en" | "en_definition";
+  currentIndex: number; total: number; answer: string; busy: boolean;
+  notice: string; noticeIndex: number | null;
+  onBack: () => void; onAnswerChange: (text: string) => void; onUnknown: () => void; onSubmit: () => void;
+}): React.JSX.Element {
+  return <section className="review-editorial-stage" aria-label="正式复习作答">
+    <StandaloneReviewHeader currentIndex={currentIndex} total={total} complete={false} onBack={onBack} />
+    <div className="standalone-content review-editorial-workspace">
+      <div className="review-question-number" aria-hidden="true">VOCABULARY / ACTIVE RECALL</div>
+      <StandaloneReviewQuestion item={item} direction={direction} />
+      <div className="review-answer-region">
+        <label className="answer-label" htmlFor="study-answer">{direction === "cn_to_en" ? "你的回答 · 英文单词" : "你的回答 · 英文释义"}</label>
+        <input id="study-answer" className="answer-input standalone-input review-answer-field" value={answer} autoComplete="off" spellCheck={false}
+          placeholder={direction === "cn_to_en" ? "在这里输入对应的英文词汇" : "用英语解释这个词"}
+          onChange={(event) => onAnswerChange(event.target.value)}
+          onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy) return; onSubmit(); } }} />
+        <StandaloneReviewFeedback notice={notice} noticeIndex={noticeIndex} currentIndex={currentIndex} />
+        <div className="review-answer-bottom">
+          <Button className="secondary review-unknown-button" type="button" disabled={busy} onClick={onUnknown}>不会</Button>
+          <Button className="review-submit-button" type="button" disabled={busy || !answer.trim()} onClick={onSubmit}>确认回答 <span aria-hidden="true">→</span></Button>
+        </div>
+        <p className="review-keyboard-note">按 Enter 提交 · 忘记时可以跳过</p>
+      </div>
+    </div>
+  </section>;
+}
+
+export function StandaloneLessonExplanation({ title, displayTitle, progressLabel, ipa, pronunciationAudioUrl, meaningZh, partOfSpeech,
+  exampleEn, exampleZh, collocations, derivations, note, busy, onBack, onStartExercise }: {
+  title: string; displayTitle: string; progressLabel: string;
+  ipa: string; pronunciationAudioUrl: string | null; meaningZh: string; partOfSpeech: string;
+  exampleEn: string; exampleZh: string | null; collocations: string[];
+  derivations: string[]; note: string; busy: boolean;
+  onBack: () => void; onStartExercise: () => void;
+}): React.JSX.Element {
+  const pos = partOfSpeech.trim().replace(/\.$/, "").toLowerCase();
+  const posLabel: Record<string,string> = {adj:"ADJECTIVE",a:"ADJECTIVE",v:"VERB",vt:"VERB",vi:"VERB",n:"NOUN",adv:"ADVERB",prep:"PREPOSITION"};
+  const fraction = progressLabel.match(/(\d+)\s*\/\s*(\d+)/);
+  const done = fraction ? Number(fraction[1]) : 0;
+  const total = fraction ? Number(fraction[2]) : 0;
+  const percent = total > 0 ? Math.max(0,Math.min(100,done / total * 100)) : 0;
+  const meaning = meaningZh;
+  return <div className="standalone-content standalone-explain-content lesson-editorial-content lesson-reference-stage" data-capture-root="true">
+    <header className="lesson-reference-topbar">
+      <StandaloneStudyBackButton onBack={onBack} />
+      <span className="lesson-reference-progress-label">{progressLabel}</span>
+    </header>
+    {total > 0 && <div className="lesson-reference-progress" role="progressbar" aria-label="正式学习进度" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(done,total)}>
+      <span style={{ width:`${percent}%` }} />
+    </div>}
+    <section className="lesson-reference-word" aria-labelledby="study-title">
+      <p className="lesson-reference-kicker">VOCABULARY / {posLabel[pos] ?? (pos || "WORD").toUpperCase()}</p>
+      <h1 id="study-title" className="lesson-reference-title">{displayTitle}</h1>
+      <div className="lesson-reference-ipa"><span>{ipa}</span>
+        {pronunciationAudioUrl
+          ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(pronunciationAudioUrl); void audio.play().catch(() => speak(title)); }}>▶</button>
+          : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}
+      </div>
+      <p className="lesson-reference-meaning">{meaning}</p>
+    </section>
+    <div className="lesson-reference-reading">
+      {collocations.length > 0 && <section className="lesson-reference-section lesson-reference-collocations">
+        <h2>COMMON COLLOCATIONS</h2>
+        <ul>{collocations.slice(0,3).map(value => <li key={value}>{value}</li>)}</ul>
+      </section>}
+      {exampleEn && <section className="lesson-reference-section lesson-reference-context" data-capture-context="true">
+        <h2>READ IN CONTEXT</h2>
+        <p className="lesson-reference-example standalone-reading-width">{exampleEn}</p>
+        {exampleZh && <details className="lesson-reference-translation" open>
+          <summary>译文</summary><p className="standalone-reading-width">{exampleZh}</p>
+        </details>}
+      </section>}
+      <section className="lesson-reference-section lesson-reference-derivations">
+        <div className="lesson-reference-family-heading"><h2>WORD FAMILY</h2><FamilyEntry word={title} disabled={busy} /></div>
+        {derivations.length > 0 && <ul>{derivations.map(value=><li key={value}>{value}</li>)}</ul>}
+      </section>
+      {note && <section className="lesson-reference-section lesson-reference-note">
+        <h2>NOTE</h2><p className="standalone-reading-width">{note}</p>
+      </section>}
+    </div>
+    <div className="lesson-reference-bottom">
+      <Button type="button" disabled={busy} onClick={onStartExercise}>开始练习 <span aria-hidden="true">→</span></Button>
+    </div>
+  </div>;
+}
+
+export function StandaloneLessonExercise({ instruction, prompt, activityType, clozeHint, multiline, answer, busy, onAnswerChange, onSubmit }: {
+  instruction: string; prompt: unknown; activityType: unknown; clozeHint: unknown;
+  multiline: boolean; answer: string; busy: boolean;
+  onAnswerChange: (text:string)=>void; onSubmit: ()=>void;
+}): React.JSX.Element {
+  const handleKey = (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const matcher = multiline ? shouldSubmitMultiline : shouldSubmitSingleLine;
+    if (matcher({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) {
+      event.preventDefault(); if (!answer.trim() || busy) return; onSubmit();
+    }
+  };
+  return <div className="standalone-content lesson-exercise-editorial">
+    <div className="lesson-exercise-eyebrow">PRACTICE / APPLICATION</div>
+    <p className="lesson-exercise-heading">{instruction}</p>
+    <LessonExercisePrompt hint={clozeHint} prompt={prompt} activityType={activityType} className="standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase" />
+    <div className="lesson-exercise-answer">
+      <label className="answer-label" htmlFor="lesson-editorial-answer">你的回答</label>
+      {multiline
+        ? <textarea id="lesson-editorial-answer" className="standalone-input" value={answer} onChange={e=>onAnswerChange(e.target.value)} onKeyDown={handleKey} rows={5}/>
+        : <input id="lesson-editorial-answer" className="answer-input standalone-input" value={answer} onChange={e=>onAnswerChange(e.target.value)} onKeyDown={handleKey}/>}
+      <div className="standalone-actions lesson-exercise-actions"><Button type="button" disabled={busy || !answer.trim()} onClick={onSubmit}>提交答案 <span aria-hidden="true">→</span></Button></div>
+    </div>
+  </div>;
 }
 
 export default function StandaloneApp(): React.JSX.Element {
@@ -1046,18 +1170,13 @@ export default function StandaloneApp(): React.JSX.Element {
       const item = items[currentIndex] ?? {};
       const complete = state.phase === "review_complete";
       const direction = item.direction === "en_definition" ? "en_definition" : "cn_to_en";
-      return <section className="widget-card standalone-card study-task-card" aria-labelledby="study-title">
-        <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={backToToday} />
-        {complete ? <div className="standalone-content"><p>本组复习完成。接下来进入预测试或补学。</p>{numberValue(record(record(view.progress).fsrs).due_now) > 0 && <p>仍有 {numberValue(record(record(view.progress).fsrs).due_now)} 个到期词，留待下一轮复习。</p>}<div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <div className="standalone-content">
-          <StandaloneReviewQuestion item={item} direction={direction} />
-          <label className="answer-label" htmlFor="study-answer">{direction === "cn_to_en" ? "写出英文单词" : "英文释义"}</label>
-          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "review_submit", answer }); } }} />
-          <StandaloneReviewFeedback notice={notice} noticeIndex={noticeIndex} currentIndex={currentIndex} />
-          <div className="standalone-actions standalone-two-actions">
-            <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "review_submit", answer: "", mark_unknown: true })}>不会</Button>
-            <Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "review_submit", answer })}>提交</Button>
-          </div>
-        </div>}
+      return <section className="widget-card standalone-card study-task-card review-editorial-card" aria-labelledby="study-title">
+        {complete && <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={backToToday} />}
+        {complete ? <div className="standalone-content"><p>本组复习完成。接下来进入预测试或补学。</p>{numberValue(record(record(view.progress).fsrs).due_now) > 0 && <p>仍有 {numberValue(record(record(view.progress).fsrs).due_now)} 个到期词，留待下一轮复习。</p>}<div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <StandaloneReviewWorkspace item={item} direction={direction} currentIndex={currentIndex} total={items.length}
+          answer={answer} busy={busy !== null} notice={notice} noticeIndex={noticeIndex} onBack={backToToday}
+          onAnswerChange={setAnswer}
+          onUnknown={() => { void dispatch({ action: "review_submit", answer: "", mark_unknown: true }); }}
+          onSubmit={() => { void dispatch({ action: "review_submit", answer }); }} />}
         {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
       </section>;
     })()}
@@ -1129,31 +1248,19 @@ export default function StandaloneApp(): React.JSX.Element {
       return <section className={`widget-card standalone-card lesson-card ${explaining ? "study-explain-card" : "study-task-card"}`} aria-labelledby="study-title">
         {!explaining && <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />}
 
-        {explaining && <div className="standalone-content standalone-explain-content" data-capture-root="true">
-          <div className="lesson-overview">
-          <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />
-          <div className="lesson-ipa">{String(payload.ipa ?? "")}{view.pronunciation_audio_url ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(view.pronunciation_audio_url!); void audio.play().catch(() => speak(title)); }}>▶</button> : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}</div>
-          <section className="lesson-section"><h2>核心义</h2><p>{meaningIncludesPartOfSpeech(String(payload.meaning_zh ?? ""), String(payload.part_of_speech ?? "")) ? String(payload.meaning_zh ?? "") : `${String(payload.part_of_speech ?? "")} · ${String(payload.meaning_zh ?? "")}`}</p></section>
-          <div className="standalone-actions lesson-start-action"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_start_exercise" })}>开始练习</Button></div>
-          </div>
-          <div className="lesson-reading-pane">
-          <section className="lesson-section lesson-example-panel" data-capture-context="true"><h2>例句</h2><p className="lesson-example standalone-reading-width">{String(payload.example_en ?? "")}</p>{typeof payload.example_zh === "string" && payload.example_zh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{payload.example_zh}</p></details>}</section>
-          <div className="lesson-detail-grid">
-          <section className="lesson-section"><h2>高价值搭配</h2><ul>{wordsFrom(payload.collocations).slice(0, 3).map((value) => <li key={value}>{value}</li>)}</ul></section>
-            <section className="lesson-section"><div className="lesson-family-heading"><h2>常见派生</h2><FamilyEntry word={title} disabled={busy !== null} /></div><ul>{wordsFrom(payload.derivations).map((value) => <li key={value}>{value}</li>)}</ul></section>
-          </div>
-          <section className="lesson-section"><h2>易混提醒</h2><p className="standalone-reading-width">{String(payload.note ?? "")}</p></section>
-          </div>
-        </div>}
+        {explaining && <StandaloneLessonExplanation title={title} displayTitle={displayTitle} progressLabel={progressLabel}
+          ipa={String(payload.ipa ?? "")} pronunciationAudioUrl={view.pronunciation_audio_url ?? null}
+          meaningZh={String(payload.meaning_zh ?? "")} partOfSpeech={String(payload.part_of_speech ?? "")}
+          exampleEn={String(payload.example_en ?? "")} exampleZh={typeof payload.example_zh === "string" ? payload.example_zh : null}
+          collocations={wordsFrom(payload.collocations)} derivations={wordsFrom(payload.derivations)}
+          note={String(payload.note ?? "")} busy={busy !== null} onBack={backToToday}
+          onStartExercise={() => { void dispatch({ action: "lesson_start_exercise" }); }} />}
 
-        {phase === "lesson_exercise" && exerciseMode && <div className="standalone-content">
-          <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
-          <LessonExercisePrompt hint={payload.cloze_hint} prompt={exercise.prompt} activityType={exercise.activity_type} className="standalone-reading-width" data-capture-text="true" data-capture-source="lesson_prompt" data-capture-type="phrase" />
-          {exercise.multiline === true
-            ? <textarea className="standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "lesson_submit", answer }); } }} />
-            : <input className="answer-input standalone-input" aria-label="你的答案" value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "lesson_submit", answer }); } }} />}
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "lesson_submit", answer })}>提交</Button></div>
-        </div>}
+        {phase === "lesson_exercise" && exerciseMode && <StandaloneLessonExercise
+          instruction={String(exercise.instruction ?? "")} prompt={exercise.prompt} activityType={exercise.activity_type}
+          clozeHint={payload.cloze_hint} multiline={exercise.multiline === true}
+          answer={answer} busy={busy !== null} onAnswerChange={saveAnswer}
+          onSubmit={() => { void dispatch({ action: "lesson_submit", answer }); }} />}
 
         {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
           {busy !== null && <p className="standalone-status" role="status">{busyLabel ?? "正在处理，请稍候…"}</p>}

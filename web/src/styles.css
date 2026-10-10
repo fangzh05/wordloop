@@ -2069,11 +2069,11 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
    This styles only Today and Lexical Atlas; the approved study page is untouched.
    ========================================================================== */
 .wordloop-shell .today-page {
-  --press-ink:#201e1c;
-  --press-paper:#f8f7f3;
-  --press-rule:#cecac3;
-  --press-muted:#766e67;
-  --press-accent:#a95340;
+  --press-ink:#1d2f40;
+  --press-paper:#f5f7f8;
+  --press-rule:#cbd6df;
+  --press-muted:#6e8190;
+  --press-accent:#365e7b;
   max-width:1080px;
   width:100%;
   margin-inline:auto;
@@ -2125,11 +2125,11 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   gap:0 2rem;
   margin:1.65rem 0 2.6rem;
   padding:2.05rem 2.35rem 2.1rem;
-  border:1px solid #201d1b;
+  border:1px solid #142e45;
   border-radius:0;
   box-shadow:none;
-  background:#211d1c;
-  color:#f8f4ec;
+  background:#142e45;
+  color:#f2f7fb;
   position:relative;
   overflow:hidden;
 }
@@ -2137,7 +2137,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   content:"";
   position:absolute;
   left:0;top:0;bottom:0;
-  width:4px;background:#b65f46;
+  width:4px;background:#78a3c0;
 }
 .wordloop-shell .today-focus-copy {grid-column:1;min-width:0;max-width:none;}
 .wordloop-shell .today-cover-kicker {
@@ -2147,19 +2147,19 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   gap:1rem;
   padding-bottom:1.2rem;
   margin-bottom:3.3rem;
-  border-bottom:1px solid #ffffff36;
+  border-bottom:1px solid #ffffff30;
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
   font-size:.64rem;
   font-weight:500;
   letter-spacing:.07em;
-  color:#c9bdb4;
+  color:#afc8d9;
 }
 .wordloop-shell .today-focus-copy > .eyebrow {
   display:block;
   font-size:.73rem;
   font-weight:540;
   letter-spacing:.04em;
-  color:#d6a992;
+  color:#b5d4e8;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) h2 {
   max-width:13em;
@@ -2169,10 +2169,10 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   line-height:1.34;
   font-weight:460;
   letter-spacing:-.045em;
-  color:#f7f4ee;
+  color:#f6f9fc;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) .today-focus-copy > p {
-  color:#c2b8ae;
+  color:#b7cbd9;
   font-size:.83rem;
   margin:0 0 2rem;
   line-height:1.75;
@@ -2184,7 +2184,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   justify-content:flex-end;
   grid-column:2;
   grid-row:1 / span 2;
-  border-left:1px solid #ffffff36;
+  border-left:1px solid #ffffff30;
   padding:0 0 1.15rem 2.1rem;
   min-width:0;
 }
@@ -2193,7 +2193,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   font-size:.64rem;
   font-weight:500;
   letter-spacing:.065em;
-  color:#baab9e;
+  color:#b1cbdc;
   white-space:normal;
 }
 .wordloop-shell .today-cover-count > strong {
@@ -2203,17 +2203,17 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   line-height:.88;
   font-weight:400;
   letter-spacing:-.085em;
-  color:#efe8df;
+  color:#f4f8fb;
   font-variant-numeric:lining-nums tabular-nums;
 }
 .wordloop-shell .today-cover-count > small {
   font-size:.76rem;
-  color:#cbbdb0;
+  color:#afc8d8;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) > p {
   grid-column:1;
   margin:0 0 1rem;
-  color:#ead6c8;
+  color:#c8dce9;
   font-size:.8rem;
   line-height:1.7;
 }
@@ -2223,20 +2223,20 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   min-width:12.5rem;
   min-height:48px;
   padding:.7rem 1.6rem;
-  border:1px solid #f8f4ec;
+  border:1px solid #f2f7fb;
   border-radius:0;
-  background:#f7f3ea;
-  color:#211d1c;
+  background:#f3f8fc;
+  color:#142e45;
   box-shadow:none;
   font-weight:625;
   letter-spacing:.015em;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) > .today-primary-action:hover:not(:disabled) {
-  background:#ddcdb8;
-  border-color:#ddcdb8;
+  background:#d9e9f3;
+  border-color:#d9e9f3;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) > .today-primary-action:focus-visible {
-  outline:3px solid #ccae8e;
+  outline:3px solid #8db8d6;
   outline-offset:3px;
 }
 .wordloop-shell .today-consolidation {
@@ -2324,8 +2324,8 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 }
 .wordloop-shell .learning-budget-summary {margin:1.25rem 0 0;padding:1.1rem 0 1.15rem;border:0;border-bottom:1px solid var(--press-rule);border-radius:0;background:transparent;box-shadow:none;}
 .wordloop-shell .learning-budget-heading h3 {font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;font-size:1.06rem;}
-.wordloop-shell .learning-budget-meter {height:3px;border-radius:0;background:#d9d6cf;}
-.wordloop-shell .learning-budget-meter > span {border-radius:0;background:#a95340;}
+.wordloop-shell .learning-budget-meter {height:3px;border-radius:0;background:#d2dde5;}
+.wordloop-shell .learning-budget-meter > span {border-radius:0;background:#365e7b;}
 .wordloop-shell .learning-budget-facts {color:var(--press-muted);}
 .wordloop-shell .learning-budget-actions .button {border-radius:0;}
 .wordloop-shell .today-secondary-grid {
@@ -2424,23 +2424,23 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 
 /* Lexical Atlas / a living dictionary spread rather than a floating bubble chart. */
 .family-dialog {
-  --atlas-paper:#f4f2ec;
-  --atlas-ink:#282420;
-  --atlas-muted:#6e6860;
-  --atlas-rule:#ccc8c0;
-  --atlas-accent:#a6533f;
+  --atlas-paper:#f3f6f8;
+  --atlas-ink:#213446;
+  --atlas-muted:#677c8d;
+  --atlas-rule:#c8d6e0;
+  --atlas-accent:#365e7b;
   width:min(1190px,calc(100vw - 2rem));
   max-height:calc(100dvh - 2rem);
   background:var(--atlas-paper);
   color:var(--atlas-ink);
-  border:1px solid #211d1b;
+  border:1px solid #142e45;
   border-radius:0;
-  box-shadow:0 22px 72px #1d191743;
+  box-shadow:0 22px 72px #0b223a43;
   padding:0;
   overflow:auto;
   overscroll-behavior:contain;
 }
-.family-dialog::backdrop {background:#15110ed1;}
+.family-dialog::backdrop {background:#0b2032d1;}
 .family-dialog .family-header {
   position:relative;
   display:flex;
@@ -2449,19 +2449,19 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   gap:1.5rem;
   padding:1.7rem 2.15rem 1.55rem;
   margin:0;
-  background:#211e1d;
-  color:#faf6ef;
+  background:#142e45;
+  color:#f3f8fc;
   border:0;
 }
 .family-dialog .family-header-copy .eyebrow {
-  color:#daa78d;
+  color:#a8cce4;
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
   font-size:.65rem;
   font-weight:530;
   letter-spacing:.09em;
 }
 .family-dialog .family-header h2 {
-  color:#faf6ef;
+  color:#f3f8fc;
   font-family:"Baskerville","Iowan Old Style","Palatino Linotype",Georgia,serif;
   font-size:clamp(3.3rem,7vw,6.8rem);
   font-weight:400;
@@ -2470,7 +2470,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   margin:.65rem 0 .35rem;
 }
 .family-dialog .family-header-subtitle {
-  color:#c8bdb2;
+  color:#b8cfdf;
   margin:.55rem 0 0;
   font-size:.8rem;
   line-height:1.65;
@@ -2479,14 +2479,14 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   flex-shrink:0;
   min-height:39px;
   padding:.45rem .85rem;
-  border:1px solid #776d64;
+  border:1px solid #68839a;
   border-radius:0;
   background:transparent;
-  color:#faf6ef;
+  color:#f3f8fc;
   font-size:.75rem;
   box-shadow:none;
 }
-.family-dialog .family-header > .button:hover {background:#38332f;}
+.family-dialog .family-header > .button:hover {background:#264862;}
 .family-dialog .lexical-view-tabs {
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
@@ -2565,8 +2565,8 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   background:transparent;
 }
 .family-dialog .family-graph-pane {
-  background:#23201e;
-  color:#f5eee6;
+  background:#18364e;
+  color:#f2f8fc;
   padding:1.25rem;
 }
 .family-dialog .family-detail-pane {
@@ -2583,37 +2583,37 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   margin:0 0 .95rem;
 }
 .family-dialog .family-graph-toolbar .eyebrow {
-  color:#d5a18a;
+  color:#b3d2e6;
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
   font-size:.62rem;
   letter-spacing:.08em;
 }
-.family-dialog .family-graph-toolbar .family-reason {color:#b9afa4;font-size:.73rem;line-height:1.6;margin:.3rem 0 0;}
+.family-dialog .family-graph-toolbar .family-reason {color:#a9c3d3;font-size:.73rem;line-height:1.6;margin:.3rem 0 0;}
 .family-dialog .family-graph-toolbar .button {
   flex-shrink:0;
-  border:1px solid #595047;
+  border:1px solid #627e92;
   border-radius:0;
   padding:.4rem .65rem;
   min-height:35px;
   font-size:.72rem;
-  color:#eee7de;
+  color:#f0f6fa;
   background:transparent;
 }
 .family-dialog .family-canvas {
-  --text:#f5eee6;
-  --muted:#b9ab9f;
-  --accent:#dbb496;
-  --accent-text:#271d18;
-  --control:#342d29;
-  --control-hover:#4a3930;
-  --material-solid:#23201e;
-  --material-raised:#2d2926;
-  --separator-strong:#6c6057;
+  --text:#f2f8fc;
+  --muted:#b8ccda;
+  --accent:#b3d7f0;
+  --accent-text:#132e45;
+  --control:#27475f;
+  --control-hover:#365871;
+  --material-solid:#18364e;
+  --material-raised:#28465e;
+  --separator-strong:#68849b;
   width:100%;
   height:clamp(330px,45vh,530px);
-  border:1px solid #554b45;
+  border:1px solid #496981;
   border-radius:0;
-  background:#23201e;
+  background:#18364e;
   background-image:linear-gradient(#ffffff09 1px,transparent 1px),linear-gradient(90deg,#ffffff09 1px,transparent 1px);
   background-size:34px 34px;
   touch-action:none;
@@ -2631,17 +2631,17 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   border-bottom:1px solid transparent;
   border-radius:0;
   background:transparent;
-  color:#bdb1a6;
+  color:#aebfcd;
   font-family:"Baskerville","Iowan Old Style",Georgia,serif;
   font-size:.96rem;
 }
 .family-dialog .family-node-list button:hover {color:#fff;}
 .family-dialog .family-node-list button[aria-pressed="true"] {
-  border-bottom-color:#d4a27f;
+  border-bottom-color:#a6cfe9;
   background:transparent;
-  color:#f3e9dd;
+  color:#eef6fc;
 }
-.family-dialog .family-help {color:#bdb1a6;font-size:.72rem;}
+.family-dialog .family-help {color:#aebfcd;font-size:.72rem;}
 .family-dialog .family-help summary {padding:.65rem 0;min-height:35px;}
 .family-dialog .family-mini-card {
   margin:0;
@@ -2693,7 +2693,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   gap:.9rem;
   margin:0;
   padding:.5rem 0;
-  border-bottom:1px solid #dcd9d2;
+  border-bottom:1px solid #d5e0e7;
 }
 .family-dialog .family-dictionary dt,
 .family-dialog .family-dictionary dd {
@@ -2773,7 +2773,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 }
 .family-dialog .lexical-relation {margin:0;padding:1rem 0;border-top:1px solid var(--atlas-rule);}
 .family-dialog .lexical-relation p {font-size:.78rem;line-height:1.7;}
-.family-dialog .lexical-evidence {padding:.8rem;border-radius:0;background:#e6e2da;overflow-wrap:anywhere;}
+.family-dialog .lexical-evidence {padding:.8rem;border-radius:0;background:#e7eef3;overflow-wrap:anywhere;}
 .family-dialog .family-micro {max-width:43rem;margin:auto;padding:2rem;}
 .family-dialog .family-micro form {gap:1rem;}
 .family-dialog .family-micro .button {border-radius:0;}
@@ -2800,24 +2800,1741 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 
 /* Press surfaces respect all three user-selected appearance modes. */
 :root[data-theme="dark"] .wordloop-shell .today-page {
-  --press-ink:#f1ece6;--press-paper:#171c1d;--press-rule:#454343;
-  --press-muted:#b9b1a9;--press-accent:#d4a085;
+  --press-ink:#f0f6fc;--press-paper:#111f2d;--press-rule:#40566a;
+  --press-muted:#abc1d0;--press-accent:#99c0db;
 }
 @media(prefers-color-scheme:dark) {
   :root[data-theme="system"] .wordloop-shell .today-page,
   :root:not([data-theme]) .wordloop-shell .today-page {
-    --press-ink:#f1ece6;--press-paper:#171c1d;--press-rule:#454343;
-    --press-muted:#b9b1a9;--press-accent:#d4a085;
+    --press-ink:#f0f6fc;--press-paper:#111f2d;--press-rule:#40566a;
+    --press-muted:#abc1d0;--press-accent:#99c0db;
   }
 }
 /* The light-paper dictionary stays legible even over a dark app theme. */
 .family-dialog {
-  --page-bg:#f4f2ec;--text:#282420;--muted:#6e6860;
-  --material-solid:#f4f2ec;--material-raised:#e9e4db;
-  --separator:#dcd8d0;--separator-strong:#ccc8c0;
-  --control:#e9e4db;--control-hover:#ddd7cd;
-  --accent:#a6533f;--accent-text:#fff;--focus:#a6533f44;
+  --page-bg:#f3f6f8;--text:#213446;--muted:#677c8d;
+  --material-solid:#f3f6f8;--material-raised:#e6edf3;
+  --separator:#d8e2e9;--separator-strong:#c8d6e0;
+  --control:#e6edf3;--control-hover:#d8e4ec;
+  --accent:#365e7b;--accent-text:#fff;--focus:#365e7b44;
   color-scheme:light;
 }
 .family-dialog .family-canvas {color-scheme:dark;}
+
+
+/* ===========================================================================
+  WordLoop Press Edition | connected surfaces
+  Source-matched classes: AppShell, InsightsPage, VocabularyPage,
+  CaptureNotesPage, NoteReviewPage, WordDetailPanel, SettingsSheet.
+  Strict presentation-only changes: existing controls and events remain.
+  =========================================================================== */
+.wordloop-shell {
+  --page-bg:#f3f6f8;
+  --material:#ffffff;
+  --material-solid:#fff;
+  --material-raised:#fff;
+  --text:#162d41;
+  --muted:#6e8091;
+  --separator:#dce5ec;
+  --separator-strong:#bfcfdb;
+  --control:#eaf1f6;
+  --control-hover:#dfeaf3;
+  --accent:#285a7c;
+  --accent-pressed:#193f5a;
+  --accent-text:#fff;
+  --nav-bg:#122e45;
+  --radius-large:12px;
+  --radius-control:6px;
+  --shadow:none;
+  background:var(--page-bg);
+}
+:root[data-theme="dark"] .wordloop-shell {
+  --page-bg:#101c2a;--material:#182b3e;--material-solid:#182b3e;
+  --material-raised:#21384d;--text:#eef5fa;--muted:#adbfce;
+  --separator:#30495d;--separator-strong:#49667c;
+  --control:#22394e;--control-hover:#304c64;
+  --accent:#a3d0ef;--accent-pressed:#c1e2f7;
+  --accent-text:#102b40;--nav-bg:#0e2234;--shadow:none;
+}
+@media(prefers-color-scheme:dark) {
+  :root[data-theme="system"] .wordloop-shell,:root:not([data-theme]) .wordloop-shell {
+    --page-bg:#101c2a;--material:#182b3e;--material-solid:#182b3e;
+    --material-raised:#21384d;--text:#eef5fa;--muted:#adbfce;
+    --separator:#30495d;--separator-strong:#49667c;
+    --control:#22394e;--control-hover:#304c64;
+    --accent:#a3d0ef;--accent-pressed:#c1e2f7;
+    --accent-text:#102b40;--nav-bg:#0e2234;--shadow:none;
+  }
+}
+.wordloop-shell .app-navigation-desktop {
+  background:var(--nav-bg);
+  border-right:1px solid #ffffff1c;
+  color:#f1f6fb;
+  border-radius:0;
+  box-shadow:none;
+}
+.wordloop-shell .app-navigation-desktop .nav-brand {color:#f1f6fb;}
+.wordloop-shell .app-navigation-desktop .nav-caption,
+.wordloop-shell .app-navigation-desktop .nav-personal small {color:#b1c7d7;}
+.wordloop-shell .app-navigation-desktop .app-nav-item {
+  color:#b2cada;
+  border-radius:5px;
+  font-size:.8rem;
+  min-height:46px;
+}
+.wordloop-shell .app-navigation-desktop .app-nav-item:hover {
+  color:#fff;
+  background:#ffffff16;
+}
+.wordloop-shell .app-navigation-desktop .app-nav-item[aria-current="page"] {
+  color:#fff;
+  background:#ffffff24;
+  border-left:2px solid #9acbe9;
+  border-radius:3px;
+  font-weight:650;
+}
+.wordloop-shell .app-navigation-desktop .nav-personal {
+  border-top-color:#ffffff24;
+  color:#e7f2f9;
+}
+.wordloop-shell .app-navigation-desktop .nav-personal > span {
+  background:#e1eff8;color:#173850;
+}
+.wordloop-shell .app-navigation-mobile {
+  background:var(--material-solid);
+  border-top:1px solid var(--separator);
+  box-shadow:none;
+}
+.wordloop-shell .app-navigation-mobile .app-nav-item[aria-current="page"] {
+  color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 8%,transparent);
+}
+.wordloop-shell .page-heading:not(.today-editorial-heading) {
+  margin-bottom:1.85rem;
+  padding-bottom:1.25rem;
+  border-bottom:1px solid var(--separator-strong);
+}
+.wordloop-shell .page-heading:not(.today-editorial-heading) h1,
+.wordloop-shell .capture-notes-page .standalone-study-heading h1,
+.wordloop-shell .note-review-page .standalone-study-heading h1 {
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif;
+  font-size:clamp(2.15rem,3.4vw,3rem);
+  font-weight:520;
+  line-height:1.2;
+  letter-spacing:-.04em;
+  color:var(--text);
+}
+.wordloop-shell .page-heading:not(.today-editorial-heading) .eyebrow,
+.wordloop-shell .capture-notes-page .eyebrow,
+.wordloop-shell .note-review-page .eyebrow {
+  display:block;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  color:var(--accent);
+  font-size:.65rem;
+  font-weight:600;
+  letter-spacing:.13em;
+}
+.wordloop-shell .page-heading:not(.today-editorial-heading) p {
+  color:var(--muted);font-size:.84rem;line-height:1.65;
+}
+.wordloop-shell .button:not(.today-primary-action),
+.wordloop-shell .secondary-button {
+  border-radius:5px;
+  box-shadow:none;
+}
+.wordloop-shell .button:focus-visible,
+.wordloop-shell button:focus-visible,
+.wordloop-shell a:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+}
+/* Insights: the analytics stay data-first and do not acquire invented charts. */
+.wordloop-shell .insights-page .insight-tabs {
+  display:flex;
+  gap:1.5rem;
+  border-bottom:1px solid var(--separator-strong);
+  margin:0 0 1.3rem;
+  overflow-x:auto;
+}
+.wordloop-shell .insights-page .insight-tabs button {
+  padding:.75rem .1rem .8rem;
+  min-height:43px;
+  border:0;
+  border-radius:0;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  color:var(--muted);
+  font-size:.81rem;
+  font-weight:530;
+  white-space:nowrap;
+}
+.wordloop-shell .insights-page .insight-tabs button[aria-current="page"] {
+  color:var(--accent);
+  background:transparent;
+  border-bottom-color:var(--accent);
+  font-weight:700;
+}
+.wordloop-shell .insight-controls {gap:.65rem;padding:0 0 1rem;}
+.wordloop-shell .insight-controls button {
+  border:1px solid var(--separator);
+  background:var(--material-solid);
+  border-radius:4px;
+  min-height:37px;
+}
+.wordloop-shell .insight-controls button[aria-pressed="true"] {
+  color:var(--accent);
+  border-color:var(--accent);
+  background:var(--control);
+}
+.wordloop-shell .insight-metric-grid {gap:0;}
+.wordloop-shell .insight-metric {
+  border:0;
+  border-right:1px solid var(--separator);
+  border-radius:0;
+  background:transparent;
+  padding:1.25rem 1.5rem 1.3rem 0;
+  min-width:0;
+}
+.wordloop-shell .insight-metric:not(:first-child) {padding-left:1.35rem;}
+.wordloop-shell .insight-metric:last-child {border-right:0;}
+.wordloop-shell .insight-metric > span {
+  color:var(--muted);font-size:.78rem;
+}
+.wordloop-shell .insight-metric > strong {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  color:var(--text);
+  font-size:clamp(2.1rem,4vw,3rem);
+  line-height:1.15;
+  font-weight:400;
+  letter-spacing:-.045em;
+}
+.wordloop-shell .insight-metric > small {color:var(--muted);font-size:.72rem;}
+.wordloop-shell .insight-panel {
+  border:1px solid var(--separator);
+  background:var(--material-solid);
+  border-radius:6px;
+  padding:1.55rem;
+  box-shadow:none;
+  min-width:0;
+}
+.wordloop-shell .insight-panel h2 {
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;
+  font-size:1.15rem;
+  font-weight:540;
+  color:var(--text);
+  letter-spacing:-.02em;
+}
+.wordloop-shell .insight-bar-list {gap:.3rem;}
+.wordloop-shell .insight-bar-row {border-radius:0;border-bottom:1px solid var(--separator);}
+.wordloop-shell .insight-bar-track {background:var(--control);border-radius:0;}
+.wordloop-shell .insight-bar-track i {border-radius:0;background:var(--accent);}
+.wordloop-shell .insight-content {gap:1rem;}
+.wordloop-shell .focus-word-list li {
+  border-bottom:1px solid var(--separator);
+}
+.wordloop-shell .focus-word-list li strong {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:1.15rem;font-weight:500;
+}
+.wordloop-shell .activity-day {border-radius:3px;}
+/* Vocabulary: a typographic catalogue with existing search, status and detail pane. */
+.wordloop-shell .vocabulary-toolbar {
+  background:transparent;
+  border:0;
+  border-radius:0;
+  padding:0 0 1.2rem;
+  box-shadow:none;
+}
+.wordloop-shell .vocabulary-search-row input {
+  background:var(--material-solid);
+  border:1px solid var(--separator-strong);
+  border-radius:5px;
+  min-height:47px;
+  color:var(--text);
+}
+.wordloop-shell .vocabulary-search-row input:focus {border-color:var(--accent);outline:2px solid var(--focus);}
+.wordloop-shell .vocabulary-filter-group {gap:.45rem;}
+.wordloop-shell .vocabulary-filter-group button {
+  border:1px solid var(--separator);
+  border-radius:4px;
+  background:transparent;
+  color:var(--muted);
+  min-height:37px;
+}
+.wordloop-shell .vocabulary-filter-group button[aria-pressed="true"] {
+  border-color:var(--accent);
+  background:var(--control);
+  color:var(--accent);
+}
+.wordloop-shell .vocabulary-list-pane {
+  background:var(--material-solid);
+  border:1px solid var(--separator);
+  border-radius:5px;
+  padding:0;
+  box-shadow:none;
+}
+.wordloop-shell .vocabulary-list {
+  margin:0;
+  padding:0;
+}
+.wordloop-shell .vocabulary-list-item {
+  min-height:63px;
+  border:0;
+  border-bottom:1px solid var(--separator);
+  border-radius:0;
+  background:transparent;
+  padding:.8rem 1.05rem;
+  transition:background 150ms ease;
+}
+.wordloop-shell .vocabulary-list-item[aria-current="true"] {
+  background:var(--control);
+  border-left:3px solid var(--accent);
+  padding-left:calc(1.05rem - 3px);
+}
+.wordloop-shell .vocabulary-word-main strong {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:1.27rem;
+  line-height:1.25;
+  font-weight:500;
+  letter-spacing:-.02em;
+}
+.wordloop-shell .vocabulary-word-state {
+  border-radius:3px;
+  font-size:.69rem;
+}
+.wordloop-shell .word-detail-panel {
+  background:var(--material-solid);
+  border:1px solid var(--separator);
+  border-radius:5px;
+  box-shadow:none;
+}
+.wordloop-shell .word-detail-header {
+  padding:1.1rem 1.35rem;
+  border-bottom:1px solid var(--separator);
+}
+.wordloop-shell .word-detail-header h2 {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(2.7rem,4vw,4.15rem);
+  font-weight:400;
+  line-height:1;
+}
+.wordloop-shell .word-detail-scroll {padding:1.3rem 1.45rem;}
+.wordloop-shell .word-detail-section {
+  margin:1.2rem 0 0;
+  padding:1.15rem 0 0;
+  border-top:1px solid var(--separator);
+}
+.wordloop-shell .word-detail-section h3 {
+  font-size:.78rem;font-weight:700;letter-spacing:.04em;
+}
+.wordloop-shell .word-memory-grid > div {
+  border:0;
+  border-right:1px solid var(--separator);
+  border-radius:0;
+  background:transparent;
+}
+.wordloop-shell .word-memory-grid dd {
+  font-family:"Baskerville",Georgia,serif;
+  font-weight:400;
+  font-size:1.7rem;
+}
+.wordloop-shell .word-history-list li,
+.wordloop-shell .word-capture-note {border-bottom:1px solid var(--separator);}
+/* Capture: quotes are the main content. Existing edit/search/filter/pagination retained. */
+.wordloop-shell .capture-notes-page {
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  padding:0;
+}
+.wordloop-shell .capture-notes-page > .widget-header {
+  padding-bottom:1.15rem;
+  border-bottom:1px solid var(--separator-strong);
+}
+.wordloop-shell .capture-tabs {
+  border-bottom:1px solid var(--separator-strong);
+  gap:1.15rem;
+}
+.wordloop-shell .capture-tabs button {
+  min-height:44px;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:var(--muted);
+  font-size:.82rem;
+}
+.wordloop-shell .capture-tabs button.active {
+  border-bottom-color:var(--accent);
+  background:transparent;
+  color:var(--accent);
+  font-weight:650;
+}
+.wordloop-shell .capture-toolbar input {
+  background:var(--material-solid);
+  border:1px solid var(--separator-strong);
+  border-radius:4px;
+  min-height:42px;
+}
+.wordloop-shell .capture-content-grid {gap:1rem;}
+.wordloop-shell .capture-list-pane {
+  border:1px solid var(--separator);
+  border-radius:5px;
+  background:var(--material-solid);
+  padding:0;
+  overflow:hidden;
+}
+.wordloop-shell .capture-note-list {
+  gap:0;
+  margin:0;
+  padding:0;
+}
+.wordloop-shell .capture-note-card {
+  border:0;
+  border-bottom:1px solid var(--separator);
+  border-radius:0;
+  padding:1.1rem 1.25rem;
+  background:transparent;
+}
+.wordloop-shell .capture-note-card.active {
+  background:var(--control);
+  border-left:3px solid var(--accent);
+  padding-left:calc(1.25rem - 3px);
+}
+.wordloop-shell .capture-note-card:hover {background:var(--control);}
+.wordloop-shell .capture-note-heading {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:1.16rem;
+  font-weight:400;
+  letter-spacing:-.015em;
+  line-height:1.5;
+}
+.wordloop-shell .capture-meta {font-size:.68rem;color:var(--muted);}
+.wordloop-shell .capture-state-badge {border-radius:3px;}
+.wordloop-shell .capture-context {border:0;border-left:2px solid var(--separator-strong);border-radius:0;padding:.7rem 1rem;background:var(--control);}
+.wordloop-shell .capture-detail {
+  background:var(--material-solid);
+  border:1px solid var(--separator);
+  border-radius:5px;
+}
+.wordloop-shell .capture-detail h2 {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(1.6rem,3vw,2.5rem);
+  font-weight:400;
+}
+.wordloop-shell .capture-occurrence {border-radius:4px;}
+.wordloop-shell .note-review-page {
+  background:transparent;
+  border:0;
+  border-radius:0;
+  padding:0;
+  box-shadow:none;
+}
+.wordloop-shell .note-review-card {
+  width:min(100%,56rem);
+  border:1px solid var(--separator-strong);
+  border-radius:5px;
+  background:var(--material-solid);
+  box-shadow:none;
+}
+.wordloop-shell .note-review-prompt,
+.wordloop-shell .note-review-front h2 {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(1.7rem,4vw,3rem);
+  font-weight:400;
+}
+.wordloop-shell .note-review-actions .button {
+  border-radius:4px;
+}
+/* Settings: a considered editor, not glassmorphic UI. */
+.wordloop-shell .settings-overlay {background:#0b2035a8;}
+.wordloop-shell .settings-sheet {
+  border:1px solid var(--separator);
+  background:var(--material-solid);
+  border-radius:7px;
+  box-shadow:0 18px 55px #081a2c30;
+}
+.wordloop-shell .settings-sheet > header {padding-bottom:1rem;border-bottom:1px solid var(--separator);}
+.wordloop-shell .settings-sheet > header h2 {
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;
+  font-size:1.7rem;font-weight:500;
+}
+.wordloop-shell .settings-section {padding:1.25rem 0;border-top:1px solid var(--separator);}
+.wordloop-shell .settings-section h3 {font-size:.85rem;font-weight:660;}
+.wordloop-shell .appearance-options button {
+  min-height:44px;border-radius:4px;border-color:var(--separator);
+}
+.wordloop-shell .appearance-options button[aria-pressed="true"] {
+  border-color:var(--accent);color:var(--accent);background:var(--control);
+}
+@media(max-width:767px) {
+  .wordloop-shell .page-heading:not(.today-editorial-heading) h1 {font-size:2.15rem;}
+  .wordloop-shell .insight-panel {padding:1.15rem;border-radius:4px;}
+  .wordloop-shell .insight-metric-grid {gap:0;}
+  .wordloop-shell .insight-metric {padding:.8rem .5rem .8rem 0;min-width:0;}
+  .wordloop-shell .insight-metric:not(:first-child) {padding-left:.6rem;}
+  .wordloop-shell .insight-metric > strong {font-size:1.75rem;}
+  .wordloop-shell .insight-metric > span {font-size:.72rem;}
+  .wordloop-shell .vocabulary-toolbar {padding:0 0 1rem;}
+  .wordloop-shell .vocabulary-list-item {padding:.8rem;}
+  .wordloop-shell .vocabulary-list-item[aria-current="true"] {padding-left:calc(.8rem - 3px);}
+  .wordloop-shell .vocabulary-word-main strong {font-size:1.2rem;}
+  .wordloop-shell .capture-notes-page {padding:0;}
+  .wordloop-shell .capture-note-card {padding:1rem;}
+  .wordloop-shell .capture-note-card.active {padding-left:calc(1rem - 3px);}
+  .wordloop-shell .word-detail-panel {border-radius:0;}
+  .wordloop-shell .note-review-card {border-radius:4px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .wordloop-shell .vocabulary-list-item,
+  .wordloop-shell .capture-note-card {transition:none;}
+}
+
+
+/* ===========================================================================
+   PRESS / STUDY SPREAD
+   Applies to the real review, lesson explanation and lesson exercise states.
+   One primary action per question. Visual-only; action handlers unchanged.
+   =========================================================================== */
+.wordloop-shell .review-editorial-card {
+  width:min(100%,960px);
+  margin:0 auto;
+  padding:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+  display:block;
+  color:var(--text);
+}
+.wordloop-shell .review-editorial-stage {
+  display:grid;
+  gap:0;
+  width:100%;
+  min-width:0;
+  background:transparent;
+}
+.wordloop-shell .review-editorial-header {
+  position:static;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:end;
+  gap:1.2rem 2.5rem;
+  padding:0 0 1.15rem;
+  margin:0 0 1.55rem;
+  background:transparent;
+  border:0;
+  border-bottom:0;
+  border-radius:0;
+  box-shadow:none;
+}
+.wordloop-shell .review-editorial-header .standalone-study-heading {
+  display:flex;
+  flex-direction:row;
+  align-items:end;
+  gap:1.45rem;
+  min-width:0;
+  width:auto;
+}
+.wordloop-shell .review-editorial-header .standalone-study-heading > div {
+  min-width:0;
+  width:auto;
+}
+.wordloop-shell .review-editorial-header .standalone-back {
+  align-self:start;
+  margin:.15rem 0 0;
+  border:0;
+  border-radius:0;
+  padding:.2rem 0;
+  white-space:nowrap;
+  font-size:.76rem;
+  color:var(--muted);
+  background:transparent;
+}
+.wordloop-shell .review-editorial-header .eyebrow {
+  display:block;
+  margin:0 0 .4rem;
+  color:var(--accent);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:.63rem;
+  font-weight:570;
+  letter-spacing:.095em;
+}
+.wordloop-shell .review-editorial-header h1 {
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif;
+  font-size:clamp(1.75rem,2.6vw,2.25rem);
+  font-weight:510;
+  letter-spacing:-.035em;
+  line-height:1.25;
+  color:var(--text);
+}
+.wordloop-shell .review-page-count {
+  display:flex;
+  flex-direction:column;
+  gap:.3rem;
+  justify-content:flex-end;
+  align-items:flex-end;
+}
+.wordloop-shell .review-page-count > span {
+  color:var(--muted);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:.6rem;
+  letter-spacing:.085em;
+}
+.wordloop-shell .review-page-count strong {
+  color:var(--text);
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:2rem;
+  font-weight:400;
+  line-height:1;
+  letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;
+}
+.wordloop-shell .review-page-count i {
+  color:var(--muted);
+  font-weight:400;
+  font-style:normal;
+  padding:0 .18rem;
+}
+.wordloop-shell .review-page-progress {
+  grid-column:1/-1;
+  position:relative;
+  width:100%;
+  height:3px;
+  overflow:hidden;
+  background:var(--separator);
+}
+.wordloop-shell .review-page-progress > span {
+  display:block;
+  height:100%;
+  background:var(--accent);
+  transition:width 250ms ease;
+}
+.wordloop-shell .review-editorial-workspace {
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:none;
+  padding:clamp(1.65rem,4vw,3.3rem);
+  border:1px solid var(--separator);
+  border-radius:5px;
+  background:var(--material-solid);
+  box-shadow:none;
+}
+.wordloop-shell .review-question-number,
+.wordloop-shell .lesson-exercise-eyebrow {
+  color:var(--accent);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:.69rem;
+  font-weight:610;
+  letter-spacing:.115em;
+}
+.wordloop-shell .review-editorial-workspace .question-block {
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  margin:1.35rem 0 2.8rem;
+  padding:0 0 2.35rem;
+  background:transparent;
+  border:0;
+  border-bottom:1px solid var(--separator);
+  border-radius:0;
+  box-shadow:none;
+}
+.wordloop-shell .review-editorial-workspace .question-label {
+  color:var(--muted);
+  font-size:.75rem;
+  letter-spacing:.03em;
+  font-weight:540;
+  margin-bottom:1rem;
+}
+.wordloop-shell .review-editorial-workspace .question-prompt,
+.wordloop-shell .review-editorial-workspace .question-word {
+  max-width:none;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--text);
+  line-height:1.5;
+  letter-spacing:-.025em;
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif;
+  font-size:clamp(2rem,3.6vw,3rem);
+  font-weight:500;
+  overflow-wrap:anywhere;
+}
+.wordloop-shell .review-editorial-workspace .question-word {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(3rem,6vw,5rem);
+  line-height:1.1;
+  font-weight:400;
+}
+.wordloop-shell .review-editorial-workspace .part-of-speech {
+  order:1;
+  width:max-content;
+  padding:.1rem .45rem;
+  background:var(--control);
+  border:1px solid var(--separator);
+  border-radius:2px;
+  color:var(--muted);
+  font-size:.7rem;
+  margin:.6rem 0 0;
+}
+.wordloop-shell .review-answer-region {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:.8rem;
+}
+.wordloop-shell .review-answer-region .answer-label,
+.wordloop-shell .lesson-exercise-answer .answer-label {
+  font-size:.82rem;
+  color:var(--text);
+  font-weight:630;
+  letter-spacing:0;
+  margin:0;
+}
+.wordloop-shell .review-answer-field,
+.wordloop-shell .lesson-exercise-answer .standalone-input {
+  width:100%;
+  min-height:58px;
+  margin:0;
+  border:1px solid var(--separator-strong);
+  border-radius:4px;
+  background:var(--material-solid);
+  padding:1rem 1.1rem;
+  box-shadow:none;
+  color:var(--text);
+  font-size:1rem;
+  line-height:1.6;
+}
+.wordloop-shell .review-answer-field:focus,
+.wordloop-shell .lesson-exercise-answer .standalone-input:focus {
+  border-color:var(--accent);
+  outline:2px solid color-mix(in srgb,var(--accent) 17%,transparent);
+  outline-offset:1px;
+}
+.wordloop-shell .review-answer-field::placeholder {
+  color:var(--muted);
+  opacity:.76;
+  font-size:.86rem;
+}
+.wordloop-shell .review-answer-bottom {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  padding:1rem 0 0;
+  margin:1.1rem 0 0;
+  border-top:1px solid var(--separator);
+}
+.wordloop-shell .review-unknown-button {
+  min-height:45px;
+  border:0;
+  border-radius:0;
+  padding:.4rem .1rem;
+  background:transparent;
+  box-shadow:none;
+  color:var(--muted);
+  font-size:.83rem;
+  font-weight:550;
+  text-decoration:none;
+}
+.wordloop-shell .review-unknown-button:hover:not(:disabled) {
+  background:transparent;
+  color:var(--accent);
+  text-decoration:underline;
+  text-underline-offset:5px;
+}
+.wordloop-shell .review-unknown-button:disabled {opacity:.5;cursor:not-allowed;}
+.wordloop-shell .review-submit-button.button {
+  min-height:48px;
+  min-width:11.5rem;
+  padding:.75rem 1.55rem;
+  border:1px solid #183c57;
+  border-radius:4px;
+  background:#183c57;
+  color:#fff;
+  font-size:.86rem;
+  font-weight:650;
+  box-shadow:none;
+  display:inline-flex;
+  gap:1.3rem;
+  justify-content:center;
+  align-items:center;
+}
+.wordloop-shell .review-submit-button.button:hover:not(:disabled) {
+  background:#285a7c;
+}
+.wordloop-shell .review-submit-button.button:disabled {
+  background:var(--control);
+  color:var(--muted);
+  border-color:var(--separator);
+  opacity:.85;
+}
+.wordloop-shell .review-keyboard-note {
+  margin:.25rem 0 0;
+  font-size:.71rem;
+  line-height:1.5;
+  color:var(--muted);
+}
+.wordloop-shell .review-answer-region .standalone-status {
+  margin:.35rem 0 0;
+  border-left:2px solid var(--accent);
+  padding:.65rem 1rem;
+  background:var(--control);
+  border-radius:0;
+}
+.wordloop-shell .review-editorial-card .standalone-content:not(.review-editorial-workspace) {
+  max-width:820px;
+  margin:0 auto;
+}
+/* Lesson explanation retains the approved calm reading-oriented layout,
+   but replaces generic tile edges with a considered typographic spread. */
+.wordloop-shell .lesson-card:has(.lesson-editorial-content) {
+  background:transparent;
+  border:0;
+  box-shadow:none;
+  padding:0;
+  overflow:visible;
+}
+.wordloop-shell .lesson-editorial-content {
+  width:100%;
+  display:grid;
+  gap:clamp(1.5rem,3vw,3rem);
+  grid-template-columns:minmax(245px,.35fr) minmax(0,.65fr);
+  align-items:start;
+  background:transparent;
+  padding:0;
+}
+.wordloop-shell .lesson-editorial-content .lesson-overview {
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  padding:1.3rem 1.4rem 1.65rem;
+  background:var(--material-solid);
+  border:1px solid var(--separator);
+  border-radius:5px;
+  position:sticky;
+  top:1.5rem;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-editorial-content .lesson-overview > .widget-header {
+  margin:0;
+  padding:0 0 1rem;
+  border:0;
+  border-bottom:1px solid var(--separator);
+  border-radius:0;
+  background:transparent;
+}
+.wordloop-shell .lesson-editorial-content .standalone-study-heading {
+  display:flex;
+  flex-direction:column;
+  gap:1.4rem;
+  align-items:flex-start;
+  margin:0;
+}
+.wordloop-shell .lesson-editorial-content .lesson-word-heading strong {
+  display:block;
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  color:var(--text);
+  font-size:clamp(2.6rem,4vw,4.4rem);
+  line-height:1.07;
+  font-weight:400;
+  letter-spacing:-.055em;
+  overflow-wrap:anywhere;
+}
+.wordloop-shell .lesson-editorial-content .lesson-ipa {
+  display:flex;
+  align-items:center;
+  gap:.7rem;
+  padding:1rem 0 .6rem;
+  margin:0;
+  color:var(--muted);
+  font-family:"Baskerville",Georgia,serif;
+  font-size:1.1rem;
+}
+.wordloop-shell .lesson-editorial-content .lesson-audio {
+  width:34px;height:34px;
+  border-radius:50%;
+  background:var(--control);
+  color:var(--accent);
+  border:1px solid var(--separator);
+}
+.wordloop-shell .lesson-editorial-content .lesson-overview .lesson-section {
+  padding:1rem 0 0;
+  margin:0;
+  border:0;
+  border-top:1px solid var(--separator);
+  background:transparent;
+}
+.wordloop-shell .lesson-editorial-content .lesson-overview .lesson-section h2,
+.wordloop-shell .lesson-editorial-content .lesson-reading-pane h2 {
+  margin:0 0 .7rem;
+  color:var(--accent);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-weight:620;
+  letter-spacing:.095em;
+  font-size:.69rem;
+  line-height:1.45;
+}
+.wordloop-shell .lesson-editorial-content .lesson-overview .lesson-section p {
+  margin:0;
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif;
+  font-size:1.12rem;
+  font-weight:500;
+  line-height:1.8;
+  color:var(--text);
+}
+.wordloop-shell .lesson-editorial-content .lesson-start-action {
+  width:100%;
+  margin:1.65rem 0 0;
+  padding:0;
+}
+.wordloop-shell .lesson-editorial-content .lesson-start-action .button {
+  min-height:46px;
+  width:100%;
+  border-radius:4px;
+  border:1px solid #183c57;
+  background:#183c57;
+  color:#fff;
+  display:flex;
+  justify-content:space-between;
+  gap:1rem;
+  padding:.7rem 1rem;
+}
+.wordloop-shell .lesson-editorial-content .lesson-reading-pane {
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  border-top:1px solid var(--separator-strong);
+}
+.wordloop-shell .lesson-editorial-content .lesson-reading-pane > .lesson-section,
+.wordloop-shell .lesson-editorial-content .lesson-reading-pane .lesson-detail-grid > .lesson-section {
+  border:0;
+  border-bottom:1px solid var(--separator);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  margin:0;
+  padding:1.7rem .2rem;
+}
+.wordloop-shell .lesson-editorial-content .lesson-reading-pane .lesson-example-panel {
+  padding:1.8rem .2rem 2.2rem;
+}
+.wordloop-shell .lesson-editorial-content .lesson-example {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(1.65rem,2.65vw,2.25rem);
+  font-weight:400;
+  letter-spacing:-.025em;
+  line-height:1.52;
+  color:var(--text);
+  margin:0 0 1.25rem;
+}
+.wordloop-shell .lesson-editorial-content .lesson-translation {
+  padding:.8rem 0 0;
+  border-top:1px solid var(--separator);
+  background:transparent;
+}
+.wordloop-shell .lesson-editorial-content .lesson-translation summary {
+  font-size:.78rem;font-weight:540;color:var(--muted);cursor:pointer;
+}
+.wordloop-shell .lesson-editorial-content .lesson-reading-pane .lesson-detail-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:1.5rem;
+}
+.wordloop-shell .lesson-editorial-content .lesson-reading-pane ul {
+  padding-left:1.1rem;
+  margin:0;
+  line-height:1.95;
+  font-size:.86rem;
+  color:var(--text);
+}
+.wordloop-shell .lesson-editorial-content .lesson-reading-pane .lesson-family-heading {
+  gap:.7rem;
+}
+.wordloop-shell .lesson-editorial-content .lesson-usage-note p {line-height:1.85;font-size:.88rem;}
+/* Exercises share the same single focal area and subordinate feedback. */
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) {
+  width:min(100%,980px);
+  max-width:980px;
+  margin-inline:auto;
+  border:0;background:transparent;
+  padding:0;box-shadow:none;
+  display:block;
+}
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header {
+  padding:0 0 1.25rem;margin:0 0 1.55rem;
+  border-bottom:1px solid var(--separator-strong);
+  background:transparent;
+}
+.wordloop-shell .lesson-exercise-editorial {
+  display:flex;
+  flex-direction:column;
+  gap:1.2rem;
+  background:var(--material-solid);
+  border:1px solid var(--separator);
+  border-radius:5px;
+  padding:clamp(1.65rem,4vw,3rem);
+}
+.wordloop-shell .lesson-exercise-editorial .lesson-exercise-heading {
+  margin:.3rem 0 .4rem;
+  font-size:clamp(1.55rem,3vw,2.15rem);
+  line-height:1.45;
+  letter-spacing:-.02em;
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif;
+  font-weight:500;
+  color:var(--text);
+}
+.wordloop-shell .lesson-exercise-editorial .lesson-prompt {
+  width:100%;
+  max-width:none;
+  margin:.6rem 0 1rem;
+  padding:1.35rem 1.55rem;
+  border:0;
+  border-left:3px solid var(--accent);
+  border-radius:0;
+  background:var(--control);
+  color:var(--text);
+  font-size:clamp(1.15rem,2vw,1.5rem);
+  line-height:1.8;
+  font-family:"Baskerville",Georgia,serif;
+  overflow-wrap:anywhere;
+}
+.wordloop-shell .lesson-exercise-answer {display:flex;flex-direction:column;gap:.75rem;}
+.wordloop-shell .lesson-exercise-answer textarea {min-height:150px;resize:vertical;}
+.wordloop-shell .lesson-exercise-actions {
+  display:flex;
+  justify-content:flex-end;
+  padding:1.3rem 0 0;
+  margin:1.15rem 0 0;
+  border-top:1px solid var(--separator);
+}
+.wordloop-shell .lesson-exercise-actions .button {
+  min-width:10rem;min-height:47px;
+  border-radius:4px;
+  background:#183c57;color:#fff;
+  border:1px solid #183c57;
+  display:inline-flex;justify-content:space-between;gap:1.5rem;
+}
+.wordloop-shell .lesson-exercise-actions .button:disabled {
+  background:var(--control);color:var(--muted);
+  border-color:var(--separator);
+}
+@media(min-width:1024px) {
+  .wordloop-shell .wordloop-app-grid.is-immersive .review-editorial-card {display:block;grid-template-columns:none;}
+  .wordloop-shell .wordloop-app-grid.is-immersive .lesson-card:has(.lesson-exercise-editorial) {display:block;grid-template-columns:none;}
+  .wordloop-shell .review-editorial-card .review-editorial-header {position:static;top:auto;padding:0 0 1rem;border:0;background:transparent;}
+  .wordloop-shell .lesson-editorial-content .lesson-overview {border-radius:5px;}
+}
+@media(max-width:1023px) {
+  .wordloop-shell .lesson-editorial-content {
+    display:flex;flex-direction:column;gap:1.2rem;
+  }
+  .wordloop-shell .lesson-editorial-content .lesson-overview {
+    display:flex;position:static;
+    padding:1.45rem 1.5rem;
+    width:100%;
+  }
+  .wordloop-shell .lesson-editorial-content .lesson-reading-pane {width:100%;}
+  .wordloop-shell .lesson-editorial-content .lesson-start-action {order:unset;}
+}
+@media(max-width:650px) {
+  .wordloop-shell .review-editorial-card {width:100%;}
+  .wordloop-shell .review-editorial-header {gap:1rem;}
+  .wordloop-shell .review-editorial-header .standalone-study-heading {
+    flex-direction:column;align-items:start;gap:.55rem;
+  }
+  .wordloop-shell .review-editorial-header h1 {font-size:1.6rem;}
+  .wordloop-shell .review-page-count > span {font-size:.49rem;}
+  .wordloop-shell .review-page-count strong {font-size:1.48rem;}
+  .wordloop-shell .review-editorial-workspace {padding:1.55rem 1.25rem;}
+  .wordloop-shell .review-editorial-workspace .question-block {margin:1rem 0 2.1rem;padding-bottom:1.8rem;}
+  .wordloop-shell .review-editorial-workspace .question-prompt {font-size:2.1rem;}
+  .wordloop-shell .review-answer-bottom {gap:.5rem;}
+  .wordloop-shell .review-submit-button.button {min-width:10rem;}
+  .wordloop-shell .review-keyboard-note {font-size:.69rem;}
+  .wordloop-shell .lesson-editorial-content .lesson-overview {padding:1.25rem;}
+  .wordloop-shell .lesson-editorial-content .lesson-word-heading strong {font-size:3rem;}
+  .wordloop-shell .lesson-editorial-content .lesson-reading-pane .lesson-detail-grid {
+    display:grid;grid-template-columns:1fr;gap:0;
+  }
+  .wordloop-shell .lesson-editorial-content .lesson-reading-pane > .lesson-section,
+  .wordloop-shell .lesson-editorial-content .lesson-reading-pane .lesson-detail-grid > .lesson-section {padding:1.4rem 0;}
+  .wordloop-shell .lesson-editorial-content .lesson-example {font-size:1.65rem;}
+  .wordloop-shell .lesson-exercise-editorial {padding:1.4rem 1.2rem;}
+  .wordloop-shell .lesson-exercise-editorial .lesson-prompt {padding:1rem;}
+  .wordloop-shell .lesson-exercise-actions .button {width:100%;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .wordloop-shell .review-page-progress > span {transition:none;}
+}
+
+
+/* Final course-exercise header alignment. The old desktop task rail had
+   sticky rounded-card styles that should not leak into the exercise spread. */
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header {
+  position:static;
+  top:auto;
+  display:block;
+  width:100%;
+  margin:0 0 1.45rem;
+  padding:0 0 1.15rem;
+  border:0;
+  border-bottom:1px solid var(--separator-strong);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  overflow:visible;
+}
+.wordloop-shell .wordloop-app-grid.is-immersive .lesson-card:has(.lesson-exercise-editorial) > .widget-header .standalone-study-heading {
+  display:flex;
+  flex-direction:row;
+  align-items:flex-end;
+  justify-content:flex-start;
+  gap:2rem;
+  width:100%;
+  margin:0;
+}
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header .standalone-study-heading > div {width:auto;min-width:0;}
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header .standalone-back {
+  flex:none;
+  align-self:start;
+  padding:.25rem 0;
+  margin:0;
+  background:transparent;
+  border:0;
+  border-radius:0;
+}
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header .lesson-word-heading strong {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(2rem,3vw,2.9rem);
+  font-weight:400;
+  line-height:1.07;
+  letter-spacing:-.035em;
+}
+@media(max-width:650px) {
+ .wordloop-shell .wordloop-app-grid.is-immersive .lesson-card:has(.lesson-exercise-editorial) > .widget-header .standalone-study-heading {
+   flex-direction:column;gap:.65rem;align-items:flex-start;
+ }
+}
+
+
+/* ===========================================================================
+   WORDLOOP / ORIGINAL STUDY REFERENCE (PR #3 early learning-page direction)
+   Visual reference: quiet all-white single-column reading, refined old-style
+   serif vocabulary, hairline rules, one deep-navy primary action.
+   These selectors deliberately supersede the later desktop rail/card variant.
+   =========================================================================== */
+.wordloop-shell[data-study-open="true"] {
+  --original-study-ink:#1d292d;
+  --original-study-muted:#818b8e;
+  --original-study-rule:#e2e6e7;
+  --original-study-navy:#375f73;
+  --original-study-english:"Iowan Old Style","Baskerville","Palatino Linotype",Georgia,serif;
+  background:#fff;
+}
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive .standalone-main {
+  width:100%;
+  max-width:1040px;
+  padding:0;
+  margin-inline:auto;
+}
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive .standalone-layout {
+  max-width:1040px;
+  width:100%;
+  margin-inline:auto;
+}
+.wordloop-shell .lesson-card:has(.lesson-reference-stage) {
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:#fff;
+  box-shadow:none;
+  overflow:visible;
+}
+.wordloop-shell .lesson-reference-stage {
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  align-items:stretch;
+  width:min(100%,710px);
+  max-width:710px;
+  min-width:0;
+  min-height:calc(100dvh - 80px);
+  margin:0 auto;
+  padding:9px 0 24px;
+  background:#fff;
+  color:var(--original-study-ink,#1d292d);
+  border:0;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-reference-topbar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  margin:0 0 45px;
+  padding:0;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-reference-topbar .standalone-back {
+  display:inline-flex;
+  flex:none;
+  align-items:center;
+  min-height:35px;
+  padding:0;
+  margin:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--original-study-ink,#1d292d);
+  font-size:.87rem;
+  font-weight:490;
+}
+.wordloop-shell .lesson-reference-topbar .standalone-back:hover {
+  color:var(--original-study-navy,#375f73);
+  background:transparent;
+}
+.wordloop-shell .lesson-reference-progress-label {
+  margin-left:auto;
+  font-size:.78rem;
+  font-weight:450;
+  letter-spacing:.02em;
+  white-space:nowrap;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-reference-progress {
+  display:block;
+  width:100%;
+  height:4px;
+  margin:0 0 45px;
+  overflow:hidden;
+  border-radius:3px;
+  background:var(--original-study-rule,#e2e6e7);
+}
+.wordloop-shell .lesson-reference-progress > span {
+  display:block;
+  height:100%;
+  background:var(--original-study-navy,#375f73);
+  border-radius:3px;
+}
+.wordloop-shell .lesson-reference-word {
+  margin:0;
+  padding:0 0 37px;
+  border-bottom:1px solid var(--original-study-rule,#e2e6e7);
+}
+.wordloop-shell .lesson-reference-kicker,
+.wordloop-shell .lesson-reference-section > h2,
+.wordloop-shell .lesson-reference-family-heading > h2 {
+  margin:0;
+  font-size:.68rem;
+  font-weight:500;
+  line-height:1.4;
+  letter-spacing:.175em;
+  color:var(--original-study-muted,#818b8e);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+}
+.wordloop-shell .lesson-reference-title {
+  display:block;
+  max-width:100%;
+  margin:15px 0 15px;
+  padding:0;
+  color:var(--original-study-ink,#1d292d);
+  font-family:var(--original-study-english);
+  font-size:clamp(3.5rem,8vw,5.4rem);
+  font-weight:400;
+  letter-spacing:-.048em;
+  line-height:1.06;
+  overflow-wrap:anywhere;
+}
+.wordloop-shell .lesson-reference-ipa {
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:.7rem;
+  min-height:38px;
+  margin:0 0 24px;
+  color:var(--original-study-muted,#818b8e);
+  font-family:var(--original-study-english);
+  font-size:1.05rem;
+  line-height:1.6;
+}
+.wordloop-shell .lesson-reference-ipa .lesson-audio {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  width:33px;
+  height:33px;
+  margin:0;
+  padding:0;
+  background:#e9edf0;
+  color:#162c39;
+  border:0;
+  border-radius:50%;
+  font-size:1rem;
+}
+.wordloop-shell .lesson-reference-meaning {
+  margin:0;
+  padding:0;
+  color:var(--original-study-ink,#1d292d);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+  font-size:1.21rem;
+  font-weight:480;
+  line-height:1.75;
+}
+.wordloop-shell .lesson-reference-reading {
+  display:block;
+  min-width:0;
+  width:100%;
+  flex:1;
+}
+.wordloop-shell .lesson-reference-section {
+  margin:0;
+  padding:24px 0 28px;
+  border:0;
+  border-bottom:1px solid var(--original-study-rule,#e2e6e7);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-reference-section > h2,
+.wordloop-shell .lesson-reference-family-heading > h2 {
+  margin:0 0 18px;
+}
+.wordloop-shell .lesson-reference-section ul {
+  display:grid;
+  gap:10px;
+  list-style:none;
+  margin:0;
+  padding:0;
+}
+.wordloop-shell .lesson-reference-section li {
+  list-style:none;
+  margin:0;
+  padding:0;
+  line-height:1.7;
+  font-size:.91rem;
+  font-weight:450;
+  color:var(--original-study-ink,#1d292d);
+}
+.wordloop-shell .lesson-reference-example {
+  margin:0;
+  padding:0;
+  border:0;
+  background:transparent;
+  font-family:var(--original-study-english);
+  font-size:clamp(1.42rem,2.4vw,1.8rem);
+  line-height:1.66;
+  font-weight:400;
+  letter-spacing:-.008em;
+  color:var(--original-study-ink,#1d292d);
+}
+.wordloop-shell .lesson-reference-translation {
+  margin:10px 0 0;
+  border:0;
+  background:transparent;
+  padding:0;
+}
+.wordloop-shell .lesson-reference-translation > summary {
+  font-size:.7rem;
+  font-weight:450;
+  color:var(--original-study-muted,#818b8e);
+  cursor:pointer;
+  list-style:none;
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+}
+.wordloop-shell .lesson-reference-translation > summary::after {content:"⌄";font-size:.9rem;}
+.wordloop-shell .lesson-reference-translation > summary::-webkit-details-marker {display:none;}
+.wordloop-shell .lesson-reference-translation p {
+  margin:7px 0 0;
+  color:var(--original-study-muted,#818b8e);
+  font-size:.77rem;
+  line-height:1.65;
+}
+.wordloop-shell .lesson-reference-family-heading {
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:1rem;
+  margin:0 0 16px;
+}
+.wordloop-shell .lesson-reference-family-heading > h2 {margin:0;}
+.wordloop-shell .lesson-reference-family-heading button {
+  background:transparent;
+  border:0;
+  border-bottom:1px solid var(--original-study-muted,#818b8e);
+  border-radius:0;
+  padding:0 0 .2rem;
+  color:var(--original-study-navy,#375f73);
+  font-size:.76rem;
+}
+.wordloop-shell .lesson-reference-note p {
+  margin:0;
+  padding:0;
+  font-size:.83rem;
+  line-height:1.8;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-reference-bottom {
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:stretch;
+  margin:28px 0 0;
+  padding:0;
+}
+.wordloop-shell .lesson-reference-bottom > .button {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:1.7rem;
+  width:100%;
+  min-height:54px;
+  margin:0;
+  border:0;
+  border-radius:12px;
+  background:var(--original-study-navy,#375f73);
+  color:#fff;
+  font-size:.91rem;
+  line-height:1.35;
+  font-weight:500;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-reference-bottom > .button:hover:not(:disabled) {
+  background:#294e62;
+}
+.wordloop-shell .lesson-reference-bottom > .button:disabled {opacity:.6;cursor:not-allowed;}
+/* Formal review inherits precisely the same column, rules and typography. */
+.wordloop-shell[data-study-open="true"] .review-editorial-card {
+  width:min(100%,710px);
+  max-width:710px;
+  margin:0 auto;
+  background:transparent;
+  border:0;
+  padding:0;
+}
+.wordloop-shell .review-editorial-card .review-editorial-header {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:0;
+  position:static;
+  padding:9px 0 0;
+  margin:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+}
+.wordloop-shell .review-reference-topline {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  margin:0 0 45px;
+}
+.wordloop-shell .review-reference-topline .standalone-back {
+  margin:0;padding:0;border:0;background:transparent;
+  color:var(--original-study-ink,#1d292d);
+  font-size:.86rem;
+  min-height:35px;
+}
+.wordloop-shell .review-reference-topline > span {
+  font-size:.78rem;
+  font-weight:450;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .review-editorial-card .review-page-progress {
+  width:100%;height:4px;
+  border-radius:3px;
+  margin:0 0 45px;
+  background:var(--original-study-rule,#e2e6e7);
+}
+.wordloop-shell .review-editorial-card .review-page-progress span {
+  background:var(--original-study-navy,#375f73);
+}
+.wordloop-shell .review-editorial-card .review-editorial-workspace {
+  padding:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+}
+.wordloop-shell .review-editorial-workspace .review-question-number {
+  margin:0 0 22px;
+  font-size:.69rem;
+  font-weight:500;
+  letter-spacing:.17em;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .review-editorial-workspace .question-block {
+  min-height:0;
+  margin:0 0 32px;
+  padding:0 0 30px;
+  border:0;
+  border-bottom:1px solid var(--original-study-rule,#e2e6e7);
+  border-radius:0;
+  background:transparent;
+}
+.wordloop-shell .review-editorial-workspace .question-label {
+  margin:0 0 14px;
+  color:var(--original-study-muted,#818b8e);
+  font-size:.75rem;
+}
+.wordloop-shell .review-editorial-workspace .question-prompt {
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+  font-size:clamp(1.65rem,4vw,2.2rem);
+  font-weight:480;
+  letter-spacing:-.035em;
+  line-height:1.65;
+}
+.wordloop-shell .review-editorial-workspace .answer-label {margin:0 0 7px;font-size:.75rem;color:var(--original-study-muted);}
+.wordloop-shell .review-editorial-workspace .review-answer-field {
+  min-height:54px;
+  border:0;
+  border-bottom:1px solid var(--original-study-rule);
+  border-radius:0;
+  padding:.7rem .15rem;
+  background:transparent;
+  font-size:1.22rem;
+  font-family:var(--original-study-english);
+}
+.wordloop-shell .review-editorial-workspace .review-answer-field:focus {
+  outline:0;
+  border-bottom:2px solid var(--original-study-navy);
+}
+.wordloop-shell .review-editorial-workspace .review-answer-bottom {
+  border:0;
+  margin:26px 0 0;
+  padding:0;
+  gap:1rem;
+}
+.wordloop-shell .review-editorial-workspace .review-unknown-button {
+  min-width:0;
+  color:var(--original-study-muted);
+  font-size:.8rem;
+}
+.wordloop-shell .review-editorial-workspace .review-submit-button.button {
+  min-height:51px;
+  min-width:12rem;
+  border:0;
+  border-radius:11px;
+  background:var(--original-study-navy);
+  font-weight:520;
+}
+.wordloop-shell .review-editorial-workspace .review-keyboard-note {
+  color:var(--original-study-muted);
+  font-size:.69rem;
+}
+@media(max-width:767px){
+  .wordloop-shell[data-study-open="true"] {
+    padding:20px 24px calc(26px + env(safe-area-inset-bottom));
+  }
+  .wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive .standalone-main {
+    padding:0;
+  }
+  .wordloop-shell .lesson-reference-stage {
+    min-height:calc(100dvh - 72px - env(safe-area-inset-bottom));
+    padding:0;
+  }
+  .wordloop-shell .lesson-reference-topbar,
+  .wordloop-shell .review-reference-topline {margin-bottom:46px;}
+  .wordloop-shell .lesson-reference-progress,
+  .wordloop-shell .review-editorial-card .review-page-progress {margin-bottom:43px;}
+  .wordloop-shell .lesson-reference-title {font-size:clamp(3.45rem,13vw,4.7rem);}
+  .wordloop-shell .lesson-reference-word {padding-bottom:33px;}
+  .wordloop-shell .lesson-reference-section {padding:23px 0 27px;}
+  .wordloop-shell .lesson-reference-example {font-size:clamp(1.36rem,5.5vw,1.6rem);}
+  .wordloop-shell .lesson-reference-bottom {margin-top:30px;}
+}
+@media(max-width:350px){
+  .wordloop-shell[data-study-open="true"] {padding-inline:16px;}
+  .wordloop-shell .lesson-reference-title {font-size:3.05rem;}
+  .wordloop-shell .review-editorial-workspace .review-answer-bottom {gap:.5rem;}
+  .wordloop-shell .review-editorial-workspace .review-submit-button.button {min-width:9rem;}
+}
+:root[data-theme="dark"] .wordloop-shell[data-study-open="true"] {
+  --original-study-ink:#ecf3f7;
+  --original-study-muted:#a9bdc8;
+  --original-study-rule:#354859;
+  --original-study-navy:#416d87;
+  background:#121f2c;
+}
+:root[data-theme="dark"] .wordloop-shell .lesson-card:has(.lesson-reference-stage),
+:root[data-theme="dark"] .wordloop-shell .lesson-reference-stage {background:#121f2c;}
+@media(prefers-color-scheme:dark){
+ :root[data-theme="system"] .wordloop-shell[data-study-open="true"],
+ :root:not([data-theme]) .wordloop-shell[data-study-open="true"] {
+  --original-study-ink:#ecf3f7;
+  --original-study-muted:#a9bdc8;
+  --original-study-rule:#354859;
+  --original-study-navy:#416d87;
+  background:#121f2c;
+ }
+ :root[data-theme="system"] .wordloop-shell .lesson-card:has(.lesson-reference-stage),
+ :root[data-theme="system"] .wordloop-shell .lesson-reference-stage,
+ :root:not([data-theme]) .wordloop-shell .lesson-card:has(.lesson-reference-stage),
+ :root:not([data-theme]) .wordloop-shell .lesson-reference-stage {background:#121f2c;}
+}
+
+
+/* ===========================================================================
+   PR #3 TYPOGRAPHY CONSISTENCY + CAPTURE MOBILE HEADER
+   Match the accepted meticulous study page. Editorial/display emphasis uses
+   the same old-style serif fallback; Chinese display headings retain glyph
+   coverage via the installed system Songti/serif. Functional controls keep
+   legible system UI text, not an indiscriminate global strong override.
+   =========================================================================== */
+.wordloop-shell {
+  --wl-display-en:"Iowan Old Style","Baskerville","Palatino Linotype",Georgia,serif;
+  --wl-display-zh:"Songti SC","STSong","Noto Serif CJK SC",serif;
+}
+.wordloop-shell .vocabulary-word-main strong,
+.wordloop-shell .word-detail-header h2,
+.wordloop-shell .capture-note-heading,
+.wordloop-shell .capture-detail h2,
+.wordloop-shell .capture-note-card strong,
+.wordloop-shell .note-review-front h2,
+.wordloop-shell .note-review-prompt,
+.wordloop-shell .focus-word-list li strong,
+.wordloop-shell .family-mini-card h3,
+.wordloop-shell .family-header h2,
+.wordloop-shell .lesson-word-heading strong,
+.wordloop-shell .lesson-reference-title,
+.wordloop-shell .lesson-reference-example,
+.wordloop-shell .lesson-exercise-editorial .lesson-prompt,
+.wordloop-shell .review-editorial-workspace .question-word {
+  font-family:var(--wl-display-en);
+  font-weight:500;
+}
+.wordloop-shell .capture-notes-page h1,
+.wordloop-shell .note-review-page .standalone-study-heading h1,
+.wordloop-shell .page-heading:not(.today-editorial-heading) h1,
+.wordloop-shell .today-editorial-heading h1,
+.wordloop-shell .today-progress-card .section-heading h2,
+.wordloop-shell .insight-panel h2,
+.wordloop-shell .lesson-exercise-editorial .lesson-exercise-heading,
+.wordloop-shell .review-editorial-workspace .question-prompt {
+  font-family:var(--wl-display-zh);
+  font-weight:500;
+}
+.wordloop-shell .insight-metric > strong,
+.wordloop-shell .today-progress-row b,
+.wordloop-shell .today-cover-count > strong,
+.wordloop-shell .today-capture-card > div > strong,
+.wordloop-shell .word-memory-grid dd {
+  font-family:var(--wl-display-en);
+  font-weight:400;
+  font-variant-numeric:tabular-nums;
+}
+.wordloop-shell .capture-notes-page .standalone-study-heading > div {
+  min-width:0;
+}
+.wordloop-shell #capture-notes-title {
+  display:block;
+  width:max-content;
+  max-width:100%;
+  margin:0;
+  font-family:var(--wl-display-zh);
+  font-size:clamp(1.72rem,3.4vw,2.45rem);
+  font-weight:500;
+  letter-spacing:-.035em;
+  line-height:1.25;
+  white-space:nowrap;
+  word-break:keep-all;
+}
+/* The restored "不会" is a proper secondary button again, without
+   altering mark_unknown, button disabled state or the answer submission. */
+.wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  min-width:6rem;
+  min-height:51px;
+  padding:.7rem 1.1rem;
+  border:1px solid var(--original-study-rule,#dce5ec);
+  border-radius:11px;
+  background:transparent;
+  color:var(--original-study-ink,#1d292d);
+  font-size:.9rem;
+  font-weight:520;
+  text-decoration:none;
+  box-shadow:none;
+}
+.wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary:hover:not(:disabled) {
+  border-color:var(--original-study-navy,#375f73);
+  color:var(--original-study-navy,#375f73);
+  background:transparent;
+  text-decoration:none;
+}
+.wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary:disabled {opacity:.55;}
+.wordloop-shell .lesson-reference-derivations .family-entry {
+  display:inline-flex;
+  padding:.2rem .35rem;
+  color:var(--original-study-navy,#375f73);
+}
+/* Small-screen capture headers should have two clean rows: an unbroken
+   four-character page title and a separate controls row. */
+@media(max-width:767px){
+  .wordloop-shell .capture-notes-page > .widget-header.compact-header {
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:.9rem;
+    align-items:start;
+    width:100%;
+  }
+  .wordloop-shell .capture-notes-page > .widget-header .standalone-study-heading {
+    display:block;
+    min-width:0;
+    width:100%;
+    margin:0;
+    padding:0;
+  }
+  .wordloop-shell .capture-notes-page > .widget-header .standalone-study-heading > div {
+    min-width:0;
+    width:100%;
+  }
+  .wordloop-shell #capture-notes-title {
+    font-size:clamp(1.82rem,8vw,2.35rem);
+    line-height:1.25;
+    white-space:nowrap;
+  }
+  .wordloop-shell .capture-notes-header-actions {
+    display:flex;
+    width:100%;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:.5rem;
+  }
+  .wordloop-shell .capture-notes-header-actions .button {
+    flex:0 1 auto;
+    min-width:0;
+    min-height:42px;
+    padding:.45rem .7rem;
+    font-size:.75rem;
+  }
+  .wordloop-shell .capture-notes-header-actions .standalone-count {
+    white-space:nowrap;
+    margin-left:auto;
+  }
+}
+@media(max-width:350px){
+  .wordloop-shell #capture-notes-title {font-size:1.75rem;}
+  .wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary {min-width:5.6rem;}
+  .wordloop-shell .review-editorial-workspace .review-submit-button.button {min-width:9.3rem;}
+}
 
