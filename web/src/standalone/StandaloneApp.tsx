@@ -1140,8 +1140,8 @@ export default function StandaloneApp(): React.JSX.Element {
       const item = items[currentIndex] ?? {};
       const complete = state.phase === "review_complete";
       const direction = item.direction === "en_definition" ? "en_definition" : "cn_to_en";
-      return <section className="widget-card standalone-card study-task-card" aria-labelledby="study-title">
-        <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={backToToday} />
+      return <section className="widget-card standalone-card study-task-card review-editorial-card" aria-labelledby="study-title">
+        {complete && <StandaloneReviewHeader currentIndex={currentIndex} total={items.length} complete={complete} onBack={backToToday} />}
         {complete ? <div className="standalone-content"><p>本组复习完成。接下来进入预测试或补学。</p>{numberValue(record(record(view.progress).fsrs).due_now) > 0 && <p>仍有 {numberValue(record(record(view.progress).fsrs).due_now)} 个到期词，留待下一轮复习。</p>}<div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>继续学习</Button></div></div> : <StandaloneReviewWorkspace item={item} direction={direction} currentIndex={currentIndex} total={items.length}
           answer={answer} busy={busy !== null} notice={notice} noticeIndex={noticeIndex} onBack={backToToday}
           onAnswerChange={setAnswer}
