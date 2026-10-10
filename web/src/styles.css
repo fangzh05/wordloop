@@ -4370,3 +4370,152 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
  :root:not([data-theme]) .wordloop-shell .lesson-reference-stage {background:#121f2c;}
 }
 
+
+/* ===========================================================================
+   PR #3 TYPOGRAPHY CONSISTENCY + CAPTURE MOBILE HEADER
+   Match the accepted meticulous study page. Editorial/display emphasis uses
+   the same old-style serif fallback; Chinese display headings retain glyph
+   coverage via the installed system Songti/serif. Functional controls keep
+   legible system UI text, not an indiscriminate global strong override.
+   =========================================================================== */
+.wordloop-shell {
+  --wl-display-en:"Iowan Old Style","Baskerville","Palatino Linotype",Georgia,serif;
+  --wl-display-zh:"Songti SC","STSong","Noto Serif CJK SC",serif;
+}
+.wordloop-shell .vocabulary-word-main strong,
+.wordloop-shell .word-detail-header h2,
+.wordloop-shell .capture-note-heading,
+.wordloop-shell .capture-detail h2,
+.wordloop-shell .capture-note-card strong,
+.wordloop-shell .note-review-front h2,
+.wordloop-shell .note-review-prompt,
+.wordloop-shell .focus-word-list li strong,
+.wordloop-shell .family-mini-card h3,
+.wordloop-shell .family-header h2,
+.wordloop-shell .lesson-word-heading strong,
+.wordloop-shell .lesson-reference-title,
+.wordloop-shell .lesson-reference-example,
+.wordloop-shell .lesson-exercise-editorial .lesson-prompt,
+.wordloop-shell .review-editorial-workspace .question-word {
+  font-family:var(--wl-display-en);
+  font-weight:500;
+}
+.wordloop-shell .capture-notes-page h1,
+.wordloop-shell .note-review-page .standalone-study-heading h1,
+.wordloop-shell .page-heading:not(.today-editorial-heading) h1,
+.wordloop-shell .today-editorial-heading h1,
+.wordloop-shell .today-progress-card .section-heading h2,
+.wordloop-shell .insight-panel h2,
+.wordloop-shell .lesson-exercise-editorial .lesson-exercise-heading,
+.wordloop-shell .review-editorial-workspace .question-prompt {
+  font-family:var(--wl-display-zh);
+  font-weight:500;
+}
+.wordloop-shell .insight-metric > strong,
+.wordloop-shell .today-progress-row b,
+.wordloop-shell .today-cover-count > strong,
+.wordloop-shell .today-capture-card > div > strong,
+.wordloop-shell .word-memory-grid dd {
+  font-family:var(--wl-display-en);
+  font-weight:400;
+  font-variant-numeric:tabular-nums;
+}
+.wordloop-shell .capture-notes-page .standalone-study-heading > div {
+  min-width:0;
+}
+.wordloop-shell #capture-notes-title {
+  display:block;
+  width:max-content;
+  max-width:100%;
+  margin:0;
+  font-family:var(--wl-display-zh);
+  font-size:clamp(1.72rem,3.4vw,2.45rem);
+  font-weight:500;
+  letter-spacing:-.035em;
+  line-height:1.25;
+  white-space:nowrap;
+  word-break:keep-all;
+}
+/* The restored "不会" is a proper secondary button again, without
+   altering mark_unknown, button disabled state or the answer submission. */
+.wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  min-width:6rem;
+  min-height:51px;
+  padding:.7rem 1.1rem;
+  border:1px solid var(--original-study-rule,#dce5ec);
+  border-radius:11px;
+  background:transparent;
+  color:var(--original-study-ink,#1d292d);
+  font-size:.9rem;
+  font-weight:520;
+  text-decoration:none;
+  box-shadow:none;
+}
+.wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary:hover:not(:disabled) {
+  border-color:var(--original-study-navy,#375f73);
+  color:var(--original-study-navy,#375f73);
+  background:transparent;
+  text-decoration:none;
+}
+.wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary:disabled {opacity:.55;}
+.wordloop-shell .lesson-reference-derivations .family-entry {
+  display:inline-flex;
+  padding:.2rem .35rem;
+  color:var(--original-study-navy,#375f73);
+}
+/* Small-screen capture headers should have two clean rows: an unbroken
+   four-character page title and a separate controls row. */
+@media(max-width:767px){
+  .wordloop-shell .capture-notes-page > .widget-header.compact-header {
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:.9rem;
+    align-items:start;
+    width:100%;
+  }
+  .wordloop-shell .capture-notes-page > .widget-header .standalone-study-heading {
+    display:block;
+    min-width:0;
+    width:100%;
+    margin:0;
+    padding:0;
+  }
+  .wordloop-shell .capture-notes-page > .widget-header .standalone-study-heading > div {
+    min-width:0;
+    width:100%;
+  }
+  .wordloop-shell #capture-notes-title {
+    font-size:clamp(1.82rem,8vw,2.35rem);
+    line-height:1.25;
+    white-space:nowrap;
+  }
+  .wordloop-shell .capture-notes-header-actions {
+    display:flex;
+    width:100%;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:.5rem;
+  }
+  .wordloop-shell .capture-notes-header-actions .button {
+    flex:0 1 auto;
+    min-width:0;
+    min-height:42px;
+    padding:.45rem .7rem;
+    font-size:.75rem;
+  }
+  .wordloop-shell .capture-notes-header-actions .standalone-count {
+    white-space:nowrap;
+    margin-left:auto;
+  }
+}
+@media(max-width:350px){
+  .wordloop-shell #capture-notes-title {font-size:1.75rem;}
+  .wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary {min-width:5.6rem;}
+  .wordloop-shell .review-editorial-workspace .review-submit-button.button {min-width:9.3rem;}
+}
+
