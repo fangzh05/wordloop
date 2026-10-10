@@ -582,13 +582,13 @@ export function StandaloneLessonExplanation({ title, displayTitle, progressLabel
   derivations: string[]; note: string; busy: boolean;
   onBack: () => void; onStartExercise: () => void;
 }): React.JSX.Element {
-  const pos = partOfSpeech.trim().replace(/\\.$/, "").toLowerCase();
+  const pos = partOfSpeech.trim().replace(/\.$/, "").toLowerCase();
   const posLabel: Record<string,string> = {adj:"ADJECTIVE",a:"ADJECTIVE",v:"VERB",vt:"VERB",vi:"VERB",n:"NOUN",adv:"ADVERB",prep:"PREPOSITION"};
-  const fraction = progressLabel.match(/(\\d+)\\s*\\/\\s*(\\d+)/);
+  const fraction = progressLabel.match(/(\d+)\s*\/\s*(\d+)/);
   const done = fraction ? Number(fraction[1]) : 0;
   const total = fraction ? Number(fraction[2]) : 0;
   const percent = total > 0 ? Math.max(0,Math.min(100,done / total * 100)) : 0;
-  const meaning = meaningIncludesPartOfSpeech(meaningZh, partOfSpeech) ? meaningZh : `${partOfSpeech} · ${meaningZh}`;
+  const meaning = meaningZh;
   return <div className="standalone-content standalone-explain-content lesson-editorial-content lesson-reference-stage" data-capture-root="true">
     <header className="lesson-reference-topbar">
       <StandaloneStudyBackButton onBack={onBack} />
