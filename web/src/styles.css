@@ -3903,3 +3903,470 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
  }
 }
 
+
+/* ===========================================================================
+   WORDLOOP / ORIGINAL STUDY REFERENCE (PR #3 early learning-page direction)
+   Visual reference: quiet all-white single-column reading, refined old-style
+   serif vocabulary, hairline rules, one deep-navy primary action.
+   These selectors deliberately supersede the later desktop rail/card variant.
+   =========================================================================== */
+.wordloop-shell[data-study-open="true"] {
+  --original-study-ink:#1d292d;
+  --original-study-muted:#818b8e;
+  --original-study-rule:#e2e6e7;
+  --original-study-navy:#375f73;
+  --original-study-english:"Iowan Old Style","Baskerville","Palatino Linotype",Georgia,serif;
+  background:#fff;
+}
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive .standalone-main {
+  width:100%;
+  max-width:1040px;
+  padding:0;
+  margin-inline:auto;
+}
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive .standalone-layout {
+  max-width:1040px;
+  width:100%;
+  margin-inline:auto;
+}
+.wordloop-shell .lesson-card:has(.lesson-reference-stage) {
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:#fff;
+  box-shadow:none;
+  overflow:visible;
+}
+.wordloop-shell .lesson-reference-stage {
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  align-items:stretch;
+  width:min(100%,710px);
+  max-width:710px;
+  min-width:0;
+  min-height:calc(100dvh - 80px);
+  margin:0 auto;
+  padding:9px 0 24px;
+  background:#fff;
+  color:var(--original-study-ink,#1d292d);
+  border:0;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-reference-topbar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  margin:0 0 45px;
+  padding:0;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-reference-topbar .standalone-back {
+  display:inline-flex;
+  flex:none;
+  align-items:center;
+  min-height:35px;
+  padding:0;
+  margin:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--original-study-ink,#1d292d);
+  font-size:.87rem;
+  font-weight:490;
+}
+.wordloop-shell .lesson-reference-topbar .standalone-back:hover {
+  color:var(--original-study-navy,#375f73);
+  background:transparent;
+}
+.wordloop-shell .lesson-reference-progress-label {
+  margin-left:auto;
+  font-size:.78rem;
+  font-weight:450;
+  letter-spacing:.02em;
+  white-space:nowrap;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-reference-progress {
+  display:block;
+  width:100%;
+  height:4px;
+  margin:0 0 45px;
+  overflow:hidden;
+  border-radius:3px;
+  background:var(--original-study-rule,#e2e6e7);
+}
+.wordloop-shell .lesson-reference-progress > span {
+  display:block;
+  height:100%;
+  background:var(--original-study-navy,#375f73);
+  border-radius:3px;
+}
+.wordloop-shell .lesson-reference-word {
+  margin:0;
+  padding:0 0 37px;
+  border-bottom:1px solid var(--original-study-rule,#e2e6e7);
+}
+.wordloop-shell .lesson-reference-kicker,
+.wordloop-shell .lesson-reference-section > h2,
+.wordloop-shell .lesson-reference-family-heading > h2 {
+  margin:0;
+  font-size:.68rem;
+  font-weight:500;
+  line-height:1.4;
+  letter-spacing:.175em;
+  color:var(--original-study-muted,#818b8e);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+}
+.wordloop-shell .lesson-reference-title {
+  display:block;
+  max-width:100%;
+  margin:15px 0 15px;
+  padding:0;
+  color:var(--original-study-ink,#1d292d);
+  font-family:var(--original-study-english);
+  font-size:clamp(3.5rem,8vw,5.4rem);
+  font-weight:400;
+  letter-spacing:-.048em;
+  line-height:1.06;
+  overflow-wrap:anywhere;
+}
+.wordloop-shell .lesson-reference-ipa {
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:.7rem;
+  min-height:38px;
+  margin:0 0 24px;
+  color:var(--original-study-muted,#818b8e);
+  font-family:var(--original-study-english);
+  font-size:1.05rem;
+  line-height:1.6;
+}
+.wordloop-shell .lesson-reference-ipa .lesson-audio {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  width:33px;
+  height:33px;
+  margin:0;
+  padding:0;
+  background:#e9edf0;
+  color:#162c39;
+  border:0;
+  border-radius:50%;
+  font-size:1rem;
+}
+.wordloop-shell .lesson-reference-meaning {
+  margin:0;
+  padding:0;
+  color:var(--original-study-ink,#1d292d);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+  font-size:1.21rem;
+  font-weight:480;
+  line-height:1.75;
+}
+.wordloop-shell .lesson-reference-reading {
+  display:block;
+  min-width:0;
+  width:100%;
+  flex:1;
+}
+.wordloop-shell .lesson-reference-section {
+  margin:0;
+  padding:24px 0 28px;
+  border:0;
+  border-bottom:1px solid var(--original-study-rule,#e2e6e7);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-reference-section > h2,
+.wordloop-shell .lesson-reference-family-heading > h2 {
+  margin:0 0 18px;
+}
+.wordloop-shell .lesson-reference-section ul {
+  display:grid;
+  gap:10px;
+  list-style:none;
+  margin:0;
+  padding:0;
+}
+.wordloop-shell .lesson-reference-section li {
+  list-style:none;
+  margin:0;
+  padding:0;
+  line-height:1.7;
+  font-size:.91rem;
+  font-weight:450;
+  color:var(--original-study-ink,#1d292d);
+}
+.wordloop-shell .lesson-reference-example {
+  margin:0;
+  padding:0;
+  border:0;
+  background:transparent;
+  font-family:var(--original-study-english);
+  font-size:clamp(1.42rem,2.4vw,1.8rem);
+  line-height:1.66;
+  font-weight:400;
+  letter-spacing:-.008em;
+  color:var(--original-study-ink,#1d292d);
+}
+.wordloop-shell .lesson-reference-translation {
+  margin:10px 0 0;
+  border:0;
+  background:transparent;
+  padding:0;
+}
+.wordloop-shell .lesson-reference-translation > summary {
+  font-size:.7rem;
+  font-weight:450;
+  color:var(--original-study-muted,#818b8e);
+  cursor:pointer;
+  list-style:none;
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+}
+.wordloop-shell .lesson-reference-translation > summary::after {content:"⌄";font-size:.9rem;}
+.wordloop-shell .lesson-reference-translation > summary::-webkit-details-marker {display:none;}
+.wordloop-shell .lesson-reference-translation p {
+  margin:7px 0 0;
+  color:var(--original-study-muted,#818b8e);
+  font-size:.77rem;
+  line-height:1.65;
+}
+.wordloop-shell .lesson-reference-family-heading {
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:1rem;
+  margin:0 0 16px;
+}
+.wordloop-shell .lesson-reference-family-heading > h2 {margin:0;}
+.wordloop-shell .lesson-reference-family-heading button {
+  background:transparent;
+  border:0;
+  border-bottom:1px solid var(--original-study-muted,#818b8e);
+  border-radius:0;
+  padding:0 0 .2rem;
+  color:var(--original-study-navy,#375f73);
+  font-size:.76rem;
+}
+.wordloop-shell .lesson-reference-note p {
+  margin:0;
+  padding:0;
+  font-size:.83rem;
+  line-height:1.8;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-reference-bottom {
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:stretch;
+  margin:28px 0 0;
+  padding:0;
+}
+.wordloop-shell .lesson-reference-bottom > .button {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:1.7rem;
+  width:100%;
+  min-height:54px;
+  margin:0;
+  border:0;
+  border-radius:12px;
+  background:var(--original-study-navy,#375f73);
+  color:#fff;
+  font-size:.91rem;
+  line-height:1.35;
+  font-weight:500;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-reference-bottom > .button:hover:not(:disabled) {
+  background:#294e62;
+}
+.wordloop-shell .lesson-reference-bottom > .button:disabled {opacity:.6;cursor:not-allowed;}
+/* Formal review inherits precisely the same column, rules and typography. */
+.wordloop-shell[data-study-open="true"] .review-editorial-card {
+  width:min(100%,710px);
+  max-width:710px;
+  margin:0 auto;
+  background:transparent;
+  border:0;
+  padding:0;
+}
+.wordloop-shell .review-editorial-card .review-editorial-header {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:0;
+  position:static;
+  padding:9px 0 0;
+  margin:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+}
+.wordloop-shell .review-reference-topline {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  margin:0 0 45px;
+}
+.wordloop-shell .review-reference-topline .standalone-back {
+  margin:0;padding:0;border:0;background:transparent;
+  color:var(--original-study-ink,#1d292d);
+  font-size:.86rem;
+  min-height:35px;
+}
+.wordloop-shell .review-reference-topline > span {
+  font-size:.78rem;
+  font-weight:450;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .review-editorial-card .review-page-progress {
+  width:100%;height:4px;
+  border-radius:3px;
+  margin:0 0 45px;
+  background:var(--original-study-rule,#e2e6e7);
+}
+.wordloop-shell .review-editorial-card .review-page-progress span {
+  background:var(--original-study-navy,#375f73);
+}
+.wordloop-shell .review-editorial-card .review-editorial-workspace {
+  padding:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+}
+.wordloop-shell .review-editorial-workspace .review-question-number {
+  margin:0 0 22px;
+  font-size:.69rem;
+  font-weight:500;
+  letter-spacing:.17em;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .review-editorial-workspace .question-block {
+  min-height:0;
+  margin:0 0 32px;
+  padding:0 0 30px;
+  border:0;
+  border-bottom:1px solid var(--original-study-rule,#e2e6e7);
+  border-radius:0;
+  background:transparent;
+}
+.wordloop-shell .review-editorial-workspace .question-label {
+  margin:0 0 14px;
+  color:var(--original-study-muted,#818b8e);
+  font-size:.75rem;
+}
+.wordloop-shell .review-editorial-workspace .question-prompt {
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+  font-size:clamp(1.65rem,4vw,2.2rem);
+  font-weight:480;
+  letter-spacing:-.035em;
+  line-height:1.65;
+}
+.wordloop-shell .review-editorial-workspace .answer-label {margin:0 0 7px;font-size:.75rem;color:var(--original-study-muted);}
+.wordloop-shell .review-editorial-workspace .review-answer-field {
+  min-height:54px;
+  border:0;
+  border-bottom:1px solid var(--original-study-rule);
+  border-radius:0;
+  padding:.7rem .15rem;
+  background:transparent;
+  font-size:1.22rem;
+  font-family:var(--original-study-english);
+}
+.wordloop-shell .review-editorial-workspace .review-answer-field:focus {
+  outline:0;
+  border-bottom:2px solid var(--original-study-navy);
+}
+.wordloop-shell .review-editorial-workspace .review-answer-bottom {
+  border:0;
+  margin:26px 0 0;
+  padding:0;
+  gap:1rem;
+}
+.wordloop-shell .review-editorial-workspace .review-unknown-button {
+  min-width:0;
+  color:var(--original-study-muted);
+  font-size:.8rem;
+}
+.wordloop-shell .review-editorial-workspace .review-submit-button.button {
+  min-height:51px;
+  min-width:12rem;
+  border:0;
+  border-radius:11px;
+  background:var(--original-study-navy);
+  font-weight:520;
+}
+.wordloop-shell .review-editorial-workspace .review-keyboard-note {
+  color:var(--original-study-muted);
+  font-size:.69rem;
+}
+@media(max-width:767px){
+  .wordloop-shell[data-study-open="true"] {
+    padding:20px 24px calc(26px + env(safe-area-inset-bottom));
+  }
+  .wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive .standalone-main {
+    padding:0;
+  }
+  .wordloop-shell .lesson-reference-stage {
+    min-height:calc(100dvh - 72px - env(safe-area-inset-bottom));
+    padding:0;
+  }
+  .wordloop-shell .lesson-reference-topbar,
+  .wordloop-shell .review-reference-topline {margin-bottom:46px;}
+  .wordloop-shell .lesson-reference-progress,
+  .wordloop-shell .review-editorial-card .review-page-progress {margin-bottom:43px;}
+  .wordloop-shell .lesson-reference-title {font-size:clamp(3.45rem,13vw,4.7rem);}
+  .wordloop-shell .lesson-reference-word {padding-bottom:33px;}
+  .wordloop-shell .lesson-reference-section {padding:23px 0 27px;}
+  .wordloop-shell .lesson-reference-example {font-size:clamp(1.36rem,5.5vw,1.6rem);}
+  .wordloop-shell .lesson-reference-bottom {margin-top:30px;}
+}
+@media(max-width:350px){
+  .wordloop-shell[data-study-open="true"] {padding-inline:16px;}
+  .wordloop-shell .lesson-reference-title {font-size:3.05rem;}
+  .wordloop-shell .review-editorial-workspace .review-answer-bottom {gap:.5rem;}
+  .wordloop-shell .review-editorial-workspace .review-submit-button.button {min-width:9rem;}
+}
+:root[data-theme="dark"] .wordloop-shell[data-study-open="true"] {
+  --original-study-ink:#ecf3f7;
+  --original-study-muted:#a9bdc8;
+  --original-study-rule:#354859;
+  --original-study-navy:#416d87;
+  background:#121f2c;
+}
+:root[data-theme="dark"] .wordloop-shell .lesson-card:has(.lesson-reference-stage),
+:root[data-theme="dark"] .wordloop-shell .lesson-reference-stage {background:#121f2c;}
+@media(prefers-color-scheme:dark){
+ :root[data-theme="system"] .wordloop-shell[data-study-open="true"],
+ :root:not([data-theme]) .wordloop-shell[data-study-open="true"] {
+  --original-study-ink:#ecf3f7;
+  --original-study-muted:#a9bdc8;
+  --original-study-rule:#354859;
+  --original-study-navy:#416d87;
+  background:#121f2c;
+ }
+ :root[data-theme="system"] .wordloop-shell .lesson-card:has(.lesson-reference-stage),
+ :root[data-theme="system"] .wordloop-shell .lesson-reference-stage,
+ :root:not([data-theme]) .wordloop-shell .lesson-card:has(.lesson-reference-stage),
+ :root:not([data-theme]) .wordloop-shell .lesson-reference-stage {background:#121f2c;}
+}
+
