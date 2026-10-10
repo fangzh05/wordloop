@@ -7,11 +7,12 @@ const root = process.cwd();
 const outputRoot = path.join(root, "dist");
 const assetsRoot = path.join(outputRoot, "assets");
 const widgetKinds = ["import", "pretest", "review", "dashboard", "pronunciation", "dictation", "lesson"] as const;
-const [siteHtml, siteCss, siteJs, siteManifest, widgetJs, widgetCss, familyJs, migrationNames] = await Promise.all([
+const [siteHtml, siteCss, siteJs, siteManifest, siteHeaders, widgetJs, widgetCss, familyJs, migrationNames] = await Promise.all([
   readFile(path.join(root, "build", "index.html"), "utf8"),
   readFile(path.join(root, "web", "dist", "widget.css"), "utf8"),
   readFile(path.join(root, "web", "dist", "standalone.js"), "utf8"),
   readFile(path.join(root, "build", "manifest.webmanifest"), "utf8"),
+  readFile(path.join(root, "build", "_headers"), "utf8"),
   Promise.all(widgetKinds.map((kind) => readFile(path.join(root, "web", "dist", `${kind}.js`), "utf8"))),
   readFile(path.join(root, "web", "dist", "widget.css"), "utf8"),
   readFile(path.join(root, "web", "dist", "family.js"), "utf8"),
@@ -36,6 +37,7 @@ await Promise.all([
   writeFile(path.join(assetsRoot, "app.js"), siteJs),
   writeFile(path.join(assetsRoot, "family.js"), familyJs),
   writeFile(path.join(assetsRoot, "manifest.webmanifest"), siteManifest),
+  writeFile(path.join(assetsRoot, "_headers"), siteHeaders),
   writeFile(path.join(assetsRoot, "widgets", "widget.css"), widgetCss),
   ...widgetKinds.map((kind, index) => writeFile(path.join(assetsRoot, "widgets", `${kind}.js`), widgetJs[index] ?? "")),
 ]);
