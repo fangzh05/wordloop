@@ -73,6 +73,7 @@ window.fetch = async (input:any, init?:any)=>{
  else if(p==="/api/web/family/dictionary")value=familyNodes[0].dictionary;
  else if(p==="/api/web/lexical/graph")value={...familyGraph,view:"root",center:{...familyNodes[0],node_id:"id0"},nodes:familyNodes.map(n=>({...n,node_id:n.lexeme_id,node_type:"lexeme"}))};
  else if(p==="/api/web/imports/shanbay")value={status:"idle"};
+ if(p==="/api/web/family/session")return new Response("null",{status:200,headers:{"content-type":"application/json"}});
  if(value!==null)return new Response(JSON.stringify(value),{status:200,headers:{"content-type":"application/json"}});
  return new Response(JSON.stringify({error:{code:"FIXTURE_UNHANDLED",message:p}}),{status:404,headers:{"content-type":"application/json"}});
 };
@@ -86,7 +87,7 @@ function App() {
  const [appearance,setAppearance]=useState<"system"|"light"|"dark">("light");
  const route=(p:string)=>{location.href="?page="+p+"&size="+(query.get("size")??"desktop");};
  return <main className="standalone-shell wordloop-shell" data-study-open={page==="study"?"true":"false"}>
-  <div className="wordloop-app-grid" data-section={section}>
+  <div className={page==="study"?"wordloop-app-grid is-immersive":"wordloop-app-grid"} data-section={section}>
    {page!=="study"&&<AppNavigation section={section} onNavigate={route as any}/>}
    <section className="standalone-main">
     {page!=="study"&&<header className="wordloop-topbar"><div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div><button className="settings-open-button" onClick={()=>setShowSettings(true)} aria-label="设置">⚙</button></header>}
