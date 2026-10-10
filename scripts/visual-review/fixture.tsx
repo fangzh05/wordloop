@@ -7,7 +7,7 @@ import { VocabularyPage } from "../../web/src/standalone/pages/VocabularyPage.js
 import { CaptureNotesPage } from "../../web/src/standalone/CaptureNotesPage.js";
 import { NoteReviewPage } from "../../web/src/standalone/NoteReviewPage.js";
 import { FamilyPanel } from "../../web/src/family/FamilyPanel.js";
-import { StandaloneReviewHeader, StandaloneReviewQuestion } from "../../web/src/standalone/StandaloneApp.js";
+import { StandaloneReviewWorkspace, StandaloneLessonExplanation, StandaloneLessonExercise, StandaloneLessonHeader } from "../../web/src/standalone/StandaloneApp.js";
 import { Button } from "../../web/src/components/Button.js";
 import type { AppSection } from "../../web/src/standalone/AppShell.js";
 
@@ -80,23 +80,47 @@ window.fetch = async (input:any, init?:any)=>{
 function App() {
  const query=new URLSearchParams(location.search);
  const page=query.get("page")??"today";
+ const immersive = ["study","lesson","lesson-exercise"].includes(page);
+ const [studyAnswer,setStudyAnswer]=useState("");
  const [section,setSection]=useState<AppSection>((["today","study","capture","insights","vocabulary"].includes(page)?page:"today") as AppSection);
  const [showSettings,setShowSettings]=useState(page==="settings");
  const [family,setFamily]=useState(page==="family");
  const [notesReview,setNotesReview]=useState(page==="note-review");
  const [appearance,setAppearance]=useState<"system"|"light"|"dark">("light");
  const route=(p:string)=>{location.href="?page="+p+"&size="+(query.get("size")??"desktop");};
- return <main className="standalone-shell wordloop-shell" data-study-open={page==="study"?"true":"false"}>
-  <div className={page==="study"?"wordloop-app-grid is-immersive":"wordloop-app-grid"} data-section={section}>
-   {page!=="study"&&<AppNavigation section={section} onNavigate={route as any}/>}
+ return <main className="standalone-shell wordloop-shell" data-study-open={immersive?"true":"false"}>
+  <div className={immersive?"wordloop-app-grid is-immersive":"wordloop-app-grid"} data-section={section}>
+   {!immersive&&<AppNavigation section={section} onNavigate={route as any}/>}
    <section className="standalone-main">
-    {page!=="study"&&<header className="wordloop-topbar"><div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div><button className="settings-open-button" onClick={()=>setShowSettings(true)} aria-label="设置">⚙</button></header>}
+    {!immersive&&<header className="wordloop-topbar"><div className="standalone-brand"><span className="standalone-mark">W</span>WordLoop</div><button className="settings-open-button" onClick={()=>setShowSettings(true)} aria-label="设置">⚙</button></header>}
     {page==="today"&&<TodayPage view={fixtureView} busy={false} tokenKey="fixture" onBudgetAction={async()=>({})} onContinue={()=>route("study")} onStartConsolidation={()=>{}} onOpenCapture={()=>route("capture")} onOpenVocabulary={()=>route("vocabulary")}/>}
     {page==="insights"&&<InsightsPage tokenKey="fixture" onOpenWord={()=>route("vocabulary")}/>}
     {page==="vocabulary"&&<VocabularyPage tokenKey="fixture" initialUserWordId="w0" onDetailChange={()=>{}}/>}
     {page==="capture"&&<CaptureNotesPage onBack={()=>route("today")} onOpenReview={()=>route("note-review")} noteReviewDueCount={1}/>}
     {page==="note-review"&&<NoteReviewPage onBack={()=>route("capture")} />}
-    {page==="study"&&<section className="widget-card standalone-card study-task-card"><StandaloneReviewHeader currentIndex={2} total={18} complete={false} onBack={()=>route("today")}/><div className="standalone-content"><StandaloneReviewQuestion item={{word:"predict",part_of_speech:"v.",meaning_zh:"预测；预言；预料"}} direction="cn_to_en"/><label className="answer-label" htmlFor="fixture-answer">写出英文单词</label><input id="fixture-answer" className="answer-input standalone-input" placeholder="输入英文"/><div className="standalone-actions standalone-two-actions"><Button className="secondary">不会</Button><Button>提交</Button></div><Button className="secondary" onClick={()=>setFamily(true)}>查看词族</Button></div></section>}
+    {page==="study"&&<section className="widget-card standalone-card study-task-card review-editorial-card" aria-labelledby="study-title">
+      <StandaloneReviewWorkspace item={{word:"predict",part_of_speech:"v.",meaning_zh:"预测；预言；预料"}}
+       direction="cn_to_en" currentIndex={2} total={18} answer={studyAnswer} busy={false}
+       notice="" noticeIndex={null} onBack={()=>route("today")} onAnswerChange={setStudyAnswer}
+       onUnknown={()=>{}} onSubmit={()=>{}} />
+    </section>}
+    {page==="lesson"&&<section className="widget-card standalone-card lesson-card study-explain-card" aria-labelledby="study-title">
+      <StandaloneLessonExplanation title="predict" displayTitle="predict" progressLabel="正式学习 · 03 / 12"
+       ipa="/prɪˈdɪkt/" pronunciationAudioUrl={null}
+       meaningZh="预测；预言；预料" partOfSpeech="v."
+       exampleEn="Scientists can predict the weather weeks in advance, but they cannot know exactly how the climate will change."
+       exampleZh="科学家能提前数周预测天气，但无法准确知道气候将如何变化。"
+       collocations={["predict the outcome","accurately predict","predict a future trend"]}
+       derivations={["prediction · n. 预测","predictable · adj. 可预测的","unpredictable · adj. 难以预料的"]}
+       note="predict 表示依据已有信息做出预测；与 anticipate（预期、预先准备）和 foresee（预见）在语境与语气上有所区别。"
+       busy={false} onBack={()=>route("today")} onStartExercise={()=>route("lesson-exercise")}/>
+    </section>}
+    {page==="lesson-exercise"&&<section className="widget-card standalone-card lesson-card study-task-card" aria-labelledby="study-title">
+      <StandaloneLessonHeader title="predict" progressLabel="正式学习 · 03 / 12" onBack={()=>route("lesson")}/>
+      <StandaloneLessonExercise instruction="使用刚学过的词，完成下面这句话。" prompt="It is difficult to ______ the outcome of the election."
+        activityType="cloze" clozeHint={""} multiline={false} answer={studyAnswer} busy={false}
+        onAnswerChange={setStudyAnswer} onSubmit={()=>{}} />
+    </section>}
     {page==="family"&&<section className="widget-card standalone-card"><h1>词族</h1><Button onClick={()=>setFamily(true)}>打开词族</Button></section>}
     {page==="settings"&&<section className="widget-card standalone-card"><h1>设置</h1></section>}
     {showSettings&&<SettingsSheet open onClose={()=>setShowSettings(false)} appearance={appearance} onAppearanceChange={setAppearance} dailyLimit={50} busy={false} onSaveDailyNewWordLimit={async(limit)=>({}) as any}/>}
