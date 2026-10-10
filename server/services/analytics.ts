@@ -438,17 +438,20 @@ export async function getTodayOverview(
     .eq("user_id", userId).gte("started_at", start).lt("started_at", end);
   assertDb(todaySessions.error);
   const relearnWords = new Set<string>();
-  for (const rawState of [session.data?.state, ...(todaySessions.data ?? []).map((item: { state: unknown }) => item.state)]) {
-    const parsed = studyStateSchema.safeParse(rawState);
-    if (!parsed.success) continue;
-    for (const word of normalizeStudyStateForRead(parsed.data).flow.relearn_words) {
+  const activeParsedState = session.data ? studyStateSchema.safeParse(session.data.state) : null;
+  const activeState = activeParsedState?.success ? normalizeStudyStateForRead(activeParsedState.data) : null;
+  const rawStates = [session.data?.state, ...(todaySessions.data ?? []).map((item: { state: unknown }) => item.state)];
+  for (const [index, rawState] of rawStates.entries()) {
+    const parsed = index === 0 ? activeParsedState : studyStateSchema.safeParse(rawState);
+    if (!parsed?.success) continue;
+    const normalizedState = index === 0 ? activeState : normalizeStudyStateForRead(parsed.data);
+    if (!normalizedState) continue;
+    for (const word of normalizedState.flow.relearn_words) {
       const normalized = normalizeWord(word);
       if (normalized) relearnWords.add(normalized);
     }
   }
   const completedRelearnWords = [...completedLessonWords].filter((word) => relearnWords.has(word)).length;
-  const activeParsedState = session.data ? studyStateSchema.safeParse(session.data.state) : null;
-  const activeState = activeParsedState?.success ? normalizeStudyStateForRead(activeParsedState.data) : null;
   const activeWidget = activeState?.widget === "review" || activeState?.widget === "pretest" || activeState?.widget === "lesson"
     ? activeState.widget
     : null;

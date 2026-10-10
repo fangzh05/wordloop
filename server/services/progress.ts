@@ -13,21 +13,21 @@ function safeStudyState(value: unknown) {
   return parsed.success ? normalizeStudyStateForRead(parsed.data) : null;
 }
 
+type NormalizedStudyState = NonNullable<ReturnType<typeof safeStudyState>>;
+
 function isFormalReviewItem(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const reviewKind = (value as { review_kind?: unknown }).review_kind;
   return reviewKind === "fsrs_due" || reviewKind === "both";
 }
 
-function reviewSnapshotTotal(value: unknown): number {
-  const state = safeStudyState(value);
+function reviewSnapshotTotal(state: NormalizedStudyState | null): number {
   return state?.widget === "review" && Array.isArray(state.payload.items)
     ? state.payload.items.filter(isFormalReviewItem).length
     : 0;
 }
 
-function completedReviewSnapshot(value: unknown): number {
-  const state = safeStudyState(value);
+function completedReviewSnapshot(state: NormalizedStudyState | null): number {
   if (state?.widget !== "review" || !Array.isArray(state.payload.items)) return 0;
   const completedPrefix = state.phase === "review_complete"
     ? state.payload.items.length
