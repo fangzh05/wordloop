@@ -513,17 +513,17 @@ function StandaloneStudyBackButton({ onBack }: { onBack: () => void }): React.JS
 }
 
 export function StandaloneReviewHeader({ currentIndex, total, complete, onBack }: {
-  currentIndex: number;
-  total: number;
+  currentIndex: number; total: number;
   complete: boolean;
   onBack: () => void;
 }): React.JSX.Element {
   const current = complete ? total : Math.min(currentIndex + 1, total);
   return <header className="widget-header compact-header review-editorial-header">
-    <div className="standalone-study-heading"><StandaloneStudyBackButton onBack={onBack} />
-      <div><span className="eyebrow">WORDLOOP / SPACED REVIEW</span><h1 id="study-title">记忆复习</h1></div>
+    <div className="review-reference-topline">
+      <StandaloneStudyBackButton onBack={onBack} />
+      <span>正式复习 · {current} / {total}</span>
     </div>
-    <div className="review-page-count"><span>SESSION PROGRESS</span><strong>{String(current).padStart(2,"0")} <i>/</i> {String(total).padStart(2,"0")}</strong></div>
+    <h1 id="study-title" className="sr-only">正式复习</h1>
     <div className="review-page-progress" role="progressbar" aria-label="复习进度" aria-valuemin={0} aria-valuemax={Math.max(1,total)} aria-valuenow={current}>
       <span style={{width:`${total>0?Math.min(100,current/total*100):0}%`}} />
     </div>
@@ -555,7 +555,7 @@ export function StandaloneReviewWorkspace({ item, direction, currentIndex, total
   return <section className="review-editorial-stage" aria-label="正式复习作答">
     <StandaloneReviewHeader currentIndex={currentIndex} total={total} complete={false} onBack={onBack} />
     <div className="standalone-content review-editorial-workspace">
-      <div className="review-question-number" aria-hidden="true">CARD {String(currentIndex+1).padStart(2,"0")} / {String(total).padStart(2,"0")}</div>
+      <div className="review-question-number" aria-hidden="true">VOCABULARY / ACTIVE RECALL</div>
       <StandaloneReviewQuestion item={item} direction={direction} />
       <div className="review-answer-region">
         <label className="answer-label" htmlFor="study-answer">{direction === "cn_to_en" ? "你的回答 · 英文单词" : "你的回答 · 英文释义"}</label>
@@ -568,7 +568,7 @@ export function StandaloneReviewWorkspace({ item, direction, currentIndex, total
           <button className="review-unknown-button" type="button" disabled={busy} onClick={onUnknown}>暂时想不起来<span aria-hidden="true"> ↗</span></button>
           <Button className="review-submit-button" type="button" disabled={busy || !answer.trim()} onClick={onSubmit}>确认回答 <span aria-hidden="true">→</span></Button>
         </div>
-        <p className="review-keyboard-note">输入后按 Enter 提交 · 不会时可跳过</p>
+        <p className="review-keyboard-note">按 Enter 提交 · 忘记时可以跳过</p>
       </div>
     </div>
   </section>;
@@ -582,29 +582,53 @@ export function StandaloneLessonExplanation({ title, displayTitle, progressLabel
   derivations: string[]; note: string; busy: boolean;
   onBack: () => void; onStartExercise: () => void;
 }): React.JSX.Element {
-  return <div className="standalone-content standalone-explain-content lesson-editorial-content" data-capture-root="true">
-    <div className="lesson-overview">
-      <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={onBack} />
-      <div className="lesson-ipa">{ipa}
+  const pos = partOfSpeech.trim().replace(/\\.$/, "").toLowerCase();
+  const posLabel: Record<string,string> = {adj:"ADJECTIVE",a:"ADJECTIVE",v:"VERB",vt:"VERB",vi:"VERB",n:"NOUN",adv:"ADVERB",prep:"PREPOSITION"};
+  const fraction = progressLabel.match(/(\\d+)\\s*\\/\\s*(\\d+)/);
+  const done = fraction ? Number(fraction[1]) : 0;
+  const total = fraction ? Number(fraction[2]) : 0;
+  const percent = total > 0 ? Math.max(0,Math.min(100,done / total * 100)) : 0;
+  const meaning = meaningIncludesPartOfSpeech(meaningZh, partOfSpeech) ? meaningZh : `${partOfSpeech} · ${meaningZh}`;
+  return <div className="standalone-content standalone-explain-content lesson-editorial-content lesson-reference-stage" data-capture-root="true">
+    <header className="lesson-reference-topbar">
+      <StandaloneStudyBackButton onBack={onBack} />
+      <span className="lesson-reference-progress-label">{progressLabel}</span>
+    </header>
+    {total > 0 && <div className="lesson-reference-progress" role="progressbar" aria-label="正式学习进度" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(done,total)}>
+      <span style={{ width:`${percent}%` }} />
+    </div>}
+    <section className="lesson-reference-word" aria-labelledby="study-title">
+      <p className="lesson-reference-kicker">VOCABULARY / {posLabel[pos] ?? (pos || "WORD").toUpperCase()}</p>
+      <h1 id="study-title" className="lesson-reference-title">{displayTitle}</h1>
+      <div className="lesson-reference-ipa"><span>{ipa}</span>
         {pronunciationAudioUrl
           ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(pronunciationAudioUrl); void audio.play().catch(() => speak(title)); }}>▶</button>
           : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}
       </div>
-      <section className="lesson-section"><h2>核心义</h2>
-        <p>{meaningIncludesPartOfSpeech(meaningZh, partOfSpeech) ? meaningZh : `${partOfSpeech} · ${meaningZh}`}</p>
-      </section>
-      <div className="standalone-actions lesson-start-action"><Button type="button" disabled={busy} onClick={onStartExercise}>开始练习 <span aria-hidden="true">→</span></Button></div>
+      <p className="lesson-reference-meaning">{meaning}</p>
+    </section>
+    <div className="lesson-reference-reading">
+      {collocations.length > 0 && <section className="lesson-reference-section lesson-reference-collocations">
+        <h2>COMMON COLLOCATIONS</h2>
+        <ul>{collocations.slice(0,3).map(value => <li key={value}>{value}</li>)}</ul>
+      </section>}
+      {exampleEn && <section className="lesson-reference-section lesson-reference-context" data-capture-context="true">
+        <h2>READ IN CONTEXT</h2>
+        <p className="lesson-reference-example standalone-reading-width">{exampleEn}</p>
+        {exampleZh && <details className="lesson-reference-translation" open>
+          <summary>译文</summary><p className="standalone-reading-width">{exampleZh}</p>
+        </details>}
+      </section>}
+      {derivations.length > 0 && <section className="lesson-reference-section lesson-reference-derivations">
+        <div className="lesson-reference-family-heading"><h2>WORD FAMILY</h2><FamilyEntry word={title} disabled={busy} /></div>
+        <ul>{derivations.map(value=><li key={value}>{value}</li>)}</ul>
+      </section>}
+      {note && <section className="lesson-reference-section lesson-reference-note">
+        <h2>NOTE</h2><p className="standalone-reading-width">{note}</p>
+      </section>}
     </div>
-    <div className="lesson-reading-pane">
-      <section className="lesson-section lesson-example-panel" data-capture-context="true">
-        <h2>例句</h2><p className="lesson-example standalone-reading-width">{exampleEn}</p>
-        {exampleZh && <details className="lesson-translation"><summary>展开译文</summary><p className="lesson-example-translation standalone-reading-width">{exampleZh}</p></details>}
-      </section>
-      <div className="lesson-detail-grid">
-        <section className="lesson-section"><h2>高价值搭配</h2><ul>{collocations.slice(0,3).map(value=><li key={value}>{value}</li>)}</ul></section>
-        <section className="lesson-section"><div className="lesson-family-heading"><h2>常见派生</h2><FamilyEntry word={title} disabled={busy}/></div><ul>{derivations.map(value=><li key={value}>{value}</li>)}</ul></section>
-      </div>
-      <section className="lesson-section lesson-usage-note"><h2>易混提醒</h2><p className="standalone-reading-width">{note}</p></section>
+    <div className="lesson-reference-bottom">
+      <Button type="button" disabled={busy} onClick={onStartExercise}>开始练习 <span aria-hidden="true">→</span></Button>
     </div>
   </div>;
 }
