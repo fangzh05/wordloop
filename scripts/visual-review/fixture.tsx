@@ -105,14 +105,14 @@ function App() {
        onUnknown={()=>{}} onSubmit={()=>{}} />
     </section>}
     {page==="lesson"&&<section className="widget-card standalone-card lesson-card study-explain-card" aria-labelledby="study-title">
-      <StandaloneLessonExplanation title="predict" displayTitle="predict" progressLabel="正式学习 · 03 / 12"
-       ipa="/prɪˈdɪkt/" pronunciationAudioUrl={null}
-       meaningZh="预测；预言；预料" partOfSpeech="v."
-       exampleEn="Scientists can predict the weather weeks in advance, but they cannot know exactly how the climate will change."
-       exampleZh="科学家能提前数周预测天气，但无法准确知道气候将如何变化。"
-       collocations={["predict the outcome","accurately predict","predict a future trend"]}
-       derivations={["prediction · n. 预测","predictable · adj. 可预测的","unpredictable · adj. 难以预料的"]}
-       note="predict 表示依据已有信息做出预测；与 anticipate（预期、预先准备）和 foresee（预见）在语境与语气上有所区别。"
+      <StandaloneLessonExplanation title="meticulous" displayTitle="meticulous" progressLabel="正式学习 · 2 / 6"
+       ipa="/məˈtɪkjələs/" pronunciationAudioUrl={null}
+       meaningZh="一丝不苟的；细致的" partOfSpeech="adj."
+       exampleEn="She kept meticulous records of every experiment."
+       exampleZh="她详细记录了每一次实验。"
+       collocations={["meticulous attention to detail","meticulous planning"]}
+       derivations={[]}
+       note="常用于描述严谨、系统的观察与工作方式。"
        busy={false} onBack={()=>route("today")} onStartExercise={()=>route("lesson-exercise")}/>
     </section>}
     {page==="lesson-exercise"&&<section className="widget-card standalone-card lesson-card study-task-card" aria-labelledby="study-title">
