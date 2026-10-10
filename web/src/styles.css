@@ -2414,7 +2414,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   max-height:calc(100dvh - 2rem);
   background:var(--atlas-paper);
   color:var(--atlas-ink);
-  border:1px solid #211d1b;
+  border:1px solid #142e45;
   border-radius:0;
   box-shadow:0 22px 72px #0b223a43;
   padding:0;
