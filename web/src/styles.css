@@ -2050,11 +2050,11 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
    This styles only Today and Lexical Atlas; the approved study page is untouched.
    ========================================================================== */
 .wordloop-shell .today-page {
-  --press-ink:#201e1c;
-  --press-paper:#f8f7f3;
-  --press-rule:#cecac3;
-  --press-muted:#766e67;
-  --press-accent:#a95340;
+  --press-ink:#1d2f40;
+  --press-paper:#f5f7f8;
+  --press-rule:#cbd6df;
+  --press-muted:#6e8190;
+  --press-accent:#365e7b;
   max-width:1080px;
   width:100%;
   margin-inline:auto;
@@ -2106,11 +2106,11 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   gap:0 2rem;
   margin:1.65rem 0 2.6rem;
   padding:2.05rem 2.35rem 2.1rem;
-  border:1px solid #201d1b;
+  border:1px solid #142e45;
   border-radius:0;
   box-shadow:none;
-  background:#211d1c;
-  color:#f8f4ec;
+  background:#142e45;
+  color:#f2f7fb;
   position:relative;
   overflow:hidden;
 }
@@ -2118,7 +2118,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   content:"";
   position:absolute;
   left:0;top:0;bottom:0;
-  width:4px;background:#b65f46;
+  width:4px;background:#78a3c0;
 }
 .wordloop-shell .today-focus-copy {grid-column:1;min-width:0;max-width:none;}
 .wordloop-shell .today-cover-kicker {
@@ -2128,19 +2128,19 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   gap:1rem;
   padding-bottom:1.2rem;
   margin-bottom:3.3rem;
-  border-bottom:1px solid #ffffff36;
+  border-bottom:1px solid #ffffff30;
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
   font-size:.64rem;
   font-weight:500;
   letter-spacing:.07em;
-  color:#c9bdb4;
+  color:#afc8d9;
 }
 .wordloop-shell .today-focus-copy > .eyebrow {
   display:block;
   font-size:.73rem;
   font-weight:540;
   letter-spacing:.04em;
-  color:#d6a992;
+  color:#b5d4e8;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) h2 {
   max-width:13em;
@@ -2150,10 +2150,10 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   line-height:1.34;
   font-weight:460;
   letter-spacing:-.045em;
-  color:#f7f4ee;
+  color:#f6f9fc;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) .today-focus-copy > p {
-  color:#c2b8ae;
+  color:#b7cbd9;
   font-size:.83rem;
   margin:0 0 2rem;
   line-height:1.75;
@@ -2165,7 +2165,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   justify-content:flex-end;
   grid-column:2;
   grid-row:1 / span 2;
-  border-left:1px solid #ffffff36;
+  border-left:1px solid #ffffff30;
   padding:0 0 1.15rem 2.1rem;
   min-width:0;
 }
@@ -2174,7 +2174,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   font-size:.64rem;
   font-weight:500;
   letter-spacing:.065em;
-  color:#baab9e;
+  color:#b1cbdc;
   white-space:normal;
 }
 .wordloop-shell .today-cover-count > strong {
@@ -2184,17 +2184,17 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   line-height:.88;
   font-weight:400;
   letter-spacing:-.085em;
-  color:#efe8df;
+  color:#f4f8fb;
   font-variant-numeric:lining-nums tabular-nums;
 }
 .wordloop-shell .today-cover-count > small {
   font-size:.76rem;
-  color:#cbbdb0;
+  color:#afc8d8;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) > p {
   grid-column:1;
   margin:0 0 1rem;
-  color:#ead6c8;
+  color:#c8dce9;
   font-size:.8rem;
   line-height:1.7;
 }
@@ -2204,20 +2204,20 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   min-width:12.5rem;
   min-height:48px;
   padding:.7rem 1.6rem;
-  border:1px solid #f8f4ec;
+  border:1px solid #f2f7fb;
   border-radius:0;
-  background:#f7f3ea;
-  color:#211d1c;
+  background:#f3f8fc;
+  color:#142e45;
   box-shadow:none;
   font-weight:625;
   letter-spacing:.015em;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) > .today-primary-action:hover:not(:disabled) {
-  background:#ddcdb8;
-  border-color:#ddcdb8;
+  background:#d9e9f3;
+  border-color:#d9e9f3;
 }
 .wordloop-shell .today-focus-card:not(.today-consolidation) > .today-primary-action:focus-visible {
-  outline:3px solid #ccae8e;
+  outline:3px solid #8db8d6;
   outline-offset:3px;
 }
 .wordloop-shell .today-consolidation {
@@ -2305,8 +2305,8 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 }
 .wordloop-shell .learning-budget-summary {margin:1.25rem 0 0;padding:1.1rem 0 1.15rem;border:0;border-bottom:1px solid var(--press-rule);border-radius:0;background:transparent;box-shadow:none;}
 .wordloop-shell .learning-budget-heading h3 {font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;font-size:1.06rem;}
-.wordloop-shell .learning-budget-meter {height:3px;border-radius:0;background:#d9d6cf;}
-.wordloop-shell .learning-budget-meter > span {border-radius:0;background:#a95340;}
+.wordloop-shell .learning-budget-meter {height:3px;border-radius:0;background:#d2dde5;}
+.wordloop-shell .learning-budget-meter > span {border-radius:0;background:#365e7b;}
 .wordloop-shell .learning-budget-facts {color:var(--press-muted);}
 .wordloop-shell .learning-budget-actions .button {border-radius:0;}
 .wordloop-shell .today-secondary-grid {
@@ -2405,23 +2405,23 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 
 /* Lexical Atlas / a living dictionary spread rather than a floating bubble chart. */
 .family-dialog {
-  --atlas-paper:#f4f2ec;
-  --atlas-ink:#282420;
-  --atlas-muted:#6e6860;
-  --atlas-rule:#ccc8c0;
-  --atlas-accent:#a6533f;
+  --atlas-paper:#f3f6f8;
+  --atlas-ink:#213446;
+  --atlas-muted:#677c8d;
+  --atlas-rule:#c8d6e0;
+  --atlas-accent:#365e7b;
   width:min(1190px,calc(100vw - 2rem));
   max-height:calc(100dvh - 2rem);
   background:var(--atlas-paper);
   color:var(--atlas-ink);
   border:1px solid #211d1b;
   border-radius:0;
-  box-shadow:0 22px 72px #1d191743;
+  box-shadow:0 22px 72px #0b223a43;
   padding:0;
   overflow:auto;
   overscroll-behavior:contain;
 }
-.family-dialog::backdrop {background:#15110ed1;}
+.family-dialog::backdrop {background:#0b2032d1;}
 .family-dialog .family-header {
   position:relative;
   display:flex;
@@ -2430,19 +2430,19 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   gap:1.5rem;
   padding:1.7rem 2.15rem 1.55rem;
   margin:0;
-  background:#211e1d;
-  color:#faf6ef;
+  background:#142e45;
+  color:#f3f8fc;
   border:0;
 }
 .family-dialog .family-header-copy .eyebrow {
-  color:#daa78d;
+  color:#a8cce4;
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
   font-size:.65rem;
   font-weight:530;
   letter-spacing:.09em;
 }
 .family-dialog .family-header h2 {
-  color:#faf6ef;
+  color:#f3f8fc;
   font-family:"Baskerville","Iowan Old Style","Palatino Linotype",Georgia,serif;
   font-size:clamp(3.3rem,7vw,6.8rem);
   font-weight:400;
@@ -2451,7 +2451,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   margin:.65rem 0 .35rem;
 }
 .family-dialog .family-header-subtitle {
-  color:#c8bdb2;
+  color:#b8cfdf;
   margin:.55rem 0 0;
   font-size:.8rem;
   line-height:1.65;
@@ -2460,14 +2460,14 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   flex-shrink:0;
   min-height:39px;
   padding:.45rem .85rem;
-  border:1px solid #776d64;
+  border:1px solid #68839a;
   border-radius:0;
   background:transparent;
-  color:#faf6ef;
+  color:#f3f8fc;
   font-size:.75rem;
   box-shadow:none;
 }
-.family-dialog .family-header > .button:hover {background:#38332f;}
+.family-dialog .family-header > .button:hover {background:#264862;}
 .family-dialog .lexical-view-tabs {
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
@@ -2546,8 +2546,8 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   background:transparent;
 }
 .family-dialog .family-graph-pane {
-  background:#23201e;
-  color:#f5eee6;
+  background:#18364e;
+  color:#f2f8fc;
   padding:1.25rem;
 }
 .family-dialog .family-detail-pane {
@@ -2564,37 +2564,37 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   margin:0 0 .95rem;
 }
 .family-dialog .family-graph-toolbar .eyebrow {
-  color:#d5a18a;
+  color:#b3d2e6;
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
   font-size:.62rem;
   letter-spacing:.08em;
 }
-.family-dialog .family-graph-toolbar .family-reason {color:#b9afa4;font-size:.73rem;line-height:1.6;margin:.3rem 0 0;}
+.family-dialog .family-graph-toolbar .family-reason {color:#a9c3d3;font-size:.73rem;line-height:1.6;margin:.3rem 0 0;}
 .family-dialog .family-graph-toolbar .button {
   flex-shrink:0;
-  border:1px solid #595047;
+  border:1px solid #627e92;
   border-radius:0;
   padding:.4rem .65rem;
   min-height:35px;
   font-size:.72rem;
-  color:#eee7de;
+  color:#f0f6fa;
   background:transparent;
 }
 .family-dialog .family-canvas {
-  --text:#f5eee6;
-  --muted:#b9ab9f;
-  --accent:#dbb496;
-  --accent-text:#271d18;
-  --control:#342d29;
-  --control-hover:#4a3930;
-  --material-solid:#23201e;
-  --material-raised:#2d2926;
-  --separator-strong:#6c6057;
+  --text:#f2f8fc;
+  --muted:#b8ccda;
+  --accent:#b3d7f0;
+  --accent-text:#132e45;
+  --control:#27475f;
+  --control-hover:#365871;
+  --material-solid:#18364e;
+  --material-raised:#28465e;
+  --separator-strong:#68849b;
   width:100%;
   height:clamp(330px,45vh,530px);
-  border:1px solid #554b45;
+  border:1px solid #496981;
   border-radius:0;
-  background:#23201e;
+  background:#18364e;
   background-image:linear-gradient(#ffffff09 1px,transparent 1px),linear-gradient(90deg,#ffffff09 1px,transparent 1px);
   background-size:34px 34px;
   touch-action:none;
@@ -2612,17 +2612,17 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   border-bottom:1px solid transparent;
   border-radius:0;
   background:transparent;
-  color:#bdb1a6;
+  color:#aebfcd;
   font-family:"Baskerville","Iowan Old Style",Georgia,serif;
   font-size:.96rem;
 }
 .family-dialog .family-node-list button:hover {color:#fff;}
 .family-dialog .family-node-list button[aria-pressed="true"] {
-  border-bottom-color:#d4a27f;
+  border-bottom-color:#a6cfe9;
   background:transparent;
-  color:#f3e9dd;
+  color:#eef6fc;
 }
-.family-dialog .family-help {color:#bdb1a6;font-size:.72rem;}
+.family-dialog .family-help {color:#aebfcd;font-size:.72rem;}
 .family-dialog .family-help summary {padding:.65rem 0;min-height:35px;}
 .family-dialog .family-mini-card {
   margin:0;
@@ -2674,7 +2674,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   gap:.9rem;
   margin:0;
   padding:.5rem 0;
-  border-bottom:1px solid #dcd9d2;
+  border-bottom:1px solid #d5e0e7;
 }
 .family-dialog .family-dictionary dt,
 .family-dialog .family-dictionary dd {
@@ -2754,7 +2754,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 }
 .family-dialog .lexical-relation {margin:0;padding:1rem 0;border-top:1px solid var(--atlas-rule);}
 .family-dialog .lexical-relation p {font-size:.78rem;line-height:1.7;}
-.family-dialog .lexical-evidence {padding:.8rem;border-radius:0;background:#e6e2da;overflow-wrap:anywhere;}
+.family-dialog .lexical-evidence {padding:.8rem;border-radius:0;background:#e7eef3;overflow-wrap:anywhere;}
 .family-dialog .family-micro {max-width:43rem;margin:auto;padding:2rem;}
 .family-dialog .family-micro form {gap:1rem;}
 .family-dialog .family-micro .button {border-radius:0;}
@@ -2781,23 +2781,23 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 
 /* Press surfaces respect all three user-selected appearance modes. */
 :root[data-theme="dark"] .wordloop-shell .today-page {
-  --press-ink:#f1ece6;--press-paper:#171c1d;--press-rule:#454343;
-  --press-muted:#b9b1a9;--press-accent:#d4a085;
+  --press-ink:#f0f6fc;--press-paper:#111f2d;--press-rule:#40566a;
+  --press-muted:#abc1d0;--press-accent:#99c0db;
 }
 @media(prefers-color-scheme:dark) {
   :root[data-theme="system"] .wordloop-shell .today-page,
   :root:not([data-theme]) .wordloop-shell .today-page {
-    --press-ink:#f1ece6;--press-paper:#171c1d;--press-rule:#454343;
-    --press-muted:#b9b1a9;--press-accent:#d4a085;
+    --press-ink:#f0f6fc;--press-paper:#111f2d;--press-rule:#40566a;
+    --press-muted:#abc1d0;--press-accent:#99c0db;
   }
 }
 /* The light-paper dictionary stays legible even over a dark app theme. */
 .family-dialog {
-  --page-bg:#f4f2ec;--text:#282420;--muted:#6e6860;
-  --material-solid:#f4f2ec;--material-raised:#e9e4db;
-  --separator:#dcd8d0;--separator-strong:#ccc8c0;
-  --control:#e9e4db;--control-hover:#ddd7cd;
-  --accent:#a6533f;--accent-text:#fff;--focus:#a6533f44;
+  --page-bg:#f3f6f8;--text:#213446;--muted:#677c8d;
+  --material-solid:#f3f6f8;--material-raised:#e6edf3;
+  --separator:#d8e2e9;--separator-strong:#c8d6e0;
+  --control:#e6edf3;--control-hover:#d8e4ec;
+  --accent:#365e7b;--accent-text:#fff;--focus:#365e7b44;
   color-scheme:light;
 }
 .family-dialog .family-canvas {color-scheme:dark;}
