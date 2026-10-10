@@ -37,6 +37,23 @@ for(const [size,w,h] of sizes) {
   if(name==="vocabulary")await page.waitForTimeout(500);
   const expected = {study:".review-editorial-stage", lesson:".lesson-editorial-content", "lesson-exercise":".lesson-exercise-editorial"}[name];
   if(expected && !(await page.locator(expected).isVisible()))throw Error(`Missing expected source component: ${name} ${size} ${expected}. Errors: ${errors.join(" | ")}`);
+  if(name==="study"){
+    const unknown=page.getByRole("button",{name:"不会",exact:true});
+    if(!(await unknown.isVisible()))throw Error("Review skip action is missing or renamed");
+  }
+  if(name==="lesson" && !(await page.getByRole("button",{name:"词族",exact:true}).isVisible()))
+    throw Error("Word-family entry is not visible in lesson explanation");
+  if(name==="capture" && size==="mobile"){
+    const h=page.locator("#capture-notes-title");
+    const layout=await h.evaluate(el=>({
+      whiteSpace:getComputedStyle(el).whiteSpace, height:el.getBoundingClientRect().height,
+      lineHeight:parseFloat(getComputedStyle(el).lineHeight),
+      width:el.getBoundingClientRect().width,
+      available:el.parentElement?.getBoundingClientRect().width??0
+    }));
+    if(layout.whiteSpace!=="nowrap" || layout.height>layout.lineHeight*1.4 || layout.width>layout.available+1)
+      throw Error("Capture title must stay on one line: "+JSON.stringify(layout));
+  }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth + 8);
   if(overflow)console.warn(`WARN: horizontal overflow at ${name} ${size}`);
   if(errors.length)console.warn(`WARN: page errors at ${name} ${size}: ${errors.join(" | ")}`);
