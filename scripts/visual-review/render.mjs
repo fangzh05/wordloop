@@ -20,7 +20,7 @@ const server=http.createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const port=server.address().port, browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
-const pages=["today","study","capture","insights","vocabulary","note-review","family","settings"];
+const pages=["today","study","lesson","lesson-exercise","capture","insights","vocabulary","note-review","family","settings"];
 const sizes=[["desktop",1440,1000],["mobile",390,844]];
 try{
 for(const [size,w,h] of sizes) {
@@ -35,6 +35,11 @@ for(const [size,w,h] of sizes) {
    await dialog.waitFor({state:"visible",timeout:10000}).catch(()=>{});
   }
   if(name==="vocabulary")await page.waitForTimeout(500);
+  const expected = {study:".review-editorial-stage", lesson:".lesson-editorial-content", "lesson-exercise":".lesson-exercise-editorial"}[name];
+  if(expected && !(await page.locator(expected).isVisible()))throw Error(`Missing expected source component: ${name} ${size} ${expected}. Errors: ${errors.join(" | ")}`);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth + 8);
+  if(overflow)console.warn(`WARN: horizontal overflow at ${name} ${size}`);
+  if(errors.length)console.warn(`WARN: page errors at ${name} ${size}: ${errors.join(" | ")}`);
   await page.screenshot({path:path.join(screenshots,`${name}-${size}.png`),fullPage:true,animations:"disabled"});
   console.log(`${name}-${size}: screenshot captured. Page errors: ${errors.slice(0,3).join(" | ")||"none"}`);
   await page.close();
