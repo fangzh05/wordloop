@@ -2802,3 +2802,473 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 }
 .family-dialog .family-canvas {color-scheme:dark;}
 
+
+/* ===========================================================================
+  WordLoop Press Edition | connected surfaces
+  Source-matched classes: AppShell, InsightsPage, VocabularyPage,
+  CaptureNotesPage, NoteReviewPage, WordDetailPanel, SettingsSheet.
+  Strict presentation-only changes: existing controls and events remain.
+  =========================================================================== */
+.wordloop-shell {
+  --page-bg:#f3f6f8;
+  --material:#ffffff;
+  --material-solid:#fff;
+  --material-raised:#fff;
+  --text:#162d41;
+  --muted:#6e8091;
+  --separator:#dce5ec;
+  --separator-strong:#bfcfdb;
+  --control:#eaf1f6;
+  --control-hover:#dfeaf3;
+  --accent:#285a7c;
+  --accent-pressed:#193f5a;
+  --accent-text:#fff;
+  --nav-bg:#122e45;
+  --radius-large:12px;
+  --radius-control:6px;
+  --shadow:none;
+  background:var(--page-bg);
+}
+:root[data-theme="dark"] .wordloop-shell {
+  --page-bg:#101c2a;--material:#182b3e;--material-solid:#182b3e;
+  --material-raised:#21384d;--text:#eef5fa;--muted:#adbfce;
+  --separator:#30495d;--separator-strong:#49667c;
+  --control:#22394e;--control-hover:#304c64;
+  --accent:#a3d0ef;--accent-pressed:#c1e2f7;
+  --accent-text:#102b40;--nav-bg:#0e2234;--shadow:none;
+}
+@media(prefers-color-scheme:dark) {
+  :root[data-theme="system"] .wordloop-shell,:root:not([data-theme]) .wordloop-shell {
+    --page-bg:#101c2a;--material:#182b3e;--material-solid:#182b3e;
+    --material-raised:#21384d;--text:#eef5fa;--muted:#adbfce;
+    --separator:#30495d;--separator-strong:#49667c;
+    --control:#22394e;--control-hover:#304c64;
+    --accent:#a3d0ef;--accent-pressed:#c1e2f7;
+    --accent-text:#102b40;--nav-bg:#0e2234;--shadow:none;
+  }
+}
+.wordloop-shell .app-navigation-desktop {
+  background:var(--nav-bg);
+  border-right:1px solid #ffffff1c;
+  color:#f1f6fb;
+  border-radius:0;
+  box-shadow:none;
+}
+.wordloop-shell .app-navigation-desktop .nav-brand {color:#f1f6fb;}
+.wordloop-shell .app-navigation-desktop .nav-caption,
+.wordloop-shell .app-navigation-desktop .nav-personal small {color:#b1c7d7;}
+.wordloop-shell .app-navigation-desktop .app-nav-item {
+  color:#b2cada;
+  border-radius:5px;
+  font-size:.8rem;
+  min-height:46px;
+}
+.wordloop-shell .app-navigation-desktop .app-nav-item:hover {
+  color:#fff;
+  background:#ffffff16;
+}
+.wordloop-shell .app-navigation-desktop .app-nav-item[aria-current="page"] {
+  color:#fff;
+  background:#ffffff24;
+  border-left:2px solid #9acbe9;
+  border-radius:3px;
+  font-weight:650;
+}
+.wordloop-shell .app-navigation-desktop .nav-personal {
+  border-top-color:#ffffff24;
+  color:#e7f2f9;
+}
+.wordloop-shell .app-navigation-desktop .nav-personal > span {
+  background:#e1eff8;color:#173850;
+}
+.wordloop-shell .app-navigation-mobile {
+  background:var(--material-solid);
+  border-top:1px solid var(--separator);
+  box-shadow:none;
+}
+.wordloop-shell .app-navigation-mobile .app-nav-item[aria-current="page"] {
+  color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 8%,transparent);
+}
+.wordloop-shell .page-heading:not(.today-editorial-heading) {
+  margin-bottom:1.85rem;
+  padding-bottom:1.25rem;
+  border-bottom:1px solid var(--separator-strong);
+}
+.wordloop-shell .page-heading:not(.today-editorial-heading) h1,
+.wordloop-shell .capture-notes-page .standalone-study-heading h1,
+.wordloop-shell .note-review-page .standalone-study-heading h1 {
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",Georgia,serif;
+  font-size:clamp(2.15rem,3.4vw,3rem);
+  font-weight:520;
+  line-height:1.2;
+  letter-spacing:-.04em;
+  color:var(--text);
+}
+.wordloop-shell .page-heading:not(.today-editorial-heading) .eyebrow,
+.wordloop-shell .capture-notes-page .eyebrow,
+.wordloop-shell .note-review-page .eyebrow {
+  display:block;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  color:var(--accent);
+  font-size:.65rem;
+  font-weight:600;
+  letter-spacing:.13em;
+}
+.wordloop-shell .page-heading:not(.today-editorial-heading) p {
+  color:var(--muted);font-size:.84rem;line-height:1.65;
+}
+.wordloop-shell .button:not(.today-primary-action),
+.wordloop-shell .secondary-button {
+  border-radius:5px;
+  box-shadow:none;
+}
+.wordloop-shell .button:focus-visible,
+.wordloop-shell button:focus-visible,
+.wordloop-shell a:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+}
+/* Insights: the analytics stay data-first and do not acquire invented charts. */
+.wordloop-shell .insights-page .insight-tabs {
+  display:flex;
+  gap:1.5rem;
+  border-bottom:1px solid var(--separator-strong);
+  margin:0 0 1.3rem;
+  overflow-x:auto;
+}
+.wordloop-shell .insights-page .insight-tabs button {
+  padding:.75rem .1rem .8rem;
+  min-height:43px;
+  border:0;
+  border-radius:0;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  color:var(--muted);
+  font-size:.81rem;
+  font-weight:530;
+  white-space:nowrap;
+}
+.wordloop-shell .insights-page .insight-tabs button[aria-current="page"] {
+  color:var(--accent);
+  background:transparent;
+  border-bottom-color:var(--accent);
+  font-weight:700;
+}
+.wordloop-shell .insight-controls {gap:.65rem;padding:0 0 1rem;}
+.wordloop-shell .insight-controls button {
+  border:1px solid var(--separator);
+  background:var(--material-solid);
+  border-radius:4px;
+  min-height:37px;
+}
+.wordloop-shell .insight-controls button[aria-pressed="true"] {
+  color:var(--accent);
+  border-color:var(--accent);
+  background:var(--control);
+}
+.wordloop-shell .insight-metric-grid {gap:0;}
+.wordloop-shell .insight-metric {
+  border:0;
+  border-right:1px solid var(--separator);
+  border-radius:0;
+  background:transparent;
+  padding:1.25rem 1.5rem 1.3rem 0;
+  min-width:0;
+}
+.wordloop-shell .insight-metric:not(:first-child) {padding-left:1.35rem;}
+.wordloop-shell .insight-metric:last-child {border-right:0;}
+.wordloop-shell .insight-metric > span {
+  color:var(--muted);font-size:.78rem;
+}
+.wordloop-shell .insight-metric > strong {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  color:var(--text);
+  font-size:clamp(2.1rem,4vw,3rem);
+  line-height:1.15;
+  font-weight:400;
+  letter-spacing:-.045em;
+}
+.wordloop-shell .insight-metric > small {color:var(--muted);font-size:.72rem;}
+.wordloop-shell .insight-panel {
+  border:1px solid var(--separator);
+  background:var(--material-solid);
+  border-radius:6px;
+  padding:1.55rem;
+  box-shadow:none;
+  min-width:0;
+}
+.wordloop-shell .insight-panel h2 {
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;
+  font-size:1.15rem;
+  font-weight:540;
+  color:var(--text);
+  letter-spacing:-.02em;
+}
+.wordloop-shell .insight-bar-list {gap:.3rem;}
+.wordloop-shell .insight-bar-row {border-radius:0;border-bottom:1px solid var(--separator);}
+.wordloop-shell .insight-bar-track {background:var(--control);border-radius:0;}
+.wordloop-shell .insight-bar-track i {border-radius:0;background:var(--accent);}
+.wordloop-shell .insight-content {gap:1rem;}
+.wordloop-shell .focus-word-list li {
+  border-bottom:1px solid var(--separator);
+}
+.wordloop-shell .focus-word-list li strong {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:1.15rem;font-weight:500;
+}
+.wordloop-shell .activity-day {border-radius:3px;}
+/* Vocabulary: a typographic catalogue with existing search, status and detail pane. */
+.wordloop-shell .vocabulary-toolbar {
+  background:transparent;
+  border:0;
+  border-radius:0;
+  padding:0 0 1.2rem;
+  box-shadow:none;
+}
+.wordloop-shell .vocabulary-search-row input {
+  background:var(--material-solid);
+  border:1px solid var(--separator-strong);
+  border-radius:5px;
+  min-height:47px;
+  color:var(--text);
+}
+.wordloop-shell .vocabulary-search-row input:focus {border-color:var(--accent);outline:2px solid var(--focus);}
+.wordloop-shell .vocabulary-filter-group {gap:.45rem;}
+.wordloop-shell .vocabulary-filter-group button {
+  border:1px solid var(--separator);
+  border-radius:4px;
+  background:transparent;
+  color:var(--muted);
+  min-height:37px;
+}
+.wordloop-shell .vocabulary-filter-group button[aria-pressed="true"] {
+  border-color:var(--accent);
+  background:var(--control);
+  color:var(--accent);
+}
+.wordloop-shell .vocabulary-list-pane {
+  background:var(--material-solid);
+  border:1px solid var(--separator);
+  border-radius:5px;
+  padding:0;
+  box-shadow:none;
+}
+.wordloop-shell .vocabulary-list {
+  margin:0;
+  padding:0;
+}
+.wordloop-shell .vocabulary-list-item {
+  min-height:63px;
+  border:0;
+  border-bottom:1px solid var(--separator);
+  border-radius:0;
+  background:transparent;
+  padding:.8rem 1.05rem;
+  transition:background 150ms ease;
+}
+.wordloop-shell .vocabulary-list-item[aria-current="true"] {
+  background:var(--control);
+  border-left:3px solid var(--accent);
+  padding-left:calc(1.05rem - 3px);
+}
+.wordloop-shell .vocabulary-word-main strong {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:1.27rem;
+  line-height:1.25;
+  font-weight:500;
+  letter-spacing:-.02em;
+}
+.wordloop-shell .vocabulary-word-state {
+  border-radius:3px;
+  font-size:.69rem;
+}
+.wordloop-shell .word-detail-panel {
+  background:var(--material-solid);
+  border:1px solid var(--separator);
+  border-radius:5px;
+  box-shadow:none;
+}
+.wordloop-shell .word-detail-header {
+  padding:1.1rem 1.35rem;
+  border-bottom:1px solid var(--separator);
+}
+.wordloop-shell .word-detail-header h2 {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(2.7rem,4vw,4.15rem);
+  font-weight:400;
+  line-height:1;
+}
+.wordloop-shell .word-detail-scroll {padding:1.3rem 1.45rem;}
+.wordloop-shell .word-detail-section {
+  margin:1.2rem 0 0;
+  padding:1.15rem 0 0;
+  border-top:1px solid var(--separator);
+}
+.wordloop-shell .word-detail-section h3 {
+  font-size:.78rem;font-weight:700;letter-spacing:.04em;
+}
+.wordloop-shell .word-memory-grid > div {
+  border:0;
+  border-right:1px solid var(--separator);
+  border-radius:0;
+  background:transparent;
+}
+.wordloop-shell .word-memory-grid dd {
+  font-family:"Baskerville",Georgia,serif;
+  font-weight:400;
+  font-size:1.7rem;
+}
+.wordloop-shell .word-history-list li,
+.wordloop-shell .word-capture-note {border-bottom:1px solid var(--separator);}
+/* Capture: quotes are the main content. Existing edit/search/filter/pagination retained. */
+.wordloop-shell .capture-notes-page {
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  padding:0;
+}
+.wordloop-shell .capture-notes-page > .widget-header {
+  padding-bottom:1.15rem;
+  border-bottom:1px solid var(--separator-strong);
+}
+.wordloop-shell .capture-tabs {
+  border-bottom:1px solid var(--separator-strong);
+  gap:1.15rem;
+}
+.wordloop-shell .capture-tabs button {
+  min-height:44px;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:var(--muted);
+  font-size:.82rem;
+}
+.wordloop-shell .capture-tabs button.active {
+  border-bottom-color:var(--accent);
+  background:transparent;
+  color:var(--accent);
+  font-weight:650;
+}
+.wordloop-shell .capture-toolbar input {
+  background:var(--material-solid);
+  border:1px solid var(--separator-strong);
+  border-radius:4px;
+  min-height:42px;
+}
+.wordloop-shell .capture-content-grid {gap:1rem;}
+.wordloop-shell .capture-list-pane {
+  border:1px solid var(--separator);
+  border-radius:5px;
+  background:var(--material-solid);
+  padding:0;
+  overflow:hidden;
+}
+.wordloop-shell .capture-note-list {
+  gap:0;
+  margin:0;
+  padding:0;
+}
+.wordloop-shell .capture-note-card {
+  border:0;
+  border-bottom:1px solid var(--separator);
+  border-radius:0;
+  padding:1.1rem 1.25rem;
+  background:transparent;
+}
+.wordloop-shell .capture-note-card.active {
+  background:var(--control);
+  border-left:3px solid var(--accent);
+  padding-left:calc(1.25rem - 3px);
+}
+.wordloop-shell .capture-note-card:hover {background:var(--control);}
+.wordloop-shell .capture-note-heading {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:1.16rem;
+  font-weight:400;
+  letter-spacing:-.015em;
+  line-height:1.5;
+}
+.wordloop-shell .capture-meta {font-size:.68rem;color:var(--muted);}
+.wordloop-shell .capture-state-badge {border-radius:3px;}
+.wordloop-shell .capture-context {border:0;border-left:2px solid var(--separator-strong);border-radius:0;padding:.7rem 1rem;background:var(--control);}
+.wordloop-shell .capture-detail {
+  background:var(--material-solid);
+  border:1px solid var(--separator);
+  border-radius:5px;
+}
+.wordloop-shell .capture-detail h2 {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(1.6rem,3vw,2.5rem);
+  font-weight:400;
+}
+.wordloop-shell .capture-occurrence {border-radius:4px;}
+.wordloop-shell .note-review-page {
+  background:transparent;
+  border:0;
+  border-radius:0;
+  padding:0;
+  box-shadow:none;
+}
+.wordloop-shell .note-review-card {
+  width:min(100%,56rem);
+  border:1px solid var(--separator-strong);
+  border-radius:5px;
+  background:var(--material-solid);
+  box-shadow:none;
+}
+.wordloop-shell .note-review-prompt,
+.wordloop-shell .note-review-front h2 {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(1.7rem,4vw,3rem);
+  font-weight:400;
+}
+.wordloop-shell .note-review-actions .button {
+  border-radius:4px;
+}
+/* Settings: a considered editor, not glassmorphic UI. */
+.wordloop-shell .settings-overlay {background:#0b2035a8;}
+.wordloop-shell .settings-sheet {
+  border:1px solid var(--separator);
+  background:var(--material-solid);
+  border-radius:7px;
+  box-shadow:0 18px 55px #081a2c30;
+}
+.wordloop-shell .settings-sheet > header {padding-bottom:1rem;border-bottom:1px solid var(--separator);}
+.wordloop-shell .settings-sheet > header h2 {
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;
+  font-size:1.7rem;font-weight:500;
+}
+.wordloop-shell .settings-section {padding:1.25rem 0;border-top:1px solid var(--separator);}
+.wordloop-shell .settings-section h3 {font-size:.85rem;font-weight:660;}
+.wordloop-shell .appearance-options button {
+  min-height:44px;border-radius:4px;border-color:var(--separator);
+}
+.wordloop-shell .appearance-options button[aria-pressed="true"] {
+  border-color:var(--accent);color:var(--accent);background:var(--control);
+}
+@media(max-width:767px) {
+  .wordloop-shell .page-heading:not(.today-editorial-heading) h1 {font-size:2.15rem;}
+  .wordloop-shell .insight-panel {padding:1.15rem;border-radius:4px;}
+  .wordloop-shell .insight-metric-grid {gap:0;}
+  .wordloop-shell .insight-metric {padding:.8rem .5rem .8rem 0;min-width:0;}
+  .wordloop-shell .insight-metric:not(:first-child) {padding-left:.6rem;}
+  .wordloop-shell .insight-metric > strong {font-size:1.75rem;}
+  .wordloop-shell .insight-metric > span {font-size:.72rem;}
+  .wordloop-shell .vocabulary-toolbar {padding:0 0 1rem;}
+  .wordloop-shell .vocabulary-list-item {padding:.8rem;}
+  .wordloop-shell .vocabulary-list-item[aria-current="true"] {padding-left:calc(.8rem - 3px);}
+  .wordloop-shell .vocabulary-word-main strong {font-size:1.2rem;}
+  .wordloop-shell .capture-notes-page {padding:0;}
+  .wordloop-shell .capture-note-card {padding:1rem;}
+  .wordloop-shell .capture-note-card.active {padding-left:calc(1rem - 3px);}
+  .wordloop-shell .word-detail-panel {border-radius:0;}
+  .wordloop-shell .note-review-card {border-radius:4px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .wordloop-shell .vocabulary-list-item,
+  .wordloop-shell .capture-note-card {transition:none;}
+}
+
