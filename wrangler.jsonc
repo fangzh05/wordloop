@@ -8,6 +8,10 @@
     {
       "pattern": "test.zehaoo.top",
       "custom_domain": true
+    },
+    {
+      "pattern": "wordloop.zehaoo.top",
+      "custom_domain": true
     }
   ],
   "vars": {
