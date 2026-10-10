@@ -17,5 +17,5 @@ await build({
 });
 await copyFile("web/src/styles.css",path.join(dest,"styles.css"));
 await writeFile(path.join(dest,"index.html"),
- '<!doctype html><html lang="zh-CN" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><style>.visual-fixture-stamp{position:fixed;z-index:99999;right:12px;bottom:11px;padding:5px 9px;font:10px/1.3 monospace;background:#0c2a40;color:#fff;opacity:.86;pointer-events:none}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>');
+ '<!doctype html><html lang="zh-CN" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><style>.visual-fixture-stamp{display:block;position:static;width:max-content;max-width:calc(100% - 20px);margin:24px 10px 8px auto;padding:5px 9px;font:10px/1.3 monospace;background:#0c2a40;color:#fff;opacity:.86;pointer-events:none}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>');
 console.log("Built actual-source React component fixture:",dest);
