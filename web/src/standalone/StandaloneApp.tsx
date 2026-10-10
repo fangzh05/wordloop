@@ -565,7 +565,7 @@ export function StandaloneReviewWorkspace({ item, direction, currentIndex, total
           onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy) return; onSubmit(); } }} />
         <StandaloneReviewFeedback notice={notice} noticeIndex={noticeIndex} currentIndex={currentIndex} />
         <div className="review-answer-bottom">
-          <button className="review-unknown-button" type="button" disabled={busy} onClick={onUnknown}>暂时想不起来<span aria-hidden="true"> ↗</span></button>
+          <Button className="secondary review-unknown-button" type="button" disabled={busy} onClick={onUnknown}>不会</Button>
           <Button className="review-submit-button" type="button" disabled={busy || !answer.trim()} onClick={onSubmit}>确认回答 <span aria-hidden="true">→</span></Button>
         </div>
         <p className="review-keyboard-note">按 Enter 提交 · 忘记时可以跳过</p>
@@ -619,10 +619,10 @@ export function StandaloneLessonExplanation({ title, displayTitle, progressLabel
           <summary>译文</summary><p className="standalone-reading-width">{exampleZh}</p>
         </details>}
       </section>}
-      {derivations.length > 0 && <section className="lesson-reference-section lesson-reference-derivations">
+      <section className="lesson-reference-section lesson-reference-derivations">
         <div className="lesson-reference-family-heading"><h2>WORD FAMILY</h2><FamilyEntry word={title} disabled={busy} /></div>
-        <ul>{derivations.map(value=><li key={value}>{value}</li>)}</ul>
-      </section>}
+        {derivations.length > 0 && <ul>{derivations.map(value=><li key={value}>{value}</li>)}</ul>}
+      </section>
       {note && <section className="lesson-reference-section lesson-reference-note">
         <h2>NOTE</h2><p className="standalone-reading-width">{note}</p>
       </section>}
