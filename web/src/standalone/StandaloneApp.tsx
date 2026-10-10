@@ -518,9 +518,15 @@ export function StandaloneReviewHeader({ currentIndex, total, complete, onBack }
   complete: boolean;
   onBack: () => void;
 }): React.JSX.Element {
-  return <header className="widget-header compact-header">
-    <div className="standalone-study-heading"><StandaloneStudyBackButton onBack={onBack} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">复习</h1></div></div>
-    <span className="standalone-count">{complete ? total : `${Math.min(currentIndex + 1, total)} / ${total}`}</span>
+  const current = complete ? total : Math.min(currentIndex + 1, total);
+  return <header className="widget-header compact-header review-editorial-header">
+    <div className="standalone-study-heading"><StandaloneStudyBackButton onBack={onBack} />
+      <div><span className="eyebrow">WORDLOOP / SPACED REVIEW</span><h1 id="study-title">记忆复习</h1></div>
+    </div>
+    <div className="review-page-count"><span>SESSION PROGRESS</span><strong>{String(current).padStart(2,"0")} <i>/</i> {String(total).padStart(2,"0")}</strong></div>
+    <div className="review-page-progress" role="progressbar" aria-label="复习进度" aria-valuemin={0} aria-valuemax={Math.max(1,total)} aria-valuenow={current}>
+      <span style={{width:`${total>0?Math.min(100,current/total*100):0}%`}} />
+    </div>
   </header>;
 }
 
