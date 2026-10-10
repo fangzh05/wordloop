@@ -29,16 +29,17 @@ describe("Capture note review migration contract", () => {
     expect(migration).not.toMatch(/delete\s+from\s+public\.note_review_states/i);
   });
 
-  it("keeps the database server-only and is included in setup and Site bundling", () => {
+  it("keeps the database server-only and includes it in setup and Worker asset builds", () => {
     expect(migration).toContain("alter table public.note_review_states enable row level security");
     expect(migration).toContain("alter table public.note_review_events enable row level security");
     expect(migration).toMatch(/revoke all on public\.note_review_states, public\.note_review_events from public, anon, authenticated/i);
     expect(migration).toMatch(/grant execute on function public\.record_note_review_rating_v1[\s\S]*to service_role/i);
     const setup = readFileSync(new URL("../setup.sql", import.meta.url), "utf8").replace(/\r\n/gu, "\n");
-    const builder = readFileSync(new URL("../scripts/build-sites-worker.ts", import.meta.url), "utf8");
+    const builder = readFileSync(new URL("../scripts/build-worker.ts", import.meta.url), "utf8");
     const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
     expect(setup).toContain(migration.replace(/\r\n/gu, "\n").trim());
-    expect(builder).toContain("202610020001_note_review_states.sql");
+    expect(builder).toContain('readdir(path.join(root, "supabase", "migrations"))');
+    expect(builder).toContain('.filter((name) => name.endsWith(".sql"))');
     expect(readme).toContain("202610020001_note_review_states.sql");
   });
 });

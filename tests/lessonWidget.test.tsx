@@ -434,6 +434,22 @@ describe("guided lesson widget", () => {
     expect(parsed.data.future_server_field).toBe("x");
   });
 
+  it("rejects exact-cloze payloads that reveal the target or use a non-English prompt", () => {
+    const valid = {
+      widget: "lesson",
+      mode: "exercise",
+      word: "empire",
+      progress: "1 / 1",
+      activity_type: "exact_cloze",
+      instruction: "根据语境填入目标词。提示：帝国；大型商业集团",
+      prompt: "After a series of acquisitions, the startup quickly grew into a vast media ___.",
+      multiline: false,
+    };
+    expect(lessonPayloadSchema.safeParse(valid).success).toBe(true);
+    expect(lessonPayloadSchema.safeParse({ ...valid, instruction: "Use empire in this sentence." }).success).toBe(false);
+    expect(lessonPayloadSchema.safeParse({ ...valid, prompt: "这家公司迅速成长为庞大的媒体 empire ___。" }).success).toBe(false);
+  });
+
   it("turns missing required payload data into a visible compatibility error", () => {
     const parsed = lessonPayloadSchema.safeParse({
       widget: "lesson",

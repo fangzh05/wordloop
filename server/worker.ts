@@ -6,36 +6,34 @@ import { createWordloopMcpServer, type WidgetKind } from "./mcpCore.js";
 import { LESSON_WIDGET_VERSION } from "../shared/toolContracts.js";
 import { handleWebApiRequest } from "./webApi.js";
 
-declare const __SITE_HTML__: string;
-declare const __SITE_CSS__: string;
-declare const __SITE_JS__: string;
-declare const __FAMILY_JS__: string;
-declare const __SITE_MANIFEST__: string;
-declare const __WIDGET_JS__: Record<WidgetKind, string>;
-declare const __WIDGET_CSS__: string;
-declare const __MIGRATION_SQL__: string;
+type AssetBinding = { fetch(request: Request): Promise<Response> };
 
 type WorkerEnv = {
+  ASSETS?: AssetBinding;
   SUPABASE_URL?: string;
+  SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   DEV_USER_ID?: string;
   MERRIAM_WEBSTER_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
   WORDLOOP_WEB_TOKEN?: string;
+  SHANBAY_IMPORT_WORKER_URL?: string;
+  SHANBAY_IMPORT_BRIDGE_SECRET?: string;
 };
 
-const siteHtml = typeof __SITE_HTML__ === "string" ? __SITE_HTML__ : "<!doctype html><title>Wordloop</title>";
-const siteCss = typeof __SITE_CSS__ === "string" ? __SITE_CSS__ : "";
-const siteJs = typeof __SITE_JS__ === "string" ? __SITE_JS__ : "";
-const familyJs = typeof __FAMILY_JS__ === "string" ? __FAMILY_JS__ : "";
-const siteManifest = typeof __SITE_MANIFEST__ === "string" ? __SITE_MANIFEST__ : "{}";
-const widgetJs: Partial<Record<WidgetKind, string>> = typeof __WIDGET_JS__ === "object" && __WIDGET_JS__ !== null ? __WIDGET_JS__ : {};
-const widgetCss = typeof __WIDGET_CSS__ === "string" ? __WIDGET_CSS__ : "";
-const migrationSql = typeof __MIGRATION_SQL__ === "string" ? __MIGRATION_SQL__ : "-- Wordloop migration is embedded when the Site is built.\n";
-
-function widgetHtml(kind: WidgetKind): Promise<string> {
+async function widgetHtml(kind: WidgetKind, assets?: AssetBinding): Promise<string> {
+  if (!assets) throw new Error("Wordloop static assets are not configured.");
+  const assetText = async (pathname: string): Promise<string> => {
+    const asset = await assets.fetch(new Request(`https://wordloop-assets.internal${pathname}`));
+    if (!asset.ok) throw new Error(`Wordloop widget asset is unavailable: ${pathname}`);
+    return asset.text();
+  };
+  const [widgetCss, widgetJs] = await Promise.all([
+    assetText("/widgets/widget.css"),
+    assetText(`/widgets/${kind}.js`),
+  ]);
   const versionAttribute = kind === "lesson" ? ` data-widget-version="${LESSON_WIDGET_VERSION}"` : "";
-  return Promise.resolve(`<!doctype html><html${versionAttribute}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="wordloop-widget" content="${kind}"><style>${widgetCss}</style></head><body><div id="root"></div><script>${widgetJs[kind] ?? ""}</script></body></html>`);
+  return `<!doctype html><html${versionAttribute}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="wordloop-widget" content="${kind}"><style>${widgetCss}</style></head><body><div id="root"></div><script>${widgetJs}</script></body></html>`;
 }
 
 function response(body: BodyInit | null, contentType: string, status = 200): Response {
@@ -62,12 +60,6 @@ function withCors(source: Response): Response {
 export const worker = {
   async fetch(request: Request, env: WorkerEnv, _context?: unknown): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method === "GET" && ["/", "/login", "/owner", "/reset-password", "/update-password"].includes(url.pathname)) return response(siteHtml, "text/html; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/family.js") return response(familyJs, "application/javascript; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/styles.css") return response(siteCss, "text/css; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/app.js") return response(siteJs, "text/javascript; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/manifest.webmanifest") return response(siteManifest, "application/manifest+json; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/setup.sql") return response(migrationSql, "text/plain; charset=utf-8");
     if (request.method === "GET" && url.pathname === "/health") {
       return response(JSON.stringify({ name: "wordloop", status: "ok", mcp: "/api/mcp", version: "0.1.0" }), "application/json; charset=utf-8");
     }
@@ -79,7 +71,11 @@ export const worker = {
     if (url.pathname.startsWith("/api/web/")) return handleWebApiRequest(request);
     // GPT Sites reserves /mcp before requests reach the Worker. Keep the standard
     // Streamable HTTP protocol on a non-reserved public path instead.
-    if (url.pathname !== "/api/mcp") return response("Not found", "text/plain; charset=utf-8", 404);
+    if (url.pathname !== "/api/mcp") {
+      if (url.pathname.startsWith("/api/")) return response("Not found", "text/plain; charset=utf-8", 404);
+      if (env.ASSETS) return env.ASSETS.fetch(request);
+      return response("Not found", "text/plain; charset=utf-8", 404);
+    }
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
     try {
@@ -91,7 +87,7 @@ export const worker = {
         throw new WebAuthError(403, "FORBIDDEN", "此导入仅供管理员使用。");
       }
       const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
-      const server = createWordloopMcpServer(widgetHtml);
+      const server = createWordloopMcpServer((kind) => widgetHtml(kind, env.ASSETS));
       await server.connect(transport);
       return withCors(await (userId ? withUserIdentity(userId, () => transport.handleRequest(request)) : transport.handleRequest(request)));
     } catch (error) {

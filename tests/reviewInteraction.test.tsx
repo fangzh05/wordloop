@@ -85,7 +85,7 @@ describe("ReviewQuestion", () => {
   it("renders immediately and only checks sampling for legacy English-definition cards", () => {
     const source = readFileSync(new URL("../web/src/review/ReviewWidget.tsx", import.meta.url), "utf8");
     const initialize = source.slice(source.indexOf("function initializePayload"), source.indexOf("useEffect(() => subscribeToApp"));
-    expect(initialize).toContain("setPayload(nextPayload)");
+    expect(initialize).toContain("setPayload(safePayload)");
     expect(initialize).toContain("setIndex(Math.min(persistedIndex");
     expect(initialize).not.toContain("await getSamplingAvailability");
     expect(initialize).toContain('entry.direction === "en_definition"');

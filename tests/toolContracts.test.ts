@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   advanceStudySessionSchema,
   activityTypeSchema,
+  containsTargetWord,
   emptyToolArgsSchema,
+  isValidExactClozePrompt,
   lessonNavigationSchema,
   lessonSubmissionSchema,
   pretestMarkFamiliarSchema,
@@ -32,6 +34,17 @@ function reviewItem(direction: (typeof directions)[number], review_kind: (typeof
 }
 
 describe("Widget to tool contracts", () => {
+  it("requires a natural English exact-cloze sentence and keeps the target out of its cue", () => {
+    expect(isValidExactClozePrompt("After a series of acquisitions, the startup quickly grew into a vast media ___.")).toBe(true);
+    expect(isValidExactClozePrompt("After the storm, workers checked whether ___ remained secure inside the public hall.")).toBe(true);
+    expect(isValidExactClozePrompt("After a series of acquisitions, the company became a media ___ (帝国；大型商业集团)." )).toBe(true);
+    expect(isValidExactClozePrompt("经过收购，这家公司成了媒体 ___。" )).toBe(false);
+    expect(isValidExactClozePrompt("A tea ___ supports local farms.")).toBe(false);
+    expect(isValidExactClozePrompt("Workers checked ___ and ___ after the storm.")).toBe(false);
+    expect(containsTargetWord("This is an empire in a sentence.", "empire")).toBe(true);
+    expect(containsTargetWord("The imperial family arrived.", "empire")).toBe(false);
+  });
+
   it("accepts persisted fixed-cloze and semantic-expression activity types", () => {
     expect(activityTypeSchema.parse("exact_cloze")).toBe("exact_cloze");
     expect(activityTypeSchema.parse("semantic_expression")).toBe("semantic_expression");
@@ -179,7 +192,7 @@ describe("Widget to tool contracts", () => {
       activityType: "exact_cloze",
       prompt: "After a series of acquisitions, the startup quickly grew into a vast media ___.",
       answer: "Empire",
-    })).toContain("accepted_answers 仅为上方目标词");
+    })).toContain("accepted_answers 不可补充到工具参数或聊天文本");
 
     for (const event of ["lesson_start_exercise", "lesson_retry", "lesson_complete"] as const) {
       const advance = buildLessonSessionAdvance(event);

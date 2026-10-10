@@ -33,9 +33,9 @@ describe("captured Notes migration contract", () => {
     expect(migration).toMatch(/grant execute on function public\.promote_captured_note_v1\(uuid, uuid, date, text\) to service_role/i);
   });
 
-  it("includes the migration in setup.sql and the Sites worker bundle", () => {
+  it("includes the migration in setup.sql and the Worker asset build", () => {
     const setup = readFileSync(new URL("../setup.sql", import.meta.url), "utf8").replace(/\r\n/gu, "\n").trimEnd();
-    const builder = readFileSync(new URL("../scripts/build-sites-worker.ts", import.meta.url), "utf8");
+    const builder = readFileSync(new URL("../scripts/build-worker.ts", import.meta.url), "utf8");
     const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
     expect(setup).toContain("create table public.captured_notes (");
     expect(setup).toContain("create or replace function public.captured_notes_schema_v1");
@@ -47,10 +47,10 @@ describe("captured Notes migration contract", () => {
     ]) {
       const currentMigration = readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/\r\n/gu, "\n").trim();
       expect(setup).toContain(currentMigration);
-      expect(builder).toContain(name);
       expect(readme).toContain(name);
     }
-    expect(builder).toContain("20260929120641_captured_notes.sql");
+    expect(builder).toContain('readdir(path.join(root, "supabase", "migrations"))');
+    expect(builder).toContain('.filter((name) => name.endsWith(".sql"))');
     expect(readme).toContain("20260929120641_captured_notes.sql");
   });
 });

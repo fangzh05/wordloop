@@ -1067,9 +1067,20 @@ describe("strict resumable widget schemas", () => {
       activity_type: "exact_cloze",
       instruction: "根据语境填入目标词。提示：帝国；大型商业集团",
       prompt: "After a series of acquisitions, the startup quickly grew into a vast media ___.",
+      accepted_answers: ["empire"],
       multiline: false,
     };
     expect(lessonInputSchema.safeParse({ ...base, word: "empire", exercise: exactCloze }).success).toBe(true);
+    expect(lessonInputSchema.safeParse({
+      ...base,
+      word: "empire",
+      exercise: { ...exactCloze, instruction: "Use empire in this sentence." },
+    }).success).toBe(false);
+    expect(lessonInputSchema.safeParse({
+      ...base,
+      word: "empire",
+      exercise: { ...exactCloze, prompt: "After the acquisitions, this firm became a vast media empire ___." },
+    }).success).toBe(false);
     const mixedLanguageCloze = lessonInputSchema.safeParse({
       ...base,
       word: "empire",

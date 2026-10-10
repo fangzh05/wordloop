@@ -4,8 +4,16 @@ import { LESSON_WIDGET_VERSION } from "../shared/toolContracts.js";
 import { WIDGET_URIS } from "../server/tools/renderWidgets.js";
 
 const testOrigin = "https://wordloop.test";
+const assets = {
+  async fetch(request: Request): Promise<Response> {
+    const pathname = new URL(request.url).pathname;
+    if (pathname === "/" || pathname === "/login") return new Response("<!doctype html><title>Wordloop</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
+    if (pathname === "/manifest.webmanifest") return new Response("{}", { headers: { "content-type": "application/manifest+json; charset=utf-8" } });
+    return new Response("asset not found", { status: 404 });
+  },
+};
 
-describe("Sites Worker", () => {
+describe("Cloudflare Worker", () => {
   it("requires identity before any MCP tool call, including a batched call", async () => {
     for (const body of [{ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_progress", arguments: {} } }, [{ jsonrpc: "2.0", id: 1, method: "tools/list" }, { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_progress", arguments: {} } }]]) {
       const result = await worker.fetch(new Request(`${testOrigin}/api/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), {});
@@ -24,15 +32,13 @@ describe("Sites Worker", () => {
     });
   });
 
-  it("serves the standalone PWA shell and manifest with static caching", async () => {
-    const html = await worker.fetch(new Request(`${testOrigin}/`), {});
+  it("serves the standalone PWA shell and manifest through the static asset binding", async () => {
+    const html = await worker.fetch(new Request(`${testOrigin}/`), { ASSETS: assets });
     expect(html.status).toBe(200);
-    expect(html.headers.get("cache-control")).toBe("no-cache");
     expect(await html.text()).toContain("Wordloop");
 
-    const manifest = await worker.fetch(new Request(`${testOrigin}/manifest.webmanifest`), {});
+    const manifest = await worker.fetch(new Request(`${testOrigin}/manifest.webmanifest`), { ASSETS: assets });
     expect(manifest.headers.get("content-type")).toContain("application/manifest+json");
-    expect(manifest.headers.get("cache-control")).toBe("public, max-age=3600");
     await expect(manifest.json()).resolves.toEqual({});
   });
 

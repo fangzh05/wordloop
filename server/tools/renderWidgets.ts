@@ -40,6 +40,8 @@ import type { ReviewVocabularyItem, StudyPhase, StudySessionRow, StudyState, Voc
 import {
   REVIEW_SESSION_MAX,
   LESSON_WIDGET_VERSION,
+  containsTargetWord,
+  isValidExactClozePrompt,
   normalizeReviewWidgetPayload,
   reviewWidgetItemSchema,
   reviewWidgetPayloadSchema,
@@ -105,6 +107,44 @@ const pretestToolInputSchema = z.object({
   items: z.array(pretestItem).min(1).max(7).optional(),
   title: z.string().trim().min(1).max(100).optional(),
 }).strict();
+function validateExactClozePrompt(
+  value: { activity_type: string; prompt: string },
+  context: z.RefinementCtx,
+  pathPrefix: Array<string | number> = [],
+): void {
+  if (value.activity_type !== "exact_cloze") return;
+  if (!isValidExactClozePrompt(value.prompt)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze prompt must be a natural English sentence.",
+      path: [...pathPrefix, "prompt"],
+    });
+  }
+}
+
+function validateExactClozeTargetExposure(
+  word: string,
+  exercise: { activity_type: string; instruction: string; prompt: string },
+  context: z.RefinementCtx,
+  pathPrefix: Array<string | number> = [],
+): void {
+  if (exercise.activity_type !== "exact_cloze") return;
+  if (containsTargetWord(exercise.instruction, word)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze instruction must not reveal the target word.",
+      path: [...pathPrefix, "instruction"],
+    });
+  }
+  if (containsTargetWord(exercise.prompt, word)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze prompt must not reveal the target word.",
+      path: [...pathPrefix, "prompt"],
+    });
+  }
+}
+
 const lessonExercise = z.object({
   activity_type: z.string().trim().min(1).max(80),
   instruction: z.string().trim().min(1).max(300),
@@ -124,6 +164,7 @@ const lessonExercise = z.object({
   if (value.activity_type === "translation_en_to_cn" && !/[A-Za-z]/.test(value.prompt)) {
     context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["prompt"] });
   }
+  validateExactClozePrompt(value, context);
 });
 const lessonFeedback = z.object({
   is_correct: z.boolean(),
@@ -173,7 +214,9 @@ const explainPayload = z.object({
   example_zh: z.string().trim().min(1).max(1000).optional(),
   note: z.string().trim().min(1).max(1000),
   exercise: lessonExercise,
-}).strict();
+}).strict().superRefine((value, context) => {
+  validateExactClozeTargetExposure(value.word, value.exercise, context, ["exercise"]);
+});
 const exercisePayload = z.object({
   ...lessonCommon,
   mode: z.literal("exercise"),
@@ -192,6 +235,8 @@ const exercisePayload = z.object({
   if (value.activity_type === "exact_cloze" && !value.accepted_answers?.length) {
     context.addIssue({ code: "custom", message: "LESSON_EXERCISE_INVALID", path: ["accepted_answers"] });
   }
+  validateExactClozePrompt(value, context);
+  validateExactClozeTargetExposure(value.word, value, context);
 });
 const feedbackPayload = z.object({
   ...lessonCommon,
@@ -201,7 +246,9 @@ const feedbackPayload = z.object({
   progress: z.string().trim().min(1).max(40),
   exercise: lessonExercise,
   feedback: lessonFeedback,
-}).strict();
+}).strict().superRefine((value, context) => {
+  validateExactClozeTargetExposure(value.word, value.exercise, context, ["exercise"]);
+});
 const lessonPayload = z.discriminatedUnion("mode", [explainPayload, exercisePayload, feedbackPayload]);
 const lessonInput = z.union([lessonPayload, z.object({ resume: z.literal(true) }).strict()]);
 const feedbackToolPayload = z.object({

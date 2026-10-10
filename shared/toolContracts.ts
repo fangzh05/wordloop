@@ -28,6 +28,33 @@ export const ACTIVITY_TYPES = [
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 export const activityTypeSchema = z.enum(ACTIVITY_TYPES);
 
+/** Allow brief Chinese hints only in parentheses, while keeping the exercise sentence English. */
+export function isValidExactClozePrompt(prompt: string): boolean {
+  if ((prompt.match(/___/gu) ?? []).length !== 1) return false;
+  const sentence = prompt
+    .replace(/\([^()]*\)|（[^（）]*）/gu, " ")
+    .replace(/___/gu, " ")
+    .trim();
+  const englishWords = sentence.match(/[A-Za-z]+(?:['’][A-Za-z]+)*/gu) ?? [];
+  const parentheticalHints = [...prompt.matchAll(/\(([^()]*)\)|（([^（）]*)）/gu)]
+    .map((match) => match[1] ?? match[2] ?? "")
+    .join(" ");
+  const chineseHintCharacters = parentheticalHints.match(/\p{Script=Han}/gu) ?? [];
+  return englishWords.length >= 6
+    && englishWords.length <= 20
+    && !/\p{Script=Han}/u.test(sentence)
+    && chineseHintCharacters.length <= 24
+    && /[.!?]["'’”]?$/.test(sentence);
+}
+
+/** Match the complete English target as a word or phrase, without matching substrings. */
+export function containsTargetWord(text: string, target: string): boolean {
+  const cleanTarget = target.trim();
+  if (!cleanTarget) return false;
+  const escapedTarget = cleanTarget.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapedTarget}(?=$|[^\\p{L}\\p{N}])`, "iu").test(text);
+}
+
 export const LESSON_PROFILES = ["quick_recall", "reinforce", "targeted_relearn"] as const;
 export type LessonProfile = (typeof LESSON_PROFILES)[number];
 export const lessonProfileSchema = z.enum(LESSON_PROFILES);

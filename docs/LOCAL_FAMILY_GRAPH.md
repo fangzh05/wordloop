@@ -26,7 +26,7 @@
 | `scripts/import-family-seed.ts` | 显式管理员知识数据导入，无学习卡写入 |
 | `scripts/check-db-schema.ts` | 新表与 Family schema/RPC 安装检查 |
 | `scripts/build-widgets.ts` | 独立引擎包、内容哈希版本、MIT notice |
-| `scripts/build-sites-worker.ts` | 引擎及 SQL migration 打包 |
+| `scripts/build-worker.ts` | Cloudflare Worker 入口与静态资源打包 |
 | `server/data/familySeed.json` | 21 lexeme / 17 relation 的审核集 |
 | `server/data/ATTRIBUTION.md` | 来源、改编说明、许可和编辑评分说明 |
 | `server/data/licenses/OEWN-LICENSE.md` | 官方 OEWN CC BY 4.0 notice |

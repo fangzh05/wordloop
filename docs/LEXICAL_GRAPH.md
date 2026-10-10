@@ -110,7 +110,9 @@ npx --yes --package @playwright/cli@0.1.22 playwright-cli -s=lexical-qa close
 
 ## 发布步骤与回滚
 
-1. 重新读取远端和 Sites 当前源码 SHA，确认生产此后更新都包含在待发布分支。保留现有 `.openai/hosting.json` project_id；不要从旧 main 替换站点源码。
+> 以下流程记录该功能原先通过 GPT Sites 发布时的检查步骤，仅用于理解旧部署或执行旧地址回滚。Cloudflare Workers 发布流程见 `docs/CLOUDFLARE_WORKERS.md`；此分支不读取 `.openai/hosting.json`。
+
+1. 对旧 Sites 地址回滚时，重新读取远端和 Sites 当前源码 SHA，保留原 `.openai/hosting.json` project_id；不要从旧 main 替换站点源码。
 2. 在独立验证库先应用本 migration 并导入 `.qa/lexical-core.sql`，运行相同 SQL/API/UI gates。生产变更必须在后续明确发布请求下执行。
 3. 应用生产增量 migration；审核来源/许可 notice，运行 source verifier；在管理员事务中导入知识 SQL。前后比较 `user_words`、`user_skill_state` 和 `study_sessions`，不接触其内容。
 4. 运行 `npm run check:db`；typecheck/test/build/Inspector 全部通过后，将**同一个精确 SHA**推送到 GitHub 和现有 Sites 绑定源码。
@@ -133,7 +135,7 @@ npx --yes --package @playwright/cli@0.1.22 playwright-cli -s=lexical-qa close
 | `scripts/verify-lexical-sources.ts` | 原始固定修订及用法资料校验 |
 | `scripts/lib/familyImportSql.ts` | 安全 lexical-only transport 的增量 allowlist |
 | `scripts/check-db-schema.ts` | 新表/字段检查 |
-| `scripts/build-sites-worker.ts` | 包含增量迁移的部署 artifact |
+| `scripts/build-worker.ts` | Worker 脚本与静态资源构建 |
 | `server/data/lexicalReviewed.json` | 有限审核词源与 Sense/用法来源 |
 | `server/data/lexicalCore.json` | 公开 OEWN 抽样 fixture |
 | `server/data/lexicalCoreDictionary.json` | 固定 ECDICT 核心双语 QA 数据 |

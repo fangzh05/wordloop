@@ -8,6 +8,8 @@ import { z } from "zod";
 import {
   LESSON_WIDGET_VERSION,
   advanceStudySessionSchema,
+  containsTargetWord,
+  isValidExactClozePrompt,
   lessonNavigationSchema,
   lessonSubmissionSchema,
   type AdvanceStudySessionInput,
@@ -19,6 +21,44 @@ export { LESSON_WIDGET_VERSION } from "../../../shared/toolContracts.js";
 
 export const LESSON_WIDGET_LOAD_ERROR = "WordLoop 学习卡数据不完整，请重新进入学习。";
 export const LESSON_WIDGET_REFRESH_ERROR = "WordLoop 未能刷新学习卡，请重试。";
+
+function validateExactClozePrompt(
+  value: { activity_type: string; prompt: string },
+  context: z.RefinementCtx,
+  pathPrefix: Array<string | number> = [],
+): void {
+  if (value.activity_type !== "exact_cloze") return;
+  if (!isValidExactClozePrompt(value.prompt)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze prompt must be a natural English sentence.",
+      path: [...pathPrefix, "prompt"],
+    });
+  }
+}
+
+function validateExactClozeTargetExposure(
+  word: string,
+  exercise: { activity_type: string; instruction: string; prompt: string },
+  context: z.RefinementCtx,
+  pathPrefix: Array<string | number> = [],
+): void {
+  if (exercise.activity_type !== "exact_cloze") return;
+  if (containsTargetWord(exercise.instruction, word)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze instruction must not reveal the target word.",
+      path: [...pathPrefix, "instruction"],
+    });
+  }
+  if (containsTargetWord(exercise.prompt, word)) {
+    context.addIssue({
+      code: "custom",
+      message: "An exact_cloze prompt must not reveal the target word.",
+      path: [...pathPrefix, "prompt"],
+    });
+  }
+}
 export const LESSON_MOUNT_RECOVERY_DELAY_MS = 600;
 export const LESSON_VISIBILITY_RECOVERY_DELAY_MS = 300;
 
@@ -64,7 +104,9 @@ const exerciseSchema = z.object({
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  validateExactClozePrompt(value, context);
+});
 
 const feedbackSchema = z.object({
   is_correct: z.boolean(),
@@ -119,7 +161,9 @@ const explainPayloadSchema = z.object({
   example_zh: z.string().trim().min(1).max(1000).optional(),
   note: z.string().trim().min(1).max(1000),
   exercise: exerciseSchema,
-}).passthrough();
+}).passthrough().superRefine((value, context) => {
+  validateExactClozeTargetExposure(value.word, value.exercise, context, ["exercise"]);
+});
 
 const exercisePayloadSchema = z.object({
   ...payloadCommon,
@@ -130,7 +174,10 @@ const exercisePayloadSchema = z.object({
   instruction: z.string().trim().min(1).max(300),
   prompt: z.string().trim().min(1).max(4000),
   multiline: z.boolean(),
-}).passthrough();
+}).passthrough().superRefine((value, context) => {
+  validateExactClozePrompt(value, context);
+  validateExactClozeTargetExposure(value.word, value, context);
+});
 
 const feedbackPayloadSchema = z.object({
   ...payloadCommon,
@@ -139,7 +186,9 @@ const feedbackPayloadSchema = z.object({
   progress: z.string().trim().min(1).max(40),
   exercise: exerciseSchema,
   feedback: feedbackSchema,
-}).passthrough();
+}).passthrough().superRefine((value, context) => {
+  validateExactClozeTargetExposure(value.word, value.exercise, context, ["exercise"]);
+});
 
 export const lessonPayloadSchema = z.discriminatedUnion("mode", [
   explainPayloadSchema,

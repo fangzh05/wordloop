@@ -122,10 +122,12 @@ describe("Capture duplicate feedback and release integration", () => {
     expect(captureSavedMessage({new_occurrence:true,occurrence_count:1})).toBe("已记录到划词笔记");
   });
   it("bundles and documents the migration and does not write learning state", () => {
-    for (const file of ["setup.sql","scripts/build-sites-worker.ts","README.md"]) {
+    for (const file of ["setup.sql","README.md"]) {
       const text=readFileSync(new URL("../"+file,import.meta.url),"utf8");
       expect(text).toContain(file==="setup.sql" ? migration.trim() : migrationName);
     }
+    const builder=readFileSync(new URL("../scripts/build-worker.ts",import.meta.url),"utf8");
+    expect(builder).toContain('readdir(path.join(root, "supabase", "migrations"))');
     expect(migration).not.toMatch(/(?:insert into|update|delete from) public\.(?:words|user_words|study_sessions|attempts|daily_imports|daily_import_words|fsrs_review_logs|note_review_states|note_review_events)/i);
   });
 });

@@ -3,15 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Persistent vocabulary state and MCP App widgets for ChatGPT-hosted English learning.",
+  "description": "Persistent vocabulary learning app deployed independently on Cloudflare Workers.",
   "scripts": {
     "dev": "npm run build:web && node --import tsx --watch server/index.ts",
-    "build": "npm run build:web && npm run build:server && npm run build:sites",
+    "build": "npm run build:web && npm run build:worker",
     "build:web": "node --import tsx scripts/build-widgets.ts",
     "build:server": "tsc -p tsconfig.build.json",
-    "build:sites": "node --import tsx scripts/build-sites-worker.ts",
+    "build:worker": "node --import tsx scripts/build-worker.ts",
+    "dev:worker": "npm run build && wrangler dev",
+    "deploy:worker": "npm run build && wrangler deploy",
+    "test:worker-mcp": "node scripts/smoke-worker-mcp.mjs",
     "start": "node node-dist/server/index.js",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run build:web",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:inspector": "npm run build && node scripts/inspect-mcp.mjs",
@@ -42,7 +46,8 @@
     "esbuild": "^0.25.9",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "4.149.0"
   },
   "engines": {
     "node": ">=20.0.0"
