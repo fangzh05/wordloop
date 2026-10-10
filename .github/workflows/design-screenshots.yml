@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm install --no-package-lock --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run build:web
       - run: npm install --no-save --package-lock=false playwright@1.56.1
