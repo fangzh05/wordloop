@@ -3854,3 +3854,52 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   .wordloop-shell .review-page-progress > span {transition:none;}
 }
 
+
+/* Final course-exercise header alignment. The old desktop task rail had
+   sticky rounded-card styles that should not leak into the exercise spread. */
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header {
+  position:static;
+  top:auto;
+  display:block;
+  width:100%;
+  margin:0 0 1.45rem;
+  padding:0 0 1.15rem;
+  border:0;
+  border-bottom:1px solid var(--separator-strong);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  overflow:visible;
+}
+.wordloop-shell .wordloop-app-grid.is-immersive .lesson-card:has(.lesson-exercise-editorial) > .widget-header .standalone-study-heading {
+  display:flex;
+  flex-direction:row;
+  align-items:flex-end;
+  justify-content:flex-start;
+  gap:2rem;
+  width:100%;
+  margin:0;
+}
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header .standalone-study-heading > div {width:auto;min-width:0;}
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header .standalone-back {
+  flex:none;
+  align-self:start;
+  padding:.25rem 0;
+  margin:0;
+  background:transparent;
+  border:0;
+  border-radius:0;
+}
+.wordloop-shell .lesson-card:has(.lesson-exercise-editorial) > .widget-header .lesson-word-heading strong {
+  font-family:"Baskerville","Iowan Old Style",Georgia,serif;
+  font-size:clamp(2rem,3vw,2.9rem);
+  font-weight:400;
+  line-height:1.07;
+  letter-spacing:-.035em;
+}
+@media(max-width:650px) {
+ .wordloop-shell .wordloop-app-grid.is-immersive .lesson-card:has(.lesson-exercise-editorial) > .widget-header .standalone-study-heading {
+   flex-direction:column;gap:.65rem;align-items:flex-start;
+ }
+}
+
