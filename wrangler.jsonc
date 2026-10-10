@@ -4,6 +4,12 @@
   "main": "./dist/server/index.js",
   "compatibility_date": "2026-10-10",
   "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "test.zehaoo.top",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "SUPABASE_URL": "https://jgzzrlnmakllhurjiazh.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_P1lM0vqrWtO23O8VoJTabQ_FI-Dsuo0"
