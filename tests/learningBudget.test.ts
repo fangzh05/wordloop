@@ -51,14 +51,14 @@ describe("fixed shadow BKT", () => {
   });
 });
 describe("time budget admission", () => {
-  it("keeps six daily slots despite overdue reviews, while preserving the no-overdue forecast", () => {
-    expect(newWordAllowance({ ...budget, overdue_count: 150, due_count: 1000 })).toBe(6);
+  it("keeps replenishing batches despite overdue reviews, while preserving the no-overdue forecast", () => {
+    expect(newWordAllowance({ ...budget, overdue_count: 150, due_count: 1000 })).toBe(35);
     expect(newWordAllowance({ ...budget, due_count: 338 })).toBe(0);
   });
   it("counts prior new words and limits admission by remaining time and user cap", () => {
     const overdue = { ...budget, overdue_count: 1 };
-    expect(newWordAdmissionLimit({ ...overdue, new_words_started_today: 5 })).toBe(1);
-    expect(newWordAdmissionLimit({ ...overdue, new_words_started_today: 6 })).toBe(0);
+    expect(newWordAdmissionLimit({ ...overdue, new_words_started_today: 5 })).toBe(6);
+    expect(newWordAdmissionLimit({ ...overdue, new_words_started_today: 6 })).toBe(6);
     expect(newWordAdmissionLimit({ ...overdue, remaining_seconds: 76 })).toBe(0);
     expect(newWordAdmissionLimit({ ...overdue, remaining_seconds: 154 })).toBe(2);
     expect(newWordAdmissionLimit({ ...overdue, new_word_cap: 3 })).toBe(3);
@@ -69,6 +69,11 @@ describe("time budget admission", () => {
     expect(newWordAllowance({ ...budget, new_word_cap: 3 })).toBe(3);
     expect(newWordAllowance({ ...budget, remaining_seconds: 76 })).toBe(0);
     expect(newWordAllowance(budget)).toBeLessThanOrEqual(Math.floor(2700 / 77));
+  });
+  it("uses cumulative limits after a completed round", () => {
+    expect(newWordAllowance({ ...budget, new_words_started_today: 20, remaining_seconds: 770 })).toBe(30);
+    expect(newWordAdmissionLimit({ ...budget, new_words_started_today: 49 })).toBe(1);
+    expect(newWordAdmissionLimit({ ...budget, new_words_started_today: 50 })).toBe(0);
   });
   it("future overload stops new admissions without touching input", () => {
     const input = { ...budget, forecast: [{ date: "2026-10-03", review_seconds: 2800 }] };

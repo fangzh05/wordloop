@@ -758,3 +758,13 @@ describe("DeepSeek stateless JSON client", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+ describe("direct input boundaries", () => {
+   it.each(["从下列选项中选出最符合句意的搭配填空。", "Choose the best option.", "点击正确答案"])("rejects %s", instruction => {
+     expect(validateGeneratedLessonExercise(lessonInput, { ...validLesson, exercise: { ...validLesson.exercise, instruction } }))
+       .toEqual(expect.arrayContaining([expect.objectContaining({ path: ["exercise", "instruction"] })]));
+   });
+   it("accepts direct fill input", () => {
+     expect(validateGeneratedLessonExercise(lessonInput, validLesson)).toEqual([]);
+   });
+ });
