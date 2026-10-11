@@ -685,7 +685,7 @@ export function StandaloneLessonFeedback({ word, progressLabel, feedback, busy, 
         : <Button className="lesson-feedback-primary" type="button" disabled={busy} onClick={onNext}>
             {loadingNext ? <><span className="lesson-feedback-spinner" aria-hidden="true"/> 正在生成下一词…</> : <>{nextWord ? "下一词" : "完成本轮并继续"} <span aria-hidden="true">→</span></>}
           </Button>}
-      {loadingNext && <p className="lesson-feedback-loading-note" role="status">{busyLabel ?? "正在准备下一词，请稍候…"}</p>}
+      {loadingNext && <span className="sr-only" role="status">{busyLabel ?? "正在准备下一词，请稍候…"}</span>}
     </div>
   </div>;
 }
@@ -1234,7 +1234,7 @@ export default function StandaloneApp(): React.JSX.Element {
           onAnswerChange={setAnswer}
           onUnknown={() => { void dispatch({ action: "review_submit", answer: "", mark_unknown: true }); }}
           onSubmit={() => { void dispatch({ action: "review_submit", answer }); }} />}
-        {busyLabel && !(phase === "lesson_feedback" && feedbackMode && busy === "lesson_next") && <p className="standalone-status" role="status">{busyLabel}</p>}
+        {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
       </section>;
     })()}
 
@@ -1355,7 +1355,7 @@ export default function StandaloneApp(): React.JSX.Element {
           <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>完成本轮并继续</Button></div>
         </div>}
 
-        {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
+        {busyLabel && !(phase === "lesson_feedback" && feedbackMode) && <p className="standalone-status" role="status">{busyLabel}</p>}
       </section>;
     })()}
 
