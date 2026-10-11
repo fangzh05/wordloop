@@ -653,7 +653,7 @@ export function StandaloneLessonExplanation({ title, displayTitle, progressLabel
       <div className="lesson-reference-ipa"><span>{ipa}</span>
         {pronunciationAudioUrl
           ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(pronunciationAudioUrl); void audio.play().catch(() => speak(title)); }}><LessonPlayGlyph /></button>
-          : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}><LessonPlayGlyph /></button>
+          : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}><LessonPlayGlyph /></button>}
       </div>
       <p className="lesson-reference-meaning">{meaning}</p>
     </section>
