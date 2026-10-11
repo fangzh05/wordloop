@@ -7,7 +7,7 @@ function object(value: unknown): Record<string, unknown> {
 function list(value: unknown): Array<Record<string, unknown>> { return Array.isArray(value) ? value.map(object) : []; }
 function text(value: unknown, fallback = "—"): string { return typeof value === "string" && value ? value : fallback; }
 function num(value: unknown): string { return typeof value === "number" && Number.isFinite(value) ? String(value) : "—"; }
-const sourceNames:Record<string,string>={'ielts-zhenjing':'雅思词汇真经','ielts-wanglu-807-listening':'王陆807听力','cet6-xinghuo':'星火六级'};
+const sourceNames:Record<string,string>={'ielts-zhenjing':'雅思词汇真经','ielts-wanglu-807-listening':'王陆807听力','cet6-xinghuo':'星火六级','ielts-xindongfang':'新东方雅思','ielts-youdao':'有道雅思（正序）','ielts-youdao-luan':'有道雅思（乱序）','ielts-niannian':'雅思词汇念念不忘','ielts-leiji':'IELTS词汇词以类记','ielts-jianqiao':'剑桥雅思词汇精典','toefl-xindongfang':'新东方托福','toefl-youdao':'有道托福','toefl-gaopin':'托福高频词汇精讲'};
 
 export function WordDetailPanel({ userWordId, onClose, tokenKey }: { userWordId: string; onClose: () => void; tokenKey: string | null }): React.JSX.Element {
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);

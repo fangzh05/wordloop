@@ -3,7 +3,7 @@ import {z} from 'zod';
 import {getAuthenticatedUserId} from '../db.js';
 import {normalizeWord} from './wordNormalization.js';
 import {getFamilyDictionary} from './familyDictionary.js';
-const sourceSchema=z.object({book_id:z.string(),entry_key:z.string(),definition_raw:z.string(),senses:z.array(z.object({pos:z.string(),definition_cn:z.string()})),
+const sourceSchema=z.object({book_id:z.string(),entry_key:z.string(),definition_raw:z.string(),senses:z.array(z.object({pos:z.string(),definition_cn:z.string(),definition_en:z.string().nullable().optional()})),
  ipa_us:z.string().nullable(),ipa_uk:z.string().nullable(),chapter:z.string().nullable(),category:z.string().nullable(),is_ai_generated:z.boolean(),
  third_party_processing_allowed:z.boolean()});
 export type SourceDefinition=z.infer<typeof sourceSchema>;
