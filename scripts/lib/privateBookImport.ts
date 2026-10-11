@@ -5,16 +5,17 @@ const bookSchema=z.enum(['ielts-wanglu-807-listening','ielts-zhenjing','toefl-xi
 export const privateImportRow=z.object({word:z.string(),normalized_word:z.string(),entry_key:z.string().length(64),source_row:z.number().int().positive(),requires_human_review:z.boolean().default(false),
  senses:z.array(z.object({pos:z.string(),definition_cn:z.string()}).passthrough()).min(1),definition_raw:z.string().min(1),source_locator:z.string().optional(),sheet:z.string().optional(),
  ipa_uk:z.string().nullable(),ipa_us:z.string().nullable(),chapter:z.string().nullable(),category:z.string().nullable(),logical_group:z.number().optional()}).passthrough();
-const q=(value:unknown)=>value===null||value===undefined?'null':"'"+String(value).replaceAll("'","''")+"'";
+const q=(value:unknown)=>value===null||value===undefined?'null':"E'"+String(value).replaceAll('\\','\\\\').replaceAll("'","''")+"'";
 export function privateBookImportSql(id:string,source:{commit:string;sha256:string;path:string;repo:string},input:unknown,review:{private_use_attested:boolean;original_wording_verified:boolean;private_use_evidence_sha256?:string},testOnly:boolean){
  bookSchema.parse(id);if(!testOnly)throw Error('Only isolated test imports are enabled. Production requires a separate reviewed release.');
  if(!review.private_use_attested)throw Error('Private-use attestation required');
  z.string().regex(/^[a-f0-9]{40}$/).parse(source.commit);z.string().regex(/^[a-f0-9]{64}$/).parse(source.sha256);
+ for(const field of [source.repo,source.path])z.string().min(1).regex(/^[^\u0000-\u001f]+$/u).parse(field);
  const all=z.array(privateImportRow).parse(input);
  if(all.some(r=>JSON.stringify(r).includes('\\u0000')))throw Error('Unsupported NUL in private source payload');
  const rows=all.filter(r=>wordInputSchema.safeParse(r.word).success&&!r.requires_human_review);
  if(rows.some(r=>normalizeWord(r.word)!==r.normalized_word))throw Error('Normalization mismatch');
- if(new Set(rows.map(r=>r.entry_key)).size!==rows.length)throw Error('Duplicate source entry keys');
+ if(new Set(all.map(r=>r.entry_key)).size!==all.length)throw Error('Duplicate source entry keys');
  if(all.some(r=>r.entry_key!==sha256(JSON.stringify([source.sha256,r.source_locator??`${r.sheet}:${r.source_row}`,r.word]))))throw Error('Source entry identity mismatch');
  const contentHash=(row:z.infer<typeof privateImportRow>)=>sha256(JSON.stringify({word:row.normalized_word,senses:row.senses,definition_raw:row.definition_raw,source_row:row.source_row,source_locator:row.source_locator??`${row.sheet??"row"}:${row.source_row}`,ipa_uk:row.ipa_uk,ipa_us:row.ipa_us,chapter:row.chapter,category:row.category,logical_group:row.logical_group??null,...(row.source_details?{source_details:row.source_details}:{})}));
  const batch=sha256(JSON.stringify({id,source:{repo:source.repo,path:source.path,commit:source.commit,sha256:source.sha256},rows:rows.map(r=>[r.entry_key,contentHash(r)]).sort((a,b)=>a[0]!<b[0]!?-1:a[0]!>b[0]!?1:0)}));

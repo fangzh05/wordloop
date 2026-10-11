@@ -23,7 +23,7 @@ def run(root):
    r['normalization_proposal']=clean if clean!=word.strip() else None
    records.append(r)
   books[id]={'source':meta,'exam':exam,'name':name,'version':version,'derived':derived,'authorization':'publisher_permission_unverified','records':records}
-  audit.append({'id':id,**meta,'name':name,'version':version,'raw_records':len(records),'unique':len({r['normalized_word'] for r in records}),'missing_definitions':sum(not r['definition_raw'].strip() for r in records),'missing_pos':sum(not any(s['pos'] for s in r['senses']) for r in records),'missing_ipa':sum(not(r['ipa_uk'] or r['ipa_us']) for r in records),'license':pin['github_license'],'publisher_authorization':'unverified'})
+  audit.append({'id':id,**meta,'name':name,'dataset_version':version,'publisher_edition':'unverified','author':'unverified','raw_records':len(records),'unique':len({r['normalized_word'] for r in records}),'missing_definitions':sum(not r['definition_raw'].strip() for r in records),'missing_pos':sum(not any(s['pos'] for s in r['senses']) for r in records),'missing_ipa':sum(not(r['ipa_uk'] or r['ipa_us']) for r in records),'missing_chapter':sum(not r['chapter'] for r in records),'license':pin['github_license'],'publisher_authorization':'unverified'})
  index=load(root/'KyleBing/dict/files/bookLists.txt')['data']['normalBooksInfo']
  ids={'IELTS_3':'ielts-xindongfang','IELTS_2':'ielts-youdao','IELTSluan_2':'ielts-youdao-luan','TOEFL_2':'toefl-youdao','TOEFL_3':'toefl-xindongfang'}
  for native,id in ids.items():
@@ -68,7 +68,7 @@ def run(root):
    r['source_details']={k:v for k,v in r.items() if k not in ('senses','definition_raw')}
    if r.get('continuation_rows'):r['requires_human_review']=True
   books[id]={'source':meta,'exam':'ielts','name':p.stem,'version':'unverified','derived':False,'authorization':'publisher_permission_unverified','records':rows}
-  audit.append({'id':id,**meta,'name':p.stem,'raw_records':len(rows),'unique':len({r['word'].strip().lower() for r in rows}),'missing_definitions':sum(not r['definition_raw'] for r in rows),'quality':quality})
+  audit.append({'id':id,**meta,'name':p.stem,'publisher_edition':'unverified','author':'unverified','raw_records':len(rows),'unique':len({r['word'].strip().lower() for r in rows}),'missing_definitions':sum(not r['definition_raw'] for r in rows),'missing_pos':sum(not any(s['pos'] for s in r['senses']) for r in rows),'missing_ipa':sum(not(r['ipa_uk'] or r['ipa_us']) for r in rows),'missing_chapter':sum(not r['chapter'] for r in rows),'quality':quality})
  (root/'private-staging.json').write_text(json.dumps({'books':books,'join_audit':join},ensure_ascii=False,default=str),encoding='utf8')
  (root/'parse-audit.json').write_text(json.dumps({'sources':audit,'join':join},ensure_ascii=False,indent=2,default=str),encoding='utf8')
  print(json.dumps({'sources':[{k:x[k] for k in ['id','raw_records','unique','missing_definitions']} for x in audit],'join':join},ensure_ascii=False))

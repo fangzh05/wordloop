@@ -47,6 +47,16 @@ export function prepareDeepImport(books:Record<string,DeepBook>,snapshot:DeepSna
    if(reason)held.push({source:id,word:w,row:r.source_row,reason});else rows.push({...r,requires_human_review:false});
   }accepted[id]=rows;
  }
+ // Alphabetical/random exports are editions of one upstream IELTS lexicon.
+ // Store identical meanings once, retaining the alternate edition's locator.
+ const editionKey=(r:Row)=>JSON.stringify([r.normalized_word,r.senses,r.definition_raw,r.ipa_uk,r.ipa_us]);
+ const primaryEditions=new Map((accepted['ielts-youdao']??[]).map(r=>[editionKey(r),r]));
+ let deduped_edition_records=0;
+ if(accepted['ielts-youdao-luan'])accepted['ielts-youdao-luan']=accepted['ielts-youdao-luan'].filter(r=>{
+  const original=primaryEditions.get(editionKey(r));if(!original)return true;
+  original.source_details={...(original.source_details as Record<string,unknown>??{}),alternate_edition:{...books['ielts-youdao-luan']!.source,source_row:r.source_row,source_locator:r.source_locator}};
+  deduped_edition_records++;return false;
+ });
  const all=Object.values(books).flatMap(b=>b.records.map(r=>normalizeWord(r.word))),pairs=[];
  const sets=Object.entries(books).map(([id,b])=>({id,words:new Set(b.records.map(r=>normalizeWord(r.word)))}));
  for(let i=0;i<sets.length;i++)for(let j=i+1;j<sets.length;j++)pairs.push({a:sets[i]!.id,b:sets[j]!.id,overlap:[...sets[i]!.words].filter(w=>sets[j]!.words.has(w)).length});
@@ -69,5 +79,5 @@ export function prepareDeepImport(books:Record<string,DeepBook>,snapshot:DeepSna
  });
  const contribution=Object.entries(books).map(([id,b])=>({source:id,exam:b.exam,raw:b.records.length,unique:new Set(b.records.map(r=>normalizeWord(r.word))).size,accepted_records:accepted[id]!.length,held_records:held.filter(h=>h.source===id).length,
   contributed_to_additions:additions.filter(a=>a.sources.includes(id)).length,new_definitions_on_existing_identity:accepted[id]!.filter(r=>global.has(r.normalized_word!)).length}));
- return {rules:'ielts-toefl-deep-v1',metrics,contribution,pairwise:pairs,additions,held,accepted,unique_new_global_words:new Set(additions.filter(a=>!global.has(a.word)).map(a=>a.word)).size,raw_unique_across_exams:new Set(all).size};
+ return {rules:'ielts-toefl-deep-v1',metrics,contribution,pairwise:pairs,additions,held,accepted,deduped_edition_records,unique_new_global_words:new Set(additions.filter(a=>!global.has(a.word)).map(a=>a.word)).size,raw_unique_across_exams:new Set(all).size};
 }

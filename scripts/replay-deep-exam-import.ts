@@ -11,6 +11,7 @@ const load=(p:string)=>JSON.parse(readFileSync(resolve(root,p),'utf8'));
 const snapshot=load('live-snapshot.json') as DeepSnapshot,books=load('private-staging.json').books as Record<string,DeepBook>;
 const legacy=load('../five-exam-snapshot.json'),plan=prepareDeepImport(books,snapshot,legacy.sources),prepared=deepExamSql(snapshot,plan);
 const db=await privateBookTestDatabase();
+const sourceBatches:Record<string,unknown>={};
 try{
  for(const f of load('../five-exam-live-functions.json'))await db.exec(f.definition);
  for(const file of ['20261012020000_exam_source_mapping.sql','20261012030000_deep_exam_internal_sources.sql'])await db.exec(readFileSync(new URL('../supabase/migrations/'+file,import.meta.url),'utf8'));
@@ -19,6 +20,7 @@ try{
  const original=load('../normalized-draft.json').books;
  async function importBook(id:string,b:DeepBook,rows:unknown[]){
   const p=privateBookImportSql(id,b.source,rows,{private_use_attested:true,original_wording_verified:false},true);
+  if(id in books)sourceBatches[id]={batch_id:p.batch,source:b.source,records:p.accepted,entries:p.transferRows.map(r=>({entry_key:r.entry_key,normalized_word:r.normalized_word,content_hash:r.content_hash}))};
   await db.exec('begin;set local standard_conforming_strings=on;');
   try{await db.exec(p.batch_statement);let added=0;
    for(let i=0;i<p.transferRows.length;i+=200)added+=(await db.query<{n:number}>('select commercial_import_admin.import_rows_v1($1,$2,$3::jsonb) n',[id,p.batch,JSON.stringify(p.transferRows.slice(i,i+200))])).rows[0]!.n;
@@ -51,6 +53,8 @@ try{
  }
  if(passes[1]!.definitions_inserted!==0||JSON.stringify(passes[0]!.totals)!==JSON.stringify(passes[1]!.totals)||passes[0]!.shared_words!==passes[1]!.shared_words)throw Error('Non-idempotent replay');
  const after=await protectedHash();if(JSON.stringify(before)!==JSON.stringify(after)||unaffected!==await hash('exam_book_words',"book_id in ('cet4','cet6','kaoyan')"))throw Error('Protected data changed');
+ const definitionCoverage=(await db.query<{exam:string;with_definition:number}>("select p.exam,count(distinct p.word)::integer with_definition from jsonb_to_recordset($1::jsonb) as p(exam text,word text,sources jsonb) where exists(select 1 from word_source_definitions s where s.normalized_word=p.word and p.sources ? s.book_id and btrim(s.definition_raw)<>'') group by p.exam order by p.exam",[JSON.stringify(plan.additions)])).rows;
+ for(const m of plan.metrics)if(definitionCoverage.find(r=>r.exam===m.exam)?.with_definition!==m.additions_with_private_definition)throw Error('Actual source definition coverage mismatch');
  // Verify old rows by actual PK set, not just record count; full content equality.
  await db.query("create temporary table old_word_keys as select value word from jsonb_array_elements_text($1::jsonb)",[JSON.stringify(snapshot.words)]);
  if(oldWords!==await hash('words','normalized_word in(select word from old_word_keys)'))throw Error('Old identities changed');
@@ -73,6 +77,7 @@ try{
   const newCards=(await db.query<{normalized_word:string}>("select w.normalized_word from user_words u join words w on w.id=u.word_id where user_id=$1 and u.source='exam_book'",[uid])).rows;
   if(newCards.length!==10||newCards.some(r=>!plan.additions.some(a=>a.exam===exam&&a.word===r.normalized_word)))throw Error('Did not enroll actual new members');learning.push({exam,enrolled_new_members:n});
  }
- const report={mode:'isolated PGlite actual corpus replay',production_writes:0,batch:prepared.batch,passes,protected_before:before,protected_after:after,old_identities_unchanged:true,old_definitions_unchanged:true,other_three_books_unchanged:true,idempotent:true,learning};
+ const report={mode:'isolated PGlite actual corpus replay',production_writes:0,batch:prepared.batch,passes,definitionCoverage,protected_before:before,protected_after:after,old_identities_unchanged:true,old_definitions_unchanged:true,other_three_books_unchanged:true,idempotent:true,learning};
  writeFileSync(resolve(root,'replay.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ writeFileSync(resolve(root,'source-batches.json'),JSON.stringify(sourceBatches));
 }finally{await db.close();}

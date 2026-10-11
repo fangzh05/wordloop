@@ -16,6 +16,14 @@ it('does not promote inherited sources even when a caller omits the derived flag
  expect(()=>deepExamSql(snapshot,{...plan,additions:[{exam:'cet6',word:'economic',sources:[]}]})).toThrow('Out of scope');
  expect(deepExamSql(snapshot,plan).sql).not.toContain('set enabled=true');
 });
+it('stores identical alphabetical/random meanings once and keeps alternate provenance and genuinely different senses',()=>{
+ const a=book('KyleBing/dict',['economic','economical'],'ielts'),b=book('KyleBing/dict',['economic','economical'],'ielts');
+ b.records[1]!.definition_raw='DIFFERENT ORIGINAL';b.records[1]!.senses[0]!.definition_cn='DIFFERENT ORIGINAL';
+ const plan=prepareDeepImport({'ielts-youdao':a,'ielts-youdao-luan':b},snapshot);
+ expect(plan.deduped_edition_records).toBe(1);expect(plan.accepted['ielts-youdao-luan']).toHaveLength(1);
+ expect(plan.accepted['ielts-youdao']![0]!.source_details).toHaveProperty('alternate_edition');
+ expect(plan.additions).toHaveLength(2);
+});
 let db:PGlite;
 beforeAll(async()=>{db=await privateBookTestDatabase(true);await db.exec(readFileSync(new URL('../supabase/migrations/20261012030000_deep_exam_internal_sources.sql',import.meta.url),'utf8'));},30000);
 afterAll(()=>db.close());
@@ -41,4 +49,11 @@ it('new internal sources stay out of catalog; authorized definitions expire with
  await db.query('update exam_book_entitlements set expires_at=now()-interval \'1 second\' where user_id=$1',[a]);
  expect((await db.query<any>("select current_book_definitions_v1($1,'economic')v",[a])).rows[0].v).toEqual([]);
  await db.query("select set_exam_book_v1($1,'ielts')",[a]);const card=(await db.query<any>('select fsrs_stability,mastered from user_words where user_id=$1',[a])).rows;expect(card).toEqual([{fsrs_stability:9,mastered:true}]);
+});
+it('standalone SQL handles a missing logical group and backslashes safely with SCS disabled',async()=>{
+ const b=book('KyleBing/dict',['organise']);const word=b.records[0]!;const locator='line:1';
+ const row={...word,normalized_word:word.word,source_locator:locator,entry_key:sha256(JSON.stringify([b.source.sha256,locator,word.word])),definition_raw:"SYNTHETIC apostrophe ' and trailing slash \\"};
+ const p=privateBookImportSql('ielts-xindongfang',b.source,[row],{private_use_attested:true,original_wording_verified:false},true);
+ await db.exec('set standard_conforming_strings=off');await db.exec(p.sql);await db.exec('set standard_conforming_strings=on');
+ expect((await db.query<any>("select definition_raw,logical_group from word_source_definitions where book_id='ielts-xindongfang'")).rows[0]).toEqual({definition_raw:row.definition_raw,logical_group:null});
 });
