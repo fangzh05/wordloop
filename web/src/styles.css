@@ -4614,14 +4614,14 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   flex:1 0 auto;
 }
 .wordloop-shell .lesson-feedback-kicker {
-  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
   font-size:.7rem;
   letter-spacing:.14em;
   font-weight:540;
   color:var(--original-study-muted,#818b8e);
 }
 .wordloop-shell .lesson-feedback-word {
-  font-family:var(--original-study-english,"Iowan Old Style",Georgia,serif);
+  font-family:var(--wl-display-en);
   font-size:clamp(3.65rem,8vw,5.55rem);
   font-weight:400;
   line-height:1.1;
@@ -4691,7 +4691,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   align-items:baseline;
   gap:12px;
   margin:0 0 13px;
-  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
   font-size:.68rem;
   font-weight:520;
   line-height:1.5;
@@ -4706,7 +4706,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 }
 .wordloop-shell .lesson-feedback-answer {
   margin:0;
-  font-family:var(--original-study-english,"Iowan Old Style",Georgia,serif);
+  font-family:var(--wl-display-en);
   color:var(--original-study-ink,#1d292d);
   font-size:clamp(1.5rem,3vw,2.15rem);
   line-height:1.4;
@@ -4841,7 +4841,6 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   --study-muted:var(--original-study-muted,#829197);
   --study-rule:var(--original-study-rule,#dee5e9);
   --study-blue:var(--original-study-navy,#375f73);
-  --study-type:"Iowan Old Style","Baskerville","Palatino Linotype",Georgia,serif;
 }
 /* Zero external card decorations, including the old desktop > .standalone-content layer. */
 .wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
@@ -4912,11 +4911,11 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   font-weight:500;
   line-height:1.5;
   color:var(--study-muted);
-  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
 }
 .wordloop-shell .pretest-write-title {
   margin:0 0 31px;padding:0;
-  font-family:var(--study-type);
+  font-family:var(--wl-display-en);
   font-weight:400;letter-spacing:-.056em;
   font-size:clamp(3.15rem,6.2vw,5rem);
   line-height:1.14;color:var(--study-ink);
@@ -4924,7 +4923,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 .wordloop-shell .pretest-editorial-question {margin:0 0 47px;}
 .wordloop-shell .pretest-editorial-question .pretest-meaning {
   margin:0;
-  font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
   font-size:clamp(1.75rem,3vw,2.45rem);
   font-weight:500;
   line-height:1.55;letter-spacing:-.01em;
@@ -4941,7 +4940,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   margin:0;padding:8px 4px 12px;
   border:0;border-bottom:1px solid var(--study-rule);
   border-radius:0;outline:none;
-  font:400 clamp(1.35rem,2.3vw,1.8rem)/1.5 var(--study-type);
+  font-size:clamp(1.35rem,2.3vw,1.8rem);line-height:1.5;
   color:var(--study-ink);background:transparent;
   box-shadow:none;
 }
@@ -4995,7 +4994,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 .wordloop-shell .pretest-result-word {
   margin:0 0 30px;
   color:var(--study-ink);
-  font-family:var(--study-type);
+  font-family:var(--wl-display-en);
   font-size:clamp(3.6rem,6vw,5rem);
   font-weight:400;letter-spacing:-.05em;line-height:1.1;
   overflow-wrap:anywhere;
@@ -5027,17 +5026,17 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 .wordloop-shell .pretest-result-row h3 {
   margin:0 0 11px;
   color:var(--study-muted);
-  font:500 .69rem/1.5 ui-monospace,SFMono-Regular,monospace;
+  font-size:.69rem;line-height:1.5;font-weight:500;
   letter-spacing:.11em;
 }
 .wordloop-shell .pretest-result-row small {
   padding-left:10px;
-  font:400 .73rem/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  font-size:.73rem;line-height:1.5;font-weight:400;
   letter-spacing:0;
 }
 .wordloop-shell .pretest-result-row p {
   margin:0;color:var(--study-ink);
-  font:400 clamp(1.45rem,2.4vw,2rem)/1.5 var(--study-type);
+  font-size:clamp(1.45rem,2.4vw,2rem);line-height:1.5;font-weight:400;font-family:var(--wl-display-en);
 }
 .wordloop-shell .pretest-result-actions {
   display:flex;flex-direction:column;
@@ -5183,10 +5182,8 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
 }
 .wordloop-shell .lesson-exercise-editorial .lesson-exercise-heading {
   margin:14px 0 30px;
-  font-family:var(--study-type,"Iowan Old Style",Georgia,serif);
   font-size:clamp(2rem,4.5vw,3.25rem);
   line-height:1.3;
-  font-weight:400;
   letter-spacing:-.045em;
   color:var(--study-ink,#1d292d);
 }
@@ -5197,7 +5194,6 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   border-top:1px solid var(--study-rule,#e2e6e7);
   border-bottom:1px solid var(--study-rule,#e2e6e7);
   border-radius:0;
-  font-family:var(--study-type,"Iowan Old Style",Georgia,serif);
   color:var(--study-ink,#1d292d);
   background:transparent;
   box-shadow:none;
@@ -5209,7 +5205,7 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   border-radius:0;
   color:var(--study-ink,#1d292d);
   background:transparent;
-  font:400 1.15rem/1.65 var(--study-type,"Iowan Old Style",Georgia,serif);
+  font-size:1.15rem;line-height:1.65;
   box-shadow:none;
 }
 .wordloop-shell .lesson-exercise-editorial .lesson-exercise-answer .standalone-input:focus {
