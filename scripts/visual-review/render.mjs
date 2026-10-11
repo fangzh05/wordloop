@@ -61,10 +61,12 @@ for(const [size,w,h] of sizes) {
     if(!(await button.isVisible()))throw Error("Missing primary feedback action");
     const style=await page.evaluate(()=>{
       const card=document.querySelector(".lesson-card:has(.lesson-feedback-editorial)");
+      const content=document.querySelector(".lesson-card > .lesson-feedback-editorial");
       const s=card?getComputedStyle(card):null;
-      return s?{border:s.borderTopWidth,radius:s.borderTopLeftRadius,shadow:s.boxShadow,display:s.display}:null;
+      const c=content?getComputedStyle(content):null;
+      return s&&c?{border:s.borderTopWidth,radius:s.borderTopLeftRadius,shadow:s.boxShadow,display:s.display,innerBorder:c.borderTopWidth,innerRadius:c.borderTopLeftRadius,innerShadow:c.boxShadow,innerBackground:c.backgroundColor}:null;
     });
-    if(!style || style.border!=="0px" || style.radius!=="0px" || style.display!=="block")
+    if(!style || style.border!=="0px" || style.radius!=="0px" || style.display!=="block" || style.innerBorder!=="0px" || style.innerRadius!=="0px" || style.innerShadow!=="none")
       throw Error(`Unexpected outer feedback card styling: ${JSON.stringify(style)}`);
     const label=(await button.innerText()).trim();
     const expectedLabel=name==="lesson-feedback-retry"?"重做当前题":name==="lesson-feedback-loading"?"正在生成下一词":"下一词";
