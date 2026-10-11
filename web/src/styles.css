@@ -5352,3 +5352,24 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   }
 }
 
+
+/* STUDY BUTTON CORNER SYSTEM
+   Single 8px radius taken from the approved pretest input actions.
+   Only rectangular actions are included: the pronunciation control must
+   remain perfectly round, text links remain text links, no outer cards. */
+.wordloop-shell[data-study-open="true"] {
+  --study-action-radius:8px;
+}
+.wordloop-shell[data-study-open="true"] .pretest-editorial-actions > .button,
+.wordloop-shell[data-study-open="true"] .pretest-result-actions > .button,
+.wordloop-shell[data-study-open="true"] .pretest-result-actions .familiar-action,
+.wordloop-shell[data-study-open="true"] .pretest-complete-workspace .standalone-actions > .button,
+.wordloop-shell[data-study-open="true"] .review-editorial-workspace .review-answer-bottom > .button,
+.wordloop-shell[data-study-open="true"] .review-editorial-card > .standalone-content .standalone-actions > .button,
+.wordloop-shell[data-study-open="true"] .lesson-reference-bottom > .button,
+.wordloop-shell[data-study-open="true"] .lesson-exercise-editorial .lesson-exercise-actions > .button,
+.wordloop-shell[data-study-open="true"] .lesson-feedback-footer > .button,
+.wordloop-shell[data-study-open="true"] .lesson-card > .standalone-content .standalone-actions > .button {
+  border-radius:var(--study-action-radius);
+}
+
