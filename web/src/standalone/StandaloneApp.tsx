@@ -734,7 +734,7 @@ export function StandaloneLessonFeedback({ word, progressLabel, feedback, busy, 
       {showRetry
         ? <Button className="lesson-feedback-primary" type="button" disabled={busy} onClick={onRetry}>{retryLabel ?? "重做当前题"} <span aria-hidden="true">→</span></Button>
         : <Button className="lesson-feedback-primary" type="button" disabled={busy} onClick={onNext}>
-            {loadingNext ? <><span className="lesson-feedback-spinner" aria-hidden="true"/> 正在生成下一词…</> : <>{nextLabel ?? (nextWord ? "下一词" : "完成本轮并继续")} <span aria-hidden="true">→</span></>}
+            {loadingNext ? <><span className="lesson-feedback-spinner" aria-hidden="true"/> {nextLabel ? "正在继续学习…" : "正在生成下一词…"}</> : <>{nextLabel ?? (nextWord ? "下一词" : "完成本轮并继续")} <span aria-hidden="true">→</span></>}
           </Button>}
       {loadingNext && <span className="sr-only" role="status">{busyLabel ?? "正在准备下一词，请稍候…"}</span>}
     </div>
