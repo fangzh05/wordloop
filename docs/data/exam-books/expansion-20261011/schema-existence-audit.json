@@ -1,0 +1,242 @@
+[
+  {
+    "kind": "column",
+    "object": "lexical_etymons.uncertain",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_etymological_links.provenance",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_sense_relations.source_sense_id",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_usage_patterns.sense_id",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_lexeme_morphemes.morpheme_id",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_dictionary_entries.parts_of_speech",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_lexemes.family_key",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_senses.provenance",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_forms.pronunciation",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_morphemes.type",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "lexical_relations.confidence",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "family_candidates.lexeme_id",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "family_exposures.introduced_at",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "family_micro_sessions.study_session_id",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "exercise_skill_evidence.evidence_version",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "user_skill_state.p_mastery",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "learning_settings.daily_minutes",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "learning_budget_events.task_key",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "evidence_gold_labels.reviewed_at",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "bkt_updates.prediction",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "tutor_shadow_decisions.suggested_activity",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "users.daily_new_word_limit",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "user_words.fsrs_state",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "study_sessions.state",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "study_sessions.updated_at",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "word_sources.user_id",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "fsrs_review_logs.user_id",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "captured_notes.normalized_text",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "captured_notes.converted_user_word_id",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "captured_note_occurrences.idempotency_key",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "captured_note_occurrences.context_text",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "captured_note_occurrences.is_duplicate",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "note_review_states.card",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "note_review_states.due",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "note_review_states.revision",
+    "present": true
+  },
+  {
+    "kind": "column",
+    "object": "note_review_events.idempotency_key",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "family_graph_schema_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "get_family_graph_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "learning_budget_snapshot_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "pending_skill_evidence_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "get_today_words_v2",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "get_review_candidates_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "get_progress_snapshot_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "get_due_review_candidates_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "get_formal_lesson_attempt_words_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "captured_notes_schema_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "note_review_schema_v1",
+    "present": true
+  },
+  {
+    "kind": "rpc",
+    "object": "get_lexical_graph_v1",
+    "present": true
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "book": "cet6",
+    "source": "KyleBing-random",
+    "accepted_members": 605,
+    "note": "Overlapping contribution; do not sum across sources"
+  },
+  {
+    "book": "cet6",
+    "source": "KyleBing-ordered",
+    "accepted_members": 606,
+    "note": "Overlapping contribution; do not sum across sources"
+  },
+  {
+    "book": "toefl",
+    "source": "KyleBing-random",
+    "accepted_members": 326,
+    "note": "Overlapping contribution; do not sum across sources"
+  },
+  {
+    "book": "toefl",
+    "source": "KyleBing-ordered",
+    "accepted_members": 326,
+    "note": "Overlapping contribution; do not sum across sources"
+  },
+  {
+    "book": "cet6",
+    "source": "cet6-frequency",
+    "accepted_members": 250,
+    "note": "Overlapping contribution; do not sum across sources"
+  },
+  {
+    "book": "ielts",
+    "source": "NAWL-1.2",
+    "accepted_members": 470,
+    "note": "Overlapping contribution; do not sum across sources"
+  },
+  {
+    "book": "toefl",
+    "source": "NAWL-1.2",
+    "accepted_members": 368,
+    "note": "Overlapping contribution; do not sum across sources"
+  },
+  {
+    "book": "toefl",
+    "source": "gungorkaya-essential",
+    "accepted_members": 125,
+    "note": "Overlapping contribution; do not sum across sources"
+  }
+]

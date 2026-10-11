@@ -1,0 +1,24 @@
+{
+  "status": "dry-run only; no production writes",
+  "files": {
+    "accepted-contributions.json": "52be0229e4cf96bea66d74dc089c794907d7f2c45089b9a5a87835153e04fe59",
+    "additions.json": "0ac6ed3f4a10352958e5aa98113e09a1f9609feebfa45831be0899092f9b4b37",
+    "backup-verification.json": "43343fb21a24339250b783e3f566a69880c53a80c2e6a158b4bd033f8dab72c1",
+    "frequency-LICENSE.txt": "fb74dc1412b0d67f8df1c8baef31142b5f12a12387f2f2feddac6b03533129b1",
+    "gungorkaya-LICENSE.txt": "86a77f2699db48a7217cc8942e137fc6d1484e2cc3b5e713d60e12f351ac1178",
+    "KyleBing-LICENSE.txt": "5746ff57c9bb587018a73c030e57ba8d116c0b9843c0617c88dde9c21757b2d2",
+    "model-review.json": "83ea04907b730da065f425722a57291468d55febb56362e877c5b33bc3b420a5",
+    "nawl-source.json": "7c0f4fa2686eeae92021a8d04b9afb9d46e39732d1197b6e06b5a08b90961ca7",
+    "protected-state-audit.json": "97abc3437d8dd9266afd8226bbbe9f63278fdae97d07ef18699a39ade6a73aef",
+    "quality-summary.json": "1bc8b9e6d136a4a6a86063471908a00f4c4c9117e90ace1b92cb62dde9a97ed8",
+    "README.md": "2872242b09778b5beb83724f2b7aa7eb6d1e11e1bfe4b493ac80f9a569315896",
+    "release-gates.json": "0104af78f111bb1dd523c162748c842314663e563013385d2910c3752ecb1631",
+    "replay-result.json": "c5049ea43453c136921c49722df81569254669c6f70ac6b33a36934cbf30aceb",
+    "report.json": "9a8cf2b20b3c2ba036803d3a3691d11c3d4c2ebaa3d1f5d07e833b003fdfddcd",
+    "restricted-source-audit.json": "d553f0c512d8ee6f2f967b07e52de1f907c116de555f79fcd30f7c37826547ad",
+    "rpc-behavior-audit.json": "f675fc08aeac70a0f1a92e8ba0896090ce74f11f164763b5de48a111aa276795",
+    "schema-existence-audit.json": "0933a06b1069fe10d419f2a23c61d30ba7187f943c7123e34ce225d0acbed3b5",
+    "source-overlap.json": "1d0da7bfebc7ab4c56768e55d56c7aebbfb01bd9dfabb3cbec94286c592c9c06",
+    "sources.json": "972b985f709a8919fd2daf511cc234bc1cd22891af26cb824ea0b5634266b4b9"
+  }
+}

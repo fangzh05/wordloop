@@ -1,0 +1,63 @@
+{
+  "environment": "isolated PGlite PostgreSQL; production-shaped membership and dictionary availability snapshot; not live production restore",
+  "before": {
+    "members": 28311,
+    "dictionary": 26447,
+    "learning": [
+      {
+        "fsrs": {
+          "stability": 42
+        },
+        "user_id": "owner",
+        "word_id": "academic",
+        "private_definition": "PRIVATE unchanged"
+      }
+    ]
+  },
+  "first": {
+    "members": 29854,
+    "dictionary": 26547,
+    "learning": [
+      {
+        "fsrs": {
+          "stability": 42
+        },
+        "user_id": "owner",
+        "word_id": "academic",
+        "private_definition": "PRIVATE unchanged"
+      }
+    ]
+  },
+  "second": {
+    "members": 29854,
+    "dictionary": 26547,
+    "learning": [
+      {
+        "fsrs": {
+          "stability": 42
+        },
+        "user_id": "owner",
+        "word_id": "academic",
+        "private_definition": "PRIVATE unchanged"
+      }
+    ]
+  },
+  "afterRollback": {
+    "members": 28311,
+    "dictionary": 26547,
+    "learning": [
+      {
+        "fsrs": {
+          "stability": 42
+        },
+        "user_id": "owner",
+        "word_id": "academic",
+        "private_definition": "PRIVATE unchanged"
+      }
+    ]
+  },
+  "restore_rows": 26447,
+  "idempotent": true,
+  "learning_unchanged": true,
+  "existing_dictionary_unchanged": true
+}

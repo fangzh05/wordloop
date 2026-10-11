@@ -1,0 +1,31 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {expansionSql} from './lib/examExpansionSql.js';
+const dir=process.argv[2]??'.exam-books/expansion',load=(f:string)=>JSON.parse(readFileSync(`${dir}/${f}`,'utf8'));
+const snapshot=load('live-snapshot.json'),payload=load('draft-corpus.json'),provenance={members:load('membership-provenance.json'),sources:load('sources.json'),nawl:load('nawl-source.json')};
+const {sql,rollback,batch}=expansionSql(payload,provenance,snapshot.members);
+const db=new PGlite();
+try{
+await db.exec(`create role anon;create role authenticated;
+create table exam_books(id text primary key,checksum text,source text,source_version text,license text);
+insert into exam_books values('cet6','baseline','ECDICT','baseline','MIT'),('ielts','baseline','ECDICT','baseline','MIT'),('toefl','baseline','ECDICT','baseline','MIT');
+create table exam_book_words(book_id text,normalized_word text,source text,source_version text,source_records integer[],primary key(book_id,normalized_word));
+create table lexical_dictionary_entries(entry_id text primary key,lemma text,language text,phonetic text,english_definition text,chinese_translation text,parts_of_speech jsonb,source text,source_version text,license text,provenance jsonb,confidence float,unique(language,lemma,source,source_version));
+create table user_words(user_id text,word_id text,private_definition text,fsrs jsonb,primary key(user_id,word_id));
+insert into user_words values('owner','academic','PRIVATE unchanged','{"stability":42}');`);
+await db.query(`insert into exam_book_words select book_id,normalized_word,'baseline','baseline','{}' from jsonb_to_recordset($1::jsonb) as t(book_id text,normalized_word text)`,[JSON.stringify(snapshot.members)]);
+await db.query(`insert into lexical_dictionary_entries(entry_id,lemma,language,chinese_translation,source,source_version) select 'existing:'||lemma,lemma,'en',case when chinese then 'EXISTING unchanged' else '' end,'existing','baseline' from jsonb_to_recordset($1::jsonb) as t(lemma text,chinese boolean) on conflict do nothing`,[JSON.stringify(snapshot.dictionary)]);
+const read=async()=> (await db.query(`select (select count(*) from exam_book_words) members,(select count(*) from lexical_dictionary_entries) dictionary,(select jsonb_agg(to_jsonb(t)) from user_words t) learning`)).rows[0];
+const before=await read();await db.exec(sql);const first=await read();await db.exec(sql);const second=await read();
+if(JSON.stringify(first)!==JSON.stringify(second))throw Error('Non-idempotent import');
+if(JSON.stringify((before as any).learning)!==JSON.stringify((first as any).learning))throw Error('Learning data changed');
+const changed=(await db.query(`select count(*) n from lexical_dictionary_entries where source='existing' and chinese_translation not in ('EXISTING unchanged','')`)).rows[0] as any;
+if(changed.n!==0)throw Error('Dictionary overwritten');
+await db.exec(`create temp table restore_probe as select * from lexical_dictionary_entries where false;
+insert into restore_probe select (jsonb_populate_record(null::lexical_dictionary_entries,row_data)).* from exam_expansion_audit.snapshots where batch='${batch}' and table_name='lexical_dictionary_entries';`);
+const restored=(await db.query(`select count(*) n from restore_probe`)).rows[0] as any;
+if(restored.n!==(before as any).dictionary)throw Error('Backup restore count mismatch');
+await db.exec(rollback);const afterRollback=await read();if((afterRollback as any).members!==(before as any).members)throw Error('Rollback failed');
+writeFileSync(`${dir}/replay-result.json`,JSON.stringify({environment:'isolated PGlite PostgreSQL; production-shaped membership and dictionary availability snapshot; not live production restore',before,first,second,afterRollback,restore_rows:restored.n,idempotent:true,learning_unchanged:true,existing_dictionary_unchanged:true},null,2));
+console.log('Import twice, scoped backup restore, dictionary preservation and membership rollback passed');
+}finally{await db.close();}

@@ -1,0 +1,13 @@
+{
+  "pending_memberships": 8151,
+  "pending_unique_words": 7431,
+  "issues": {
+    "insufficient_exam_evidence": 8113,
+    "missing_chinese_gloss": 693,
+    "needs_human_review": 281
+  },
+  "model_requires_review": 122,
+  "model_identity_change_suggestions": 106,
+  "missing_gloss_unique": 693,
+  "new_dictionary_rows": 100
+}

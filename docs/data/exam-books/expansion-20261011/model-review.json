@@ -1,0 +1,3162 @@
+[
+  {
+    "original": "aerobics",
+    "suggested_lemma": "aerobics",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Established singular mass-noun headword; no relation to another listed entry.",
+    "requires_review": false
+  },
+  {
+    "original": "aged",
+    "suggested_lemma": "aged",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Valid adjective headword ('an aged man'); homograph of the past tense of 'age' but treated here as an independent adjectival entry.",
+    "requires_review": false
+  },
+  {
+    "original": "arose",
+    "suggested_lemma": "arise",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Past tense of 'arise'; inflectional form, not an independent lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "asses",
+    "suggested_lemma": "ass",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Plural of 'ass'; inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "backbreaking",
+    "suggested_lemma": "backbreaking",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.8,
+    "reason": "Compound adjective headword; no other entry to relate to.",
+    "requires_review": false
+  },
+  {
+    "original": "backlighting",
+    "suggested_lemma": "backlighting",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Noun in photography/cinematography; also analyzable as the gerund of 'backlight', so independent headword status is ambiguous.",
+    "requires_review": true
+  },
+  {
+    "original": "bent",
+    "suggested_lemma": "bent",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Lexicalized adjective ('bent on'); homograph of the past tense of 'bend', kept as an independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "bit",
+    "suggested_lemma": "bit",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Noun headword ('a bit', computing 'bit'); homograph of the past tense of 'bite', kept as an independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "born",
+    "suggested_lemma": "born",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Lexicalized adjectival form ('born in June'); historically related to 'bear' but functions as an independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "bought",
+    "suggested_lemma": "buy",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Past tense/past participle of 'buy'; inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "broke",
+    "suggested_lemma": "break",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Past tense of 'break'; also an independent adjective ('broke' = penniless), so the inflection reading warrants review.",
+    "requires_review": true
+  },
+  {
+    "original": "broken",
+    "suggested_lemma": "break",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Past participle of 'break'; also a lexicalized adjective ('broken glass'), so headword status should be reviewed.",
+    "requires_review": true
+  },
+  {
+    "original": "burnt",
+    "suggested_lemma": "burn",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Past tense/past participle of 'burn' (variant form); also adjectival ('burnt toast').",
+    "requires_review": false
+  },
+  {
+    "original": "cas",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.7,
+    "reason": "Not an established English headword; appears to be a truncated fragment (possibly of 'cause'/'case').",
+    "requires_review": true
+  },
+  {
+    "original": "caught",
+    "suggested_lemma": "catch",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Past tense/past participle of 'catch'; inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "caus",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.7,
+    "reason": "Not an established English headword; truncated fragment (likely of 'cause').",
+    "requires_review": true
+  },
+  {
+    "original": "chosen",
+    "suggested_lemma": "choose",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Past participle of 'choose'; also adjectival ('the chosen one'), but primarily an inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "clos",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.7,
+    "reason": "Not an established English headword; truncated fragment (likely of 'close').",
+    "requires_review": true
+  },
+  {
+    "original": "coaming",
+    "suggested_lemma": "coaming",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.8,
+    "reason": "Established technical noun (raised rim around a hatch); no other entry to relate to.",
+    "requires_review": false
+  },
+  {
+    "original": "compelling",
+    "suggested_lemma": "compelling",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized adjective ('a compelling argument'); also the present participle of 'compel', so headword status is debatable.",
+    "requires_review": true
+  },
+  {
+    "original": "cours",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.7,
+    "reason": "Not an established English headword; truncated fragment (likely of 'course').",
+    "requires_review": true
+  },
+  {
+    "original": "crept",
+    "suggested_lemma": "creep",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Past tense/past participle of 'creep'; inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "criteria",
+    "suggested_lemma": "criterion",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Plural of 'criterion'; widely also used as a singular noun, so the inflection relation should be reviewed.",
+    "requires_review": true
+  },
+  {
+    "original": "cued",
+    "suggested_lemma": "cue",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.85,
+    "reason": "Past tense/past participle of 'cue'; inflectional form, occasionally adjectival ('cued in').",
+    "requires_review": false
+  },
+  {
+    "original": "curricula",
+    "suggested_lemma": "curriculum",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular plural of 'curriculum'; inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "died",
+    "suggested_lemma": "die",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Past tense of 'die'; inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "drawn",
+    "suggested_lemma": "draw",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Past participle of 'draw'; also adjectival ('a drawn face').",
+    "requires_review": false
+  },
+  {
+    "original": "drew",
+    "suggested_lemma": "draw",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Past tense of 'draw'; inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "driven",
+    "suggested_lemma": "drive",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Past participle of 'drive'; also adjectival ('a driven person').",
+    "requires_review": false
+  },
+  {
+    "original": "eas",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.7,
+    "reason": "Not an established English headword; truncated fragment (likely of 'ease'/'easy').",
+    "requires_review": true
+  },
+  {
+    "original": "dating",
+    "suggested_lemma": "date",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Surface form is the present participle/gerund of verb 'date'; likely an inflected form rather than an independent headword, though a nominal 'dating' sense is also possible.",
+    "requires_review": true
+  },
+  {
+    "original": "dealing",
+    "suggested_lemma": "deal",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.55,
+    "reason": "Appears as gerund/participle of verb 'deal'; a nominal 'dealing(s)' sense may coexist, so relation is advisory only.",
+    "requires_review": true
+  },
+  {
+    "original": "debris",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Well-formed uncountable noun with its own lexical identity and no base form to reduce to.",
+    "requires_review": false
+  },
+  {
+    "original": "demanding",
+    "suggested_lemma": "demand",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Lexicalized participial adjective distinct from verb 'demand'; derived words retain independent identities, so no merge is authorized.",
+    "requires_review": true
+  },
+  {
+    "original": "destined",
+    "suggested_lemma": "destine",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Functions as a participial adjective with its own usage profile; overlapping with verb 'destine' but not reducible for merging.",
+    "requires_review": true
+  },
+  {
+    "original": "detached",
+    "suggested_lemma": "detach",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Lexicalized participial adjective; shares stem with verb 'detach' but retains an independent adjectival identity.",
+    "requires_review": true
+  },
+  {
+    "original": "deteriorates",
+    "suggested_lemma": "deteriorate",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Third-person singular present of verb 'deteriorate'; a straightforward inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "diagnosis",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Standard noun in base form with an independent lemma; no reduction indicated.",
+    "requires_review": false
+  },
+  {
+    "original": "differentiating",
+    "suggested_lemma": "differentiate",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.65,
+    "reason": "Present participle/gerund of verb 'differentiate'; possible adjectival use introduces mild ambiguity.",
+    "requires_review": true
+  },
+  {
+    "original": "diffuses",
+    "suggested_lemma": "diffuse",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Third-person singular present of verb 'diffuse'; regular inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "dining",
+    "suggested_lemma": "dine",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Gerund/participle of verb 'dine'; an attributive nominal 'dining' sense also exists, so the relation is advisory.",
+    "requires_review": true
+  },
+  {
+    "original": "discuss",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Base-form verb acting as its own headword; no inflection or variant reduction applies.",
+    "requires_review": false
+  },
+  {
+    "original": "dress",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Base-form headword with both noun and verb senses existing as a single lemma; no reduction applies.",
+    "requires_review": false
+  },
+  {
+    "original": "dy",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": null,
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Two-letter fragment with no clear standalone lemma in standard English; likely a truncated or tokenized artifact. Evidence insufficient to classify.",
+    "requires_review": true
+  },
+  {
+    "original": "dynamics",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Plural-form noun functioning as its own lemma; not a simple inflection of a distinct singular headword.",
+    "requires_review": false
+  },
+  {
+    "original": "earning",
+    "suggested_lemma": "earn",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Gerund/participle of verb 'earn'; a nominal 'earnings'-related sense may be relevant but is not the same token.",
+    "requires_review": true
+  },
+  {
+    "original": "ending",
+    "suggested_lemma": "end",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.55,
+    "reason": "Lexicalized noun 'ending' distinct from verb 'end'; derived/gerund forms retain independent identity and cannot be merged.",
+    "requires_review": true
+  },
+  {
+    "original": "endotherms",
+    "suggested_lemma": "endotherm",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.7,
+    "reason": "Regular plural of technical noun 'endotherm'; inflectional relation only, with specialized-domain relevance uncertain.",
+    "requires_review": false
+  },
+  {
+    "original": "engineering",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Lexicalized noun 'engineering' with independent identity; homographic with participle of 'engineer' but not reducible.",
+    "requires_review": true
+  },
+  {
+    "original": "eras",
+    "suggested_lemma": "era",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Regular plural of noun 'era'; straightforward inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "etching",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Lexicalized noun 'etching' competing with the participle of 'etch'; independent identity retained, no merge authorized.",
+    "requires_review": true
+  },
+  {
+    "original": "ethics",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Plural-form noun with its own lemma; not a simple inflectional plural of a singular headword in this usage.",
+    "requires_review": false
+  },
+  {
+    "original": "evening",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized time noun with independent identity; homographic with a participial form but not reducible.",
+    "requires_review": false
+  },
+  {
+    "original": "everything",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "pronoun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Single-word pronoun lemma; no inflection or variant reduction applies.",
+    "requires_review": false
+  },
+  {
+    "original": "ex",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Short standalone lemma (noun 'ex'); could also be a bound prefix fragment, so classification is only tentative.",
+    "requires_review": true
+  },
+  {
+    "original": "exceeding",
+    "suggested_lemma": "exceed",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Present participle/gerund of verb 'exceed'; occasional adjectival use adds mild ambiguity.",
+    "requires_review": true
+  },
+  {
+    "original": "expos",
+    "suggested_lemma": "expo",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Plural of noun 'expo'; informal/abbreviated headword, so relation is advisory only.",
+    "requires_review": true
+  },
+  {
+    "original": "facilities",
+    "suggested_lemma": "facility",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Regular plural of noun 'facility'; straightforward inflectional form.",
+    "requires_review": false
+  },
+  {
+    "original": "famous",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Base-form adjective with an independent lemma; no inflection or variant reduction applies.",
+    "requires_review": false
+  },
+  {
+    "original": "fanners",
+    "suggested_lemma": "fanner",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Plural of rare noun 'fanner'; form is regular but the headword's provenance and lemma status are unclear.",
+    "requires_review": true
+  },
+  {
+    "original": "loss",
+    "suggested_lemma": "loss",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.92,
+    "reason": "Standard noun headword; valid standalone exam lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "lost-and-found",
+    "suggested_lemma": "lost-and-found",
+    "decision": "multiword_expression",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Hyphenated multiword/compound unit rather than a single lexical lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "marked",
+    "suggested_lemma": "marked",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle) / adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Formally an inflection of 'mark' but also an independent adjective (noticeable); inflection relation is not a merging basis.",
+    "requires_review": true
+  },
+  {
+    "original": "massachusetts",
+    "suggested_lemma": "Massachusetts",
+    "decision": "uncertain",
+    "part_of_speech": "proper noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Proper place name; may fall outside teachable exam vocabulary and casing would need normalization.",
+    "requires_review": true
+  },
+  {
+    "original": "me",
+    "suggested_lemma": "me",
+    "decision": "keep",
+    "part_of_speech": "pronoun",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Standard pronoun headword.",
+    "requires_review": false
+  },
+  {
+    "original": "meaning",
+    "suggested_lemma": "meaning",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Nominalized form of 'mean' with independent lexical identity; retain as its own lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "meeting",
+    "suggested_lemma": "meeting",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Derived noun with independent identity; not merged with base 'meet'.",
+    "requires_review": false
+  },
+  {
+    "original": "meticulous",
+    "suggested_lemma": "meticulous",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Standard adjective headword.",
+    "requires_review": false
+  },
+  {
+    "original": "mining",
+    "suggested_lemma": "mining",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.82,
+    "reason": "Derived noun retaining independent identity relative to 'mine'.",
+    "requires_review": false
+  },
+  {
+    "original": "miraculous",
+    "suggested_lemma": "miraculous",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Standard adjective headword.",
+    "requires_review": false
+  },
+  {
+    "original": "misled",
+    "suggested_lemma": "mislead",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular past/participle of 'mislead'; inflectional relation only, not a merging basis.",
+    "requires_review": false
+  },
+  {
+    "original": "miss",
+    "suggested_lemma": "miss",
+    "decision": "keep",
+    "part_of_speech": "verb / noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Standard verb/noun headword.",
+    "requires_review": false
+  },
+  {
+    "original": "misunderstanding",
+    "suggested_lemma": "misunderstanding",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.82,
+    "reason": "Derived noun with independent identity relative to 'misunderstand'.",
+    "requires_review": false
+  },
+  {
+    "original": "modeling",
+    "suggested_lemma": "modelling",
+    "decision": "spelling_variant",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "American spelling corresponding to British 'modelling'; orthographic variant only, no merging.",
+    "requires_review": true
+  },
+  {
+    "original": "morning",
+    "suggested_lemma": "morning",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Standard noun headword.",
+    "requires_review": false
+  },
+  {
+    "original": "my",
+    "suggested_lemma": "my",
+    "decision": "keep",
+    "part_of_speech": "determiner / pronoun",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Standard possessive determiner/pronoun headword.",
+    "requires_review": false
+  },
+  {
+    "original": "nestling",
+    "suggested_lemma": "nestling",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.55,
+    "reason": "Standalone noun (a young bird), also participial form of 'nestle'; noun has independent identity and is not merged.",
+    "requires_review": true
+  },
+  {
+    "original": "netherlands",
+    "suggested_lemma": "Netherlands",
+    "decision": "uncertain",
+    "part_of_speech": "proper noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Proper place name; may fall outside teachable exam vocabulary and casing would need normalization.",
+    "requires_review": true
+  },
+  {
+    "original": "news",
+    "suggested_lemma": "news",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.93,
+    "reason": "Standard noun headword.",
+    "requires_review": false
+  },
+  {
+    "original": "nonliving",
+    "suggested_lemma": "nonliving",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Valid adjective headword; often written 'non-living'. Variant orthography does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "nothing",
+    "suggested_lemma": "nothing",
+    "decision": "keep",
+    "part_of_speech": "pronoun",
+    "exam_relevance": "supported",
+    "confidence": 0.93,
+    "reason": "Standard pronoun headword.",
+    "requires_review": false
+  },
+  {
+    "original": "nursing",
+    "suggested_lemma": "nursing",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun / adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Derived noun keeping independent identity relative to 'nurse'.",
+    "requires_review": false
+  },
+  {
+    "original": "odds",
+    "suggested_lemma": "odds",
+    "decision": "keep",
+    "part_of_speech": "plural noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Plural-only noun headword; retain as listed.",
+    "requires_review": false
+  },
+  {
+    "original": "offering",
+    "suggested_lemma": "offering",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.82,
+    "reason": "Derived noun with independent identity relative to 'offer'.",
+    "requires_review": false
+  },
+  {
+    "original": "ongoing",
+    "suggested_lemma": "ongoing",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.88,
+    "reason": "Standard adjective headword.",
+    "requires_review": false
+  },
+  {
+    "original": "onwards",
+    "suggested_lemma": "onward",
+    "decision": "spelling_variant",
+    "part_of_speech": "adverb",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "British adverbial form corresponding to 'onward'; form relation only, no merging.",
+    "requires_review": false
+  },
+  {
+    "original": "opening",
+    "suggested_lemma": "opening",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun / adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.83,
+    "reason": "Derived noun/adjective with independent identity relative to 'open'.",
+    "requires_review": false
+  },
+  {
+    "original": "outdated",
+    "suggested_lemma": "outdated",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Standard adjective headword.",
+    "requires_review": false
+  },
+  {
+    "original": "overseas",
+    "suggested_lemma": "overseas",
+    "decision": "keep",
+    "part_of_speech": "adjective / adverb",
+    "exam_relevance": "supported",
+    "confidence": 0.88,
+    "reason": "Standard adjective/adverb headword.",
+    "requires_review": false
+  },
+  {
+    "original": "owing",
+    "suggested_lemma": "owing",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Valid adjective headword (chiefly in 'owing to'); also participial form of 'owe', retained independently.",
+    "requires_review": false
+  },
+  {
+    "original": "aching",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Lexicalized participial adjective from 'ache'; treated as an independent headword. An inflection relation would not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "afterwards",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adverb",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Standard adverb headword; a variant of 'afterward' but not a duplicate in this list.",
+    "requires_review": false
+  },
+  {
+    "original": "aging",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Established headword (US spelling); UK 'ageing' is not present, so no merge is warranted.",
+    "requires_review": true
+  },
+  {
+    "original": "air-conditioning",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Hyphenated compound noun listed as a single headword; the open form 'air conditioning' exists but has no entry here.",
+    "requires_review": true
+  },
+  {
+    "original": "annoyed",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Past-participle adjective lexicalized from 'annoy'; independent headword.",
+    "requires_review": true
+  },
+  {
+    "original": "anything",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "pronoun",
+    "exam_relevance": "supported",
+    "confidence": 0.95,
+    "reason": "Standard indefinite pronoun headword.",
+    "requires_review": false
+  },
+  {
+    "original": "appalling",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.78,
+    "reason": "Participial adjective from 'appall'; lexicalized and independent.",
+    "requires_review": true
+  },
+  {
+    "original": "athletics",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.88,
+    "reason": "Standard plural-form noun denoting a subject/activity; a headword in its own right.",
+    "requires_review": false
+  },
+  {
+    "original": "authorities",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Plural form of 'authority' with a lexicalized sense ('the authorities'); an inflection relation does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "autonomous",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Standard adjective headword.",
+    "requires_review": false
+  },
+  {
+    "original": "ax",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Accepted US spelling variant of 'axe'; 'axe' is not in this list, so it is retained as an independent headword.",
+    "requires_review": true
+  },
+  {
+    "original": "basis",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.92,
+    "reason": "Standard noun; base form (the irregular plural 'bases' is not relevant to this headword).",
+    "requires_review": false
+  },
+  {
+    "original": "bearing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Noun from 'bear' with distinct senses (relevance, manner); also an -ing form, so its lemma identity merits a look.",
+    "requires_review": true
+  },
+  {
+    "original": "being",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.68,
+    "reason": "Lexicalized noun/gerund from 'be'; independent headword with its own senses.",
+    "requires_review": true
+  },
+  {
+    "original": "beloved",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Lexicalized adjective headword; independent identity retained.",
+    "requires_review": false
+  },
+  {
+    "original": "biased",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.78,
+    "reason": "Participial adjective from 'bias'; lexicalized and independent.",
+    "requires_review": true
+  },
+  {
+    "original": "booking",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Noun from 'book' (reservation); also an -ing form, so flagged for review.",
+    "requires_review": true
+  },
+  {
+    "original": "boring",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Participial adjective from 'bore'; lexicalized and independent.",
+    "requires_review": true
+  },
+  {
+    "original": "building",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Noun from 'build' with a distinct lexical sense; independent headword.",
+    "requires_review": true
+  },
+  {
+    "original": "canoes",
+    "suggested_lemma": "canoe",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Regular plural of 'canoe'; an inflected form, and inflection does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "canvass",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Distinct lemma (to solicit/survey), not a variant or misspelling of 'canvas'; it must not be merged with it.",
+    "requires_review": true
+  },
+  {
+    "original": "cenotes",
+    "suggested_lemma": "cenote",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.65,
+    "reason": "Regular plural of the loanword 'cenote'; an inflected form, and inflection does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "checked",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Past-participle form of 'check' with lexicalized adjective uses (patterned, verified); could also be read as an inflected verb form.",
+    "requires_review": true
+  },
+  {
+    "original": "clearing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Noun from 'clear' (open space); also an -ing form, so flagged for review.",
+    "requires_review": true
+  },
+  {
+    "original": "coating",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Noun from 'coat' (layer); also an -ing form, so flagged for review.",
+    "requires_review": true
+  },
+  {
+    "original": "condenses",
+    "suggested_lemma": "condense",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Third-person singular present of 'condense'; an inflected form, and inflection does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "covering",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Noun from 'cover'; also an -ing form, so flagged for review.",
+    "requires_review": true
+  },
+  {
+    "original": "crisis",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.92,
+    "reason": "Standard noun headword; base form (the irregular plural 'crises' is not relevant here).",
+    "requires_review": false
+  },
+  {
+    "original": "criss-cross",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Hyphenated form of 'crisscross'; retained as an independent headword since the solid form is not in the list.",
+    "requires_review": true
+  },
+  {
+    "original": "crushing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Participial adjective from 'crush'; lexicalized and independent.",
+    "requires_review": true
+  },
+  {
+    "original": "vicious",
+    "suggested_lemma": "vicious",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Standard adjective headword; no inflectional or orthographic relation to another lemma is claimed.",
+    "requires_review": false
+  },
+  {
+    "original": "waling",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": null,
+    "exam_relevance": "uncertain",
+    "confidence": 0.3,
+    "reason": "Ambiguous: could be a present participle of 'wale' (to mark with welts) or a noun denoting a horizontal timber; evidence is insufficient to fix lemma or part of speech.",
+    "requires_review": true
+  },
+  {
+    "original": "watercourses",
+    "suggested_lemma": "watercourse",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Appears to be the regular plural of 'watercourse'; relation documented only, and inflection does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "well-heeled",
+    "suggested_lemma": "well-heeled",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.85,
+    "reason": "Hyphenated compound adjective functioning as an independent headword; retained as its own lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "working",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized headword with independent noun/adjective senses alongside its participial origin; the inflectional link to 'work' does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "wretched",
+    "suggested_lemma": "wretched",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Standard adjective headword; no merge-triggering relation asserted.",
+    "requires_review": false
+  },
+  {
+    "original": "writing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized noun headword distinct in identity from the gerund of 'write'; inflectional relation does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "x-ray",
+    "suggested_lemma": "x-ray",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Hyphenated headword with noun (and verb) senses; retained as an independent lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "ox",
+    "suggested_lemma": "ox",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Standard singular noun headword; no duplication, variant, or inflection issue.",
+    "requires_review": false
+  },
+  {
+    "original": "paris",
+    "suggested_lemma": "paris",
+    "decision": "keep",
+    "part_of_speech": "proper noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.55,
+    "reason": "Lowercase proper noun (city); capitalization/headword policy unclear, confirm intended form.",
+    "requires_review": true
+  },
+  {
+    "original": "parking",
+    "suggested_lemma": "parking",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized noun (act/space of parking) distinct from verb 'park'; inflection relation would not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "part-time",
+    "suggested_lemma": "part-time",
+    "decision": "multiword_expression",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Hyphenated compound functioning as a single headword.",
+    "requires_review": false
+  },
+  {
+    "original": "pass",
+    "suggested_lemma": "pass",
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Standard verb/noun headword; no issue.",
+    "requires_review": false
+  },
+  {
+    "original": "physics",
+    "suggested_lemma": "physics",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Uncountable noun headword; no issue.",
+    "requires_review": false
+  },
+  {
+    "original": "pi",
+    "suggested_lemma": "pi",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.55,
+    "reason": "Valid noun (math constant/Greek letter) but sense not specified; confirm intended meaning.",
+    "requires_review": true
+  },
+  {
+    "original": "piling",
+    "suggested_lemma": "piling",
+    "decision": "uncertain",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Ambiguous between lexicalized noun 'piling' and gerund of 'pile'; insufficient evidence to classify.",
+    "requires_review": true
+  },
+  {
+    "original": "pleas",
+    "suggested_lemma": "plea",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Plural of 'plea'; inflection relation does not authorize merging, so retain independently.",
+    "requires_review": true
+  },
+  {
+    "original": "pointed",
+    "suggested_lemma": "pointed",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Lexicalized adjective (pointed remark) distinct from past tense of 'point'.",
+    "requires_review": false
+  },
+  {
+    "original": "poisonous",
+    "suggested_lemma": "poisonous",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Derived adjective retaining independent identity from 'poison'; derivation does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "posting",
+    "suggested_lemma": "posting",
+    "decision": "uncertain",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.45,
+    "reason": "Ambiguous between noun 'posting' (job/online post) and gerund of 'post'.",
+    "requires_review": true
+  },
+  {
+    "original": "prairies",
+    "suggested_lemma": "prairie",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Plural of 'prairie' (also proper noun 'the Prairies'); inflection does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "pres",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": "abbreviation",
+    "exam_relevance": "uncertain",
+    "confidence": 0.3,
+    "reason": "Indeterminate abbreviation (e.g., president, press); not a standard headword.",
+    "requires_review": true
+  },
+  {
+    "original": "press",
+    "suggested_lemma": "press",
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Standard verb/noun headword; no issue.",
+    "requires_review": false
+  },
+  {
+    "original": "privileged",
+    "suggested_lemma": "privileged",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized adjective distinct from participle of 'privilege'.",
+    "requires_review": false
+  },
+  {
+    "original": "proces",
+    "suggested_lemma": "process",
+    "decision": "spelling_variant",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Apparent misspelling/truncation of 'process'; verify intended spelling.",
+    "requires_review": true
+  },
+  {
+    "original": "processing",
+    "suggested_lemma": "processing",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Lexicalized noun/gerund (data processing) distinct from verb 'process'; inflection would not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "prolonged",
+    "suggested_lemma": "prolonged",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized adjective distinct from past participle of 'prolong'.",
+    "requires_review": false
+  },
+  {
+    "original": "puzzling",
+    "suggested_lemma": "puzzling",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized adjective distinct from participle of 'puzzle'.",
+    "requires_review": false
+  },
+  {
+    "original": "racing",
+    "suggested_lemma": "racing",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.55,
+    "reason": "Noun 'racing' (sport) lexicalized but overlaps with participle of 'race'; confirm intended sense.",
+    "requires_review": true
+  },
+  {
+    "original": "recording",
+    "suggested_lemma": "recording",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized noun distinct from participle of 'record'.",
+    "requires_review": false
+  },
+  {
+    "original": "refreshing",
+    "suggested_lemma": "refreshing",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized adjective distinct from participle of 'refresh'.",
+    "requires_review": false
+  },
+  {
+    "original": "relieved",
+    "suggested_lemma": "relieved",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Lexicalized adjective distinct from past participle of 'relieve'.",
+    "requires_review": false
+  },
+  {
+    "original": "remains",
+    "suggested_lemma": "remains",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Lexicalized plural noun (remains) distinct from verb 'remain'; inflection would not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "repeated",
+    "suggested_lemma": "repeated",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Lexicalized adjective (repeated attempts) distinct from participle of 'repeat'.",
+    "requires_review": false
+  },
+  {
+    "original": "reserved",
+    "suggested_lemma": "reserved",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Lexicalized adjective distinct from participle of 'reserve'.",
+    "requires_review": false
+  },
+  {
+    "original": "rewarding",
+    "suggested_lemma": "rewarding",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Lexicalized adjective distinct from participle of 'reward'.",
+    "requires_review": false
+  },
+  {
+    "original": "righteous",
+    "suggested_lemma": "righteous",
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Independent adjective; no derivation or merge issue.",
+    "requires_review": false
+  },
+  {
+    "original": "ruling",
+    "suggested_lemma": "ruling",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Lexicalized noun/adjective distinct from participle of 'rule'.",
+    "requires_review": false
+  },
+  {
+    "original": "far-fetched",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.82,
+    "reason": "Hyphenated compound adjective listed as a single exam headword; no merge or split indicated.",
+    "requires_review": false
+  },
+  {
+    "original": "feeling",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Lexicalized noun with an independent sense; homographic participle of 'feel' does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "firing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Lexicalized nominal use (dismissal/shooting) alongside the verb form; retained as an independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "flaming",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Adjectival use is lexicalized; participle relation to 'flame' does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "founding",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Adjectival/nominal use is lexicalized; kept as a headword without merging.",
+    "requires_review": false
+  },
+  {
+    "original": "freezing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.76,
+    "reason": "Lexicalized adjective/noun; participle relation to 'freeze' does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "gardening",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.82,
+    "reason": "Established noun denoting an activity; independent identity retained.",
+    "requires_review": false
+  },
+  {
+    "original": "genetics",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.88,
+    "reason": "Singular mass noun ending in -s; valid independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "go",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "High-frequency base verb that is also a noun; no relation to merge.",
+    "requires_review": false
+  },
+  {
+    "original": "goods",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.84,
+    "reason": "Plural-only noun with a distinct meaning (merchandise); not a plain inflection of 'good'.",
+    "requires_review": false
+  },
+  {
+    "original": "grading",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Nominal use is established; kept independently of the verb 'grade'.",
+    "requires_review": false
+  },
+  {
+    "original": "grandparents",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.68,
+    "reason": "Compound plural noun frequently listed as a headword; inflectional relation to 'grandparent' does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "grazing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Nominal use is established; retained independently of the verb 'graze'.",
+    "requires_review": false
+  },
+  {
+    "original": "grounding",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Nominal use is established; kept independently of 'ground'.",
+    "requires_review": false
+  },
+  {
+    "original": "guess",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.88,
+    "reason": "Base verb and noun; valid independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "heading",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Lexicalized noun (title/section heading); participle relation to 'head' does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "heartbreaking",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Compound adjective functioning as a single headword.",
+    "requires_review": false
+  },
+  {
+    "original": "holding",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Nominal use (holdings) is established; kept independently of 'hold'.",
+    "requires_review": false
+  },
+  {
+    "original": "homing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.66,
+    "reason": "Adjectival use is lexicalized; retained independently of 'home'.",
+    "requires_review": false
+  },
+  {
+    "original": "housewares",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Plural-only noun; valid independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "hundred",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "numeral",
+    "exam_relevance": "supported",
+    "confidence": 0.88,
+    "reason": "Base numeral/noun; valid independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "id",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Lowercase form is ambiguous between the psychoanalytic noun and an abbreviation; insufficient evidence to fix lemma or sense.",
+    "requires_review": true
+  },
+  {
+    "original": "illinois",
+    "suggested_lemma": "Illinois",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Proper noun; lowercase input likely reflects orthographic normalization only, not a distinct lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "impress",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.88,
+    "reason": "Base verb; valid independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "incoming",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Lexicalized adjective; independent headword.",
+    "requires_review": false
+  },
+  {
+    "original": "increasing",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Adjectival use is established; participle relation to 'increase' does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "intervening",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.68,
+    "reason": "Adjectival use is established; retained independently of 'intervene'.",
+    "requires_review": false
+  },
+  {
+    "original": "jeans",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.86,
+    "reason": "Plural-only noun; valid independent headword, not a plain inflection.",
+    "requires_review": false
+  },
+  {
+    "original": "leaning",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.72,
+    "reason": "Nominal use is established; kept independently of 'lean'.",
+    "requires_review": false
+  },
+  {
+    "original": "living",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Lexicalized noun/adjective; independent identity retained.",
+    "requires_review": false
+  },
+  {
+    "original": "sent",
+    "suggested_lemma": "send",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense and past participle of send; an inflected form, not a base lemma. Inflection relation does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "sentimentalized",
+    "suggested_lemma": "sentimentalize",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Past tense/participle of the verb sentimentalize.",
+    "requires_review": false
+  },
+  {
+    "original": "shoemaking",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.7,
+    "reason": "Lexicalized noun denoting the making of shoes; not an inflection or spelling variant.",
+    "requires_review": false
+  },
+  {
+    "original": "shrank",
+    "suggested_lemma": "shrink",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense of shrink.",
+    "requires_review": false
+  },
+  {
+    "original": "situated",
+    "suggested_lemma": "situate",
+    "decision": "uncertain",
+    "part_of_speech": "verb/adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Participial form of situate but also lexicalized as an adjective; relation alone does not authorize merging, so status is ambiguous.",
+    "requires_review": true
+  },
+  {
+    "original": "sled",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun/verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.85,
+    "reason": "Base form functioning as both noun and verb; retained as an independent lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "sledding",
+    "suggested_lemma": "sled",
+    "decision": "inflection_of",
+    "part_of_speech": "verb/noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Gerund/verbal noun of sled but also lexicalized as a noun; derivation does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "slept",
+    "suggested_lemma": "sleep",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense and past participle of sleep.",
+    "requires_review": false
+  },
+  {
+    "original": "smelt",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": null,
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Ambiguous: past/participle of smell (especially British) and an independent verb meaning to extract metal from ore; insufficient evidence to assign a single lemma.",
+    "requires_review": true
+  },
+  {
+    "original": "sold",
+    "suggested_lemma": "sell",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense and past participle of sell.",
+    "requires_review": false
+  },
+  {
+    "original": "sought",
+    "suggested_lemma": "seek",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense and past participle of seek.",
+    "requires_review": false
+  },
+  {
+    "original": "sped",
+    "suggested_lemma": "speed",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Past tense and past participle of speed.",
+    "requires_review": false
+  },
+  {
+    "original": "spoken",
+    "suggested_lemma": "speak",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past participle of speak.",
+    "requires_review": false
+  },
+  {
+    "original": "sprung",
+    "suggested_lemma": "spring",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Past participle and (less commonly) past tense of spring.",
+    "requires_review": false
+  },
+  {
+    "original": "spun",
+    "suggested_lemma": "spin",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense and past participle of spin.",
+    "requires_review": false
+  },
+  {
+    "original": "stimuli",
+    "suggested_lemma": "stimulus",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Plural (Latinate) form of stimulus.",
+    "requires_review": false
+  },
+  {
+    "original": "stole",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": null,
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Ambiguous: past tense of steal and an independent noun denoting a garment; the two senses have different lemmas.",
+    "requires_review": true
+  },
+  {
+    "original": "struck",
+    "suggested_lemma": "strike",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense and past participle of strike.",
+    "requires_review": false
+  },
+  {
+    "original": "stuck",
+    "suggested_lemma": "stick",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Past tense and past participle of stick.",
+    "requires_review": false
+  },
+  {
+    "original": "substantiated",
+    "suggested_lemma": "substantiate",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Past tense/participle of the verb substantiate.",
+    "requires_review": false
+  },
+  {
+    "original": "suppos",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Not a well-formed English word; appears to be a typo or truncation (e.g., suppose).",
+    "requires_review": true
+  },
+  {
+    "original": "swollen",
+    "suggested_lemma": "swell",
+    "decision": "inflection_of",
+    "part_of_speech": "verb/adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.8,
+    "reason": "Past participle of swell and lexicalized adjective; the inflection relation alone does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "tangled",
+    "suggested_lemma": "tangle",
+    "decision": "uncertain",
+    "part_of_speech": "verb/adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.5,
+    "reason": "Participial form of tangle but also lexicalized as an adjective; status is ambiguous and merging is not authorized by the inflection relation.",
+    "requires_review": true
+  },
+  {
+    "original": "taxes",
+    "suggested_lemma": "tax",
+    "decision": "inflection_of",
+    "part_of_speech": "noun/verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Plural of the noun tax and third-person singular of the verb tax.",
+    "requires_review": false
+  },
+  {
+    "original": "thames",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "proper noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Proper noun (as in the River Thames); not derivable from an inflection and retained as an independent entry.",
+    "requires_review": false
+  },
+  {
+    "original": "threw",
+    "suggested_lemma": "throw",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense of throw.",
+    "requires_review": false
+  },
+  {
+    "original": "thrown",
+    "suggested_lemma": "throw",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past participle of throw.",
+    "requires_review": false
+  },
+  {
+    "original": "told",
+    "suggested_lemma": "tell",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.95,
+    "reason": "Past tense and past participle of tell.",
+    "requires_review": false
+  },
+  {
+    "original": "torn",
+    "suggested_lemma": "tear",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.9,
+    "reason": "Past participle of tear.",
+    "requires_review": false
+  },
+  {
+    "original": "trans",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": null,
+    "exam_relevance": "uncertain",
+    "confidence": 0.3,
+    "reason": "Commonly a combining prefix; as a standalone headword its word status, part of speech, and meaning are unclear without source context.",
+    "requires_review": true
+  },
+  {
+    "original": "eyed",
+    "suggested_lemma": "eye",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle); also adjective in compounds",
+    "exam_relevance": "supported",
+    "confidence": 0.78,
+    "reason": "Regular past tense/participle of the verb 'eye'; also attested adjectivally (e.g. keen-eyed), but as an inflected form it relates to the base verb and does not merge with it.",
+    "requires_review": false
+  },
+  {
+    "original": "fallen",
+    "suggested_lemma": "fall",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle); adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular past participle of 'fall'; adjectival use exists but the relation to the base verb is primary, and inflection does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "fed",
+    "suggested_lemma": "feed",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past tense and past participle of 'feed'.",
+    "requires_review": false
+  },
+  {
+    "original": "flown",
+    "suggested_lemma": "fly",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past participle of 'fly'.",
+    "requires_review": false
+  },
+  {
+    "original": "forbidden",
+    "suggested_lemma": "forbid",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle); adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular past participle of 'forbid', frequently used adjectivally; still an inflected form of the verb, not a merge candidate.",
+    "requires_review": false
+  },
+  {
+    "original": "foresaw",
+    "suggested_lemma": "foresee",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past tense of 'foresee'.",
+    "requires_review": false
+  },
+  {
+    "original": "foreseen",
+    "suggested_lemma": "foresee",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past participle of 'foresee'.",
+    "requires_review": false
+  },
+  {
+    "original": "forgot",
+    "suggested_lemma": "forget",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past tense of 'forget'.",
+    "requires_review": false
+  },
+  {
+    "original": "forgotten",
+    "suggested_lemma": "forget",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle); adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past participle of 'forget'.",
+    "requires_review": false
+  },
+  {
+    "original": "found",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": "verb (past tense of 'find'); verb (base: to found, to establish)",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Homograph: past tense/participle of 'find' versus the independent base verb 'found' (establish). The input alone does not disambiguate, and these are separate lexemes.",
+    "requires_review": true
+  },
+  {
+    "original": "froze",
+    "suggested_lemma": "freeze",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past tense of 'freeze'.",
+    "requires_review": false
+  },
+  {
+    "original": "frozen",
+    "suggested_lemma": "freeze",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle); adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular past participle of 'freeze', also used adjectivally; inflected form of the base verb.",
+    "requires_review": false
+  },
+  {
+    "original": "ganglia",
+    "suggested_lemma": "ganglion",
+    "decision": "inflection_of",
+    "part_of_speech": "noun (irregular plural)",
+    "exam_relevance": "uncertain",
+    "confidence": 0.7,
+    "reason": "Irregular plural of 'ganglion'. The plural relation is clear, but the lemma is a technical/medical term whose exam-source scope is not established here.",
+    "requires_review": false
+  },
+  {
+    "original": "given",
+    "suggested_lemma": "give",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle); adjective; preposition",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular past participle of 'give', with grammaticalized adjectival/prepositional uses; the verbal inflection relation is primary.",
+    "requires_review": false
+  },
+  {
+    "original": "grew",
+    "suggested_lemma": "grow",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past tense of 'grow'.",
+    "requires_review": false
+  },
+  {
+    "original": "ground",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": "noun; verb (past tense/past participle of 'grind')",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Homograph: the noun/verb 'ground' is an independent lexeme, while 'ground' is also the past tense/participle of 'grind'. Input alone is ambiguous.",
+    "requires_review": true
+  },
+  {
+    "original": "gues",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.25,
+    "reason": "Not a well-formed English word; appears to be a truncated or garbled string. No established lemma or inflection relation can be assigned.",
+    "requires_review": true
+  },
+  {
+    "original": "heard",
+    "suggested_lemma": "hear",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past tense and past participle of 'hear'.",
+    "requires_review": false
+  },
+  {
+    "original": "held",
+    "suggested_lemma": "hold",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past tense and past participle of 'hold'.",
+    "requires_review": false
+  },
+  {
+    "original": "hidden",
+    "suggested_lemma": "hide",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle); adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular past participle of 'hide', commonly adjectival; remains an inflected form of the base verb.",
+    "requires_review": false
+  },
+  {
+    "original": "hors",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.25,
+    "reason": "Not a well-formed English word; likely a truncated string. No lemma or inflection relation can be established.",
+    "requires_review": true
+  },
+  {
+    "original": "incapacitated",
+    "suggested_lemma": "incapacitate",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle); adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.55,
+    "reason": "Regular past participle of 'incapacitate' with strong adjectival use; if the source treats it as an independent adjective headword, the lemma assignment differs. Inflection/derivation does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "interwoven",
+    "suggested_lemma": "interweave",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past participle); adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Irregular past participle of 'interweave', also used adjectivally; inflected form of the base verb.",
+    "requires_review": false
+  },
+  {
+    "original": "justified",
+    "suggested_lemma": "justify",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle); adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.55,
+    "reason": "Regular past participle of 'justify' with common adjectival use; if the source lists it as a standalone adjective entry, the lemma differs. Inflection does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "kept",
+    "suggested_lemma": "keep",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Irregular past tense and past participle of 'keep'.",
+    "requires_review": false
+  },
+  {
+    "original": "laid",
+    "suggested_lemma": "lay",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.88,
+    "reason": "Irregular past tense and past participle of 'lay'. Standard confusion with 'lie/laid' is noted but does not alter the inflection relation.",
+    "requires_review": false
+  },
+  {
+    "original": "landlocked",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "A compound adjective with its own lexical entry; it is not an inflection or spelling variant of another headword and retains an independent identity.",
+    "requires_review": false
+  },
+  {
+    "original": "laymen",
+    "suggested_lemma": "layman",
+    "decision": "inflection_of",
+    "part_of_speech": "noun (irregular plural)",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular plural of 'layman'; plural relation is clear, and inflection does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "left",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": "verb (past tense/past participle of 'leave'); adjective; noun; adverb",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Homograph: past tense/participle of 'leave' versus the independent adjective/adverb/noun 'left' (direction, side). Input alone does not disambiguate.",
+    "requires_review": true
+  },
+  {
+    "original": "lent",
+    "suggested_lemma": "lend",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (past tense/past participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Irregular past tense and past participle of 'lend'. Note the homograph proper noun 'Lent' (ecclesiastical season); the lowercase form supports the verb reading.",
+    "requires_review": false
+  },
+  {
+    "original": "unified",
+    "suggested_lemma": "unify",
+    "decision": "inflection_of",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.8,
+    "reason": "Regular past tense/past participle of verb 'unify', frequently used attributively as an adjective; inflectional relation does not authorize merging.",
+    "requires_review": true
+  },
+  {
+    "original": "ups",
+    "suggested_lemma": "up",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.7,
+    "reason": "Plural/third-person form of 'up'; has a lexicalized noun sense ('ups and downs') but remains inflectionally related to 'up'.",
+    "requires_review": true
+  },
+  {
+    "original": "vas",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Possible standalone noun ('vas deferens') but also read as a clipped or plural form; insufficient evidence to assign a lemma or exam status.",
+    "requires_review": true
+  },
+  {
+    "original": "vers",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": null,
+    "exam_relevance": "uncertain",
+    "confidence": 0.3,
+    "reason": "Possible clipping of 'versus' or 'verse'; no reliable standalone lemma or exam evidence available.",
+    "requires_review": true
+  },
+  {
+    "original": "waxes",
+    "suggested_lemma": "wax",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.8,
+    "reason": "Plural of noun 'wax' and third-person singular of verb 'wax'; regular inflection of a single base lemma.",
+    "requires_review": true
+  },
+  {
+    "original": "willing",
+    "suggested_lemma": "willing",
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Lexicalized adjective ('willing to help') not a productive inflection of modal 'will'; derived/participial forms retain independent identity.",
+    "requires_review": true
+  },
+  {
+    "original": "woodcutting",
+    "suggested_lemma": "woodcutting",
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.6,
+    "reason": "Compound/gerund noun denoting the activity of cutting wood; identifiable as an independent lemma, but exam attestation is unclear.",
+    "requires_review": true
+  },
+  {
+    "original": "wound",
+    "suggested_lemma": "wound",
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "uncertain",
+    "confidence": 0.7,
+    "reason": "Standalone homograph: noun/verb 'wound' (injury) is an independent lemma distinct from the past tense of 'wind'; homographs must not be merged.",
+    "requires_review": true
+  },
+  {
+    "original": "saving",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.5,
+    "reason": "Functions as a lexicalized noun/adjective (a saving, saving grace) as well as a present participle of 'save'; distinct identity but homograph ambiguity warrants review.",
+    "requires_review": true
+  },
+  {
+    "original": "screening",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Lexicalized noun (a screening, film screening) alongside the participle of 'screen'; treated as an independent lemma.",
+    "requires_review": true
+  },
+  {
+    "original": "seeming",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Lexicalized adjective (apparent) distinct from the participle of 'seem'.",
+    "requires_review": true
+  },
+  {
+    "original": "series",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Invariant noun lemma; no inflection relation to another English base form.",
+    "requires_review": false
+  },
+  {
+    "original": "so-called",
+    "suggested_lemma": null,
+    "decision": "multiword_expression",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Hyphenated multiword expression functioning as an adjective.",
+    "requires_review": false
+  },
+  {
+    "original": "speed",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Base noun/verb lemma; no normalization needed.",
+    "requires_review": false
+  },
+  {
+    "original": "staggered",
+    "suggested_lemma": "stagger",
+    "decision": "uncertain",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.4,
+    "reason": "Both a regular past tense/participle of 'stagger' and a lexicalized adjective (staggered hours); insufficient evidence to fix the intended lexeme.",
+    "requires_review": true
+  },
+  {
+    "original": "stocking",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Lexicalized noun (garment) alongside the participle of 'stock'; independent identity retained.",
+    "requires_review": true
+  },
+  {
+    "original": "storehouses",
+    "suggested_lemma": "storehouse",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Regular plural of 'storehouse'; inflection relation recorded but does not authorize merging.",
+    "requires_review": false
+  },
+  {
+    "original": "superorganisms",
+    "suggested_lemma": "superorganism",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Regular plural of 'superorganism'; inflection only.",
+    "requires_review": false
+  },
+  {
+    "original": "supposed",
+    "suggested_lemma": "suppose",
+    "decision": "uncertain",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.4,
+    "reason": "Both past participle of 'suppose' and a lexicalized adjective (be supposed to); intended lexeme unclear.",
+    "requires_review": true
+  },
+  {
+    "original": "surrounding",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Lexicalized adjective/noun (surrounding area) distinct from the participle of 'surround'.",
+    "requires_review": true
+  },
+  {
+    "original": "tantalizing",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Lexicalized adjective distinct from the participle of 'tantalize'.",
+    "requires_review": true
+  },
+  {
+    "original": "teas",
+    "suggested_lemma": "tea",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Regular plural of 'tea'; inflection relation only.",
+    "requires_review": false
+  },
+  {
+    "original": "telecommunications",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Standard noun headword (mass/plural usage); no normalization to a distinct singular lemma required.",
+    "requires_review": false
+  },
+  {
+    "original": "tempting",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Lexicalized adjective distinct from the participle of 'tempt'.",
+    "requires_review": true
+  },
+  {
+    "original": "thrilling",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Lexicalized adjective distinct from the participle of 'thrill'.",
+    "requires_review": true
+  },
+  {
+    "original": "trade-off",
+    "suggested_lemma": null,
+    "decision": "multiword_expression",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Hyphenated multiword expression functioning as a noun.",
+    "requires_review": false
+  },
+  {
+    "original": "twinkling",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.5,
+    "reason": "Lexicalized noun/adjective (in the twinkling of an eye) alongside the participle of 'twinkle'; ambiguity warrants review.",
+    "requires_review": true
+  },
+  {
+    "original": "ubiquitous",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Base adjective lemma; no normalization needed.",
+    "requires_review": false
+  },
+  {
+    "original": "unanticipated",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Derived un- adjective retaining independent identity rather than a mere inflection of 'anticipated'.",
+    "requires_review": false
+  },
+  {
+    "original": "underfunded",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Derived adjective (under- + funded) retaining independent identity.",
+    "requires_review": false
+  },
+  {
+    "original": "underlies",
+    "suggested_lemma": "underlie",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Third-person singular present of 'underlie'; inflection relation only, no merge authorized.",
+    "requires_review": false
+  },
+  {
+    "original": "underrepresented",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Derived adjective (under- + represented) retaining independent identity.",
+    "requires_review": false
+  },
+  {
+    "original": "undeveloped",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Derived un- adjective retaining independent identity.",
+    "requires_review": false
+  },
+  {
+    "original": "unemployed",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Derived un- adjective retaining independent identity.",
+    "requires_review": false
+  },
+  {
+    "original": "unexpected",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Derived un- adjective retaining independent identity.",
+    "requires_review": false
+  },
+  {
+    "original": "uninteresting",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Derived un- adjective retaining independent identity.",
+    "requires_review": false
+  },
+  {
+    "original": "unlimited",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Derived un- adjective retaining independent identity.",
+    "requires_review": false
+  },
+  {
+    "original": "upcoming",
+    "suggested_lemma": null,
+    "decision": "distinct_lemma",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Lexicalized adjective with no productive base verb; independent lemma.",
+    "requires_review": false
+  },
+  {
+    "original": "lit",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.6,
+    "reason": "Valid headword, but the form is ambiguous between an informal adjective and the past tense of 'light'; sense cannot be resolved from the string alone.",
+    "requires_review": true
+  },
+  {
+    "original": "lopsided",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Clear independent adjective lemma; no inflection or spelling conflict present.",
+    "requires_review": false
+  },
+  {
+    "original": "lying",
+    "suggested_lemma": "lie",
+    "decision": "inflection_of",
+    "part_of_speech": "verb (present participle); also adjective/noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Inflected form of 'lie', but two source lemmas (recline vs. untruth) leave the base ambiguous. The inflection relation does not authorize merging; retained as an independent entry.",
+    "requires_review": true
+  },
+  {
+    "original": "lys",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.4,
+    "reason": "Not a standalone English lemma; appears to be a truncated fragment or bound prefix. No lexicographic evidence as given.",
+    "requires_review": true
+  },
+  {
+    "original": "met",
+    "suggested_lemma": "meet",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Past tense of 'meet'; also overlaps with the proper noun 'Met'. Inflection does not authorize merging; retained as its own entry.",
+    "requires_review": true
+  },
+  {
+    "original": "mistaken",
+    "suggested_lemma": "mistake",
+    "decision": "inflection_of",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Past participle of 'mistake' functioning as a lexicalized adjective. Retention independent of the base; no merge authorized.",
+    "requires_review": true
+  },
+  {
+    "original": "mottled",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Lexicalized adjective and the likely exam headword itself; treated as an independent identity rather than reducible to the rare base 'mottle'.",
+    "requires_review": false
+  },
+  {
+    "original": "mudflats",
+    "suggested_lemma": "mudflat",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Plural of the compound noun 'mudflat'. Inflection does not authorize merging; retained as an independent entry.",
+    "requires_review": true
+  },
+  {
+    "original": "onrushing",
+    "suggested_lemma": "onrush",
+    "decision": "inflection_of",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.65,
+    "reason": "Participial/derived adjective from 'onrush'. Derived forms retain independent identities; no merge authorized.",
+    "requires_review": true
+  },
+  {
+    "original": "oppos",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.4,
+    "reason": "Not a standalone English lemma; appears to be a truncated fragment (e.g. of 'oppose'/'opposite'/'opposition'). No evidence as given.",
+    "requires_review": true
+  },
+  {
+    "original": "outgas",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Clear independent verb lemma; no inflection or spelling conflict.",
+    "requires_review": false
+  },
+  {
+    "original": "outgassing",
+    "suggested_lemma": "outgas",
+    "decision": "inflection_of",
+    "part_of_speech": "noun; verb (present participle)",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Present participle of 'outgas' and a lexicalized technical noun. Derived form retains an independent identity; no merge authorized.",
+    "requires_review": true
+  },
+  {
+    "original": "outpouring",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Clear independent noun lemma; no inflection or spelling conflict.",
+    "requires_review": false
+  },
+  {
+    "original": "overslept",
+    "suggested_lemma": "oversleep",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular past tense of 'oversleep'. Inflection does not authorize merging; retained as its own entry.",
+    "requires_review": true
+  },
+  {
+    "original": "overtaken",
+    "suggested_lemma": "overtake",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Past participle of 'overtake'. Inflection does not authorize merging; retained as its own entry.",
+    "requires_review": true
+  },
+  {
+    "original": "owed",
+    "suggested_lemma": "owe",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Past tense/participle of 'owe'. Inflection does not authorize merging; retained as its own entry.",
+    "requires_review": true
+  },
+  {
+    "original": "pos",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.4,
+    "reason": "Not a standalone English lemma; appears to be a truncated fragment or abbreviation (e.g. of 'position'/'positive'). No evidence as given.",
+    "requires_review": true
+  },
+  {
+    "original": "posses",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": null,
+    "exam_relevance": "uncertain",
+    "confidence": 0.3,
+    "reason": "Ambiguous: could be the plural of 'posse' or a misspelling of 'possess'/'possesses'. Insufficient evidence to choose; not an authorized spelling merge.",
+    "requires_review": true
+  },
+  {
+    "original": "postmen",
+    "suggested_lemma": "postman",
+    "decision": "inflection_of",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.8,
+    "reason": "Irregular plural of 'postman'. Inflection does not authorize merging; retained as its own entry.",
+    "requires_review": true
+  },
+  {
+    "original": "predetermined",
+    "suggested_lemma": "predetermine",
+    "decision": "inflection_of",
+    "part_of_speech": "adjective",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "Past participle of 'predetermine' functioning as an adjective. Retention independent of the base; no merge authorized.",
+    "requires_review": true
+  },
+  {
+    "original": "ran",
+    "suggested_lemma": "run",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Irregular past tense of 'run'. Inflection does not authorize merging; retained as its own entry.",
+    "requires_review": true
+  },
+  {
+    "original": "rebound",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "verb; noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Clear independent lemma with verb and noun senses; no inflection or spelling conflict.",
+    "requires_review": false
+  },
+  {
+    "original": "rebuilt",
+    "suggested_lemma": "rebuild",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Past tense/participle of 'rebuild'. Inflection does not authorize merging; retained as its own entry.",
+    "requires_review": true
+  },
+  {
+    "original": "res",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.4,
+    "reason": "Not a standalone English lemma; appears to be a truncated fragment or abbreviation (e.g. of 'reservation'/'research'/'response'). No evidence as given.",
+    "requires_review": true
+  },
+  {
+    "original": "sapiens",
+    "suggested_lemma": null,
+    "decision": "uncertain",
+    "part_of_speech": "adjective",
+    "exam_relevance": "uncertain",
+    "confidence": 0.4,
+    "reason": "Latin specific epithet normally bound in the binomial 'Homo sapiens'; not a standalone English headword. Insufficient evidence as a single-token lemma.",
+    "requires_review": true
+  },
+  {
+    "original": "sat",
+    "suggested_lemma": "sit",
+    "decision": "inflection_of",
+    "part_of_speech": "verb",
+    "exam_relevance": "supported",
+    "confidence": 0.75,
+    "reason": "Past tense of 'sit'; also overlaps with the acronym 'SAT'. Inflection does not authorize merging; retained as its own entry.",
+    "requires_review": true
+  },
+  {
+    "original": "saw",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.7,
+    "reason": "The noun 'saw' is an independent lemma, though the form also serves as the past of 'see'; the noun reading is retained independently.",
+    "requires_review": true
+  },
+  {
+    "original": "scaffolding",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.85,
+    "reason": "Clear independent noun lemma; no inflection or spelling conflict.",
+    "requires_review": false
+  },
+  {
+    "original": "semiotics",
+    "suggested_lemma": null,
+    "decision": "keep",
+    "part_of_speech": "noun",
+    "exam_relevance": "supported",
+    "confidence": 0.9,
+    "reason": "Clear independent noun lemma; no inflection or spelling conflict.",
+    "requires_review": false
+  },
+  {
+    "original": "sens",
+    "suggested_lemma": null,
+    "decision": "invalid",
+    "part_of_speech": null,
+    "exam_relevance": "unsupported",
+    "confidence": 0.4,
+    "reason": "Not a standalone English lemma; appears to be a truncated fragment or bound stem (e.g. of 'sense'/'sensitive'/'sensor'). No evidence as given.",
+    "requires_review": true
+  }
+]

@@ -1,0 +1,47 @@
+{
+  "scope": "Actual production dictionary, exam catalog and memberships; excludes learner tables and is not a full-project backup",
+  "tables": {
+    "exam_book_words": {
+      "n": 28311,
+      "hash": "844d29b8080ec93d2d5294acf8410ee1",
+      "json_restore_exact": true
+    },
+    "exam_books": {
+      "n": 5,
+      "hash": "7f15caf552300b56235f5bb08657327a",
+      "json_restore_exact": true
+    },
+    "lexical_dictionary_entries": {
+      "n": 26447,
+      "hash": "3196c304ba0dda3511b76da650709a4e",
+      "json_restore_exact": true
+    }
+  },
+  "live_hashes_match": true,
+  "restored": true,
+  "note": "Compare table hashes with a fresh live read before authorizing import",
+  "import_replay": {
+    "before": {
+      "members": 28311,
+      "dictionary": 26447,
+      "bytes": 43008000
+    },
+    "first": {
+      "members": 29854,
+      "dictionary": 26547,
+      "bytes": 94240768
+    },
+    "second": {
+      "members": 29854,
+      "dictionary": 26547,
+      "bytes": 94240768
+    },
+    "rollback": {
+      "members": 28311,
+      "dictionary": 26547,
+      "bytes": 94240768
+    },
+    "existing_dictionary_unchanged": true,
+    "note": "Actual backed-up data in isolated PostgreSQL. Storage includes private audit snapshots, approximate production index layout; not a production measurement."
+  }
+}

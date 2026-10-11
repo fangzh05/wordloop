@@ -1,0 +1,62 @@
+[
+  {
+    "name": "family_graph_schema_v1",
+    "executed_read_only": true,
+    "schema_true": true
+  },
+  {
+    "name": "get_family_graph_v1",
+    "executed_read_only": true,
+    "schema_true": null
+  },
+  {
+    "name": "learning_budget_snapshot_v1",
+    "executed_read_only": true,
+    "schema_true": null
+  },
+  {
+    "name": "pending_skill_evidence_v1",
+    "executed_read_only": true,
+    "schema_true": null
+  },
+  {
+    "name": "get_today_words_v2",
+    "executed_read_only": true,
+    "schema_true": null
+  },
+  {
+    "name": "get_review_candidates_v1",
+    "executed_read_only": true,
+    "schema_true": null
+  },
+  {
+    "name": "get_progress_snapshot_v1",
+    "executed_read_only": true,
+    "schema_true": null
+  },
+  {
+    "name": "get_due_review_candidates_v1",
+    "executed_read_only": true,
+    "schema_true": null
+  },
+  {
+    "name": "get_formal_lesson_attempt_words_v1",
+    "executed_read_only": true,
+    "schema_true": null
+  },
+  {
+    "name": "captured_notes_schema_v1",
+    "executed_read_only": true,
+    "schema_true": true
+  },
+  {
+    "name": "note_review_schema_v1",
+    "executed_read_only": true,
+    "schema_true": true
+  },
+  {
+    "name": "get_lexical_graph_v1",
+    "executed_read_only": true,
+    "schema_true": null
+  }
+]

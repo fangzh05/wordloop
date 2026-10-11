@@ -1,0 +1,87 @@
+{
+  "before": [
+    {
+      "tab": "words",
+      "n": 7048,
+      "hash": "1d97f888cb7e077250934f64be809137"
+    },
+    {
+      "tab": "user_words",
+      "n": 7048,
+      "hash": "56766d3ab24260b7ad0d60f86cdd2433"
+    },
+    {
+      "tab": "fsrs_review_logs",
+      "n": 1745,
+      "hash": "7f77438929b16503696532db8ad5b0b5"
+    },
+    {
+      "tab": "lexical_relations",
+      "n": 29088,
+      "hash": "9d24e1ee6f3fb27f542005a62ad26721"
+    },
+    {
+      "tab": "lexical_dictionary_entries",
+      "n": 26447,
+      "hash": "9dfb2922b35199db359bade6b172c04c"
+    },
+    {
+      "tab": "user_skill_state",
+      "n": 11,
+      "hash": "c553c05f9c4ec7aab8f51273f7e2558e"
+    },
+    {
+      "tab": "study_sessions",
+      "n": 64,
+      "hash": "abb95b9c8a280b24252133d9c853bbab"
+    },
+    {
+      "tab": "word_sources",
+      "n": 7793,
+      "hash": "1a207aa1f3ccbbb224b53045ba175915"
+    }
+  ],
+  "after": [
+    {
+      "tab": "words",
+      "n": 7048,
+      "hash": "1d97f888cb7e077250934f64be809137"
+    },
+    {
+      "tab": "user_words",
+      "n": 7048,
+      "hash": "56766d3ab24260b7ad0d60f86cdd2433"
+    },
+    {
+      "tab": "fsrs_review_logs",
+      "n": 1745,
+      "hash": "7f77438929b16503696532db8ad5b0b5"
+    },
+    {
+      "tab": "lexical_relations",
+      "n": 29088,
+      "hash": "9d24e1ee6f3fb27f542005a62ad26721"
+    },
+    {
+      "tab": "lexical_dictionary_entries",
+      "n": 26447,
+      "hash": "9dfb2922b35199db359bade6b172c04c"
+    },
+    {
+      "tab": "user_skill_state",
+      "n": 11,
+      "hash": "c553c05f9c4ec7aab8f51273f7e2558e"
+    },
+    {
+      "tab": "study_sessions",
+      "n": 64,
+      "hash": "abb95b9c8a280b24252133d9c853bbab"
+    },
+    {
+      "tab": "word_sources",
+      "n": 7793,
+      "hash": "1a207aa1f3ccbbb224b53045ba175915"
+    }
+  ],
+  "unchanged": true
+}

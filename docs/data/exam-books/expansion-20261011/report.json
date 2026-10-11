@@ -1,0 +1,161 @@
+{
+  "mode": "dry-run",
+  "snapshot_sha256": "464132d93a49ca55d1f3741f99bed0666a1aeb33b6eb486c09b489fdc684b5c0",
+  "books": {
+    "cet6": {
+      "old": 5406,
+      "source_union": 7986,
+      "new_candidates": 3678,
+      "accepted_additions": 606,
+      "proposed_total": 6012,
+      "pending": 3072,
+      "dictionary_coverage": 1
+    },
+    "ielts": {
+      "old": 5038,
+      "source_union": 957,
+      "new_candidates": 478,
+      "accepted_additions": 470,
+      "proposed_total": 5508,
+      "pending": 8,
+      "dictionary_coverage": 1
+    },
+    "toefl": {
+      "old": 6973,
+      "source_union": 10775,
+      "new_candidates": 5538,
+      "accepted_additions": 467,
+      "proposed_total": 7440,
+      "pending": 5071,
+      "dictionary_coverage": 1
+    }
+  },
+  "sources": [
+    {
+      "id": "KyleBing-random",
+      "book": "cet6",
+      "raw": 5651,
+      "redistribution": "headwords only; upstream license/provenance review required",
+      "unique": 3991,
+      "exact_duplicates": 1660,
+      "old_overlap": 3362,
+      "new_candidates": 629
+    },
+    {
+      "id": "KyleBing-ordered",
+      "book": "cet6",
+      "raw": 5651,
+      "redistribution": "headwords only; upstream license/provenance review required",
+      "unique": 3991,
+      "exact_duplicates": 1660,
+      "old_overlap": 3362,
+      "new_candidates": 629
+    },
+    {
+      "id": "KyleBing-random",
+      "book": "toefl",
+      "raw": 13477,
+      "redistribution": "headwords only; upstream license/provenance review required",
+      "unique": 10367,
+      "exact_duplicates": 3110,
+      "old_overlap": 5128,
+      "new_candidates": 5239
+    },
+    {
+      "id": "KyleBing-ordered",
+      "book": "toefl",
+      "raw": 13477,
+      "redistribution": "headwords only; upstream license/provenance review required",
+      "unique": 10367,
+      "exact_duplicates": 3110,
+      "old_overlap": 5128,
+      "new_candidates": 5239
+    },
+    {
+      "id": "cet6-frequency",
+      "book": "cet6",
+      "raw": 5821,
+      "redistribution": "headwords only; upstream license/provenance review required",
+      "unique": 5821,
+      "exact_duplicates": 0,
+      "old_overlap": 2523,
+      "new_candidates": 3298
+    },
+    {
+      "id": "NAWL-1.2",
+      "book": "ielts",
+      "raw": 957,
+      "redistribution": "CC-BY-SA-4.0; academic support, not official exam syllabus",
+      "unique": 957,
+      "exact_duplicates": 0,
+      "old_overlap": 479,
+      "new_candidates": 478
+    },
+    {
+      "id": "NAWL-1.2",
+      "book": "toefl",
+      "raw": 957,
+      "redistribution": "CC-BY-SA-4.0; academic support, not official exam syllabus",
+      "unique": 957,
+      "exact_duplicates": 0,
+      "old_overlap": 584,
+      "new_candidates": 373
+    },
+    {
+      "id": "gungorkaya-essential",
+      "book": "toefl",
+      "raw": 1000,
+      "redistribution": "MIT; AI-enriched, requires independent corroboration",
+      "unique": 1000,
+      "exact_duplicates": 0,
+      "old_overlap": 720,
+      "new_candidates": 280
+    }
+  ],
+  "excluded_public_sources": [
+    {
+      "repo": "fanhongtao/IELTS",
+      "reason": "commercial or unverified provenance/license; review-only"
+    },
+    {
+      "repo": "LynnShaw/vocabulary_for_ielts",
+      "reason": "commercial or unverified provenance/license; review-only"
+    },
+    {
+      "repo": "Mundi-Xu/ielts",
+      "reason": "commercial or unverified provenance/license; review-only"
+    },
+    {
+      "repo": "hefengxian/ielts-vocabulary",
+      "reason": "commercial or unverified provenance/license; review-only"
+    }
+  ],
+  "workbuddy": {
+    "calls": 0,
+    "cache_hits": 12,
+    "total_successful_batches": 12,
+    "reviewed": 316,
+    "candidates": 316,
+    "decisions": {
+      "keep": 117,
+      "inflection_of": 103,
+      "invalid": 13,
+      "distinct_lemma": 54,
+      "uncertain": 22,
+      "multiword_expression": 4,
+      "spelling_variant": 3
+    },
+    "cost": null,
+    "cost_note": "ACP billing unavailable"
+  },
+  "pending": 8151,
+  "intersections": {
+    "cet6&ielts": 3497,
+    "cet6&toefl": 3741,
+    "ielts&toefl": 3523,
+    "cet6&ielts&toefl": 2656
+  },
+  "actual_database_additions": 0,
+  "publication_ready": false,
+  "payload_bytes": 450155
+}

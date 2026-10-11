@@ -1,2 +1,3 @@
 # Keep pinned public dictionary bytes stable across Windows/Linux checkouts.
 tests/data/oewn-bear-bearing-2025.xml -text
+docs/data/exam-books/expansion-20261011/** text eol=lf

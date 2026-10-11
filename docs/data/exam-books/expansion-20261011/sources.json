@@ -1,0 +1,497 @@
+[
+  {
+    "repo": "KyleBing/english-vocabulary",
+    "url": "https://github.com/KyleBing/english-vocabulary",
+    "commit": "c4c6c80879ff17d7025c28fb853a4991c8e6be6a",
+    "downloaded_at": "2026-10-11T10:57:42.658019+00:00",
+    "license": {
+      "key": "bsd-3-clause",
+      "name": "BSD 3-Clause \"New\" or \"Revised\" License",
+      "spdx_id": "BSD-3-Clause",
+      "url": "https://api.github.com/licenses/bsd-3-clause",
+      "node_id": "MDc6TGljZW5zZTU="
+    },
+    "files": [
+      {
+        "path": "4 六级-乱序.txt",
+        "local": "KyleBing-0.txt",
+        "sha256": "4a938c26f5732194330c5453a7fe28d65cf3fd7009fcdfb5bea4517b8ce48ddb",
+        "bytes": 231996
+      },
+      {
+        "path": "6 托福-乱序.txt",
+        "local": "KyleBing-1.txt",
+        "sha256": "f7028faff8298e1f75421800b8370014f58fa1a76f0724aa5590b220b36bb516",
+        "bytes": 511291
+      },
+      {
+        "path": "json/4-CET6-顺序.json",
+        "local": "KyleBing-2.json",
+        "sha256": "30215ac897af7041cbd103c74d57823d543484856f64f034e40c0e85457cc0ae",
+        "bytes": 2915772
+      },
+      {
+        "path": "json/6-托福-顺序.json",
+        "local": "KyleBing-3.json",
+        "sha256": "6722035d058acf6321500a1c77b515636c6999b1c24071686b7e87d539c3ed97",
+        "bytes": 6053492
+      },
+      {
+        "path": "LICENSE",
+        "local": "KyleBing-4",
+        "sha256": "5746ff57c9bb587018a73c030e57ba8d116c0b9843c0617c88dde9c21757b2d2",
+        "bytes": 1500
+      },
+      {
+        "path": "README.md",
+        "local": "KyleBing-5.md",
+        "sha256": "4bbb18c85d17aeb06a32afbc86a14b9b692154444410e6ebb79ef17d534279f7",
+        "bytes": 6406
+      },
+      {
+        "path": "full_line_jsonl/README.md",
+        "local": "KyleBing-6.md",
+        "sha256": "08949b7a153370f60ef92fd5fdee4993b63efc1160b2e5678ca4c02011987088",
+        "bytes": 3920
+      },
+      {
+        "path": "full_line_tsv/README.md",
+        "local": "KyleBing-7.md",
+        "sha256": "9d1b262bc51a6e75c41536e6d2d549b6fc23b0cd55bff11623392b17e45507c3",
+        "bytes": 8415
+      }
+    ]
+  },
+  {
+    "repo": "wangjiuyi543-ui/cet6-vocabulary",
+    "url": "https://github.com/wangjiuyi543-ui/cet6-vocabulary",
+    "commit": "6399f6cad57b66f86aa781827f0ac38a337ad214",
+    "downloaded_at": "2026-10-11T10:58:08.833338+00:00",
+    "license": {
+      "key": "mit",
+      "name": "MIT License",
+      "spdx_id": "MIT",
+      "url": "https://api.github.com/licenses/mit",
+      "node_id": "MDc6TGljZW5zZTEz"
+    },
+    "files": [
+      {
+        "path": "README.md",
+        "local": "wangjiuyi543-ui-0.md",
+        "sha256": "9c1c50921f94e3717660cf054db17c6ddf5692b006cefe92029c7193f9f0da77",
+        "bytes": 3507
+      },
+      {
+        "path": "analysis_summary.md",
+        "local": "wangjiuyi543-ui-1.md",
+        "sha256": "d26b4e34ab9e8023a5e45c6573b30f3e0ddb1ce864e28f7bee668493a4077107",
+        "bytes": 857
+      },
+      {
+        "path": "cet6_core_words_top300.md",
+        "local": "wangjiuyi543-ui-2.md",
+        "sha256": "4eccdf1c56d5ff5c2a71bfebcca5e7de96f51f110ccbcfa19c21b7e322298dff",
+        "bytes": 111001
+      },
+      {
+        "path": "cet6_core_words_top300_refined.md",
+        "local": "wangjiuyi543-ui-3.md",
+        "sha256": "551858abb25c3f986c21a081d7d81e55b68142861f2f28551bced9b1d6ab82fb",
+        "bytes": 21673
+      },
+      {
+        "path": "cet6_core_words_top300_simple.md",
+        "local": "wangjiuyi543-ui-4.md",
+        "sha256": "4cdde82795979fede38925abde7bf03e9ca6798f5436cd328ece30c2a86ca8a5",
+        "bytes": 11554
+      },
+      {
+        "path": "cet6_core_words_top500_refined.md",
+        "local": "wangjiuyi543-ui-5.md",
+        "sha256": "4efd0480b5a29b1e52477d2f1703e1df5c253cc63afae3e6733b9d474008c225",
+        "bytes": 33645
+      },
+      {
+        "path": "cet6_core_words_top500_simple.md",
+        "local": "wangjiuyi543-ui-6.md",
+        "sha256": "dd1054e2fbfe10dd4bfa39dd679b2dd73d42b9a5f701b4b3a6c0de2d8af93662",
+        "bytes": 17864
+      },
+      {
+        "path": "cet6_emergency_words_top100.md",
+        "local": "wangjiuyi543-ui-7.md",
+        "sha256": "1f1cf662174b700747998ca2535835b39ed90c7f6534d36f77015eea88d9a7c5",
+        "bytes": 5467
+      },
+      {
+        "path": "cet6_emergency_words_top100_refined.md",
+        "local": "wangjiuyi543-ui-8.md",
+        "sha256": "1fffdafe05ab1359110ec537f4af4d25c6558d80ad28dfc6581419648ea52ed2",
+        "bytes": 8802
+      },
+      {
+        "path": "cet6_emergency_words_top100_simple.md",
+        "local": "wangjiuyi543-ui-9.md",
+        "sha256": "f745a46b669cfdafbb6f6bf1e91fe103db39a25e3029ae11fb50dd747f85d071",
+        "bytes": 5266
+      },
+      {
+        "path": "cet6_filtered_out_words.csv",
+        "local": "wangjiuyi543-ui-10.csv",
+        "sha256": "c75a138decddf134589e63cfbd0b260052bc91d63b2469da2800e381fee87237",
+        "bytes": 18354
+      },
+      {
+        "path": "cet6_high_frequency_words.csv",
+        "local": "wangjiuyi543-ui-11.csv",
+        "sha256": "8a1090ed2e4e922dfcff13a96c75e32cf2ab12cdd4476d1d6af00719a53e69a3",
+        "bytes": 1537443
+      },
+      {
+        "path": "cet6_topic_words.md",
+        "local": "wangjiuyi543-ui-12.md",
+        "sha256": "153076a844dec01a04dc8875160ac46e0f8f490d8475107fde7099187879e2d3",
+        "bytes": 5746
+      },
+      {
+        "path": "data_audit_report.md",
+        "local": "wangjiuyi543-ui-13.md",
+        "sha256": "29f0910299a7adc2ad80491ec6fb654f357b54680c6aae535057aa153dc3d118",
+        "bytes": 5126
+      },
+      {
+        "path": "refined_vocab_quality_check.md",
+        "local": "wangjiuyi543-ui-14.md",
+        "sha256": "58e33db1713718afd9f66baf732a5412696e0d1ac113fb3997b17c11487454b4",
+        "bytes": 2794
+      },
+      {
+        "path": "refined_vocab_summary.md",
+        "local": "wangjiuyi543-ui-15.md",
+        "sha256": "4be87be6cd298f9757f92f1e897340df2ac1b61d2a83d854132748fb9c138a0c",
+        "bytes": 2104
+      },
+      {
+        "path": "vocab_revision_plan.md",
+        "local": "wangjiuyi543-ui-16.md",
+        "sha256": "492d1f6b0d63e3b2265c806f0678ce30c70912be11c139a5363649c671131290",
+        "bytes": 9231
+      },
+      {
+        "path": "LICENSE",
+        "local": "wangjiuyi543-ui-17",
+        "sha256": "fb74dc1412b0d67f8df1c8baef31142b5f12a12387f2f2feddac6b03533129b1",
+        "bytes": 1072
+      }
+    ]
+  },
+  {
+    "repo": "fanhongtao/IELTS",
+    "url": "https://github.com/fanhongtao/IELTS",
+    "commit": "bf6a5bfe87d96f75dfc550679f357794d22b7ab9",
+    "downloaded_at": "2026-10-11T10:58:13.056784+00:00",
+    "license": null,
+    "files": [
+      {
+        "path": "IELTS Word List.txt",
+        "local": "fanhongtao-0.txt",
+        "sha256": "f253e5ef77d6653513e52da6f9f1eed133a883270afb598ba13f073dd49f7ea5",
+        "bytes": 253380
+      },
+      {
+        "path": "README.md",
+        "local": "fanhongtao-1.md",
+        "sha256": "f6587d75d947c6423c94de71fe1f59b4d00462773cd0bb4861f8fdae55b5e93a",
+        "bytes": 66
+      }
+    ]
+  },
+  {
+    "repo": "LynnShaw/vocabulary_for_ielts",
+    "url": "https://github.com/LynnShaw/vocabulary_for_ielts",
+    "commit": "77c83600ed743637792995b6f363fd619aeb6786",
+    "downloaded_at": "2026-10-11T10:58:17.403044+00:00",
+    "license": null,
+    "files": [
+      {
+        "path": "README.md",
+        "local": "LynnShaw-0.md",
+        "sha256": "f955982b096f513d1184f4816f4437fb227390a77fb875a84803e6f8fc610fa5",
+        "bytes": 548
+      },
+      {
+        "path": "word_list.csv",
+        "local": "LynnShaw-1.csv",
+        "sha256": "b67cc4b77657bdd2b08576aec35dce05027b9762ae7e03a33fc040e3ecde7c58",
+        "bytes": 273858
+      }
+    ]
+  },
+  {
+    "repo": "Mundi-Xu/ielts",
+    "url": "https://github.com/Mundi-Xu/ielts",
+    "commit": "ebc75253cc852c6e9c60cf7e5ebbfbb912d0e365",
+    "downloaded_at": "2026-10-11T10:58:58.681545+00:00",
+    "license": null,
+    "files": [
+      {
+        "path": "CLAUDE.md",
+        "local": "Mundi-Xu-0.md",
+        "sha256": "b90258711965f6d300538d47906f562b661674462a5fdac8088d4656a37411b8",
+        "bytes": 2645
+      },
+      {
+        "path": "README.md",
+        "local": "Mundi-Xu-1.md",
+        "sha256": "31c5727a0bd26cf6d6b1e7dc8eab7319b0ece8e9486626161959180dae680b50",
+        "bytes": 2645
+      },
+      {
+        "path": "public/vocabulary/audio/01_自然地理/audacity_tags.txt",
+        "local": "Mundi-Xu-2.txt",
+        "sha256": "f53f1b0a21a56f5aaf6a8ae8a5ccae99702263db70ec01a9f48d437c86b6ea5e",
+        "bytes": 7410
+      },
+      {
+        "path": "public/vocabulary/audio/02_植物研究/audacity_tags.txt",
+        "local": "Mundi-Xu-3.txt",
+        "sha256": "d1e50c75c6d55ae6024b4d7fd8726847065c5cf125c07b8a9487d40e48de4649",
+        "bytes": 3869
+      },
+      {
+        "path": "public/vocabulary/audio/03_动物保护/audacity_tags.txt",
+        "local": "Mundi-Xu-4.txt",
+        "sha256": "23171f74979f71cfefdc7c09d8833c9bb425efcf05b8d3ae21c4e109f941b3f5",
+        "bytes": 4917
+      },
+      {
+        "path": "public/vocabulary/audio/04_太空探索/audacity_tags.txt",
+        "local": "Mundi-Xu-5.txt",
+        "sha256": "16b3944df40960e6afc7bf1efc1784751f7989e53b4a26de12326ec9d475e7ba",
+        "bytes": 2275
+      },
+      {
+        "path": "public/vocabulary/audio/06_科技发明/audacity_tags.txt",
+        "local": "Mundi-Xu-6.txt",
+        "sha256": "bd808132dc4cbad842091a7699e43cc59e3d2160f0f5a57c6867a86fe89fe1b8",
+        "bytes": 3660
+      },
+      {
+        "path": "public/vocabulary/audio/07_文化历史/audacity_tags.txt",
+        "local": "Mundi-Xu-7.txt",
+        "sha256": "c6ab0b39efd8b3bba65ed67f58ef007702b2a7cb87e49595faab6fb6d30e47ed",
+        "bytes": 2368
+      },
+      {
+        "path": "public/vocabulary/audio/08_语言演化/audacity_tags.txt",
+        "local": "Mundi-Xu-8.txt",
+        "sha256": "05f0b4b3a6b4678ec696e59e7f49adc0ac07f185d61139f7b00e2ca20be4e894",
+        "bytes": 2068
+      },
+      {
+        "path": "public/vocabulary/audio/09_娱乐运动/audacity_tags.txt",
+        "local": "Mundi-Xu-9.txt",
+        "sha256": "e60b6b1b5c0352aa0b62fced5d583973465c7bd08d28a072b55fbbd5b15acd21",
+        "bytes": 5197
+      },
+      {
+        "path": "public/vocabulary/audio/10_物品材料/audacity_tags.txt",
+        "local": "Mundi-Xu-10.txt",
+        "sha256": "05558c9dce28bdff779daa3b1e23d62f95a2b66d7571514e179f64c6cba12cdf",
+        "bytes": 4354
+      },
+      {
+        "path": "public/vocabulary/audio/11_时尚潮流/audacity_tags.txt",
+        "local": "Mundi-Xu-11.txt",
+        "sha256": "b75584dd1a212fa284fe7cfd029d063ae85701d8783a09d00c4b3cd350632e5c",
+        "bytes": 3245
+      },
+      {
+        "path": "public/vocabulary/audio/12_饮食健康/audacity_tags.txt",
+        "local": "Mundi-Xu-12.txt",
+        "sha256": "f36120e9b27a98392cd759fe85ede17ff1b4d2b6b4a8a5be060381043890d066",
+        "bytes": 4956
+      },
+      {
+        "path": "public/vocabulary/audio/13_建筑场所/audacity_tags.txt",
+        "local": "Mundi-Xu-13.txt",
+        "sha256": "c03a3492f0d9732fd8de32bd63ad16c3704ecd56045a41402a8eff519a29d8f9",
+        "bytes": 3929
+      },
+      {
+        "path": "public/vocabulary/audio/14_交通旅行/audacity_tags.txt",
+        "local": "Mundi-Xu-14.txt",
+        "sha256": "4a21dbe61cd9250d198ed8ec2f9436e8139a729752aa3283d2393bc652a05fd8",
+        "bytes": 3876
+      },
+      {
+        "path": "public/vocabulary/audio/15_国家政府/audacity_tags.txt",
+        "local": "Mundi-Xu-15.txt",
+        "sha256": "a5034ec5d99e143334059d2e4e301364ec87ade44dae6cab58c59a91083df1dc",
+        "bytes": 4552
+      },
+      {
+        "path": "public/vocabulary/audio/16_社会经济/audacity_tags.txt",
+        "local": "Mundi-Xu-16.txt",
+        "sha256": "8997116858ba2f3e4cf83fcb2fcf7263d402f28247706c64178b6f9e02409ea7",
+        "bytes": 5146
+      },
+      {
+        "path": "public/vocabulary/audio/17_法律法规/audacity_tags.txt",
+        "local": "Mundi-Xu-17.txt",
+        "sha256": "7646e93bf4fe12bc9a4fafd605b4a45a6bc145a71afca464ca3c169235e6c070",
+        "bytes": 3448
+      },
+      {
+        "path": "public/vocabulary/audio/18_沙场争锋/audacity_tags.txt",
+        "local": "Mundi-Xu-18.txt",
+        "sha256": "46fd18bdfe6888a2e5a5b1da3007de178c31211ace0b192597c7fe1ce37b2c78",
+        "bytes": 6394
+      },
+      {
+        "path": "public/vocabulary/audio/19_社会角色/audacity_tags.txt",
+        "local": "Mundi-Xu-19.txt",
+        "sha256": "294533635a684356ebdde6db8d7feb86a13b6d9da5bf0aaa78f2fbd29d7523c6",
+        "bytes": 3611
+      },
+      {
+        "path": "public/vocabulary/audio/20_行为动作/audacity_tags.txt",
+        "local": "Mundi-Xu-20.txt",
+        "sha256": "b8527aecd817a8eea006897dbf9a9397178ed342db078529f0cbb90a3ac785d0",
+        "bytes": 8066
+      },
+      {
+        "path": "public/vocabulary/audio/21_身心健康/audacity_tags.txt",
+        "local": "Mundi-Xu-21.txt",
+        "sha256": "cf8be40afb3b33444bedf1edca8ccdbeee1e6747112093cf2cae81781d2837c2",
+        "bytes": 12875
+      },
+      {
+        "path": "public/vocabulary/audio/22_时间日期/audacity_tags.txt",
+        "local": "Mundi-Xu-22.txt",
+        "sha256": "c5a2bc0697ed2e5b92118930541f06717d9c39c5c720839993150390d4179eee",
+        "bytes": 1572
+      },
+      {
+        "path": "src/components/README.md",
+        "local": "Mundi-Xu-23.md",
+        "sha256": "b6e36e74668509db36b56acf028784e0476cd7cb93e62743f33ceeba8d8f9f0b",
+        "bytes": 403
+      },
+      {
+        "path": "src/pages/README.md",
+        "local": "Mundi-Xu-24.md",
+        "sha256": "39ca47de75755c2b1b41a2d19134246b470fe42b1a3915afe1a1c1f11364d816",
+        "bytes": 422
+      },
+      {
+        "path": "src/pages/listening/listening179.json",
+        "local": "Mundi-Xu-25.json",
+        "sha256": "68318f49b6f41064643ecda38b35541a4b4e1bc3f2b395385506f9eb0444c81e",
+        "bytes": 31033
+      },
+      {
+        "path": "src/pages/reading/538keyword.md",
+        "local": "Mundi-Xu-26.md",
+        "sha256": "8ae07cba2e7eb07b5ab4012e3fdbd78a0b6ad6cea2f46d7a77a86571a5afe0e0",
+        "bytes": 27275
+      },
+      {
+        "path": "src/pages/vocabulary/README.md",
+        "local": "Mundi-Xu-27.md",
+        "sha256": "e3ea2fc903350caca4f0d40e78fd195c5e704cff0f4cdb73e1cf126c3d6de944",
+        "bytes": 788
+      },
+      {
+        "path": "src/pages/vocabulary/vocabulary.txt",
+        "local": "Mundi-Xu-28.txt",
+        "sha256": "ccd50bb4e973e0daf07dc26d244b0fbbfa28b18cfb43e1a77a08e53f59702e03",
+        "bytes": 350083
+      },
+      {
+        "path": "tsconfig.json",
+        "local": "Mundi-Xu-29.json",
+        "sha256": "23b64d805a3d1a13490533dae586673c914d24cc0c9ec029d8a78a050be1fedd",
+        "bytes": 702
+      }
+    ]
+  },
+  {
+    "repo": "hefengxian/ielts-vocabulary",
+    "url": "https://github.com/hefengxian/ielts-vocabulary",
+    "commit": "d59669c8c55da843ce5996e3349e8cf0883c30db",
+    "downloaded_at": "2026-10-11T10:59:06.566039+00:00",
+    "license": {
+      "key": "mit",
+      "name": "MIT License",
+      "spdx_id": "MIT",
+      "url": "https://api.github.com/licenses/mit",
+      "node_id": "MDc6TGljZW5zZTEz"
+    },
+    "files": [
+      {
+        "path": "README.md",
+        "local": "hefengxian-0.md",
+        "sha256": "26d57766f5431413dfe5090b4b41e2cb3b2d392dbb0f16b384347f6a0a5a8e8f",
+        "bytes": 784
+      },
+      {
+        "path": "vocabulary.txt",
+        "local": "hefengxian-1.txt",
+        "sha256": "401b6b5c07c0d1b2adef154ee6f45cae08d2d65388c3c093bad1605b0e2307ae",
+        "bytes": 79135
+      },
+      {
+        "path": "LICENSE",
+        "local": "hefengxian-2",
+        "sha256": "568c14db1974f7378bc4357a72fc4d31e2e840614011ea2ac6ef16f1a9c60095",
+        "bytes": 1062
+      }
+    ]
+  },
+  {
+    "repo": "gungorkaya-eng/toefl-essential-vocabulary-dataset",
+    "url": "https://github.com/gungorkaya-eng/toefl-essential-vocabulary-dataset",
+    "commit": "85d4392a2254d2a1ad73cf12cdd8898b49cd3295",
+    "downloaded_at": "2026-10-11T10:59:20.196487+00:00",
+    "license": {
+      "key": "mit",
+      "name": "MIT License",
+      "spdx_id": "MIT",
+      "url": "https://api.github.com/licenses/mit",
+      "node_id": "MDc6TGljZW5zZTEz"
+    },
+    "files": [
+      {
+        "path": "README.md",
+        "local": "gungorkaya-eng-0.md",
+        "sha256": "d057fa3413faa3d7b2f8ed56dec5c6949a76f1ba055d1e11c182c2fac86c5fef",
+        "bytes": 2499
+      },
+      {
+        "path": "toefl_essential_vocabulary.csv",
+        "local": "gungorkaya-eng-1.csv",
+        "sha256": "2c780f2cc35da4efb0ec2bc28b6011de63d4b580fc61e6768aab62a3eba81099",
+        "bytes": 325831
+      },
+      {
+        "path": "toefl_essential_vocabulary.json",
+        "local": "gungorkaya-eng-2.json",
+        "sha256": "1771a0b444f8a3141339c07474336fdf1336d2f966bef3d13a2a8fd64f9ea885",
+        "bytes": 495981
+      },
+      {
+        "path": "toefl_essential_vocabulary.txt",
+        "local": "gungorkaya-eng-3.txt",
+        "sha256": "0fda426659ac8029816089a4d23dbbde0e116bbc7183050eab6f1c7d69ec993e",
+        "bytes": 10291
+      },
+      {
+        "path": "LICENSE",
+        "local": "gungorkaya-eng-4",
+        "sha256": "86a77f2699db48a7217cc8942e137fc6d1484e2cc3b5e713d60e12f351ac1178",
+        "bytes": 1071
+      }
+    ]
+  }
+]

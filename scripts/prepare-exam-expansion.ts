@@ -1,0 +1,10 @@
+import {readFileSync,writeFileSync,existsSync} from 'node:fs';
+import {expansionSql} from './lib/examExpansionSql.js';
+import {sha256} from './lib/examBooks.js';
+const dir=process.argv[2]??'.exam-books/expansion';
+const load=(f:string)=>JSON.parse(readFileSync(`${dir}/${f}`,'utf8'));
+const payload=load('draft-corpus.json'),provenance={members:load('membership-provenance.json'),sources:load('sources.json'),nawl:load('nawl-source.json')},snapshot=load('live-snapshot.json');
+const result=expansionSql(payload,provenance,snapshot.members);
+writeFileSync(`${dir}/review-import.sql`,result.sql);writeFileSync(`${dir}/rollback-members.sql`,result.rollback);
+writeFileSync(`${dir}/release-gates.json`,JSON.stringify({batch:result.batch,payload_hash:result.hash,sql_sha256:sha256(result.sql),production_authorized:false,current_backup_verified:existsSync(`${dir}/backup/verification.json`)&&load('backup/verification.json').live_hashes_match===true,restore_verified:existsSync(`${dir}/backup/verification.json`)&&load('backup/verification.json').restored===true,browser_acceptance:false,publication_ready:false,warning:'Review artifacts only. This program never connects to a database.'},null,2));
+console.log(JSON.stringify({batch:result.batch,members:payload.relationships.length,dictionary:payload.dictionary_entries.length,mode:'review-only'}));
