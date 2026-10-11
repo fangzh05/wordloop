@@ -80,7 +80,7 @@ window.fetch = async (input:any, init?:any)=>{
 function App() {
  const query=new URLSearchParams(location.search);
  const page=(query.get("page")??"today").replace(/-dark$/,"");
- const immersive = ["study","review-correct","review-wrong","review-loading","pretest","pretest-correct","pretest-wrong","pretest-loading","lesson","lesson-exercise","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","consolidation-feedback","consolidation-retry","consolidation-loading"].includes(page);
+ const immersive = ["study","review-correct","review-wrong","review-loading","pretest","pretest-correct","pretest-wrong","pretest-loading","lesson","relearn-lesson","relearn-exercise","lesson-exercise","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","consolidation-feedback","consolidation-retry","consolidation-loading"].includes(page);
  const [studyAnswer,setStudyAnswer]=useState("");
  const [section,setSection]=useState<AppSection>((["today","study","capture","insights","vocabulary"].includes(page)?page:"today") as AppSection);
  const [showSettings,setShowSettings]=useState(page==="settings");
@@ -115,6 +115,24 @@ function App() {
           source="new_word" word="indulge" answer={page==="pretest-correct"?"indulge":"indulging"}
           status={page==="pretest-correct"?"known":"unknown"} errorLayer={page==="pretest-correct"?"none":"spelling"}
           markedFamiliar={false} busy={false} onContinue={()=>{}} onMarkFamiliar={()=>{}}/></div>}
+    </section>}
+    {page==="relearn-lesson"&&<section className="widget-card standalone-card lesson-card study-explain-card" aria-labelledby="study-title">
+      <StandaloneLessonExplanation title="indulge" displayTitle="indulge" progressLabel="复习补学 1 / 32"
+        ipa="/ɪnˈdʌldʒ/" pronunciationAudioUrl={null}
+        meaningZh="v. 纵容；沉溺于；满足" partOfSpeech="v."
+        exampleEn="After a demanding week at work, many people indulge in a long, relaxing bath or their favorite dessert."
+        exampleZh="在忙碌了一周的工作之后，许多人会纵容自己享受一个长长的放松浴或最爱的甜点。"
+        collocations={["indulge in （沉溺于；尽情享受）","indulge in a hobby （沉溺于某项爱好）"]}
+        derivations={["indulgence n.（纵容；放纵；享受）","indulgent adj.（纵容的）"]}
+        note=""
+        busy={false} onBack={()=>route("today")} onStartExercise={()=>route("relearn-exercise")}/>
+    </section>}
+    {page==="relearn-exercise"&&<section className="widget-card standalone-card lesson-card study-task-card" aria-labelledby="study-title">
+      <StandaloneLessonHeader title="indulge" progressLabel="复习补学 1 / 32" onBack={()=>route("relearn-lesson")}/>
+      <StandaloneLessonExercise instruction="使用刚复习的单词，完成下面这句话。"
+        prompt="After work, she likes to ______ in a relaxing bath." activityType="cloze"
+        clozeHint={""} multiline={false} answer={studyAnswer} busy={false}
+        onAnswerChange={setStudyAnswer} onSubmit={()=>{}} />
     </section>}
     {page==="lesson"&&<section className="widget-card standalone-card lesson-card study-explain-card" aria-labelledby="study-title">
       <StandaloneLessonExplanation title="meticulous" displayTitle="meticulous" progressLabel="正式学习 · 2 / 6"
