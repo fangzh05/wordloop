@@ -139,6 +139,36 @@ for(const [size,w,h] of sizes) {
     if(/Songti|STSong|Baskerville|Georgia/.test(fonts.meaning)||/Iowan|Baskerville|Georgia/.test(fonts.input))
       throw Error("Pretest must retain original system UI fonts for Chinese and input: "+JSON.stringify(fonts));
   }
+  // All rectangular buttons in the study flow share the approved pretest
+  // 8px radius; audio remains a circle and is deliberately excluded.
+  const radiusTargets={
+    pretest:[".pretest-editorial-actions > .pretest-unknown-button",".pretest-editorial-actions > .pretest-submit-button"],
+    "pretest-dark":[".pretest-editorial-actions > .pretest-unknown-button",".pretest-editorial-actions > .pretest-submit-button"],
+    "pretest-wrong":[".pretest-result-actions > .pretest-main-button",".pretest-result-actions .familiar-action"],
+    study:[".review-answer-bottom > .review-unknown-button",".review-answer-bottom > .review-submit-button"],
+    lesson:[".lesson-reference-bottom > .button"],
+    "relearn-lesson":[".lesson-reference-bottom > .button"],
+    "relearn-lesson-dark":[".lesson-reference-bottom > .button"],
+    "relearn-exercise":[".lesson-exercise-actions > .button"],
+    "lesson-exercise":[".lesson-exercise-actions > .button"],
+    "lesson-feedback":[".lesson-feedback-footer > .button"],
+    "lesson-feedback-retry":[".lesson-feedback-footer > .button"],
+    "lesson-feedback-loading":[".lesson-feedback-footer > .button"]
+  }[name] ?? [];
+  for(const selector of radiusTargets){
+    const action=page.locator(selector).first();
+    if(!(await action.isVisible()))throw Error(`Missing corner check target ${name}: ${selector}`);
+    const corners=await action.evaluate(el=>{
+      const s=getComputedStyle(el);
+      return [s.borderTopLeftRadius,s.borderTopRightRadius,s.borderBottomRightRadius,s.borderBottomLeftRadius];
+    });
+    if(corners.some(c=>c!=="8px"))throw Error(`Inconsistent corner radius on ${name}: ${selector}: ${corners.join(",")}`);
+  }
+  if(["lesson","relearn-lesson","relearn-lesson-dark"].includes(name)){
+    const audio=page.locator(".lesson-reference-ipa .lesson-audio");
+    const radius=await audio.evaluate(el=>getComputedStyle(el).borderTopLeftRadius);
+    if(radius!=="50%")throw Error("Audio icon must remain circular: "+radius);
+  }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth + 8);
   if(overflow)console.warn(`WARN: horizontal overflow at ${name} ${size}`);
   if(errors.length)console.warn(`WARN: page errors at ${name} ${size}: ${errors.join(" | ")}`);
