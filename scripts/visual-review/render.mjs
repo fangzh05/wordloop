@@ -106,6 +106,25 @@ for(const [size,w,h] of sizes) {
     const theme=await page.evaluate(()=>document.documentElement.dataset.theme);
     if(theme!=="dark")throw Error("Dark mode not enabled");
   }
+  // Protect the user-approved PR #3 typography from future visual-only overrides.
+  if(name==="lesson-exercise"){
+    const fonts=await page.evaluate(()=>{
+      const h=document.querySelector(".lesson-exercise-heading");
+      const input=document.querySelector(".lesson-exercise-answer .standalone-input");
+      return {heading:h?getComputedStyle(h).fontFamily:"",input:input?getComputedStyle(input).fontFamily:""};
+    });
+    if(!/Songti|STSong|Noto Serif CJK/.test(fonts.heading))throw Error("Lesson heading must retain original PR3 Chinese display font: "+JSON.stringify(fonts));
+    if(/Iowan|Baskerville|Georgia/.test(fonts.input))throw Error("Do not force English display typeface onto lesson input: "+JSON.stringify(fonts));
+  }
+  if(name==="pretest"){
+    const fonts=await page.evaluate(()=>{
+      const meaning=document.querySelector(".pretest-meaning");
+      const input=document.querySelector(".pretest-editorial-input");
+      return {meaning:meaning?getComputedStyle(meaning).fontFamily:"",input:input?getComputedStyle(input).fontFamily:""};
+    });
+    if(/Songti|STSong|Baskerville|Georgia/.test(fonts.meaning)||/Iowan|Baskerville|Georgia/.test(fonts.input))
+      throw Error("Pretest must retain original system UI fonts for Chinese and input: "+JSON.stringify(fonts));
+  }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth + 8);
   if(overflow)console.warn(`WARN: horizontal overflow at ${name} ${size}`);
   if(errors.length)console.warn(`WARN: page errors at ${name} ${size}: ${errors.join(" | ")}`);
