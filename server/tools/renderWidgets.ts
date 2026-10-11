@@ -394,6 +394,8 @@ export function lessonWidgetResponsePayload(payload: Record<string, unknown>): R
     if (typeof response[key] === "object" && response[key] !== null && !Array.isArray(response[key])) {
       const plan = { ...response[key] as Record<string, unknown> };
       delete plan.target_sense;
+      delete plan.private_source_word;
+      delete plan.private_source_entry_keys;
       delete plan.word_id;
       delete plan.target_word_ids;
       delete plan.skill_signals;
@@ -981,6 +983,7 @@ export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): Revi
   const partOfSpeech = formatPartOfSpeech(senses);
   return reviewWidgetItemSchema.parse({
     word: item.word,
+    ...(item.definition_source?{private_source_book_id:item.definition_source.book_id}:{}),
     meaning_zh: meaning,
     ...(partOfSpeech ? { part_of_speech: partOfSpeech } : {}),
     error_layers: item.error_layers,

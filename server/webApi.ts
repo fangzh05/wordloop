@@ -1,3 +1,4 @@
+import {privateSourceIds,PrivateBookAccessError} from './services/sourceDictionary.js';
 import { WebAuthError, authenticateWebUser } from "./webAuth.js";
 import {examBookId,listExamBooks,selectExamBook,listExamBookWords} from './services/examBooks.js';
 import { handleShanbayImportRequest } from "./shanbayImportApi.js";
@@ -74,6 +75,7 @@ import {
   type WrapupGrade,
 } from "./services/deepseek.js";
 import { normalizeWord } from "./services/wordNormalization.js";
+import {privateBookLesson} from './services/privateBookLesson.js';
 import { deriveLessonProfile } from "./services/lessonProfile.js";
 import { cadenceCandidatePlans, planLessonQueue } from "./services/exercisePlanner.js";
 import { perf } from "./services/perf.js";
@@ -181,6 +183,7 @@ function toApiError(error: unknown): WebApiError {
   if (error instanceof NoteReviewServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof AnalyticsServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof VocabularyServiceError) return new WebApiError(error.status, error.code, error.message);
+  if(error instanceof PrivateBookAccessError)return new WebApiError(403,error.code,'当前会话的私人词书授权已失效。');
   if (error instanceof DeepSeekError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof StaleStudyStateError || (error instanceof Error && ["STALE_STUDY_STATE", "STUDY_SESSION_REVISION_MISMATCH"].includes(error.message))) {
     return new WebApiError(409, "STALE_STUDY_STATE", "Study state changed in another client.");
@@ -244,6 +247,7 @@ export function buildPretestItems(words: VocabularyItem[]): Array<Record<string,
       meaning_zh: meaning,
       prompt: meaning,
       direction: "cn_to_en",
+      ...(item.definition_source?{private_source_book_id:item.definition_source.book_id}:{}),
     };
   });
 }
@@ -274,6 +278,8 @@ function resultForState(
     if (typeof payload.plan === "object" && payload.plan !== null && !Array.isArray(payload.plan)) {
       const plan = { ...payload.plan as Record<string, unknown> };
       delete plan.target_sense;
+      delete plan.private_source_word;
+      delete plan.private_source_entry_keys;
       delete plan.word_id;
       delete plan.target_word_ids;
       delete plan.skill_signals;
@@ -282,6 +288,8 @@ function resultForState(
     if (typeof payload.consolidation_plan === "object" && payload.consolidation_plan !== null && !Array.isArray(payload.consolidation_plan)) {
       const plan = { ...payload.consolidation_plan as Record<string, unknown> };
       delete plan.target_sense;
+      delete plan.private_source_word;
+      delete plan.private_source_entry_keys;
       delete plan.word_id;
       delete plan.target_word_ids;
       delete plan.skill_signals;
@@ -348,6 +356,10 @@ async function successForSession(
   audioUrl?: string | null,
 ): Promise<Record<string, unknown>> {
   const state = ensureState(session);
+  for(const id of privateSourceIds(state)){
+    const allowed=await getDatabase().rpc('can_access_exam_book_v1',{p_user_id:getAuthenticatedUserId(),p_book_id:id});
+    if(allowed.error||allowed.data!==true)throw new WebApiError(403,'PRIVATE_BOOK_UNAVAILABLE','当前会话的私人词书授权已失效。');
+  }
   const displayState = state.widget === "lesson"
     ? { ...state, payload: await withLessonClozeHint(state.payload) }
     : state;
@@ -574,9 +586,9 @@ async function generateAndPersistLesson(input: {
   }
   await reserveLearningBudget(`exercise:${plan.exercise_id}`, plan.planned_activity_type, "lesson", db, userId);
   const [generated, audioUrl] = await Promise.all([
-    generateLesson({
+    plan.private_source_book_id?Promise.resolve(privateBookLesson(item.word,plan,pos,item.ipa_us??'')):generateLesson({
       word: item.word,
-      meaning_zh: meaning,
+      meaning_zh: plan.private_source_book_id?plan.target_sense:meaning,
       part_of_speech: pos,
       ...(item.ipa_us?.trim() ? { ipa: item.ipa_us.trim() } : {}),
       ...lessonProfile,
@@ -610,7 +622,7 @@ async function generateAndPersistLesson(input: {
       progress: lessonProgressLabel(input.flow.relearn_words, queue, input.index),
       ipa: generated.ipa,
       part_of_speech: persistedPos ?? generated.part_of_speech,
-      meaning_zh: meaning,
+      meaning_zh: plan.private_source_book_id?plan.target_sense:meaning,
       collocations: generated.collocations,
       derivations: generated.derivations,
       example_en: generated.example_en,
@@ -755,6 +767,7 @@ async function submitReview(action: Extract<WebAction, { action: "review_submit"
     grade = { is_correct: false, error_layer: "meaning", rating: "again", feedback: "已标记为不会。", graded_by: "deterministic" };
   } else if (item.direction === "en_definition") {
     const semantic = await gradeEnglishDefinition({
+      ...(item.private_source_book_id?{private_source_book_id:item.private_source_book_id}:{}),
       word: item.word,
       ...(item.part_of_speech ? { part_of_speech: item.part_of_speech } : {}),
       meaning_zh: item.meaning_zh,

@@ -11,7 +11,8 @@ export async function withLessonClozeHint(payload: Record<string, unknown>): Pro
     || !hintedActivityTypes.has(String(payload.activity_type))) return payload;
   let meaning = typeof payload.meaning_zh === "string" ? payload.meaning_zh : "";
   const pos = typeof payload.part_of_speech === "string" ? payload.part_of_speech.trim() : "";
-  if (!meaningIncludesPartOfSpeech(meaning, pos) && typeof payload.word === "string") {
+  const frozenPrivate=typeof payload.plan==='object'&&payload.plan!==null&&'private_source_book_id' in payload.plan;
+  if (!frozenPrivate && !meaningIncludesPartOfSpeech(meaning, pos) && typeof payload.word === "string") {
     const [item] = await getVocabularyItemsByWords([payload.word]);
     const dictionaryMeaning = formatMeaningByPartOfSpeech(item?.senses);
     if (dictionaryMeaning) meaning = dictionaryMeaning;

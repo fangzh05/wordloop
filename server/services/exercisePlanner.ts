@@ -25,6 +25,7 @@ export interface PlannerWord {
   error_focus: ActiveErrorLayer | null;
   is_relearn?: boolean;
   has_useful_derivation?: boolean;
+  private_source?: VocabularyItem['definition_source'];
 }
 
 export interface RecentPlannedActivity {
@@ -232,7 +233,9 @@ export function planLessonRound(input: ExercisePlannerInput): LessonExercisePlan
   for (let index = 0; index < input.words.length; index += 1) {
     const word = input.words[index]!;
     const applicableSignals = input.skill_signals?.filter((signal) => !signal.word_id || signal.word_id === word.word_id) ?? [];
-    const selected = selectActivity(word, index, roundSize, precedingTypes, applicableSignals);
+    const selected = word.private_source
+      ? {activity:'word_recall' as const,reason:'从当前私人词书义项提取词头。',exception:'私人释义使用本地固定答案练习，不发送给第三方模型。'}
+      : selectActivity(word, index, roundSize, precedingTypes, applicableSignals);
     const primarySkills = skillIdsFor(word, selected.activity, applicableSignals);
     const signals = input.skill_signals?.filter((signal) => (!signal.word_id || signal.word_id === word.word_id)
       && primarySkills.includes(signal.skill_id))
@@ -246,6 +249,7 @@ export function planLessonRound(input: ExercisePlannerInput): LessonExercisePlan
       word_id: word.word_id,
       target_word_ids: [word.word_id],
       target_sense: word.target_sense,
+      ...(word.private_source?{private_source_book_id:word.private_source.book_id,private_source_entry_keys:word.private_source.entry_keys,private_source_word:normalizeWord(word.word)}:{}),
       planned_activity_type: activity,
       skill_goal: word.error_focus ? `修复 ${word.error_focus} 错误` : activity === "translation_cn_to_en"
         ? "从指定中文核心义主动提取目标词及其用法"
@@ -285,6 +289,7 @@ export function isRetrievalActivity(activity: string): boolean {
  * makes this the sole final activity-selection policy.
  */
 export function cadenceCandidatePlans(plan: LessonExercisePlan, word: string): Record<string, unknown> {
+  if(plan.private_source_book_id)return {};
   const target = plan.word_id ?? plan.target_word_ids[0];
   if (!target) return {};
   const make = (activity: "translation_en_to_cn" | "translation_cn_to_en" | "sentence", skill_ids: string[], hint_level: "meaning" | "context") => {
@@ -392,6 +397,7 @@ export async function planLessonQueue(
       word_id: item.word_id,
       word: item.word,
       target_sense: targetSense,
+      ...(item.definition_source?{private_source:item.definition_source}:{}),
       part_of_speech: item.senses?.find((sense) => sense.pos.trim())?.pos,
       lesson_profile: profile.lesson_profile,
       error_focus: profile.error_focus,

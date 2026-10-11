@@ -1,6 +1,6 @@
 import {getDatabase,getAuthenticatedUserId} from '../db.js';
 import {z} from 'zod';
-export const examBookId=z.enum(['kaoyan','cet4','cet6','ielts','toefl']);
+export const examBookId=z.enum(['kaoyan','cet4','cet6','ielts','toefl','ielts-wanglu-807-listening','ielts-zhenjing','toefl-xindongfang','cet6-xinghuo']);
 export async function listExamBooks(){
  const result=await getDatabase().rpc('list_exam_books_v1',{p_user_id:getAuthenticatedUserId()});
  if(result.error)throw Error('词书目录暂时不可用。');return result.data;

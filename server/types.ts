@@ -72,6 +72,7 @@ export interface UserWordRow {
 }
 
 export interface VocabularyItem {
+  definition_source?: {book_id:string;entry_keys:string[];private:true;third_party_processing_allowed:boolean};
   last_reviewed_at?: string | null;
   word_id?: string;
   word: string;

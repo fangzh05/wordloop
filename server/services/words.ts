@@ -223,7 +223,7 @@ export async function getTodayWords(
     p_date: date,
   });
   assertDatabaseResult(error);
-  return hydrateExamCards(((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc),db);
+  return hydrateExamCards(((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc),db,userId);
 }
 
 /** Read only the persisted words needed to resume a session-aware lesson queue. */
@@ -240,7 +240,7 @@ export async function getVocabularyItemsByWords(
     .eq("user_id", userId)
     .in("word.normalized_word", normalizedWords);
   assertDatabaseResult(error);
-  return hydrateExamCards(((data ?? []) as unknown as JoinedUserWord[]).map((row) => toVocabularyItem(row, relationOne(row.word))),db);
+  return hydrateExamCards(((data ?? []) as unknown as JoinedUserWord[]).map((row) => toVocabularyItem(row, relationOne(row.word))),db,userId);
 }
 
 export async function getAllUserWords(
@@ -262,7 +262,7 @@ export async function getAllUserWords(
     rows.push(...page);
     if (page.length < pageSize) break;
   }
-  return hydrateExamCards(rows.map((row) => toVocabularyItem(row, relationOne(row.word))),db);
+  return hydrateExamCards(rows.map((row) => toVocabularyItem(row, relationOne(row.word))),db,userId,false);
 }
 
 export function toVocabularyItem(
