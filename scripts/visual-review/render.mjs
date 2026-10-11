@@ -21,10 +21,12 @@ const server=http.createServer(async(req,res)=>{
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const port=server.address().port, browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const pages=["lesson","lesson-dark","lesson-exercise","pretest","pretest-dark","pretest-correct","pretest-wrong","pretest-loading","study","study-dark","review-correct","review-wrong","review-loading","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","consolidation-feedback","consolidation-retry","consolidation-loading","today","capture","insights","vocabulary","note-review","family","settings"];
+const requestedPages=process.env.VISUAL_PAGES?.trim().split(",").map(v=>v.trim()).filter(Boolean);
+const visualPages=requestedPages?.length?requestedPages:pages;
 const sizes=[["desktop",1440,1000],["mobile",390,844]];
 try{
 for(const [size,w,h] of sizes) {
- for(const name of pages){
+ for(const name of visualPages){
   const page=await browser.newPage({viewport:{width:w,height:h},deviceScaleFactor:1});
   const errors=[];
   page.on("pageerror",e=>errors.push(e.message));
@@ -36,7 +38,7 @@ for(const [size,w,h] of sizes) {
   }
   if(name==="vocabulary")await page.waitForTimeout(500);
   const expected = {study:".review-editorial-stage","study-dark":".review-editorial-stage","review-correct":".review-editorial-stage","review-wrong":".review-editorial-stage","review-loading":".review-editorial-stage",
-    lesson:".lesson-reference-stage","lesson-dark":".lesson-reference-stage","lesson-exercise":".lesson-exercise-editorial",
+    lesson:".lesson-reference-stage","lesson-dark":".lesson-reference-stage","relearn-lesson":".lesson-reference-stage","relearn-lesson-dark":".lesson-reference-stage","relearn-exercise":".lesson-exercise-editorial","lesson-exercise":".lesson-exercise-editorial",
     pretest:".pretest-editorial-workspace","pretest-dark":".pretest-editorial-workspace","pretest-correct":".pretest-result-editorial","pretest-wrong":".pretest-result-editorial","pretest-loading":".pretest-editorial-workspace",
     "consolidation-feedback":".lesson-feedback-editorial","consolidation-retry":".lesson-feedback-editorial","consolidation-loading":".lesson-feedback-editorial"}[name];
   if(expected && !(await page.locator(expected).isVisible()))throw Error(`Missing expected source component: ${name} ${size} ${expected}. Errors: ${errors.join(" | ")}`);
@@ -48,7 +50,7 @@ for(const [size,w,h] of sizes) {
       if(!rect || rect.height>65 || rect.height<42)throw Error("Mobile 不会 button height should be compact, measured: "+JSON.stringify(rect));
     }
   }
-  if(["lesson","lesson-dark"].includes(name) && !(await page.getByRole("button",{name:"词族",exact:true}).isVisible()))
+  if(["lesson","lesson-dark","relearn-lesson","relearn-lesson-dark"].includes(name) && !(await page.getByRole("button",{name:"词族",exact:true}).isVisible()))
     throw Error("Word-family entry is not visible in lesson explanation");
   if(name==="capture" && size==="mobile"){
     const h=page.locator("#capture-notes-title");
@@ -80,11 +82,23 @@ for(const [size,w,h] of sizes) {
     if(!label.includes(expectedLabel))throw Error(`Incorrect button: ${label} vs ${expectedLabel}`);
     if(name==="lesson-feedback-loading" && !(await button.isDisabled()))throw Error("Next-word button must be disabled while generating");
   }
-  if(["lesson","lesson-dark"].includes(name)){
+  if(["lesson","lesson-dark","relearn-lesson","relearn-lesson-dark"].includes(name)){
     const audio=page.getByRole("button",{name:/播放发音|朗读单词/});
     if(!(await audio.isVisible())||await audio.locator("svg.lesson-play-glyph").count()!==1)
       throw Error("Lesson audio control must use actual monochrome SVG");
     if(await audio.innerText())throw Error("Unexpected emoji/text play glyph in lesson button");
+    const tone=await audio.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,border:getComputedStyle(el).borderTopWidth,icon:getComputedStyle(el).color,diameter:el.getBoundingClientRect().width}));
+    if(tone.border!=="0px"||tone.diameter<28||tone.diameter>37)throw Error("Audio control does not match accepted indulge reference: "+JSON.stringify(tone));
+  }
+  if(["relearn-lesson","relearn-lesson-dark"].includes(name)){
+    const progress=await page.locator(".lesson-reference-progress-label").innerText();
+    if(!progress.includes("复习补学 1 / 32"))throw Error("Relearn session header missing: "+progress);
+    const terms=await page.locator(".lesson-reference-title").innerText();
+    if(terms.trim()!=="indulge")throw Error("Relearn word mismatch");
+  }
+  if(["pretest","pretest-dark"].includes(name)){
+    if(await page.getByText("Write the word",{exact:true}).count())throw Error("Decorative Write the word heading must be removed");
+    if(!(await page.locator(".pretest-meaning").isVisible()))throw Error("Chinese prompt must be prominent");
   }
   if(name.startsWith("pretest")){
     const card=page.locator(".pretest-editorial-card");
@@ -107,7 +121,7 @@ for(const [size,w,h] of sizes) {
     if(theme!=="dark")throw Error("Dark mode not enabled");
   }
   // Protect the user-approved PR #3 typography from future visual-only overrides.
-  if(name==="lesson-exercise"){
+  if(["lesson-exercise","relearn-exercise"].includes(name)){
     const fonts=await page.evaluate(()=>{
       const h=document.querySelector(".lesson-exercise-heading");
       const input=document.querySelector(".lesson-exercise-answer .standalone-input");
