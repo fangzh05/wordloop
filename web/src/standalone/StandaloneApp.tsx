@@ -533,7 +533,7 @@ export function StandalonePretestWorkspace({item,answer,busy,notice,onAnswerChan
 }):React.JSX.Element {
   return <div className="standalone-content pretest-editorial-workspace">
     <div className="study-typographic-kicker">PRETEST / CN → EN</div>
-    <h2 className="pretest-write-title">Write the word</h2>
+    <h2 className="sr-only">预测试 · 根据中文写出英文单词</h2>
     <div className="pretest-editorial-question">
       <p className="pretest-meaning">{String(item.meaning_zh??"")}</p>
       {typeof item.part_of_speech==="string"&&!meaningIncludesPartOfSpeech(String(item.meaning_zh??""),item.part_of_speech) &&
