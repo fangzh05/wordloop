@@ -7,7 +7,7 @@ import { VocabularyPage } from "../../web/src/standalone/pages/VocabularyPage.js
 import { CaptureNotesPage } from "../../web/src/standalone/CaptureNotesPage.js";
 import { NoteReviewPage } from "../../web/src/standalone/NoteReviewPage.js";
 import { FamilyPanel } from "../../web/src/family/FamilyPanel.js";
-import { StandaloneReviewWorkspace, StandaloneLessonExplanation, StandaloneLessonExercise, StandaloneLessonHeader } from "../../web/src/standalone/StandaloneApp.js";
+import { StandaloneReviewWorkspace, StandaloneLessonExplanation, StandaloneLessonExercise, StandaloneLessonHeader, StandaloneLessonFeedback } from "../../web/src/standalone/StandaloneApp.js";
 import { Button } from "../../web/src/components/Button.js";
 import type { AppSection } from "../../web/src/standalone/AppShell.js";
 
@@ -80,7 +80,7 @@ window.fetch = async (input:any, init?:any)=>{
 function App() {
  const query=new URLSearchParams(location.search);
  const page=query.get("page")??"today";
- const immersive = ["study","lesson","lesson-exercise"].includes(page);
+ const immersive = ["study","lesson","lesson-exercise","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading"].includes(page);
  const [studyAnswer,setStudyAnswer]=useState("");
  const [section,setSection]=useState<AppSection>((["today","study","capture","insights","vocabulary"].includes(page)?page:"today") as AppSection);
  const [showSettings,setShowSettings]=useState(page==="settings");
@@ -120,6 +120,21 @@ function App() {
       <StandaloneLessonExercise instruction="使用刚学过的词，完成下面这句话。" prompt="It is difficult to ______ the outcome of the election."
         activityType="cloze" clozeHint={""} multiline={false} answer={studyAnswer} busy={false}
         onAnswerChange={setStudyAnswer} onSubmit={()=>{}} />
+    </section>}
+    {["lesson-feedback","lesson-feedback-retry","lesson-feedback-loading"].includes(page) && <section className="widget-card standalone-card lesson-card study-task-card" aria-labelledby="study-title">
+      <StandaloneLessonFeedback
+        word="indulge"
+        progressLabel="复习补学 1 / 32"
+        feedback={page==="lesson-feedback-retry"
+          ? {is_correct:false,user_answer:"indulging",error_layer:"word_form",message:"词形与题目要求不一致。",explanation:"这里应使用原形 indulge，注意动词形式。",reveal_answer:false}
+          : {is_correct:true,user_answer:"indulge",error_layer:"none",message:"答案正确。",explanation:"目标词与作答一致。",reveal_answer:false}}
+        busy={page==="lesson-feedback-loading"}
+        busyLabel={page==="lesson-feedback-loading"?"正在生成下一词…":null}
+        notice=""
+        nextWord={true}
+        onBack={()=>route("today")}
+        onRetry={()=>{}} onNext={()=>{}}
+      />
     </section>}
     {page==="family"&&<section className="widget-card standalone-card"><h1>词族</h1><Button onClick={()=>setFamily(true)}>打开词族</Button></section>}
     {page==="settings"&&<section className="widget-card standalone-card"><h1>设置</h1></section>}
