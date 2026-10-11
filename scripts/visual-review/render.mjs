@@ -95,7 +95,7 @@ for(const [size,w,h] of sizes) {
   if(name.startsWith("consolidation-")){
     const btn=page.locator(".lesson-feedback-primary");
     const label=(await btn.innerText()).trim();
-    const wanted=name==="consolidation-retry"?"修改一次":name==="consolidation-loading"?"正在生成下一词":"继续学习";
+    const wanted=name==="consolidation-retry"?"修改一次":name==="consolidation-loading"?"正在继续学习":"继续学习";
     if(!label.includes(wanted))throw Error(`Wrong consolidation UI label ${label} for ${name}`);
   }
   if(name.endsWith("-dark")){
