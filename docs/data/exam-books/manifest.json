@@ -1,0 +1,28 @@
+{
+  "books": {
+    "kaoyan": {
+      "count": 5528,
+      "sha256": "383d8bbdfa14220e5f81b240a2031767ac167b928f582fe460474365a87a2323"
+    },
+    "cet4": {
+      "count": 3846,
+      "sha256": "96c2d74a4e180dc3502228b87db7194eb4ae8a9ab113d4577e0037330ce5759d"
+    },
+    "cet6": {
+      "count": 5406,
+      "sha256": "9b487632fd868daa2a7c7bd7a5bfcb78bf331d0ae7b17abdbb6bc81f9342ff55"
+    },
+    "ielts": {
+      "count": 5038,
+      "sha256": "e18dc25a0798586b472a16d7d5709111a9bddee1c74e99b745ee000336ab8a70"
+    },
+    "toefl": {
+      "count": 6973,
+      "sha256": "974e45840abb302eecc95979794aee48f262b210171bbb343fc6bcb83a706339"
+    }
+  },
+  "corpus_sha256": "a46ecbc74c4d0bb80b119a97efcbf454596ad7bf5d397abae781f4f2466005c9",
+  "ecdict_version": "bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b",
+  "netem_version": "70dc6b68c855f21e666a7a291ff8ead5ca1f7b44",
+  "publication_ready": true
+}
