@@ -4538,3 +4538,270 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   .wordloop-shell .review-editorial-workspace .review-submit-button.button {min-width:9.3rem;}
 }
 
+
+/* ===========================================================================
+   WORDLOOP / FEEDBACK READING SPREAD
+   One unboxed page, one primary action. The lesson state machine, navigation,
+   grading, retry and persistence remain exactly as before.
+   =========================================================================== */
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive .lesson-card:has(.lesson-feedback-editorial) {
+  display:block;
+  width:min(100%,710px);
+  max-width:710px;
+  margin:0 auto;
+  padding:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+  overflow:visible;
+  color:var(--original-study-ink,#1d292d);
+}
+.wordloop-shell .lesson-card:has(.lesson-feedback-editorial) > .widget-header {
+  display:none;
+}
+.wordloop-shell .lesson-feedback-editorial {
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  max-width:710px;
+  min-height:calc(100dvh - 90px);
+  margin:0 auto;
+  padding:9px 0 27px;
+  gap:0;
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-feedback-topbar {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:1rem;
+  min-height:38px;
+  margin:0 0 54px;
+  color:var(--original-study-muted,#818b8e);
+  font-size:.78rem;
+  letter-spacing:.035em;
+}
+.wordloop-shell .lesson-feedback-topbar .standalone-back {
+  flex:0 0 auto;
+  min-height:36px;
+  border:0;
+  background:transparent;
+  color:var(--original-study-ink,#1d292d);
+  padding:0;
+  margin:0;
+  font-size:.85rem;
+  font-weight:500;
+}
+.wordloop-shell .lesson-feedback-topbar .standalone-back:hover {
+  background:transparent;
+  color:var(--original-study-navy,#375f73);
+}
+.wordloop-shell .lesson-feedback-topbar > span {
+  color:var(--original-study-muted,#818b8e);
+  text-align:right;
+  white-space:nowrap;
+  font-size:.78rem;
+}
+.wordloop-shell .lesson-feedback-main {
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  width:100%;
+  flex:1 0 auto;
+}
+.wordloop-shell .lesson-feedback-kicker {
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:.7rem;
+  letter-spacing:.14em;
+  font-weight:540;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-feedback-word {
+  font-family:var(--original-study-english,"Iowan Old Style",Georgia,serif);
+  font-size:clamp(3.65rem,8vw,5.55rem);
+  font-weight:400;
+  line-height:1.1;
+  letter-spacing:-.055em;
+  overflow-wrap:anywhere;
+  margin:12px 0 29px;
+  color:var(--original-study-ink,#1d292d);
+}
+.wordloop-shell .lesson-feedback-verdict {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:0 0 26px;
+  padding:0 0 24px;
+  border-bottom:1px solid var(--original-study-rule,#e2e6e7);
+  background:transparent;
+  border-radius:0;
+}
+.wordloop-shell .lesson-feedback-verdict-symbol {
+  display:grid;
+  place-items:center;
+  flex:0 0 31px;
+  width:31px;
+  height:31px;
+  border:1px solid #6c8d7d;
+  border-radius:50%;
+  color:#3e6c58;
+  font-size:1rem;
+  line-height:1;
+  font-weight:500;
+}
+.wordloop-shell .lesson-feedback-verdict.needs-revision .lesson-feedback-verdict-symbol {
+  color:#956b52;
+  border-color:#bc9a83;
+}
+.wordloop-shell .lesson-feedback-verdict > div {
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.wordloop-shell .lesson-feedback-verdict strong {
+  color:var(--original-study-ink,#1d292d);
+  font-size:.97rem;
+  line-height:1.35;
+  font-weight:620;
+}
+.wordloop-shell .lesson-feedback-verdict div span {
+  color:var(--original-study-muted,#818b8e);
+  font-size:.75rem;
+  line-height:1.5;
+}
+.wordloop-shell .lesson-feedback-section {
+  margin:0;
+  padding:0 0 24px;
+  border:0;
+  border-bottom:1px solid var(--original-study-rule,#e2e6e7);
+  background:transparent;
+  border-radius:0;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-feedback-section + .lesson-feedback-section {
+  padding-top:24px;
+}
+.wordloop-shell .lesson-feedback-section h2 {
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  margin:0 0 13px;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:.68rem;
+  font-weight:520;
+  line-height:1.5;
+  letter-spacing:.12em;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-feedback-section h2 > span {
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  letter-spacing:0;
+  font-size:.73rem;
+  color:var(--original-study-muted,#818b8e);
+}
+.wordloop-shell .lesson-feedback-answer {
+  margin:0;
+  font-family:var(--original-study-english,"Iowan Old Style",Georgia,serif);
+  color:var(--original-study-ink,#1d292d);
+  font-size:clamp(1.5rem,3vw,2.15rem);
+  line-height:1.4;
+  font-weight:400;
+  overflow-wrap:anywhere;
+}
+.wordloop-shell .lesson-feedback-note {
+  margin:0;
+  color:var(--original-study-ink,#1d292d);
+  font-size:.92rem;
+  line-height:1.75;
+}
+.wordloop-shell .lesson-feedback-detail {
+  margin:.4rem 0 0;
+  color:var(--original-study-muted,#818b8e);
+  font-size:.84rem;
+  line-height:1.8;
+}
+.wordloop-shell .lesson-feedback-notice {
+  padding:.65rem 0;
+  margin:.5rem 0;
+  color:var(--original-study-muted,#818b8e);
+  font-size:.8rem;
+}
+.wordloop-shell .lesson-feedback-footer {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  width:100%;
+  gap:.6rem;
+  margin:32px 0 0;
+  padding:0;
+  border:0;
+  background:transparent;
+}
+.wordloop-shell .lesson-feedback-footer .button.lesson-feedback-primary {
+  display:flex;
+  width:100%;
+  min-width:0;
+  max-width:none;
+  min-height:54px;
+  justify-content:center;
+  align-items:center;
+  gap:1rem;
+  padding:13px 20px;
+  border:1px solid #375f73;
+  border-radius:11px;
+  background:#375f73;
+  color:#fff;
+  font-size:.92rem;
+  font-weight:520;
+  line-height:1.45;
+  box-shadow:none;
+  transition:background 120ms ease,border-color 120ms ease;
+}
+.wordloop-shell .lesson-feedback-footer .button.lesson-feedback-primary:hover:not(:disabled) {
+  background:#284c60;
+  border-color:#284c60;
+}
+.wordloop-shell .lesson-feedback-footer .button.lesson-feedback-primary:focus-visible {
+  outline:2px solid #375f73;
+  outline-offset:3px;
+}
+.wordloop-shell .lesson-feedback-footer .button.lesson-feedback-primary:disabled {
+  opacity:.68;
+  cursor:progress;
+  background:#64869a;
+  border-color:#64869a;
+}
+.wordloop-shell .lesson-feedback-loading-note {
+  margin:4px 0 0;
+  font-size:.75rem;
+  text-align:center;
+  color:var(--original-study-muted,#818b8e);
+  line-height:1.6;
+}
+.wordloop-shell .lesson-feedback-spinner {
+  display:inline-block;
+  width:13px;
+  height:13px;
+  border:1.5px solid #ffffff65;
+  border-top-color:#fff;
+  border-radius:50%;
+  animation:wordloop-feedback-spin 800ms linear infinite;
+}
+@keyframes wordloop-feedback-spin {to{transform:rotate(360deg)}}
+@media(max-width:767px) {
+  .wordloop-shell .lesson-feedback-editorial {min-height:calc(100dvh - 75px - env(safe-area-inset-bottom));padding:0 0 20px;}
+  .wordloop-shell .lesson-feedback-topbar {margin:0 0 48px;}
+  .wordloop-shell .lesson-feedback-word {font-size:clamp(3.5rem,13vw,4.8rem);margin:12px 0 27px;}
+  .wordloop-shell .lesson-feedback-verdict {margin-bottom:23px;padding-bottom:23px;}
+  .wordloop-shell .lesson-feedback-footer {margin-top:28px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .wordloop-shell .lesson-feedback-spinner {animation:none;border-top-color:#fff;}
+  .wordloop-shell .lesson-feedback-footer .button.lesson-feedback-primary {transition:none;}
+}
+
