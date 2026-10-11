@@ -1,16 +1,16 @@
 # WordLoop public exam book data
 
-The JSON files contain public normalized headword memberships and source record numbers only. They contain no private word_sources, definitions from commercial books, or learner data.
+The JSON files contain public normalized headword memberships and source record numbers only. They contain no private word_sources references, personal definitions, or learner data.
 
 ## Kaoyan
 
-Attribution: exam-data/NETEMVocabulary contributors, https://github.com/exam-data/NETEMVocabulary, revision `70dc6b68c855f21e666a7a291ff8ead5ca1f7b44`.
+Source: the union of the WordLoop owner's existing Hongbaoshu (6,593 source entries) and familiar-word/less-common-meanings (1,200 source entries), 745 shared entries, 7,048 unique normalized headwords. The source data remains in the owner's private account. WordLoop publishes only this normalized word list and does not expose original source IDs, imported definitions, or account records.
 
-The data, including `kaoyan.json`, is licensed under **CC BY-NC-SA 4.0**, https://creativecommons.org/licenses/by-nc-sa/4.0/. See KAOYAN-LICENSE.txt for the full license. WordLoop's owner explicitly confirmed noncommercial use and ShareAlike distribution on 2026-10-11. The source's MIT license applies to code, not this data. WordLoop's software license does not relicense these files.
+The owner explicitly authorized public distribution of the union's normalized headwords in the Codex conversation on 2026-10-11 (“授权并公开”), following confirmation that this publishes the 7,048-word union. This grant covers public headword membership for WordLoop. It does not republish the source books, their definitions, order, notes, or private learning records. Public words receive dictionary information through the separately licensed ECDICT service.
 
-Changes: extracted only main headwords, applied existing WordLoop trim/lowercase normalization, collapsed two exact duplicates, retained source record numbers. All 154 other-spelling annotations are excluded from membership; no identities are merged. Source definitions, example sentences, classification and frequency rankings are not distributed here. 5,530 source rows yield 5,528 unique main headwords. Original JSON SHA-256: `6d71a301321056291902bc4804e223c6926dca0d629a45076a6ca5adab185f62`.
+`kaoyan.json` contains 7,048 alphabetically sorted normalized words, source version `owner-authorization-2026-10-11`, with empty private source-record arrays. SHA-256: `247b81b85b8c8878d7ebbb3a544b4f2d27889b7066c1a7006c26b0e44c59b00b`.
 
-This is an independent public dataset. It is not the original owner's private 7,048-word Hongbaoshu/familiar-word union and does not include that account's private content. The owner retains their private source union and learning state.
+This public list replaces the earlier 5,528-word NETEM candidate. It has 5,461 words in common with that candidate: 1,587 words were added and 67 former NETEM-only words removed. The former CC BY-NC-SA terms applied to NETEM and do not govern this owner-authorized word list. Three words (cliché, non-materialistic, open-access) currently lack an exact ECDICT entry; they remain in the authorized list and no private definitions were copied.
 
 ## CET4, CET6, IELTS and TOEFL
 
@@ -22,8 +22,8 @@ Final counts: CET4 3,846; CET6 5,406; IELTS 5,038; TOEFL 6,973. Definitions and 
 
 ## Audit and publication
 
-manifest.json binds each book's membership checksum and source version. The release adds 3,015 missing dictionary records and 26,791 membership relations; inserts use unique constraints and do not update existing rows. WorkBuddy suggestions are advisory; formal ECDICT review approval came from the human owner. WorkBuddy actual model identity was unverified (`auto`), not asserted to be DeepSeek V4.1.
+`manifest.json` records each book's row count and checksum. The 2026-10-11 release added 3,015 shared dictionary records and 26,791 initial membership relations. The authorized kaoyan update adds 1,587 relationships and removes 67. All writes use database uniqueness constraints; existing dictionary rows, words and learner state are preserved.
 
-Local complete audit: `.exam-books/release/`, `.exam-books/workbuddy-review/`, `.exam-books/source-research/`. Pre-release scoped production backup: non-public schema `exam_release_backup_20261011` (dictionary/catalog/memberships); a temporary-table restore of all 23,432 existing dictionary rows was compared exactly before import. This is a scoped in-database backup, not an independently verified full-project disaster-recovery backup.
+Local release audit: `.exam-books/release/`, `.exam-books/workbuddy-review/`, `.exam-books/source-research/`. WorkBuddy actual model identity was unverified (`auto`), not asserted to be DeepSeek V4.1.
 
-Rollback publication by setting `is_public=false,is_available=false,published_at=null` on exam_books. Preserve all enrolled cards and learning history. The captured pre-release catalog remains in the private backup schema; do not delete dictionary additions referenced by learning cards.
+Rollback public kaoyan membership/metadata from the private, access-restricted snapshot `exam_release_backup_20261011.kaoyan_netem`. Keep any enrolled cards and learner history; never remove dictionary additions referenced by learning cards.

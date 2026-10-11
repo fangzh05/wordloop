@@ -1,0 +1,8 @@
+WordLoop owner authorization record
+Date: 2026-10-11
+
+The owner explicitly instructed: “授权并公开” in response to a request to publish the union of the existing Hongbaoshu and familiar-word/less-common-meanings lists to all WordLoop users.
+
+Authorized public material: the 7,048 normalized headwords in the union, as exam-book membership rows and the corresponding headword-only public list.
+
+The publication does not include original word_sources record IDs, commercial-book definitions, imported order, notes, user_words, FSRS, review logs, or learning history. Shared ECDICT dictionary material remains separately attributed and licensed.

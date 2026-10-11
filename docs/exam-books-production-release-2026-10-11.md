@@ -1,24 +1,24 @@
 # Public exam books production release — 2026-10-11
 
-This report supersedes the unpublished/import status in the earlier implementation report. Published at 2026-10-11 10:30:37 UTC (18:30:37 Asia/Shanghai). All five exam_books rows are public and available.
+This report supersedes the unpublished/import status in the earlier implementation report. The four ECDICT books and the initial public kaoyan list were published at 2026-10-11 10:30:37 UTC. On owner authorization (“授权并公开”) at 10:44 UTC, public kaoyan was corrected to exactly the owner's 7,048-word Hongbaoshu plus familiar-word union. All five exam_books rows are public and available.
 
 | Book | Final public headwords |
 |---|---:|
-| kaoyan | 5528 |
+| kaoyan | 7048 |
 | cet4 | 3846 |
 | cet6 | 5406 |
 | ielts | 5038 |
 | toefl | 6973 |
 
-Added 3,015 shared dictionary records and 26,791 unique membership relations. Existing 23,432 dictionary records compare exactly with the pre-import snapshot; final dictionary count 26,447. Every public membership has a shared English dictionary row with a nonempty Chinese translation. Membership storage including indexes measured 6,160,384 bytes after initial import (not a full database storage delta).
+The initial import added 3,015 shared dictionary records; the authorized-list correction added 1,587 kaoyan memberships and removed 67 NETEM-only memberships. Final membership count is 28,311, dictionary count 26,447. Existing 23,432 dictionary records compare exactly with the pre-import snapshot. Three public kaoyan headwords lack an exact ECDICT entry: cliché, non-materialistic and open-access. They remain in the explicitly authorized roster; no private definitions were copied to fill the gap. Membership storage including indexes measured 6,160,384 bytes after initial import, before the roster correction (not a full database storage delta).
 
-Public source/version/license and complete licensed membership files: [data/exam-books](data/exam-books/README.md). Membership-manifest commit: 2a53ecc. The production Worker code was already deployed from 40cd372; no runtime changes or Worker rebuild were required for this data-only publication.
+Public source/version/authorization record and membership files: [data/exam-books](data/exam-books/README.md). Initial manifest commit: 2a53ecc. The corrected 7,048-word list is in the follow-up data commit. The production Worker code was deployed from 40cd372; no runtime changes or Worker rebuild were required for this data-only publication.
 
-Human owner explicitly confirmed noncommercial use and ShareAlike distribution of NETEM data and approved the proposed 28-item ECDICT disposition. ECDICT: 22 approved with separate normalized identities retained; six temporarily excluded (b.c., i.e., p.m., in spite of, drop-out, dropout). NETEM: two exact duplicate source rows collapsed. All 154 other-spelling annotations remain outside the main-headword release; no uncertain variant is automatically enrolled or merged.
+The owner explicitly authorized public distribution of the normalized 7,048-word private union in this conversation on 2026-10-11. The earlier NETEM noncommercial/ShareAlike confirmation applied to the temporary candidate only; NETEM is no longer the published kaoyan source. ECDICT: 22 approved with separate normalized identities retained; six excluded (b.c., i.e., p.m., in spite of, drop-out, dropout). The original private source rows remain private. The earlier NETEM data had two exact duplicate rows and 154 spelling annotations; none of those annotations are part of the final kaoyan roster.
 
 WorkBuddy: original 28-item advisory review completed; source-search attempt 1 timed out, attempt 2 completed with three reported WebSearch calls; 154-item NETEM advisory review completed with 83 spelling_variant, 5 different_form, 66 needs_review. Record/word identity and complete coverage validated. All WorkBuddy tasks used deny permissions and no external write permissions. Actual underlying model was unverified (auto), not claimed as DeepSeek V4.1. Native Computer Use invocations: 0; WorkBuddy ACP connector used. Source-search and variant-review searches reported six total read-only web lookups.
 
-Private owner union remains 7,048 words. Its overlap with independent public kaoyan is 5,461 words: 1,587 private-only, 67 public-only. Existing owner retains the private source union as their kaoyan learning scope; other users receive the independent 5,528-word public dataset. No private source rows or definitions were copied into public memberships.
+The public kaoyan set and private owner union were compared in production: 7,048 each; symmetric difference 0. Public membership rows have empty source-record arrays. No private source IDs, definitions, or personal learning state were copied.
 
 ## Production protection and verification
 
@@ -26,7 +26,7 @@ Private owner union remains 7,048 words. Its overlap with independent public kao
 - words full-row MD5 before/after: 3c55c5b1ee9fc04d89cb64f6ccb91d70 (all existing IDs, senses and IPA preserved).
 - lexical_relations full-row MD5 before/after: be91d49dd3a09048b4983c502d9aa77a.
 - user_words ID MD5 before/after: 22d775ace5dddcd580f08d90283d7743; FSRS log count remained 1,745. Full learner-state/FSRS-row hashing was not performed in this release; the import only inserted dictionary and public membership rows and updated catalog metadata.
-- RLS authenticated-role probe reads five public books and 26,791 memberships, zero preferences for an unrelated identity; no direct set RPC permission and no backup-schema access.
+- RLS authenticated-role probe reads five public books and 28,311 memberships, zero preferences for an unrelated identity; no direct set RPC permission and no backup-schema access.
 - Production transactional smoke used two temporary public.users records, then rolled back everything. Verified all five selections, explicit initial choice, no eager card creation, isolated preferences, two actual CET6 new-word allocations within budget, matching selected-book membership, repeated allocation idempotence, pinned daily allocation retained after changing target, and zero generated FSRS logs. Final probe confirmed zero test users remain.
 - PGlite actual corpus import twice: 3,015 dictionary entries and 26,791 memberships both times; no missing Chinese glosses. Focused feature suite: 9 passed. The earlier runtime release passed typecheck, build and 880 tests (2 skipped).
 - Live MCP smoke after publication: initialize succeeded, 33 tools, 16 resources, Lesson resource readable.

@@ -1,8 +1,8 @@
 {
   "books": {
     "kaoyan": {
-      "count": 5528,
-      "sha256": "383d8bbdfa14220e5f81b240a2031767ac167b928f582fe460474365a87a2323"
+      "count": 7048,
+      "sha256": "247b81b85b8c8878d7ebbb3a544b4f2d27889b7066c1a7006c26b0e44c59b00b"
     },
     "cet4": {
       "count": 3846,
@@ -21,8 +21,8 @@
       "sha256": "974e45840abb302eecc95979794aee48f262b210171bbb343fc6bcb83a706339"
     }
   },
-  "corpus_sha256": "a46ecbc74c4d0bb80b119a97efcbf454596ad7bf5d397abae781f4f2466005c9",
+  "corpus_sha256": "6d7a7adc1ee798cab44b24e0fabb8b92f955609f6b78fcde29a29101626fdfe9",
   "ecdict_version": "bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b",
-  "netem_version": "70dc6b68c855f21e666a7a291ff8ead5ca1f7b44",
+  "kaoyan_source_version": "owner-authorization-2026-10-11",
   "publication_ready": true
-}
+}\n
