@@ -20,7 +20,7 @@ const server=http.createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const port=server.address().port, browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
-const pages=["lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","today","study","lesson","lesson-exercise","capture","insights","vocabulary","note-review","family","settings"];
+const pages=["lesson","lesson-dark","lesson-exercise","pretest","pretest-dark","pretest-correct","pretest-wrong","pretest-loading","study","study-dark","review-correct","review-wrong","review-loading","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","consolidation-feedback","consolidation-retry","consolidation-loading","today","capture","insights","vocabulary","note-review","family","settings"];
 const sizes=[["desktop",1440,1000],["mobile",390,844]];
 try{
 for(const [size,w,h] of sizes) {
@@ -35,13 +35,16 @@ for(const [size,w,h] of sizes) {
    await dialog.waitFor({state:"visible",timeout:10000}).catch(()=>{});
   }
   if(name==="vocabulary")await page.waitForTimeout(500);
-  const expected = {study:".review-editorial-stage", lesson:".lesson-editorial-content", "lesson-exercise":".lesson-exercise-editorial"}[name];
+  const expected = {study:".review-editorial-stage","study-dark":".review-editorial-stage","review-correct":".review-editorial-stage","review-wrong":".review-editorial-stage","review-loading":".review-editorial-stage",
+    lesson:".lesson-reference-stage","lesson-dark":".lesson-reference-stage","lesson-exercise":".lesson-exercise-editorial",
+    pretest:".pretest-editorial-workspace","pretest-dark":".pretest-editorial-workspace","pretest-correct":".pretest-result-editorial","pretest-wrong":".pretest-result-editorial","pretest-loading":".pretest-editorial-workspace",
+    "consolidation-feedback":".lesson-feedback-editorial","consolidation-retry":".lesson-feedback-editorial","consolidation-loading":".lesson-feedback-editorial"}[name];
   if(expected && !(await page.locator(expected).isVisible()))throw Error(`Missing expected source component: ${name} ${size} ${expected}. Errors: ${errors.join(" | ")}`);
-  if(name==="study"){
+  if(["study","study-dark","review-correct","review-wrong","review-loading"].includes(name)){
     const unknown=page.getByRole("button",{name:"不会",exact:true});
     if(!(await unknown.isVisible()))throw Error("Review skip action is missing or renamed");
   }
-  if(name==="lesson" && !(await page.getByRole("button",{name:"词族",exact:true}).isVisible()))
+  if(["lesson","lesson-dark"].includes(name) && !(await page.getByRole("button",{name:"词族",exact:true}).isVisible()))
     throw Error("Word-family entry is not visible in lesson explanation");
   if(name==="capture" && size==="mobile"){
     const h=page.locator("#capture-notes-title");
@@ -72,6 +75,32 @@ for(const [size,w,h] of sizes) {
     const expectedLabel=name==="lesson-feedback-retry"?"重做当前题":name==="lesson-feedback-loading"?"正在生成下一词":"下一词";
     if(!label.includes(expectedLabel))throw Error(`Incorrect button: ${label} vs ${expectedLabel}`);
     if(name==="lesson-feedback-loading" && !(await button.isDisabled()))throw Error("Next-word button must be disabled while generating");
+  }
+  if(["lesson","lesson-dark"].includes(name)){
+    const audio=page.getByRole("button",{name:/播放发音|朗读单词/});
+    if(!(await audio.isVisible())||await audio.locator("svg.lesson-play-glyph").count()!==1)
+      throw Error("Lesson audio control must use actual monochrome SVG");
+    if(await audio.innerText())throw Error("Unexpected emoji/text play glyph in lesson button");
+  }
+  if(name.startsWith("pretest")){
+    const card=page.locator(".pretest-editorial-card");
+    if(!(await card.isVisible()))throw Error("Pretest card missing");
+    const st=await card.evaluate(el=>({border:getComputedStyle(el).borderTopWidth,radius:getComputedStyle(el).borderTopLeftRadius}));
+    if(st.border!=="0px" || st.radius!=="0px")throw Error("Pretest outer border must be removed: "+JSON.stringify(st));
+    const button=page.getByRole("button",{name:"不会",exact:true});
+    if(["pretest","pretest-dark","pretest-loading"].includes(name)&&!(await button.isVisible()))throw Error("Pretest unknown action missing");
+    if(name==="pretest-wrong"&&!(await page.getByRole("button",{name:"我本来会这个词"}).isVisible()))throw Error("Original familiar-word action missing");
+    if(name==="pretest-loading"&&!(await button.isDisabled()))throw Error("Loading pretest button must be disabled");
+  }
+  if(name.startsWith("consolidation-")){
+    const btn=page.locator(".lesson-feedback-primary");
+    const label=(await btn.innerText()).trim();
+    const wanted=name==="consolidation-retry"?"修改一次":name==="consolidation-loading"?"正在生成下一词":"继续学习";
+    if(!label.includes(wanted))throw Error(`Wrong consolidation UI label ${label} for ${name}`);
+  }
+  if(name.endsWith("-dark")){
+    const theme=await page.evaluate(()=>document.documentElement.dataset.theme);
+    if(theme!=="dark")throw Error("Dark mode not enabled");
   }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth + 8);
   if(overflow)console.warn(`WARN: horizontal overflow at ${name} ${size}`);
