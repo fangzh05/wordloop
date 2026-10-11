@@ -20,7 +20,7 @@ const server=http.createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const port=server.address().port, browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
-const pages=["today","study","lesson","lesson-exercise","capture","insights","vocabulary","note-review","family","settings"];
+const pages=["lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","today","study","lesson","lesson-exercise","capture","insights","vocabulary","note-review","family","settings"];
 const sizes=[["desktop",1440,1000],["mobile",390,844]];
 try{
 for(const [size,w,h] of sizes) {
@@ -53,6 +53,23 @@ for(const [size,w,h] of sizes) {
     }));
     if(layout.whiteSpace!=="nowrap" || layout.height>layout.lineHeight*1.4 || layout.width>layout.available+1)
       throw Error("Capture title must stay on one line: "+JSON.stringify(layout));
+  }
+  if(name.startsWith("lesson-feedback")) {
+    const feedback=page.locator(".lesson-feedback-editorial");
+    if(!(await feedback.isVisible()))throw Error(`Missing source feedback component in ${name} ${size}`);
+    const button=feedback.locator(".lesson-feedback-primary");
+    if(!(await button.isVisible()))throw Error("Missing primary feedback action");
+    const style=await page.evaluate(()=>{
+      const card=document.querySelector(".lesson-card:has(.lesson-feedback-editorial)");
+      const s=card?getComputedStyle(card):null;
+      return s?{border:s.borderTopWidth,radius:s.borderTopLeftRadius,shadow:s.boxShadow,display:s.display}:null;
+    });
+    if(!style || style.border!=="0px" || style.radius!=="0px" || style.display!=="block")
+      throw Error(`Unexpected outer feedback card styling: ${JSON.stringify(style)}`);
+    const label=(await button.innerText()).trim();
+    const expectedLabel=name==="lesson-feedback-retry"?"重做当前题":name==="lesson-feedback-loading"?"正在生成下一词":"下一词";
+    if(!label.includes(expectedLabel))throw Error(`Incorrect button: ${label} vs ${expectedLabel}`);
+    if(name==="lesson-feedback-loading" && !(await button.isDisabled()))throw Error("Next-word button must be disabled while generating");
   }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth + 8);
   if(overflow)console.warn(`WARN: horizontal overflow at ${name} ${size}`);
