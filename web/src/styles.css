@@ -4830,3 +4830,326 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   }
 }
 
+
+/* ==========================================================================
+   STUDY STREAM / FINAL EDITORIAL UI
+   Existing state machine and session actions are untouched.
+   Across pretest, review, lesson, feedback and consolidation.
+   ========================================================================== */
+.wordloop-shell[data-study-open="true"] {
+  --study-ink:var(--original-study-ink,#1d292d);
+  --study-muted:var(--original-study-muted,#829197);
+  --study-rule:var(--original-study-rule,#dee5e9);
+  --study-blue:var(--original-study-navy,#375f73);
+  --study-type:"Iowan Old Style","Baskerville","Palatino Linotype",Georgia,serif;
+}
+/* Zero external card decorations, including the old desktop > .standalone-content layer. */
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.study-task-card.pretest-editorial-card,
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.study-task-card.review-editorial-card,
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.lesson-card:has(.lesson-feedback-editorial) {
+  display:block;
+  width:min(100%,710px);
+  max-width:710px;
+  min-width:0;
+  margin-inline:auto;
+  padding:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+  overflow:visible;
+}
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.pretest-editorial-card > .standalone-content,
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.review-editorial-card > .review-editorial-stage > .standalone-content {
+  width:100%;
+  max-width:710px;
+  margin-inline:auto;
+  padding:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+}
+.wordloop-shell .pretest-editorial-header {
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  position:static;
+  width:100%;
+  margin:0 0 43px;
+  padding:8px 0 0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.wordloop-shell .pretest-editorial-top {
+  display:flex;align-items:center;justify-content:space-between;
+  gap:1rem;min-height:36px;margin:0 0 46px;
+  color:var(--study-muted);font-size:.82rem;
+}
+.wordloop-shell .pretest-editorial-top .standalone-back {
+  border:0;padding:0;margin:0;background:transparent;
+  color:var(--study-ink);font-weight:500;
+}
+.wordloop-shell .pretest-editorial-progress {
+  width:100%;height:4px;overflow:hidden;
+  background:var(--study-rule);border-radius:3px;
+}
+.wordloop-shell .pretest-editorial-progress > span {
+  display:block;height:100%;background:var(--study-blue);border-radius:3px;
+}
+.wordloop-shell .study-typographic-kicker {
+  display:block;
+  margin:0 0 21px;
+  font-size:.7rem;
+  letter-spacing:.17em;
+  font-weight:500;
+  line-height:1.5;
+  color:var(--study-muted);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+.wordloop-shell .pretest-write-title {
+  margin:0 0 31px;padding:0;
+  font-family:var(--study-type);
+  font-weight:400;letter-spacing:-.056em;
+  font-size:clamp(3.15rem,6.2vw,5rem);
+  line-height:1.14;color:var(--study-ink);
+}
+.wordloop-shell .pretest-editorial-question {margin:0 0 47px;}
+.wordloop-shell .pretest-editorial-question .pretest-meaning {
+  margin:0;
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;
+  font-size:clamp(1.75rem,3vw,2.45rem);
+  font-weight:500;
+  line-height:1.55;letter-spacing:-.01em;
+  color:var(--study-ink);
+}
+.wordloop-shell .pretest-part-of-speech {
+  margin:8px 0 0;font-size:.81rem;color:var(--study-muted);
+}
+.wordloop-shell .pretest-instruction {
+  margin:22px 0 0;font-size:.89rem;color:var(--study-muted);
+}
+.wordloop-shell .pretest-editorial-input {
+  display:block;width:100%;min-height:66px;
+  margin:0;padding:8px 4px 12px;
+  border:0;border-bottom:1px solid var(--study-rule);
+  border-radius:0;outline:none;
+  font:400 clamp(1.35rem,2.3vw,1.8rem)/1.5 var(--study-type);
+  color:var(--study-ink);background:transparent;
+  box-shadow:none;
+}
+.wordloop-shell .pretest-editorial-input::placeholder {color:var(--study-muted);opacity:.85;}
+.wordloop-shell .pretest-editorial-input:focus {
+  border-bottom:2px solid var(--study-blue);
+  outline:0;box-shadow:none;
+}
+.wordloop-shell .pretest-editorial-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  width:100%;margin:43px 0 0;
+}
+.wordloop-shell .pretest-editorial-actions > .button {
+  min-height:53px;min-width:0;
+  flex:1 1 11rem;
+  border-radius:8px;
+  padding:.75rem 1rem;
+  font-size:.9rem;font-weight:530;
+  box-shadow:none;
+}
+.wordloop-shell .pretest-editorial-actions .pretest-unknown-button.button {
+  border:1px solid var(--study-rule);
+  color:var(--study-blue);
+  background:transparent;
+}
+.wordloop-shell .pretest-editorial-actions .pretest-submit-button.button {
+  border:1px solid var(--study-blue);
+  color:#fff;background:var(--study-blue);
+}
+.wordloop-shell .pretest-editorial-actions .pretest-submit-button.button:disabled {
+  color:var(--study-muted);
+  background:color-mix(in srgb,var(--study-blue) 10%,transparent);
+  border-color:var(--study-rule);
+}
+.wordloop-shell .pretest-editorial-shortcut {
+  text-align:center;font-size:.77rem;
+  margin:15px 0 0;color:var(--study-muted);
+}
+.wordloop-shell .pretest-editorial-notice,
+.wordloop-shell .review-editorial-notice {
+  padding:12px 0;margin:12px 0 0;
+  border:0;border-top:1px solid var(--study-rule);
+  border-radius:0;background:transparent;
+  color:var(--study-muted);font-size:.85rem;line-height:1.7;
+  box-shadow:none;
+}
+/* Pretest result: editorial feedback, original familiar-word action retained. */
+.wordloop-shell .pretest-result-editorial {display:flex;flex-direction:column;width:100%;}
+.wordloop-shell .pretest-result-word {
+  margin:0 0 30px;
+  color:var(--study-ink);
+  font-family:var(--study-type);
+  font-size:clamp(3.6rem,6vw,5rem);
+  font-weight:400;letter-spacing:-.05em;line-height:1.1;
+  overflow-wrap:anywhere;
+}
+.wordloop-shell .pretest-result-verdict {
+  display:flex;align-items:center;gap:13px;
+  padding:0 0 25px;margin:0 0 5px;
+  border-bottom:1px solid var(--study-rule);
+  background:transparent;
+}
+.wordloop-shell .pretest-result-verdict > span {
+  display:grid;place-items:center;flex:0 0 30px;
+  width:30px;height:30px;border:1px solid #759989;
+  border-radius:50%;color:#47715d;
+}
+.wordloop-shell .pretest-result-verdict.needs-revision > span {
+  border-color:#bb9a7e;color:#936b4e;
+}
+.wordloop-shell .pretest-result-verdict strong {
+  font-size:.94rem;color:var(--study-ink);
+}
+.wordloop-shell .pretest-result-verdict p {
+  color:var(--study-muted);font-size:.8rem;margin:3px 0 0;line-height:1.6;
+}
+.wordloop-shell .pretest-result-row {
+  border-bottom:1px solid var(--study-rule);
+  padding:23px 0;
+}
+.wordloop-shell .pretest-result-row h3 {
+  margin:0 0 11px;
+  color:var(--study-muted);
+  font:500 .69rem/1.5 ui-monospace,SFMono-Regular,monospace;
+  letter-spacing:.11em;
+}
+.wordloop-shell .pretest-result-row small {
+  padding-left:10px;
+  font:400 .73rem/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  letter-spacing:0;
+}
+.wordloop-shell .pretest-result-row p {
+  margin:0;color:var(--study-ink);
+  font:400 clamp(1.45rem,2.4vw,2rem)/1.5 var(--study-type);
+}
+.wordloop-shell .pretest-result-actions {
+  display:flex;flex-direction:column;
+  gap:13px;margin:33px 0 0;
+}
+.wordloop-shell .pretest-result-actions > .button.pretest-main-button {
+  width:100%;min-height:53px;
+  background:var(--study-blue);color:#fff;
+  border:1px solid var(--study-blue);
+  border-radius:10px;
+  font-weight:530;box-shadow:none;
+}
+.wordloop-shell .pretest-result-actions .familiar-action-wrap {
+  display:flex;flex-direction:column;gap:8px;align-items:stretch;
+}
+.wordloop-shell .pretest-result-actions .familiar-action {
+  width:100%;min-height:44px;
+  border:1px solid var(--study-rule);border-radius:9px;
+  background:transparent;color:var(--study-ink);box-shadow:none;
+}
+.wordloop-shell .pretest-result-actions .familiar-action-wrap small {
+  color:var(--study-muted);text-align:center;font-size:.72rem;
+}
+.wordloop-shell .pretest-complete-workspace .standalone-result-grid {
+  border-top:1px solid var(--study-rule);
+  border-bottom:1px solid var(--study-rule);
+  padding:16px 0;margin:20px 0;
+}
+.wordloop-shell .pretest-complete-workspace .standalone-actions .button {
+  background:var(--study-blue);border-color:var(--study-blue);color:#fff;
+}
+.wordloop-shell .pretest-editorial-card > .standalone-status {background:transparent;color:var(--study-muted);}
+/* Review shares the same input and two-action rhythm, never a feedback page
+   that does not exist in the real review state machine. */
+.wordloop-shell .review-editorial-workspace .question-block {
+  padding:0 0 26px;margin:25px 0 32px;
+  border-bottom:1px solid var(--study-rule);
+}
+.wordloop-shell .review-editorial-workspace .question-label {
+  font-size:.85rem;line-height:1.4;color:var(--study-muted);
+}
+.wordloop-shell .review-editorial-workspace .review-question-number {
+  color:var(--study-muted);
+}
+.wordloop-shell .review-editorial-workspace .review-answer-field {
+  border-bottom:1px solid var(--study-rule);
+}
+.wordloop-shell .review-editorial-workspace .review-answer-bottom {
+  display:flex;flex-wrap:wrap;gap:12px;
+  margin:36px 0 0;padding:0;
+}
+.wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary,
+.wordloop-shell .review-editorial-workspace .review-submit-button.button {
+  min-height:53px;min-width:0;
+  flex:1 1 12rem;
+  border-radius:9px;font-size:.89rem;box-shadow:none;
+}
+.wordloop-shell .review-editorial-workspace .review-unknown-button.button.secondary {
+  border-color:var(--study-rule);
+}
+.wordloop-shell .review-editorial-workspace .review-submit-button.button {
+  background:var(--study-blue);border-color:var(--study-blue);color:#fff;
+}
+.wordloop-shell .review-editorial-workspace .review-submit-button.button:disabled {
+  color:var(--study-muted);background:color-mix(in srgb,var(--study-blue) 10%,transparent);
+  border-color:var(--study-rule);
+}
+.wordloop-shell .review-editorial-workspace .review-keyboard-note {text-align:center;}
+
+/* Formal lesson pronunciation: pure SVG triangle; no blue emoji squares. */
+.wordloop-shell .lesson-reference-ipa {
+  display:flex;align-items:center;gap:9px;
+}
+.wordloop-shell .lesson-reference-ipa .play-button.lesson-audio {
+  display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 32px;width:32px;height:32px;
+  padding:0;margin:0;border:1px solid var(--study-rule);
+  border-radius:50%;box-shadow:none;
+  color:var(--study-blue);
+  background:color-mix(in srgb,var(--study-blue) 5%,transparent);
+  font-size:0;line-height:0;
+  -webkit-appearance:none;appearance:none;
+}
+.wordloop-shell .lesson-reference-ipa .play-button.lesson-audio:hover {
+  border-color:var(--study-blue);
+  background:color-mix(in srgb,var(--study-blue) 12%,transparent);
+}
+.wordloop-shell .lesson-reference-ipa .play-button.lesson-audio:active {
+  background:color-mix(in srgb,var(--study-blue) 20%,transparent);
+}
+.wordloop-shell .lesson-reference-ipa .play-button.lesson-audio:focus-visible {
+  outline:2px solid var(--study-blue);outline-offset:3px;
+}
+.wordloop-shell .lesson-play-glyph {width:15px;height:15px;display:block;}
+/* Consolidation feedback uses the same single-column result presentation. */
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.lesson-card:has(.lesson-feedback-editorial) > .standalone-content {
+  border:0;border-radius:0;box-shadow:none;background:transparent;
+}
+@media(max-width:767px) {
+  .wordloop-shell .pretest-editorial-top {margin-bottom:45px;}
+  .wordloop-shell .pretest-editorial-header {margin-bottom:42px;}
+  .wordloop-shell .pretest-write-title {font-size:clamp(3rem,12vw,4.5rem);}
+  .wordloop-shell .pretest-editorial-question {margin-bottom:37px;}
+  .wordloop-shell .pretest-editorial-question .pretest-meaning {font-size:clamp(1.7rem,7vw,2.3rem);}
+  .wordloop-shell .pretest-editorial-actions,
+  .wordloop-shell .review-editorial-workspace .review-answer-bottom {flex-direction:column;gap:10px;}
+  .wordloop-shell .pretest-editorial-actions > .button,
+  .wordloop-shell .review-editorial-workspace .review-answer-bottom > .button {
+    flex:0 0 auto;width:100%;min-width:0;min-height:50px;
+  }
+  .wordloop-shell .pretest-editorial-actions {margin-top:40px;}
+  .wordloop-shell .review-editorial-workspace .review-submit-button.button {width:100%;}
+}
+
