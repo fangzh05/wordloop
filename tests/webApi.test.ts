@@ -1116,6 +1116,20 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.generateWrapup).not.toHaveBeenCalled();
   });
 
+  it.each(["pretest", "budget_complete"])("continues a completed Lesson using server bootstrap: %s", async (action) => {
+    const state = lessonState("exact_cloze");
+    state.phase = "lesson_complete";
+    state.payload.mode = "feedback";
+    state.payload.feedback = {is_correct:true,reveal_answer:true};
+    mocks.active = row(state);
+    mocks.finishStudySession.mockImplementationOnce(async () => {mocks.active = null; return {ended_at:date};});
+    mocks.bootstrap.mockResolvedValueOnce(action === "pretest" ? {action,words:[{word:"next",display_word:"next",senses:[{pos:"adj.",definition_cn:"下一个"}]}],date} : {action});
+    const response = await handleWebApiRequest(post({action:"lesson_next"}));
+    expect(response.status).toBe(200);
+    expect(await body(response)).toMatchObject(action === "pretest" ? {screen:"pretest",round_complete:true} : {screen:"done",budget_paused:true});
+    expect(mocks.bootstrap).toHaveBeenCalledTimes(1);
+  });
+
   it("reuses frozen plans on successful generation with one persistence and no replanning", async () => {
     const plan = lessonExercisePlanSchema.parse(lessonPlan("exact_cloze"));
     const state = makeStudyState({

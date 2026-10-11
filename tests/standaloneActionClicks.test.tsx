@@ -18,7 +18,7 @@ vi.mock("react", async (original) => ({
   useEffect: () => undefined,
 }));
 vi.mock("../web/src/standalone/apiClient.js", async (original) => ({ ...await original<typeof import("../web/src/standalone/apiClient.js")>(), postAction: harness.post }));
-import StandaloneApp from "../web/src/standalone/StandaloneApp.js";
+import StandaloneApp, { StandaloneLessonFeedback } from "../web/src/standalone/StandaloneApp.js";
 
 function find(root: unknown, predicate: (node: ReactElement<Record<string, any>>) => boolean): ReactElement<Record<string, any>> | undefined {
   if (Array.isArray(root)) { for (const child of root) { const found = find(child, predicate); if (found) return found; } }
@@ -42,9 +42,9 @@ describe("standalone action click handlers", () => {
   });
   it("sends lesson_next when completing the final feedback", async () => {
     const tree = StandaloneApp();
-    const button = find(tree, node => node.props.children === "完成本轮并继续");
+    const button = find(tree, node => node.type === StandaloneLessonFeedback);
     expect(button).toBeDefined();
-    button!.props.onClick();
+    button!.props.onNext();
     await vi.waitFor(() => expect(harness.post).toHaveBeenCalledWith({ action: "lesson_next", expected_revision: "revision" }));
   });
   it("sends consolidation_start from the Today screen", async () => {

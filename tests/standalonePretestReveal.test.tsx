@@ -20,8 +20,8 @@ describe("Standalone Pretest answer reveal", () => {
   it("reveals the target and offers familiar correction for a new-word spelling near miss", () => {
     const markup = renderResult("new_word", "uncertain");
 
-    expect(markup).toContain("你的答案：<strong>aleviate</strong>");
-    expect(markup).toContain("正确答案：<strong>alleviate</strong>");
+    expect(markup).toContain("你的答案</small></h3><p>aleviate</p>");
+    expect(markup).toContain("正确答案</small></h3><p>alleviate</p>");
     expect(markup).toContain("拼写接近，但仍有拼写错误。");
     expect(markup).toContain("我本来会这个词");
     expect(markup).toContain("未来仍可能正常复习");

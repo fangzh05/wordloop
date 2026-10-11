@@ -7,7 +7,7 @@ import { VocabularyPage } from "../../web/src/standalone/pages/VocabularyPage.js
 import { CaptureNotesPage } from "../../web/src/standalone/CaptureNotesPage.js";
 import { NoteReviewPage } from "../../web/src/standalone/NoteReviewPage.js";
 import { FamilyPanel } from "../../web/src/family/FamilyPanel.js";
-import { StandaloneReviewWorkspace, StandaloneLessonExplanation, StandaloneLessonExercise, StandaloneLessonHeader, StandaloneLessonFeedback, StandalonePretestHeader, StandalonePretestWorkspace, StandalonePretestAnswerReveal } from "../../web/src/standalone/StandaloneApp.js";
+import { StandaloneConsolidationExercise, StandaloneReviewWorkspace, StandaloneLessonExplanation, StandaloneLessonExercise, StandaloneLessonHeader, StandaloneLessonFeedback, StandalonePretestHeader, StandalonePretestWorkspace, StandalonePretestAnswerReveal } from "../../web/src/standalone/StandaloneApp.js";
 import { Button } from "../../web/src/components/Button.js";
 import type { AppSection } from "../../web/src/standalone/AppShell.js";
 
@@ -80,7 +80,7 @@ window.fetch = async (input:any, init?:any)=>{
 function App() {
  const query=new URLSearchParams(location.search);
  const page=(query.get("page")??"today").replace(/-dark$/,"");
- const immersive = ["study","review-correct","review-wrong","review-loading","pretest","pretest-correct","pretest-wrong","pretest-loading","lesson","relearn-lesson","relearn-exercise","lesson-exercise","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","consolidation-feedback","consolidation-retry","consolidation-loading"].includes(page);
+ const immersive = ["consolidation","consolidation-pending","review-feedback-correct","review-feedback-wrong","study","review-correct","review-wrong","review-loading","pretest","pretest-correct","pretest-wrong","pretest-loading","lesson","relearn-lesson","relearn-exercise","lesson-exercise","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","consolidation-feedback","consolidation-retry","consolidation-loading"].includes(page);
  const [studyAnswer,setStudyAnswer]=useState("");
  const [section,setSection]=useState<AppSection>((["today","study","capture","insights","vocabulary"].includes(page)?page:"today") as AppSection);
  const [showSettings,setShowSettings]=useState(page==="settings");
@@ -98,6 +98,8 @@ function App() {
     {page==="vocabulary"&&<VocabularyPage tokenKey="fixture" initialUserWordId="w0" onDetailChange={()=>{}}/>}
     {page==="capture"&&<CaptureNotesPage onBack={()=>route("today")} onOpenReview={()=>route("note-review")} noteReviewDueCount={1}/>}
     {page==="note-review"&&<NoteReviewPage onBack={()=>route("capture")} />}
+    {page==="consolidation"&&<section className="widget-card standalone-card lesson-card study-task-card consolidation-editorial-card"><StandaloneLessonHeader title="长难句翻译" progressLabel="应用巩固 · 英译中" onBack={()=>route("today")}/><StandaloneConsolidationExercise instruction="先找出句子主干，再把整句翻译成自然中文。" prompt="The scientists who studied the remote island where the rare birds nest discovered that the plentiful food sources, which had been undisturbed for centuries, were gradually diminishing due to climate change." kind="translation" answer={studyAnswer} busy={false} onAnswerChange={setStudyAnswer} onSubmit={()=>route("consolidation-feedback")}/></section>}
+    {["review-feedback-correct","review-feedback-wrong"].includes(page)&&<section className="widget-card standalone-card lesson-card study-task-card"><StandaloneLessonFeedback word="sanctuary" progressLabel="正式复习 · 1 / 8" feedback={{is_correct:page.endsWith("correct"),user_answer:page.endsWith("correct")?"sanctuary":"sanctury",error_layer:page.endsWith("correct")?"none":"spelling",message:page.endsWith("correct")?"回答正确，已记录本次复习。":"拼写需要修改，请再回忆一次。",reveal_answer:page.endsWith("correct")}} busy={false} busyLabel={null} notice="" nextWord={true} nextLabel="继续" continueOnly onBack={()=>route("today")} onRetry={()=>route("study")} onNext={()=>route("study")}/></section>}
     {["study","review-correct","review-wrong","review-loading"].includes(page)&&<section className="widget-card standalone-card study-task-card review-editorial-card" aria-labelledby="study-title">
       <StandaloneReviewWorkspace item={{word:"indulge",part_of_speech:"v.",meaning_zh:"纵容；沉溺于；满足"}}
        direction="cn_to_en" currentIndex={2} total={18} answer={studyAnswer} busy={page==="review-loading"}

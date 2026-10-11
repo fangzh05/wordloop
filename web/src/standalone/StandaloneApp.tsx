@@ -36,8 +36,9 @@ type RetryFields = Record<string, unknown> | null;
 export function visibleStandalonePage(
   page: StandalonePage,
   screen: WebApiResponse["screen"] | null,
+  budgetPaused = false,
 ): StandalonePage {
-  return page === "study" && screen === "done" ? "dashboard" : page;
+  return page === "study" && screen === "done" && budgetPaused ? "dashboard" : page;
 }
 
 function initialToken(): string | null {
@@ -688,14 +689,14 @@ export function StandaloneLessonExplanation({ title, displayTitle, progressLabel
  * Reading-first feedback for a submitted lesson. All mutations stay in the
  * calling session controller (lesson_retry / lesson_next); no local state.
  */
-export function StandaloneLessonFeedback({ word, progressLabel, feedback, busy, busyLabel, notice, nextWord, retryLabel, nextLabel, onBack, onRetry, onNext }: {
+export function StandaloneLessonFeedback({ word, progressLabel, feedback, busy, busyLabel, notice, nextWord, retryLabel, nextLabel, continueOnly = false, onBack, onRetry, onNext }: {
   word: string; progressLabel: string; feedback: Record<string, unknown>;
   busy: boolean; busyLabel: string | null; notice: string; nextWord: boolean;
-  retryLabel?: string; nextLabel?: string;
+  retryLabel?: string; nextLabel?: string; continueOnly?: boolean;
   onBack: () => void; onRetry: () => void; onNext: () => void;
 }): React.JSX.Element {
   const correct = feedback.is_correct === true;
-  const showRetry = !correct && feedback.reveal_answer !== true;
+  const showRetry = !continueOnly && !correct && feedback.reveal_answer !== true;
   const errorLayer = typeof feedback.error_layer === "string" ? feedback.error_layer.trim() : "";
   const explanation = typeof feedback.explanation === "string" ? feedback.explanation.trim() : "";
   const message = typeof feedback.message === "string" ? feedback.message.trim() : "";
@@ -709,7 +710,7 @@ export function StandaloneLessonFeedback({ word, progressLabel, feedback, busy, 
       <h1 className="lesson-feedback-word" id="study-title">{word}</h1>
       <div className={`lesson-feedback-verdict ${correct ? "is-correct" : "needs-revision"}`}>
         <span className="lesson-feedback-verdict-symbol" aria-hidden="true">{correct ? "✓" : "↻"}</span>
-        <div><strong>{correct ? "回答正确" : "需要修改"}</strong><span>{correct ? "已记录本次学习结果" : "根据反馈完成本题"}</span></div>
+        <div><strong>{correct ? "回答正确" : continueOnly ? "需要巩固" : "需要修改"}</strong><span>{continueOnly ? "已记录本次复习结果" : correct ? "已记录本次学习结果" : "根据反馈完成本题"}</span></div>
       </div>
       <section className="lesson-feedback-section">
         <h2>YOUR RESPONSE <span>你的答案</span></h2>
@@ -766,6 +767,20 @@ export function StandaloneLessonExercise({ instruction, prompt, activityType, cl
   </div>;
 }
 
+export function StandaloneConsolidationExercise({instruction,prompt,kind,answer,busy,onAnswerChange,onSubmit}: {
+  instruction:string; prompt:string; kind:"translation"|"translation_cn_to_en"|"sentence";
+  answer:string; busy:boolean; onAnswerChange:(value:string)=>void; onSubmit:()=>void;
+}): React.JSX.Element {
+  return <div className="standalone-content consolidation-editorial-content">
+          <span className="lesson-exercise-eyebrow">READING / APPLICATION</span>
+          <p className="lesson-exercise-heading">{instruction}</p>
+          <div className="lesson-prompt standalone-reading-width">{prompt}</div>
+          <label className="answer-label" htmlFor="consolidation-answer">{kind === "sentence" ? "你的句子" : "你的译文与分析"}</label>
+          <textarea id="consolidation-answer" placeholder="先梳理句子主干，再写下你的回答…" className={`standalone-input consolidation-input ${kind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={kind === "sentence" ? 2 : 5} aria-label={kind === "translation" ? "长难句翻译与结构分析" : kind === "translation_cn_to_en" ? "完整中译英答案" : "造句练习答案"} value={answer} onChange={(event) => onAnswerChange(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy) return; onSubmit(); } }} />
+          <div className="standalone-actions"><Button type="button" disabled={busy || !answer.trim()} onClick={onSubmit}>{kind === "sentence" ? "提交句子" : "提交翻译"}</Button></div>
+        </div>;
+}
+
 export default function StandaloneApp(): React.JSX.Element {
   const [page, setPage] = useState<StandalonePage>(() => sectionFromHash() === "capture" ? "notes" : "dashboard");
   const [appSection, setAppSection] = useState<AppSection>(() => sectionFromHash() ?? "today");
@@ -779,6 +794,7 @@ export default function StandaloneApp(): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
   const [notice, setNotice] = useState("");
+  const [reviewFeedback, setReviewFeedback] = useState<{word:string; progress:string; feedback:Record<string,unknown>} | null>(null);
   const [noticeIndex, setNoticeIndex] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [authError, setAuthError] = useState("");
@@ -831,7 +847,7 @@ export default function StandaloneApp(): React.JSX.Element {
     };
     window.addEventListener("popstate", restoreSection);
     return () => window.removeEventListener("popstate", restoreSection);
-  }, [view?.screen]);
+  }, [view?.screen, view?.budget_paused, reviewFeedback]);
 
   const navigateSection = useCallback((section: AppSection) => {
     if (section === "study") {
@@ -974,12 +990,12 @@ export default function StandaloneApp(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (view?.screen === "done") setPage((currentPage) => {
+    if (!reviewFeedback && view?.screen === "done" && view.budget_paused) setPage((currentPage) => {
       if (currentPage !== "study") return currentPage;
       setAppSection("today");
       return "dashboard";
     });
-  }, [view?.screen]);
+  }, [view?.screen, view?.budget_paused, reviewFeedback]);
 
   useEffect(() => {
     const refreshWhenVisible = () => {
@@ -1091,7 +1107,7 @@ export default function StandaloneApp(): React.JSX.Element {
           setView((previous) => previous ? { ...previous, progress: next.progress } : next);
     } else {
       setView(next);
-      if (actionName === "continue") setPage(next.screen === "done" ? "dashboard" : "study");
+      if (actionName === "continue") setPage(next.budget_paused ? "dashboard" : "study");
       if (actionName === "consolidation_start") { setAppSection("study"); setPage("study"); }
       if (actionName === "consolidation_defer") { setAppSection("today"); setPage("dashboard"); }
           setRetryFields(null);
@@ -1103,6 +1119,8 @@ export default function StandaloneApp(): React.JSX.Element {
             setAnswer("");
           }
           if (actionName === "review_submit") {
+            const submittedItem = list(record(view?.state.payload).items)[submittedIndex ?? 0] ?? {};
+            setReviewFeedback({word:String(submittedItem.word ?? ""), progress:`正式复习 · ${(submittedIndex ?? 0) + 1} / ${list(record(view?.state.payload).items).length}`, feedback:{...next.result, user_answer: fields.answer, reveal_answer: next.state.current_index !== submittedIndex || next.state.phase === "review_complete"}});
             const nextIndex = typeof next.state.current_index === "number" ? next.state.current_index : null;
             if (submittedIndex !== null && nextIndex === submittedIndex && next.result?.message) {
               setNotice(next.result.message);
@@ -1123,7 +1141,6 @@ export default function StandaloneApp(): React.JSX.Element {
           if (error instanceof ApiError && error.code.startsWith("DEEPSEEK_")) {
             const generationAction = ["continue", "lesson_next", "consolidation_start"].includes(actionName);
             if (generationAction) {
-              setPage("dashboard");
               setErrorMessage(deepSeekMessage(error.code, "generation"));
               if (!view?.progress) await loadDashboardProgress();
             } else {
@@ -1176,7 +1193,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
   const state = view?.state ?? {};
   const payload = record(state.payload);
-  const visiblePage = visibleStandalonePage(page, view?.screen ?? null);
+  const visiblePage = visibleStandalonePage(page, view?.screen ?? null, view?.budget_paused === true);
   const currentIndex = typeof state.current_index === "number" ? state.current_index : 0;
   const busyLabel = busy === "lesson_next"
     ? payload.navigation && record(payload.navigation).action === "round_complete" ? "正在检查本轮任务…" : "正在生成下一词…"
@@ -1273,7 +1290,11 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {pageStatus === "ready" && !view && !errorMessage && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>正在加载今日学习…</p></div></section>}
 
-    {visiblePage === "study" && view?.screen === "review" && (() => {
+    {visiblePage === "study" && reviewFeedback && <section className="widget-card standalone-card lesson-card study-task-card"><StandaloneLessonFeedback word={reviewFeedback.word} progressLabel={reviewFeedback.progress} feedback={reviewFeedback.feedback} busy={busy !== null} busyLabel={busyLabel} notice="" nextWord={true} nextLabel="继续" continueOnly onBack={backToToday} onRetry={() => setReviewFeedback(null)} onNext={() => setReviewFeedback(null)} /></section>}
+
+    {visiblePage === "study" && !reviewFeedback && view?.screen === "done" && <section className="widget-card standalone-card study-task-card"><StandaloneLessonHeader title="本轮学习已完成" progressLabel="今日学习" onBack={backToToday}/><div className="standalone-content"><p>当前没有待学任务。你可以留在这里，稍后继续检查。</p><Button disabled={busy !== null} onClick={() => void dispatch({action:"continue"})}>继续学习</Button></div></section>}
+
+    {visiblePage === "study" && !reviewFeedback && view?.screen === "review" && (() => {
       const items = list(payload.items);
       const item = items[currentIndex] ?? {};
       const complete = state.phase === "review_complete";
@@ -1342,7 +1363,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const displayTitle = standaloneLessonDisplayTitle(title, exerciseMode, consolidationKind);
       const progressLabel = String(payload.progress ?? standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, consolidationKind));
       const explaining = phase === "lesson_explain" && payload.mode === "explain";
-      return <section className={`widget-card standalone-card lesson-card ${explaining ? "study-explain-card" : "study-task-card"}`} aria-labelledby="study-title">
+      return <section className={`widget-card standalone-card lesson-card ${explaining ? "study-explain-card" : "study-task-card"} ${consolidationKind ? "consolidation-editorial-card" : ""}`} aria-labelledby="study-title">
         {!explaining && !(phase === "lesson_feedback" && feedbackMode) && !(phase === "lesson_complete" && feedbackMode && consolidationKind && payload.consolidation_status === "feedback") && <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />}
 
         {explaining && <StandaloneLessonExplanation title={title} displayTitle={displayTitle} progressLabel={progressLabel}
@@ -1366,15 +1387,10 @@ export default function StandaloneApp(): React.JSX.Element {
           onRetry={() => { void dispatch({ action: "lesson_retry" }); }}
           onNext={() => { void dispatch({ action: "lesson_next" }); }} />}
 
-        {phase === "lesson_complete" && exerciseMode && consolidationKind && <div className="standalone-content">
-          <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
-          <div className="lesson-prompt standalone-reading-width">{String(exercise.prompt ?? "")}</div>
-          <textarea className={`standalone-input consolidation-input ${consolidationKind === "sentence" ? "sentence-consolidation-input" : ""}`} rows={consolidationKind === "sentence" ? 2 : 5} aria-label={consolidationKind === "translation" ? "长难句翻译与结构分析" : consolidationKind === "translation_cn_to_en" ? "完整中译英答案" : "造句练习答案"} value={answer} onChange={(event) => saveAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitMultiline({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "consolidation_submit", answer }); } }} />
-          <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "sentence" ? "提交句子" : "提交翻译"}</Button></div>
-        </div>}
+        {phase === "lesson_complete" && exerciseMode && consolidationKind && <StandaloneConsolidationExercise instruction={String(exercise.instruction ?? "")} prompt={String(exercise.prompt ?? "")} kind={consolidationKind} answer={answer} busy={busy !== null} onAnswerChange={saveAnswer} onSubmit={() => void dispatch({action:"consolidation_submit",answer})} />}
 
         {phase === "lesson_complete" && feedbackMode && consolidationKind && payload.consolidation_status === "feedback" && <StandaloneLessonFeedback
-          word={title} progressLabel={progressLabel} feedback={feedback}
+          word={displayTitle} progressLabel={progressLabel} feedback={feedback}
           busy={busy !== null} busyLabel={busyLabel} notice={notice} nextWord={false}
           retryLabel="修改一次" nextLabel="继续学习" onBack={backToToday}
           onRetry={() => { void dispatch({ action: "consolidation_retry" }); }}

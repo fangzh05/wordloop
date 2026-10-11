@@ -153,7 +153,7 @@ describe("Standalone Dashboard and Study navigation", () => {
     expect(activeStudySummary(lesson)).toBe("Lesson · constrain");
   });
 
-  it("renders a done response as Dashboard and routes Continue through the backend action", () => {
+  it("keeps a completed round in study and only exits when the budget is paused", () => {
     const doneView: WebApiResponse = {
       screen: "done",
       session_revision: null,
@@ -162,7 +162,8 @@ describe("Standalone Dashboard and Study navigation", () => {
     };
     const markup = renderToStaticMarkup(<StandaloneDashboard view={doneView} busy={false} onContinue={() => undefined} />);
 
-    expect(visibleStandalonePage("study", doneView.screen)).toBe("dashboard");
+    expect(visibleStandalonePage("study", doneView.screen)).toBe("study");
+    expect(visibleStandalonePage("study", doneView.screen, true)).toBe("dashboard");
     expect(activeStudySummary(doneView)).toBeNull();
     expect(dashboardContinueBehavior(doneView)).toBe("continue");
     expect(markup).toContain("继续学习");

@@ -17,7 +17,7 @@ const progress = {
 describe("Standalone Notes UI", () => {
   it("keeps Notes open when the server study screen is done and adds a Dashboard entry", () => {
     expect(visibleStandalonePage("notes", "done")).toBe("notes");
-    expect(visibleStandalonePage("study", "done")).toBe("dashboard");
+    expect(visibleStandalonePage("study", "done")).toBe("study");
     const view: WebApiResponse = {
       screen: "done", session_revision: "rev", state: {}, progress,
     };

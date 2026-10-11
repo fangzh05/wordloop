@@ -724,7 +724,7 @@ async function resolveBootstrap(expectedRevision?: string | null, startNewRound 
     await finishStudySession(getDatabase(), getAuthenticatedUserId(), {
       revision: revision!, sessionId: active.id, allowCompletedReview: true,
     });
-    return { ...await doneResponse(null), round_complete: true };
+    return { ...await resolveBootstrap(null), round_complete: true };
   }
   return doneResponse(revision);
 }
@@ -1227,7 +1227,7 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
       sessionId: scheduled.id,
       allowLessonRoundCompletion: true,
     });
-    return { ...await doneResponse(null), round_complete: true };
+    return { ...await resolveBootstrap(null), round_complete: true };
   }
   if (state.phase !== "lesson_feedback") throw new WebApiError(409, "INVALID_STUDY_STATE", "The Lesson has no completed exercise to advance.");
   if (action.expected_revision === null) throw new StaleStudyStateError();
@@ -1266,7 +1266,7 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
     sessionId: active.id,
     allowLessonRoundCompletion: true,
   });
-  return { ...await doneResponse(null), round_complete: true };
+  return { ...await resolveBootstrap(null), round_complete: true };
 }
 
 async function ensureLessonConsolidationScheduled(active: StudySessionRow): Promise<StudySessionRow> {
@@ -1495,7 +1495,7 @@ async function finishConsolidation(action: { expected_revision: string | null },
     sessionId: active.id,
     allowLessonRoundCompletion: true,
   });
-  return { ...await doneResponse(null), round_complete: true };
+  return { ...await resolveBootstrap(null), round_complete: true };
 }
 
 async function startPendingConsolidation(action: { expected_revision: string | null }, active: StudySessionRow | null): Promise<Record<string, unknown>> {
