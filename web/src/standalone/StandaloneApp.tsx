@@ -292,7 +292,7 @@ export function StandaloneReviewFeedback({ notice, noticeIndex, currentIndex }: 
   currentIndex: number;
 }): React.JSX.Element | null {
   const visibleNotice = reviewNoticeForCard(notice, noticeIndex, currentIndex);
-  return visibleNotice ? <p className="standalone-status" role="status">{visibleNotice}</p> : null;
+  return visibleNotice ? <p className="standalone-status review-editorial-notice" role="status">{visibleNotice}</p> : null;
 }
 
 export function StandalonePretestAnswerReveal({
@@ -326,16 +326,21 @@ export function StandalonePretestAnswerReveal({
         : "这次没有准确回忆出这个词。";
   const canMarkFamiliar = source === "new_word" && !known;
 
-  return <div className="pretest-reveal standalone-pretest-reveal" role="status">
-    <p>你的答案：<strong>{answer || "未作答"}</strong></p>
-    <p>正确答案：<strong>{word}</strong></p>
-    <p className="pretest-reveal-feedback">{feedback}</p>
-    <div className="standalone-actions standalone-pretest-result-actions">
-      <Button type="button" disabled={busy} onClick={onContinue}>继续学习</Button>
-      {canMarkFamiliar ? <div className="familiar-action-wrap">
+  return <div className="pretest-reveal standalone-pretest-reveal pretest-result-editorial" role="status">
+    <p className="study-typographic-kicker">PRETEST / FEEDBACK</p>
+    <h2 className="pretest-result-word">{word}</h2>
+    <div className={`pretest-result-verdict ${known ? "is-correct" : "needs-revision"}`}>
+      <span aria-hidden="true">{known ? "✓" : "↻"}</span>
+      <div><strong>{known ? "回答正确" : "需要复习"}</strong><p>{feedback}</p></div>
+    </div>
+    <div className="pretest-result-row"><h3>YOUR RESPONSE <small>你的答案</small></h3><p>{answer || "未作答"}</p></div>
+    <div className="pretest-result-row"><h3>REFERENCE <small>正确答案</small></h3><p>{word}</p></div>
+    <div className="pretest-result-actions">
+      <Button className="pretest-main-button" type="button" disabled={busy} onClick={onContinue}>继续学习 <span aria-hidden="true">→</span></Button>
+      {canMarkFamiliar && <div className="familiar-action-wrap">
         <Button className="secondary familiar-action" type="button" disabled={busy} onClick={onMarkFamiliar}>我本来会这个词</Button>
-        <small>标记后将跳过本轮新词学习，但未来仍可能正常复习。</small>
-      </div> : null}
+        <small>标记后跳过本轮新词学习，未来仍可能正常复习。</small>
+      </div>}
     </div>
   </div>;
 }
@@ -512,6 +517,44 @@ function StandaloneStudyBackButton({ onBack }: { onBack: () => void }): React.JS
   return <button className="standalone-back" type="button" onClick={onBack}>← 返回</button>;
 }
 
+/** Pretest shares the approved reading column. Actions remain in the session controller. */
+export function StandalonePretestHeader({ index, total, onBack }: {index:number;total:number;onBack:()=>void}): React.JSX.Element {
+  return <header className="pretest-editorial-header">
+    <div className="pretest-editorial-top"><StandaloneStudyBackButton onBack={onBack}/><span>预测试 {total>0?Math.min(index+1,total):0} / {total}</span></div>
+    <div className="pretest-editorial-progress" role="progressbar" aria-label="预测试进度" aria-valuemin={0} aria-valuemax={Math.max(1,total)} aria-valuenow={Math.max(0,Math.min(index+1,total))}>
+      <span style={{width:`${total>0?Math.min(100,(index+1)/total*100):0}%`}} />
+    </div>
+  </header>;
+}
+
+export function StandalonePretestWorkspace({item,answer,busy,notice,onAnswerChange,onUnknown,onSubmit}:{
+  item:Record<string,unknown>;answer:string;busy:boolean;notice:string;
+  onAnswerChange:(value:string)=>void;onUnknown:()=>void;onSubmit:()=>void;
+}):React.JSX.Element {
+  return <div className="standalone-content pretest-editorial-workspace">
+    <div className="study-typographic-kicker">PRETEST / CN → EN</div>
+    <h2 className="sr-only">预测试 · 根据中文写出英文单词</h2>
+    <div className="pretest-editorial-question">
+      <p className="pretest-meaning">{String(item.meaning_zh??"")}</p>
+      {typeof item.part_of_speech==="string"&&!meaningIncludesPartOfSpeech(String(item.meaning_zh??""),item.part_of_speech) &&
+        <p className="pretest-part-of-speech">{item.part_of_speech}</p>}
+      <p className="pretest-instruction">请输入对应的英文单词</p>
+    </div>
+    <label htmlFor="study-answer" className="sr-only">输入英文答案</label>
+    <input id="study-answer" className="standalone-input pretest-editorial-input" type="text" autoComplete="off" spellCheck={false}
+      value={answer} placeholder="Type your answer" onChange={event=>onAnswerChange(event.target.value)}
+      onKeyDown={event=>{if(shouldSubmitSingleLine({key:event.key,shiftKey:event.shiftKey,ctrlKey:event.ctrlKey,metaKey:event.metaKey,isComposing:event.nativeEvent.isComposing})){
+        event.preventDefault();if(!answer.trim()||busy)return;onSubmit();
+      }}}/>
+    {notice&&<p className="pretest-editorial-notice" role="status">{notice}</p>}
+    <div className="pretest-editorial-actions">
+      <Button className="secondary pretest-unknown-button" type="button" disabled={busy} onClick={onUnknown}>不会</Button>
+      <Button className="pretest-submit-button" type="button" disabled={busy||!answer.trim()} onClick={onSubmit}>确认回答</Button>
+    </div>
+    <p className="pretest-editorial-shortcut">按 Enter 提交</p>
+  </div>;
+}
+
 export function StandaloneReviewHeader({ currentIndex, total, complete, onBack }: {
   currentIndex: number; total: number;
   complete: boolean;
@@ -574,6 +617,13 @@ export function StandaloneReviewWorkspace({ item, direction, currentIndex, total
   </section>;
 }
 
+/** Inline monocolor SVG replaces the emoji-style play glyph. No audio action changes. */
+function LessonPlayGlyph(): React.JSX.Element {
+  return <svg className="lesson-play-glyph" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+    <path d="M9 6.75 17 12l-8 5.25V6.75Z" fill="currentColor" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round"/>
+  </svg>;
+}
+
 export function StandaloneLessonExplanation({ title, displayTitle, progressLabel, ipa, pronunciationAudioUrl, meaningZh, partOfSpeech,
   exampleEn, exampleZh, collocations, derivations, note, busy, onBack, onStartExercise }: {
   title: string; displayTitle: string; progressLabel: string;
@@ -602,8 +652,8 @@ export function StandaloneLessonExplanation({ title, displayTitle, progressLabel
       <h1 id="study-title" className="lesson-reference-title">{displayTitle}</h1>
       <div className="lesson-reference-ipa"><span>{ipa}</span>
         {pronunciationAudioUrl
-          ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(pronunciationAudioUrl); void audio.play().catch(() => speak(title)); }}>▶</button>
-          : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}>▶</button>}
+          ? <button className="play-button lesson-audio" type="button" aria-label="播放发音" onClick={() => { const audio = new Audio(pronunciationAudioUrl); void audio.play().catch(() => speak(title)); }}><LessonPlayGlyph /></button>
+          : <button className="play-button lesson-audio" type="button" aria-label="朗读单词" onClick={() => speak(title)}><LessonPlayGlyph /></button>}
       </div>
       <p className="lesson-reference-meaning">{meaning}</p>
     </section>
@@ -629,6 +679,64 @@ export function StandaloneLessonExplanation({ title, displayTitle, progressLabel
     </div>
     <div className="lesson-reference-bottom">
       <Button type="button" disabled={busy} onClick={onStartExercise}>开始练习 <span aria-hidden="true">→</span></Button>
+    </div>
+  </div>;
+}
+
+
+/**
+ * Reading-first feedback for a submitted lesson. All mutations stay in the
+ * calling session controller (lesson_retry / lesson_next); no local state.
+ */
+export function StandaloneLessonFeedback({ word, progressLabel, feedback, busy, busyLabel, notice, nextWord, retryLabel, nextLabel, onBack, onRetry, onNext }: {
+  word: string; progressLabel: string; feedback: Record<string, unknown>;
+  busy: boolean; busyLabel: string | null; notice: string; nextWord: boolean;
+  retryLabel?: string; nextLabel?: string;
+  onBack: () => void; onRetry: () => void; onNext: () => void;
+}): React.JSX.Element {
+  const correct = feedback.is_correct === true;
+  const showRetry = !correct && feedback.reveal_answer !== true;
+  const errorLayer = typeof feedback.error_layer === "string" ? feedback.error_layer.trim() : "";
+  const explanation = typeof feedback.explanation === "string" ? feedback.explanation.trim() : "";
+  const message = typeof feedback.message === "string" ? feedback.message.trim() : "";
+  const userAnswer = String(feedback.user_answer ?? "");
+  const reference = feedback.reveal_answer === true && typeof feedback.reference_answer === "string" ? feedback.reference_answer : null;
+  const loadingNext = busy && !showRetry;
+  return <div className="standalone-content lesson-feedback-editorial" data-capture-root="true">
+    <div className="lesson-feedback-topbar"><StandaloneStudyBackButton onBack={onBack}/><span>{progressLabel}</span></div>
+    <div className="lesson-feedback-main">
+      <div className="lesson-feedback-kicker">VOCABULARY / FEEDBACK</div>
+      <h1 className="lesson-feedback-word" id="study-title">{word}</h1>
+      <div className={`lesson-feedback-verdict ${correct ? "is-correct" : "needs-revision"}`}>
+        <span className="lesson-feedback-verdict-symbol" aria-hidden="true">{correct ? "✓" : "↻"}</span>
+        <div><strong>{correct ? "回答正确" : "需要修改"}</strong><span>{correct ? "已记录本次学习结果" : "根据反馈完成本题"}</span></div>
+      </div>
+      <section className="lesson-feedback-section">
+        <h2>YOUR RESPONSE <span>你的答案</span></h2>
+        <p className="lesson-feedback-answer">{userAnswer || "—"}</p>
+      </section>
+      {(message || explanation) && <section className="lesson-feedback-section">
+        <h2>REVIEW NOTES <span>判分说明</span></h2>
+        {message && <p className="lesson-feedback-note">{message}</p>}
+        {explanation && <p className="lesson-feedback-detail">{explanation}</p>}
+      </section>}
+      {errorLayer && errorLayer.toLowerCase() !== "none" && <section className="lesson-feedback-section">
+        <h2>ERROR CATEGORY <span>错误层</span></h2>
+        <p className="lesson-feedback-detail">{errorLayer}</p>
+      </section>}
+      {reference !== null && <section className="lesson-feedback-section">
+        <h2>REFERENCE <span>参考答案</span></h2>
+        <p className="lesson-feedback-answer">{reference}</p>
+      </section>}
+      {notice && <p className="lesson-feedback-notice" role="status">{notice}</p>}
+    </div>
+    <div className="lesson-feedback-footer">
+      {showRetry
+        ? <Button className="lesson-feedback-primary" type="button" disabled={busy} onClick={onRetry}>{retryLabel ?? "重做当前题"} <span aria-hidden="true">→</span></Button>
+        : <Button className="lesson-feedback-primary" type="button" disabled={busy} onClick={onNext}>
+            {loadingNext ? <><span className="lesson-feedback-spinner" aria-hidden="true"/> {nextLabel ? "正在继续学习…" : "正在生成下一词…"}</> : <>{nextLabel ?? (nextWord ? "下一词" : "完成本轮并继续")} <span aria-hidden="true">→</span></>}
+          </Button>}
+      {loadingNext && <span className="sr-only" role="status">{busyLabel ?? "正在准备下一词，请稍候…"}</span>}
     </div>
   </div>;
 }
@@ -1189,9 +1297,9 @@ export default function StandaloneApp(): React.JSX.Element {
       const resultStage = state.phase === "pretest_result";
       const result = { ...record(view.pretest_result), ...record(view.result) };
       const audioStage = ["listen_repeat", "listen_recall"].includes(String(state.phase));
-      return <section className="widget-card standalone-card study-task-card" aria-labelledby="study-title">
-        <header className="widget-header compact-header"><div className="standalone-study-heading"><StandaloneStudyBackButton onBack={backToToday} /><div><span className="eyebrow">WordLoop</span><h1 id="study-title">预测试</h1></div></div><span className="standalone-count">{complete ? items.length : `${Math.min(currentIndex + 1, items.length)} / ${items.length}`}</span></header>
-        {complete ? <div className="standalone-content">
+      return <section className="widget-card standalone-card study-task-card pretest-editorial-card" aria-label="预测试">
+        <StandalonePretestHeader index={currentIndex} total={items.length} onBack={backToToday} />
+        {complete ? <div className="standalone-content pretest-complete-workspace">
           <p>预测试完成</p>
           <div className="standalone-result-grid">
             <div><strong>{summary.known}</strong><span>已掌握</span></div>
@@ -1199,7 +1307,7 @@ export default function StandaloneApp(): React.JSX.Element {
             <div><strong>{summary.unknown}</strong><span>不会</span></div>
           </div>
           <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "continue" })}>开始正式学习</Button></div>
-        </div> : resultStage ? <div className="standalone-content">
+        </div> : resultStage ? <div className="standalone-content pretest-result-workspace">
           <StandalonePretestAnswerReveal
             source={String(payload.source ?? "")}
             word={String(item.word ?? state.current_word ?? "")}
@@ -1211,20 +1319,9 @@ export default function StandaloneApp(): React.JSX.Element {
             onContinue={() => void dispatch({ action: "pretest_continue", current_index: currentIndex })}
             onMarkFamiliar={() => void dispatch({ action: "pretest_mark_familiar", word: String(item.word ?? state.current_word ?? ""), current_index: currentIndex })}
           />
-        </div> : audioStage ? <div className="standalone-content"><p>当前预测试正在 ChatGPT 听音阶段，请在 ChatGPT 完成此阶段。</p></div> : <div className="standalone-content">
-          <div className="question-block">
-            <span className="question-label">中文核心义</span>
-            <p className="question-prompt">{String(item.meaning_zh ?? "")}</p>
-            {typeof item.part_of_speech === "string" && !meaningIncludesPartOfSpeech(String(item.meaning_zh ?? ""), item.part_of_speech) && <p className="answer-hint">{item.part_of_speech}</p>}
-          </div>
-          <label className="answer-label" htmlFor="study-answer">写出英文单词</label>
-          <input id="study-answer" className="answer-input standalone-input" value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (shouldSubmitSingleLine({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (!answer.trim() || busy !== null) return; void dispatch({ action: "pretest_submit", answer }); } }} />
-          {notice && <p className="standalone-status" role="status">{notice}</p>}
-          <div className="standalone-actions standalone-two-actions">
-            <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "pretest_submit", answer: "", mark_unknown: true })}>不会</Button>
-            <Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "pretest_submit", answer })}>提交</Button>
-          </div>
-        </div>}
+        </div> : audioStage ? <div className="standalone-content"><p>当前预测试正在 ChatGPT 听音阶段，请在 ChatGPT 完成此阶段。</p></div> : <StandalonePretestWorkspace item={item} answer={answer} busy={busy !== null} notice={notice}
+          onAnswerChange={setAnswer} onUnknown={() => { void dispatch({ action: "pretest_submit", answer: "", mark_unknown: true }); }}
+          onSubmit={() => { void dispatch({ action: "pretest_submit", answer }); }} />}
         {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
       </section>;
     })()}
@@ -1246,7 +1343,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const progressLabel = String(payload.progress ?? standaloneLessonProgressLabel(wordsFrom(flow.relearn_words), queue, currentIndex, consolidationKind));
       const explaining = phase === "lesson_explain" && payload.mode === "explain";
       return <section className={`widget-card standalone-card lesson-card ${explaining ? "study-explain-card" : "study-task-card"}`} aria-labelledby="study-title">
-        {!explaining && <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />}
+        {!explaining && !(phase === "lesson_feedback" && feedbackMode) && !(phase === "lesson_complete" && feedbackMode && consolidationKind && payload.consolidation_status === "feedback") && <StandaloneLessonHeader title={displayTitle} progressLabel={progressLabel} onBack={backToToday} />}
 
         {explaining && <StandaloneLessonExplanation title={title} displayTitle={displayTitle} progressLabel={progressLabel}
           ipa={String(payload.ipa ?? "")} pronunciationAudioUrl={view.pronunciation_audio_url ?? null}
@@ -1262,18 +1359,12 @@ export default function StandaloneApp(): React.JSX.Element {
           answer={answer} busy={busy !== null} onAnswerChange={saveAnswer}
           onSubmit={() => { void dispatch({ action: "lesson_submit", answer }); }} />}
 
-        {phase === "lesson_feedback" && feedbackMode && <div className="standalone-content">
-          {busy !== null && <p className="standalone-status" role="status">{busyLabel ?? "正在处理，请稍候…"}</p>}
-          <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
-          {notice && <p className="standalone-status" role="status">{notice}</p>}
-          <div className="standalone-actions">
-            {feedback.is_correct !== true && feedback.reveal_answer !== true
-              ? <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_retry" })}>重做当前题</Button>
-              : navigation.action === "next_word"
-                ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>下一词</Button>
-                : <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>{busy === "lesson_next" ? "正在完成本轮…" : "完成本轮并继续"}</Button>}
-          </div>
-        </div>}
+        {phase === "lesson_feedback" && feedbackMode && <StandaloneLessonFeedback
+          word={title} progressLabel={progressLabel} feedback={feedback}
+          busy={busy !== null} busyLabel={busyLabel} notice={notice}
+          nextWord={navigation.action === "next_word"} onBack={backToToday}
+          onRetry={() => { void dispatch({ action: "lesson_retry" }); }}
+          onNext={() => { void dispatch({ action: "lesson_next" }); }} />}
 
         {phase === "lesson_complete" && exerciseMode && consolidationKind && <div className="standalone-content">
           <p className="lesson-exercise-heading">{String(exercise.instruction ?? "")}</p>
@@ -1282,14 +1373,12 @@ export default function StandaloneApp(): React.JSX.Element {
           <div className="standalone-actions"><Button type="button" disabled={busy !== null || !answer.trim()} onClick={() => void dispatch({ action: "consolidation_submit", answer })}>{consolidationKind === "sentence" ? "提交句子" : "提交翻译"}</Button></div>
         </div>}
 
-        {phase === "lesson_complete" && feedbackMode && consolidationKind && payload.consolidation_status === "feedback" && <div className="standalone-content">
-          <div className="standalone-feedback standalone-reading-width" data-capture-root="true"><p><strong>{feedback.is_correct === true ? "正确" : "需要修改"}</strong></p><p>你的答案：{String(feedback.user_answer ?? "")}</p>{typeof feedback.error_layer === "string" && <p>错误层：{feedback.error_layer}</p>}<p>{String(feedback.message ?? "")}</p><p>{String(feedback.explanation ?? "")}</p>{feedback.reveal_answer === true && typeof feedback.reference_answer === "string" && <p>参考答案：{feedback.reference_answer}</p>}</div>
-          <div className="standalone-actions">
-            {feedback.is_correct === true || feedback.reveal_answer === true
-              ? <Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "consolidation_finish" })}>继续学习</Button>
-              : <Button className="secondary" type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "consolidation_retry" })}>修改一次</Button>}
-          </div>
-        </div>}
+        {phase === "lesson_complete" && feedbackMode && consolidationKind && payload.consolidation_status === "feedback" && <StandaloneLessonFeedback
+          word={title} progressLabel={progressLabel} feedback={feedback}
+          busy={busy !== null} busyLabel={busyLabel} notice={notice} nextWord={false}
+          retryLabel="修改一次" nextLabel="继续学习" onBack={backToToday}
+          onRetry={() => { void dispatch({ action: "consolidation_retry" }); }}
+          onNext={() => { void dispatch({ action: "consolidation_finish" }); }} />}
 
         {phase === "lesson_complete" && payload.consolidation === true && payload.consolidation_status === "pending" && <div className="standalone-content">
           <p>本轮词汇已完成。应用巩固待做：{String(record(payload.consolidation_plan).planned_activity_type === "translation_en_to_cn" ? "长难句英译中" : record(payload.consolidation_plan).planned_activity_type === "translation_cn_to_en" ? "完整中译英" : record(payload.consolidation_plan).planned_activity_type === "sentence" ? "情境造句" : "应用任务")}。</p>
@@ -1304,7 +1393,7 @@ export default function StandaloneApp(): React.JSX.Element {
           <div className="standalone-actions"><Button type="button" disabled={busy !== null} onClick={() => void dispatch({ action: "lesson_next" })}>完成本轮并继续</Button></div>
         </div>}
 
-        {busyLabel && <p className="standalone-status" role="status">{busyLabel}</p>}
+        {busyLabel && !(phase === "lesson_feedback" && feedbackMode) && !(phase === "lesson_complete" && feedbackMode && consolidationKind && payload.consolidation_status === "feedback") && <p className="standalone-status" role="status">{busyLabel}</p>}
       </section>;
     })()}
 
