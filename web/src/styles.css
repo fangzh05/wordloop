@@ -5153,3 +5153,86 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   .wordloop-shell .review-editorial-workspace .review-submit-button.button {width:100%;}
 }
 
+
+/* Final open-page treatment for lesson exercises and wrap-up prompts:
+   no isolated quiz card inside the immersive reading canvas. */
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.lesson-card:has(.lesson-exercise-editorial) {
+  display:block;
+  width:min(100%,710px);
+  max-width:710px;
+  margin:0 auto;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.lesson-card > .standalone-content.lesson-exercise-editorial {
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  min-width:0;
+  margin:0;
+  padding:12px 0 22px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-exercise-editorial .lesson-exercise-heading {
+  margin:14px 0 30px;
+  font-family:var(--study-type,"Iowan Old Style",Georgia,serif);
+  font-size:clamp(2rem,4.5vw,3.25rem);
+  line-height:1.3;
+  font-weight:400;
+  letter-spacing:-.045em;
+  color:var(--study-ink,#1d292d);
+}
+.wordloop-shell .lesson-exercise-editorial .lesson-prompt {
+  padding:18px 0 23px;
+  margin:0 0 28px;
+  border:0;
+  border-top:1px solid var(--study-rule,#e2e6e7);
+  border-bottom:1px solid var(--study-rule,#e2e6e7);
+  border-radius:0;
+  font-family:var(--study-type,"Iowan Old Style",Georgia,serif);
+  color:var(--study-ink,#1d292d);
+  background:transparent;
+  box-shadow:none;
+}
+.wordloop-shell .lesson-exercise-editorial .lesson-exercise-answer .standalone-input {
+  padding:12px 3px;
+  border:0;
+  border-bottom:1px solid var(--study-rule,#e2e6e7);
+  border-radius:0;
+  color:var(--study-ink,#1d292d);
+  background:transparent;
+  font:400 1.15rem/1.65 var(--study-type,"Iowan Old Style",Georgia,serif);
+  box-shadow:none;
+}
+.wordloop-shell .lesson-exercise-editorial .lesson-exercise-answer .standalone-input:focus {
+  outline:0;
+  border-bottom:2px solid var(--study-blue,#375f73);
+}
+.wordloop-shell .lesson-exercise-editorial .lesson-exercise-actions {
+  border:0;
+  padding:0;
+  margin:27px 0 0;
+}
+.wordloop-shell .lesson-exercise-editorial .lesson-exercise-actions .button {
+  width:100%;
+  min-height:53px;
+  border:1px solid var(--study-blue,#375f73);
+  border-radius:10px;
+  background:var(--study-blue,#375f73);
+  color:#fff;
+  font-size:.9rem;
+  font-weight:530;
+  box-shadow:none;
+}
+@media(max-width:767px) {
+  .wordloop-shell .lesson-exercise-editorial .lesson-exercise-heading {font-size:2.1rem;}
+}
+
