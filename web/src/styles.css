@@ -4805,3 +4805,28 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   .wordloop-shell .lesson-feedback-footer .button.lesson-feedback-primary {transition:none;}
 }
 
+
+/* Override the historical desktop .study-task-card > .standalone-content
+   card rule (the visible 20px-radius outline around feedback at >=1024px). */
+.wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+.study-task-card > .standalone-content.lesson-feedback-editorial {
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  max-width:710px;
+  min-width:0;
+  margin:0 auto;
+  padding:9px 0 27px;
+  gap:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+}
+@media(max-width:767px) {
+  .wordloop-shell[data-study-open="true"] .wordloop-app-grid.is-immersive
+  .study-task-card > .standalone-content.lesson-feedback-editorial {
+    padding:0 0 20px;
+  }
+}
+
