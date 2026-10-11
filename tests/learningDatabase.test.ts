@@ -21,6 +21,7 @@ beforeAll(async () => {
   await db.exec(readFileSync(new URL("../supabase/migrations/20261002024106_evidence_budget.sql", import.meta.url), "utf8"));
   await db.exec(readFileSync(new URL("../supabase/migrations/20261004045839_bkt_active_planner.sql", import.meta.url), "utf8"));
   await db.exec(readFileSync(new URL("../supabase/migrations/20261004164746_cross_day_review_handoff.sql", import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../supabase/migrations/20261011082546_replenish_new_words_budget.sql", import.meta.url), "utf8"));
 }, 30000);
 afterAll(() => db.close());
 beforeEach(async () => { await db.exec("begin"); await db.query("insert into users(id) values($1)", [user]); });
@@ -91,25 +92,38 @@ describe("real PostgreSQL evidence and budget transactions", () => {
     const id = await evidence();
     await expect(db.query("select commit_bkt_update_v1($1,$2,0,.5,.34,'OBSERVE',true)", [crypto.randomUUID(), id])).rejects.toThrow("EVIDENCE_NOT_FOUND");
   });
-  it("preserves due dates and allows six new admissions when overdue", async () => {
+  it("preserves due dates and allows budgeted new admissions when overdue", async () => {
     await db.query("insert into words values($1,'opaque','opaque')", [exercise]);
     await db.query("insert into user_words values($1,$2,$1,now()-interval '2 days','review',false,now())", [exercise, user]);
     const before = await value("select next_review_at from user_words");
     const r = await value("select prepare_daily_new_words_budget_v1($1,current_date,50) b", [user]);
-    expect(r.b.added).toBe(0); expect(r.b.limit).toBe(6);
+    expect(r.b.added).toBe(0); expect(r.b.limit).toBe(35);
     expect(await value("select next_review_at from user_words")).toEqual(before);
   });
-  it("prepares at most six overdue new words across repeat calls and preserves the existing queue", async () => {
+  it("prepares budgeted overdue new words across repeat calls and preserves the existing queue", async () => {
     for(let i=0;i<12;i++) {
       const id=crypto.randomUUID();
       await db.query("insert into user_words values($1,$2,$1,now()-interval '2 days','new',false,now())",[id,user]);
     }
     const first=await value("select prepare_daily_new_words_budget_v1($1,(now() at time zone 'Asia/Shanghai')::date,50) b",[user]);
-    expect(first.b).toMatchObject({limit:6,added:6,prepared:6});
+    expect(first.b).toMatchObject({limit:35,added:12,prepared:12});
     const again=await value("select prepare_daily_new_words_budget_v1($1,(now() at time zone 'Asia/Shanghai')::date,50) b",[user]);
-    expect(again.b).toMatchObject({limit:6,added:0,prepared:6});
+    expect(again.b).toMatchObject({limit:35,added:0,prepared:12});
     await db.query("update users set daily_new_word_limit=3 where id=$1",[user]);
-    expect((await value("select prepare_daily_new_words_budget_v1($1,current_date,50) b",[user])).b.prepared).toBe(6);
+    expect((await value("select prepare_daily_new_words_budget_v1($1,current_date,50) b",[user])).b.prepared).toBe(12);
+  });
+  it.each([false, true])("replenishes after six started words with overdue=%s", async overdue => {
+    for (let i=0;i<20;i++) {
+      const id=crypto.randomUUID();
+      await db.query("insert into user_words values($1,$2,$1,null,'new',false,now())",[id,user]);
+      if (i<6) await db.query("insert into fsrs_review_logs values($1,$2,now(),'pretest')",[user,id]);
+    }
+    if (overdue) await db.query("insert into user_words values($1,$2,$1,now()-interval '2 days','review',false,now())",[crypto.randomUUID(),user]);
+    await value("select prepare_daily_new_words_budget_v1($1,current_date,6)",[user]);
+    for(let i=0;i<6;i++) await value("select reserve_learning_budget_v1($1,$2,300,'test')",[user,`cost-${i}`]);
+    const next=await value("select prepare_daily_new_words_budget_v1($1,current_date,17) b",[user]);
+    expect(next.b).toMatchObject({limit:17,prepared:17,added:11});
+    expect((await value("select prepare_daily_new_words_budget_v1($1,current_date,17) b",[user])).b.added).toBe(0);
   });
   it("counts only first-ever new Pretests on the user's local day and respects insufficient time", async () => {
     await db.query("insert into fsrs_review_logs values($1,$2,now()-interval '2 days','pretest'),($1,$2,now(),'pretest')",[user,exercise]);

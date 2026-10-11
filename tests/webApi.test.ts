@@ -62,6 +62,9 @@ vi.mock("../server/db.js", async () => {
 });
 
 vi.mock("../server/services/studyBootstrap.js", () => ({ getStudyBootstrap: mocks.bootstrap }));
+vi.mock("../server/services/dailyQueue.js", () => ({
+  ensureDailyQueueForDate: vi.fn(async (date: string) => ({ date, prepared: 0, added: 0 })),
+}));
 vi.mock("../server/services/lessonConsolidation.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/lessonConsolidation.js")>("../server/services/lessonConsolidation.js");
   return {

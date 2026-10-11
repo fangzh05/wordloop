@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
       : state;
   }),
   ensureTodayQueue: vi.fn(),
+  ensureDailyQueueForDate: vi.fn(),
   getDueReviewSelection: vi.fn(),
   getFirstSessionLearningWord: vi.fn(),
   findFirstLearningWord: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock("../server/db.js", () => ({
   }));
 vi.mock("../server/services/dailyQueue.js", () => ({
   ensureTodayQueue: mocks.ensureTodayQueue,
+  ensureDailyQueueForDate: mocks.ensureDailyQueueForDate,
 }));
 vi.mock("../server/services/review.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../server/services/review.js")>();
@@ -88,6 +90,18 @@ function word(index: number, status: VocabularyItem["status"] = "new"): Vocabula
 }
 
 describe("study bootstrap daily queue invariant", () => {
+  it("replenishes an exhausted completed pretest before reading the next batch", async () => {
+    const active = { updated_at: "revision", state: { date: "2026-10-11", widget: "pretest", phase: "pretest_complete", flow: { relearn_words: [], pretest_familiar_words: ["file"] }, payload: {} } } as any;
+    mocks.getTodayWords.mockResolvedValue([]);
+    mocks.ensureDailyQueueForDate.mockImplementationOnce(async () => {
+      mocks.getTodayWords.mockResolvedValue([word(42)]);
+      return { date: "2026-10-11", prepared: 34, added: 8 };
+    });
+    expect(await getStudyBootstrap({ activeSession: active, expectedRevision: "revision", startNewRound: true, deferLessonQueueFreeze: true })).toEqual({ action: "pretest", words: [word(42)] });
+    expect(mocks.ensureDailyQueueForDate).toHaveBeenCalledWith("2026-10-11", expect.anything(), expect.any(String));
+    expect(mocks.ensureDailyQueueForDate.mock.invocationCallOrder[0]).toBeLessThan(mocks.getTodayWords.mock.invocationCallOrder[0]!);
+    expect(active.state.phase).toBe("pretest_complete");
+  });
   it("refreshes the production-shaped 7/106 cursor without replacing or extending its snapshot", async () => {
     const state = { version: 1, date: "2026-10-04", widget: "review", phase: "review", current_word: "word-7", current_index: 7,
       retry_count: 0, flow: { relearn_words: Array.from({ length: 70 }, (_, i) => `failed-${i}`) },

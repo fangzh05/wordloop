@@ -2,7 +2,7 @@ import { getLearningBudget, newWordAdmissionLimit, type BudgetSnapshot } from ".
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { getCompletedLessonWords } from "./attempts.js";
 import type { StudyPhase, StudySessionRow, VocabularyItem } from "../types.js";
-import { ensureTodayQueue } from "./dailyQueue.js";
+import { ensureDailyQueueForDate, ensureTodayQueue } from "./dailyQueue.js";
 import {
   getDueReviewSelection,
 } from "./review.js";
@@ -128,6 +128,9 @@ export async function continueCompletedPretest(
   const date = active.state?.date;
   if (!date) return { action: "done" };
 
+  // A completed pretest can exhaust its original batch while budget remains.
+  // Replenish before reading candidates, keeping the session's date and cursor.
+  await ensureDailyQueueForDate(date, db, userId);
   const [todayWords, completedLessonWords] = await Promise.all([
     getTodayWords(date, db, userId),
     getCompletedLessonWords(db, userId),

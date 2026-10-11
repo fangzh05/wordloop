@@ -55,7 +55,10 @@ vi.mock("../server/services/studySessions.js", async () => {
     normalizeStudyStateForRead: bootstrapMocks.normalizeStudyStateForRead,
   };
 });
-vi.mock("../server/services/dailyQueue.js", () => ({ ensureTodayQueue: bootstrapMocks.ensureTodayQueue }));
+vi.mock("../server/services/dailyQueue.js", () => ({
+  ensureTodayQueue: bootstrapMocks.ensureTodayQueue,
+  ensureDailyQueueForDate: vi.fn(async (date: string) => ({ date, prepared: 0, added: 0 })),
+}));
 vi.mock("../server/services/review.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/review.js")>("../server/services/review.js");
   return {

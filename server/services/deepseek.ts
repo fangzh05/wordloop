@@ -273,6 +273,12 @@ export function validateGeneratedLessonExercise(
 ): LessonExerciseValidationIssue[] {
   const issues: LessonExerciseValidationIssue[] = [];
   const { exercise } = generated;
+  const choiceDirective = /选项|选择|多选|单选|点击|拖拽|\b(?:choose|select|multiple[- ]choice|click|drag)\b/iu;
+  for (const field of ["instruction", "prompt"] as const) {
+    if ((field === "instruction" ? choiceDirective : /从.{0,12}选项|下列选项|\b(?:choose|select)\b.{0,40}\b(?:options|choices|following)\b/iu).test(exercise[field])) {
+      issues.push({ path: ["exercise", field], message: "Use direct text input only; no options, selection, clicking or dragging instructions." });
+    }
+  }
   if (exercise.activity_type !== context.plan.planned_activity_type) {
     issues.push({
       path: ["exercise", "activity_type"],

@@ -31,22 +31,23 @@ export function newWordForecast(count: number): number[] {
 }
 export function newWordAllowance(b: BudgetSnapshot): number {
   if (!b.enabled) return b.new_word_cap;
-  if (b.overdue_count > 0) return Math.min(6, b.new_word_cap,
+  if (b.overdue_count > 0) return Math.min(b.new_word_cap,
     (b.new_words_started_today ?? 0) + Math.floor(Math.max(0, b.remaining_seconds) / 77));
   if (b.due_count * 8 >= b.remaining_seconds) return 0;
   const available = b.remaining_seconds - b.due_count * 8;
-  const today = Math.min(b.new_word_cap, Math.floor(available / 77));
+  const started = b.new_words_started_today ?? 0;
+  const today = Math.min(Math.max(0, b.new_word_cap - started), Math.floor(available / 77));
   for (let n = today; n >= 0; n--) {
     const projected = newWordForecast(n);
-    if (projected.every((s, day) => s + (b.forecast[day]?.review_seconds ?? 0) <= b.daily_minutes * 60)) return n;
+    if (projected.every((s, day) => s + (b.forecast[day]?.review_seconds ?? 0) <= b.daily_minutes * 60)) return Math.min(b.new_word_cap, started + n);
   }
   return 0;
 }
 /** Bound admission even when an older import already prepared more words. */
 export function newWordAdmissionLimit(b: BudgetSnapshot): number {
-  if (!b.enabled || b.overdue_count <= 0) return 6;
-  const slots = Math.max(0, Math.min(6, b.new_word_cap) - (b.new_words_started_today ?? 0));
-  return Math.min(slots, Math.floor(Math.max(0, b.remaining_seconds) / 77));
+  if (!b.enabled) return 6;
+  const slots = Math.max(0, b.new_word_cap - (b.new_words_started_today ?? 0));
+  return Math.min(6, slots, Math.floor(Math.max(0, b.remaining_seconds) / 77));
 }
 export async function getLearningBudget(db = getDatabase(), userId = getAuthenticatedUserId()): Promise<BudgetSnapshot> {
   const r = await db.rpc("learning_budget_snapshot_v1", { p_user_id: userId });

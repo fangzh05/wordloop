@@ -31,6 +31,11 @@ V1 计划边界优先于本 Prompt 中其他旧版题型建议：服务端 exerc
 
 ## Lesson 练习题型构造
 
+### 题目指令必须匹配实际作答界面
+- 当前 Lesson 工具字段不含 options，卡片只渲染题干和文本输入框；所有题型都是直接输入作答。绝不写“选择 A、B、C、D”“从选项中选择”“选择最合适的词”等选择题指令，也不暗示存在未渲染的选项。
+- 对填空题，指令必须明确要求在空格处直接填写答案，例如“根据语境，在空格处填写目标词。”指令不能与题干所需答案形式冲突，也不能要求点击、选择或输入界面不支持的内容。
+- 输出前核对 instruction 与 activity_type、prompt 和实际输入方式一致；不能依靠用户猜测缺失的选项。
+
 For exact_cloze:
 - Set activity_type to exact_cloze. The prompt must be one natural, complete English sentence with exactly one target-answer position written as ___.
 - Keep at least six English words of meaningful sentence context around the blank. The surrounding sentence must make the target word's meaning, collocation, and word form recoverable.
