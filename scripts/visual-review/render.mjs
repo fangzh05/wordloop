@@ -43,6 +43,10 @@ for(const [size,w,h] of sizes) {
   if(["study","study-dark","review-correct","review-wrong","review-loading"].includes(name)){
     const unknown=page.getByRole("button",{name:"不会",exact:true});
     if(!(await unknown.isVisible()))throw Error("Review skip action is missing or renamed");
+    if(size==="mobile"){
+      const rect=await unknown.boundingBox();
+      if(!rect || rect.height>65 || rect.height<42)throw Error("Mobile 不会 button height should be compact, measured: "+JSON.stringify(rect));
+    }
   }
   if(["lesson","lesson-dark"].includes(name) && !(await page.getByRole("button",{name:"词族",exact:true}).isVisible()))
     throw Error("Word-family entry is not visible in lesson explanation");
