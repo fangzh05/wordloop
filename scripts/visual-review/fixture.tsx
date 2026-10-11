@@ -7,7 +7,7 @@ import { VocabularyPage } from "../../web/src/standalone/pages/VocabularyPage.js
 import { CaptureNotesPage } from "../../web/src/standalone/CaptureNotesPage.js";
 import { NoteReviewPage } from "../../web/src/standalone/NoteReviewPage.js";
 import { FamilyPanel } from "../../web/src/family/FamilyPanel.js";
-import { StandaloneReviewWorkspace, StandaloneLessonExplanation, StandaloneLessonExercise, StandaloneLessonHeader, StandaloneLessonFeedback } from "../../web/src/standalone/StandaloneApp.js";
+import { StandaloneReviewWorkspace, StandaloneLessonExplanation, StandaloneLessonExercise, StandaloneLessonHeader, StandaloneLessonFeedback, StandalonePretestHeader, StandalonePretestWorkspace, StandalonePretestAnswerReveal } from "../../web/src/standalone/StandaloneApp.js";
 import { Button } from "../../web/src/components/Button.js";
 import type { AppSection } from "../../web/src/standalone/AppShell.js";
 
@@ -79,8 +79,8 @@ window.fetch = async (input:any, init?:any)=>{
 };
 function App() {
  const query=new URLSearchParams(location.search);
- const page=query.get("page")??"today";
- const immersive = ["study","lesson","lesson-exercise","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading"].includes(page);
+ const page=(query.get("page")??"today").replace(/-dark$/,"");
+ const immersive = ["study","review-correct","review-wrong","review-loading","pretest","pretest-correct","pretest-wrong","pretest-loading","lesson","lesson-exercise","lesson-feedback","lesson-feedback-retry","lesson-feedback-loading","consolidation-feedback","consolidation-retry","consolidation-loading"].includes(page);
  const [studyAnswer,setStudyAnswer]=useState("");
  const [section,setSection]=useState<AppSection>((["today","study","capture","insights","vocabulary"].includes(page)?page:"today") as AppSection);
  const [showSettings,setShowSettings]=useState(page==="settings");
@@ -98,11 +98,23 @@ function App() {
     {page==="vocabulary"&&<VocabularyPage tokenKey="fixture" initialUserWordId="w0" onDetailChange={()=>{}}/>}
     {page==="capture"&&<CaptureNotesPage onBack={()=>route("today")} onOpenReview={()=>route("note-review")} noteReviewDueCount={1}/>}
     {page==="note-review"&&<NoteReviewPage onBack={()=>route("capture")} />}
-    {page==="study"&&<section className="widget-card standalone-card study-task-card review-editorial-card" aria-labelledby="study-title">
-      <StandaloneReviewWorkspace item={{word:"predict",part_of_speech:"v.",meaning_zh:"预测；预言；预料"}}
-       direction="cn_to_en" currentIndex={2} total={18} answer={studyAnswer} busy={false}
-       notice="" noticeIndex={null} onBack={()=>route("today")} onAnswerChange={setStudyAnswer}
+    {["study","review-correct","review-wrong","review-loading"].includes(page)&&<section className="widget-card standalone-card study-task-card review-editorial-card" aria-labelledby="study-title">
+      <StandaloneReviewWorkspace item={{word:"indulge",part_of_speech:"v.",meaning_zh:"纵容；沉溺于；满足"}}
+       direction="cn_to_en" currentIndex={2} total={18} answer={studyAnswer} busy={page==="review-loading"}
+       notice={page==="review-correct"?"回答正确，正在进入下一题。":page==="review-wrong"?"未完全回忆出目标词，系统已记录本次复习。":""}
+       noticeIndex={page==="review-correct"||page==="review-wrong"?2:null}
+       onBack={()=>route("today")} onAnswerChange={setStudyAnswer}
        onUnknown={()=>{}} onSubmit={()=>{}} />
+    </section>}
+    {["pretest","pretest-correct","pretest-wrong","pretest-loading"].includes(page)&&<section className="widget-card standalone-card study-task-card pretest-editorial-card" aria-label="预测试">
+      <StandalonePretestHeader index={3} total={20} onBack={()=>route("today")}/>
+      {page==="pretest"||page==="pretest-loading"
+        ? <StandalonePretestWorkspace item={{part_of_speech:"v.",meaning_zh:"纵容；沉溺于；满足"}} answer={studyAnswer} busy={page==="pretest-loading"}
+          notice={page==="pretest-loading"?"正在核对答案…":""} onAnswerChange={setStudyAnswer} onUnknown={()=>{}} onSubmit={()=>{}}/>
+        : <div className="standalone-content pretest-result-workspace"><StandalonePretestAnswerReveal
+          source="new_word" word="indulge" answer={page==="pretest-correct"?"indulge":"indulging"}
+          status={page==="pretest-correct"?"known":"unknown"} errorLayer={page==="pretest-correct"?"none":"spelling"}
+          markedFamiliar={false} busy={false} onContinue={()=>{}} onMarkFamiliar={()=>{}}/></div>}
     </section>}
     {page==="lesson"&&<section className="widget-card standalone-card lesson-card study-explain-card" aria-labelledby="study-title">
       <StandaloneLessonExplanation title="meticulous" displayTitle="meticulous" progressLabel="正式学习 · 2 / 6"
@@ -136,6 +148,15 @@ function App() {
         onRetry={()=>{}} onNext={()=>{}}
       />
     </section>}
+    {["consolidation-feedback","consolidation-retry","consolidation-loading"].includes(page)&&<section className="widget-card standalone-card lesson-card study-task-card" aria-labelledby="study-title">
+      <StandaloneLessonFeedback word="indulge" progressLabel="本轮应用巩固"
+        feedback={page==="consolidation-retry"
+          ? {is_correct:false,user_answer:"I indulge yesterday.",error_layer:"grammar",message:"时态需要调整。",explanation:"结合语境使用正确的时态。",reveal_answer:false}
+          : {is_correct:true,user_answer:"She indulges in reading after work.",message:"表达准确，句意符合要求。",explanation:"搭配 indulge in 使用正确。",reveal_answer:false}}
+        busy={page==="consolidation-loading"} busyLabel={page==="consolidation-loading"?"正在继续学习…":null}
+        notice="" nextWord={false} nextLabel="继续学习" retryLabel="修改一次"
+        onBack={()=>route("lesson")} onRetry={()=>{}} onNext={()=>{}}/>
+    </section>}
     {page==="family"&&<section className="widget-card standalone-card"><h1>词族</h1><Button onClick={()=>setFamily(true)}>打开词族</Button></section>}
     {page==="settings"&&<section className="widget-card standalone-card"><h1>设置</h1></section>}
     {showSettings&&<SettingsSheet open onClose={()=>setShowSettings(false)} appearance={appearance} onAppearanceChange={setAppearance} dailyLimit={50} busy={false} onSaveDailyNewWordLimit={async(limit)=>({}) as any}/>}
@@ -145,5 +166,5 @@ function App() {
   <aside className="visual-fixture-stamp" aria-label="测试数据">SOURCE COMPONENT PREVIEW · FIXTURE DATA</aside>
  </main>;
 }
-document.documentElement.dataset.theme="light";
+document.documentElement.dataset.theme=new URLSearchParams(location.search).get("page")?.endsWith("-dark")?"dark":"light";
 createRoot(document.getElementById("root")!).render(<App/>);
