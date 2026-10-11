@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getVocabularyPage, type VocabularyListItem } from "../apiClient.js";
 import { WordDetailPanel } from "../components/WordDetailPanel.js";
 import { ShanbayImportPanel } from "../components/ShanbayImportPanel.js";
+import {CurrentExamBook} from '../components/ExamBookSelector.js';
 
 const filterOptions = [
   ["not_started", "未开始"], ["in_memory", "已进入记忆"], ["active_error", "有活动错误"], ["due", "到期"],
@@ -87,6 +88,7 @@ export function VocabularyPage({ tokenKey, initialUserWordId = null, onDetailCha
 
   return <section className={`vocabulary-page${selected ? " has-word-detail" : ""}`} aria-labelledby="vocabulary-title">
     <header className="page-heading"><span className="eyebrow">Vocabulary</span><h1 id="vocabulary-title">词库</h1><p>保存每一个词，也保留每一次理解。</p></header>
+    <CurrentExamBook />
     <ShanbayImportPanel key={tokenKey} onImported={() => setImportRevision((revision) => revision + 1)} />
     <div className="vocabulary-toolbar">
       <label className="vocabulary-search-label" htmlFor="vocabulary-search">搜索词条</label>

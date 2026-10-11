@@ -10,6 +10,7 @@ import {
 } from "../../shared/toolContracts.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
 import { getTodayWords, getUserTimeZone, getVocabularyItemsByWords, vocabularyItemFromRpc, type RpcVocabularyRow } from "./words.js";
+import {hydrateExamCards} from './examCardDictionary.js';
 import { normalizeWord } from "./wordNormalization.js";
 import { getProgress } from "./progress.js";
 import { getActiveStudySession, normalizeLegacyLessonSession } from "./studySessions.js";
@@ -133,7 +134,7 @@ export async function getReviewSelection(
       p_limit: limit,
     });
     assertDatabaseResult(error);
-    const candidates = ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
+    const candidates = await hydrateExamCards(((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc),db);
     return {
       rollingReview: candidates.map((item) => decorateReviewWord(item, now)),
       oldRandomReview: [],
@@ -159,7 +160,9 @@ export async function getDueReviewSelection(
       candidates.push(...page.map(row => toVocabularyItem(row.state, row.word)));
       if (page.length < 1000) break;
     }
-    return { rollingReview: selectDueReviewWords(candidates, limit, now), oldRandomReview: [] };
+    const selected=selectDueReviewWords(candidates, limit, now);
+    const hydrated=await hydrateExamCards(selected,db);
+    return { rollingReview: hydrated.map(item=>decorateReviewWord(item,now)), oldRandomReview: [] };
 
   });
 }

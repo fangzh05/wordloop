@@ -17,3 +17,4 @@ supabase/.temp/
 .bkt-calibration/
 **/__pycache__/
 .playwright-cli/
+.exam-books/

@@ -1,4 +1,5 @@
 import { WebAuthError, authenticateWebUser } from "./webAuth.js";
+import {examBookId,listExamBooks,selectExamBook,listExamBookWords} from './services/examBooks.js';
 import { handleShanbayImportRequest } from "./shanbayImportApi.js";
 import { withUserIdentity } from "./db.js";
 import { getLearningBudget, setLearningBudget, reserveLearningBudget, LearningBudgetReached } from "./services/learningBudget.js";
@@ -1662,6 +1663,18 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
   try {
 
     const url = new URL(request.url);
+    if(url.pathname==='/api/web/exam-books' && request.method==='GET') return jsonApiResponse(await listExamBooks());
+    if(url.pathname==='/api/web/exam-books/selection' && request.method==='PUT') {
+      const input=z.object({book_id:examBookId}).strict().safeParse(await request.json());
+      if(!input.success)throw new WebApiError(400,'INVALID_REQUEST','请选择有效词书。');
+      return jsonApiResponse(await selectExamBook(input.data.book_id));
+    }
+    const examWords=/^\/api\/web\/exam-books\/([^/]+)\/words$/.exec(url.pathname);
+    if(examWords && request.method==='GET') {
+      const input=z.object({id:examBookId,after:z.string().max(120),limit:z.coerce.number().int().min(1).max(100)}).safeParse({id:examWords[1],after:url.searchParams.get('after')??'',limit:url.searchParams.get('limit')??50});
+      if(!input.success)throw new WebApiError(400,'INVALID_REQUEST','词书分页参数无效。');
+      return jsonApiResponse(await listExamBookWords(input.data.id,input.data.after,input.data.limit));
+    }
     if (request.method === "GET" && url.pathname === "/api/web/lexical/graph") {
       const query = lexicalGraphQuerySchema.safeParse(Object.fromEntries(url.searchParams));
       if (!query.success || new Set(url.searchParams.keys()).size !== [...url.searchParams.keys()].length)

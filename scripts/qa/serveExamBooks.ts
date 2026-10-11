@@ -1,0 +1,17 @@
+import express from 'express';
+import {build} from 'esbuild';
+import {mkdirSync,readFileSync} from 'node:fs';
+mkdirSync('.qa',{recursive:true});
+await build({entryPoints:['scripts/qa/examBooksHarness.tsx'],outfile:'.qa/exam-books.js',bundle:true,format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"development"'}});
+const app=express();app.use(express.json());
+app.get('/',(_,r)=>r.type('html').send('<!doctype html><title>WordLoop exam books local QA</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><div id="root"></div><script>localStorage.setItem("wordloop_web_token","LOCAL-FAKE-TOKEN")</script><script src="/exam-books.js"></script>'));
+app.get('/styles.css',(_,r)=>r.type('css').send(readFileSync('web/src/styles.css','utf8')));
+app.get('/exam-books.js',(_,r)=>r.type('js').send(readFileSync('.qa/exam-books.js','utf8')));
+app.get('/api/web/vocabulary',(_,r)=>r.json({data:{items:[]}}));
+app.get('/api/web/shanbay-import/status',(_,r)=>r.json({connected:false}));
+app.get('/api/web/today',(_,r)=>r.status(503).json({error:{message:'Local fixture: today unavailable'}}));
+app.get('/api/web/budget',(_,r)=>r.status(503).json({error:{message:'Local fixture'}}));
+let selected='cet4';
+app.get('/api/web/exam-books',(_,r)=>r.json({selected_book_id:selected,effective_date:'2026-10-12',books:[['kaoyan','考研英语',0],['cet4','大学英语四级',3849],['cet6','大学英语六级',5407],['ielts','雅思 IELTS',5040],['toefl','托福 TOEFL',6974]].map(([id,name,total])=>({id,name,total,available:id!=='kaoyan',is_public:id!=='kaoyan',scope:'public',source:'ECDICT',source_version:'bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b',license:'MIT',in_learning:0,mastered:0,not_enrolled:total,unavailable_reason:'公共词表授权与数据待准备'}))}));
+app.put('/api/web/exam-books/selection',(req,r)=>{selected=req.body.book_id;r.json({book_id:selected,effective_date:'2026-10-12'});});
+app.listen(4187,'127.0.0.1',()=>console.log('Exam books local fixture :4187'));

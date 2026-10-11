@@ -8,6 +8,7 @@ import { Icon } from "./DesignIcons.js";
 import { SelectionCapture } from "./SelectionCapture.js";
 import { AppNavigation, SettingsSheet, type AppSection, type Appearance } from "./AppShell.js";
 import { TodayPage } from "./pages/TodayPage.js";
+import {ExamBookProvider} from './components/ExamBookSelector.js';
 import { InsightsPage } from "./pages/InsightsPage.js";
 import { VocabularyPage } from "./pages/VocabularyPage.js";
 import { WordDetailPanel } from "./components/WordDetailPanel.js";
@@ -1228,7 +1229,7 @@ export default function StandaloneApp(): React.JSX.Element {
     && (["lesson_explain", "lesson_feedback"].includes(String(state.phase))
       || (state.phase === "lesson_complete" && record(state.payload).mode === "feedback"));
 
-  return <main className="standalone-shell wordloop-shell" data-study-open={visiblePage === "study" ? "true" : "false"}>
+  return <ExamBookProvider key={token} tokenKey={token}><main className="standalone-shell wordloop-shell" data-study-open={visiblePage === "study" ? "true" : "false"}>
     <div className={`wordloop-app-grid${visiblePage === "study" ? " is-immersive" : ""}`} data-section={appSection}>
     {visiblePage !== "study" && <AppNavigation section={appSection} onNavigate={navigateSection} />}
     <StandaloneResponsiveLayout
@@ -1438,7 +1439,7 @@ export default function StandaloneApp(): React.JSX.Element {
       sourceRef={visiblePage === "study" ? `${view?.screen ?? "study"}:${String(state.current_word ?? currentIndex)}` : null}
       onCaptured={() => void refreshCaptureCounts()}
     />
-  </main>;
+  </main></ExamBookProvider>;
 }
 
 function speak(word: string): void {

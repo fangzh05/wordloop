@@ -6,6 +6,7 @@ import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
 import { normalizeWord, prepareWordList } from "./wordNormalization.js";
 import { cardToDatabase, reviewLogToDatabase, scheduleReview } from "./fsrsScheduler.js";
 import { gradeExactRecall } from "../../web/src/grading/deterministic.js";
+import {hydrateExamCards} from './examCardDictionary.js';
 
 interface RpcImportResult {
   date: string;
@@ -222,7 +223,7 @@ export async function getTodayWords(
     p_date: date,
   });
   assertDatabaseResult(error);
-  return ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
+  return hydrateExamCards(((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc),db);
 }
 
 /** Read only the persisted words needed to resume a session-aware lesson queue. */
@@ -239,7 +240,7 @@ export async function getVocabularyItemsByWords(
     .eq("user_id", userId)
     .in("word.normalized_word", normalizedWords);
   assertDatabaseResult(error);
-  return ((data ?? []) as unknown as JoinedUserWord[]).map((row) => toVocabularyItem(row, relationOne(row.word)));
+  return hydrateExamCards(((data ?? []) as unknown as JoinedUserWord[]).map((row) => toVocabularyItem(row, relationOne(row.word))),db);
 }
 
 export async function getAllUserWords(
@@ -261,7 +262,7 @@ export async function getAllUserWords(
     rows.push(...page);
     if (page.length < pageSize) break;
   }
-  return rows.map((row) => toVocabularyItem(row, relationOne(row.word)));
+  return hydrateExamCards(rows.map((row) => toVocabularyItem(row, relationOne(row.word))),db);
 }
 
 export function toVocabularyItem(
@@ -285,9 +286,9 @@ export function toVocabularyItem(
     fsrs_reps: state.fsrs_reps,
     last_reviewed_at: state.last_reviewed_at,
     fsrs_state: state.fsrs_state ?? 0,
-    ipa_us: word.ipa_us,
-    ipa_uk: word.ipa_uk,
-    senses: Array.isArray(word.senses) ? word.senses : [],
+    ipa_us: state.source==='exam_book'?null:word.ipa_us,
+    ipa_uk: state.source==='exam_book'?null:word.ipa_uk,
+    senses: state.source==='exam_book'?[]:Array.isArray(word.senses) ? word.senses : [],
   };
 }
 
@@ -307,9 +308,9 @@ export function vocabularyItemFromRpc(row: RpcVocabularyRow): VocabularyItem {
     fsrs_scheduled_days: row.fsrs_scheduled_days ?? 0,
     fsrs_reps: row.fsrs_reps,
     fsrs_state: row.fsrs_state ?? 0,
-    ipa_us: row.ipa_us,
-    ipa_uk: row.ipa_uk,
-    senses: Array.isArray(row.senses) ? row.senses : [],
+    ipa_us: row.source==='exam_book'?null:row.ipa_us,
+    ipa_uk: row.source==='exam_book'?null:row.ipa_uk,
+    senses: row.source==='exam_book'?[]:Array.isArray(row.senses) ? row.senses : [],
   };
 }
 

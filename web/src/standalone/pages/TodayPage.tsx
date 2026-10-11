@@ -1,4 +1,5 @@
 import { LearningBudgetPanel } from "../components/LearningBudgetPanel.js";
+import {CurrentExamBook} from '../components/ExamBookSelector.js';
 import type { BudgetSnapshot } from "../../../../server/services/learningBudget.js";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/Button.js";
@@ -109,6 +110,7 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
       </Button>
     </section>
 
+    <CurrentExamBook compact />
     {view?.pending_consolidation && <section className="today-focus-card today-consolidation" aria-label="待做应用巩固">
       <div>
         <span className="eyebrow">应用巩固待做</span>

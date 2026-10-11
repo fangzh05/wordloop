@@ -5410,3 +5410,20 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   min-height:44px; max-height:44px; height:44px; flex:0 0 44px;
   aspect-ratio:1; border-radius:50%; padding:0;
 }
+/* Built-in books reuse the existing editorial tokens and settings sheet. */
+.current-exam-book {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--separator);margin-bottom:1rem;}
+.current-exam-book > div {display:grid;gap:.35rem;min-width:0;}
+.current-exam-book strong {font-size:1rem;}
+.current-exam-book small,.exam-book-note,.exam-book-option small {color:var(--muted);font-size:.8rem;line-height:1.6;}
+.current-exam-book.is-compact {padding:.75rem 0;}
+.current-exam-book button,.exam-book-sheet button {min-height:44px;}
+dialog.exam-book-sheet {position:fixed;inset:auto 0 0;margin:0 auto;max-height:90dvh;padding-bottom:calc(1rem + env(safe-area-inset-bottom));}
+dialog.exam-book-sheet:not([open]) {display:none;}
+dialog.exam-book-sheet::backdrop {background:#0b2035a8;}
+.exam-book-options {border:0;padding:0;margin:1rem 0;min-width:0;}
+.exam-book-options legend {font-size:.85rem;color:var(--muted);}
+.exam-book-option {display:flex;align-items:flex-start;gap:.75rem;padding:1rem 0;border-bottom:1px solid var(--separator);cursor:pointer;}
+.exam-book-option input {flex:none;min-height:24px;min-width:24px;margin-top:.15rem;accent-color:var(--accent);}
+.exam-book-option span {display:grid;gap:.25rem;min-width:0;overflow-wrap:anywhere;}
+.exam-book-option:has(input:disabled) {cursor:default;}
+@media(min-width:700px) {dialog.exam-book-sheet {inset:0;margin:auto;height:fit-content;border-radius:1.25rem;}}
