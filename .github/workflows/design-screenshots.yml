@@ -3,9 +3,11 @@ on:
   push:
     branches:
       - design/wordloop-editorial-refresh-20261010
+      - design/feedback-clean-reading-20261011
   pull_request:
     branches:
       - codex/lexical-root-network
+      - feat/cloudflare-workers-production
   workflow_dispatch:
 jobs:
   visual-review:
