@@ -295,6 +295,12 @@ export function lessonEyebrowLabel(progress?: string): string {
   return "学习进度";
 }
 
+export function buildLessonExerciseHeader(input: {activityType:string;wrapup:boolean;progress?:string;title?:string}): {eyebrow:string;heading:string} {
+  if(input.wrapup)return {eyebrow:'长难句收尾',heading:'先找主干，再翻译'};
+  if(input.activityType==='exact_cloze')return {eyebrow:'新词学习'+(input.progress?' · '+input.progress:''),heading:'填空练习'};
+  return {eyebrow:input.title??'练习',heading:input.progress??'当前练习'};
+}
+
 function modeForPhase(phase: Payload["phase"]): Mode | null {
   if (phase === "lesson_exercise") return "exercise";
   if (phase === "lesson_feedback") return "feedback";
@@ -808,13 +814,14 @@ export function LessonWidget(): React.JSX.Element {
 
   if (mode === "exercise") {
     const consolidation = payload.consolidation === true;
+    const exerciseHeader=buildLessonExerciseHeader({activityType,wrapup:payload.wrapup===true,progress:payload.progress,title:payload.title});
     const consolidationTitle = payload.consolidation_kind === "sentence" ? "情境造句"
       : payload.consolidation_kind === "translation_cn_to_en" ? "完整中译英" : "长难句英译中";
     return <section className="widget-card lesson-card" aria-labelledby="lesson-exercise-title">
       <header className="widget-header compact-header">
         <div>
-          <span className="eyebrow">{consolidation ? consolidationTitle : payload.title ?? "练习"}</span>
-          <h1 id="lesson-exercise-title">{consolidation ? payload.progress ?? (payload.consolidation_kind === "sentence" ? "应用巩固 · 情境造句" : payload.consolidation_kind === "translation_cn_to_en" ? "应用巩固 · 中译英" : "应用巩固 · 长难句英译中") : payload.progress ?? "当前练习"}</h1>
+          <span className="eyebrow">{consolidation ? consolidationTitle : exerciseHeader.eyebrow}</span>
+          <h1 id="lesson-exercise-title">{consolidation ? payload.progress ?? (payload.consolidation_kind === "sentence" ? "应用巩固 · 情境造句" : payload.consolidation_kind === "translation_cn_to_en" ? "应用巩固 · 中译英" : "应用巩固 · 长难句英译中") : exerciseHeader.heading}</h1>
         </div>
         <FocusButton />
       </header>
