@@ -30,7 +30,7 @@ jobs:
       - name: Render requested UI states
         run: node scripts/visual-review/render.mjs
         env:
-          VISUAL_PAGES: relearn-lesson,relearn-lesson-dark,relearn-exercise,pretest,pretest-dark,lesson,lesson-dark,lesson-feedback,lesson-feedback-retry
+          VISUAL_PAGES: relearn-lesson,relearn-lesson-dark,relearn-exercise,pretest,pretest-dark,pretest-wrong,study,lesson,lesson-dark,lesson-exercise,lesson-feedback,lesson-feedback-retry,lesson-feedback-loading
       - uses: actions/upload-artifact@v4
         if: always()
         with:
