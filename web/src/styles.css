@@ -5335,3 +5335,20 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   }
 }
 
+
+/* Dark pretest secondary button must be legible against the navy page. */
+:root[data-theme="dark"] .wordloop-shell .pretest-editorial-actions .pretest-unknown-button.button {
+  color:#d7e7f0;
+  border-color:#4e6b80;
+}
+:root[data-theme="dark"] .wordloop-shell .pretest-editorial-actions .pretest-unknown-button.button:hover:not(:disabled) {
+  background:#1d3548;
+}
+@media(prefers-color-scheme:dark) {
+  :root[data-theme="system"] .wordloop-shell .pretest-editorial-actions .pretest-unknown-button.button,
+  :root:not([data-theme]) .wordloop-shell .pretest-editorial-actions .pretest-unknown-button.button {
+    color:#d7e7f0;
+    border-color:#4e6b80;
+  }
+}
+
