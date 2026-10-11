@@ -5317,3 +5317,21 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   .wordloop-shell .lesson-reference-ipa .play-button.lesson-audio {transition:none;}
 }
 
+
+/* Readable word-family link in the deep-navy relearning spread. */
+:root[data-theme="dark"] .wordloop-shell .lesson-reference-family-heading button {
+  color:#d9e9f2;
+  border-color:#69899d;
+}
+:root[data-theme="dark"] .wordloop-shell .lesson-reference-family-heading button:hover {
+  color:#fff;
+  border-color:#c1d5e3;
+}
+@media(prefers-color-scheme:dark){
+  :root[data-theme="system"] .wordloop-shell .lesson-reference-family-heading button,
+  :root:not([data-theme]) .wordloop-shell .lesson-reference-family-heading button {
+    color:#d9e9f2;
+    border-color:#69899d;
+  }
+}
+
