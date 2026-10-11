@@ -1,31 +1,36 @@
-# Private exam-book source import
+# Private sources for the five existing exam targets
 
-The importer extends shared `words.normalized_word` identities with private source definitions. It does not replace ECDICT, existing personal senses, FSRS, BKT or study sessions. Missing or unverified book attribution is not fabricated.
+Only `cet4`, `cet6`, `kaoyan`, `ielts`, `toefl` are selectable. Commercial IDs are internal provenance keys. The earlier commercial-book activation plan is superseded. Keep imported shared identities, source originals, batches, entitlements and quarantine intact.
 
-Commercial source files, parsed originals, provenance inventories, model audit logs, import SQL and measured acceptance reports belong in an existing restricted directory **outside every Git checkout**. Do not commit these artifacts or copy them into Worker assets. Repository availability and a user's private learning assertion are separate from publisher authorization; preserve both facts without claiming verified publisher rights.
+Originals, source inventories, model logs, measured reports and prepared SQL belong in a restricted directory outside Git. A private-use assertion is separate from verified publisher authorization. Never send originals to external models without applicable processing authorization.
 
-## Offline workflow
+## Offline correction workflow
 
-1. Create a restricted private processing directory outside the checkout. Python parsing requires `openpyxl==3.1.5`.
-2. `python scripts/download-commercial-sources.py <private-directory>` downloads pinned source files and inventories repository trees. Full source clones can additionally be inspected at the pinned commits.
-3. `python scripts/parse-commercial-sources.py <private-directory>` preserves raw XLSX cells, coordinates, merged cells, original text, chapter/group structure and resource-only materials. Static TS/JS literals use the non-executing parser in `scripts/parse-static-data.ts`.
-4. `npx tsx scripts/audit-commercial-books.ts <private-directory> --review` normalizes exact identities and submits headword-only uncertainties through the configured WorkBuddy ACP adapter. Set `WORKBUDDY_PYTHON` to the installed bridge interpreter. Commercial definitions and learner data must not be sent to an external model without separate processing authorization.
-5. Save a read-only identity/membership snapshot from the explicitly selected target environment. `npx tsx scripts/replay-commercial-books.ts <private-directory>` imports the real accepted corpus twice into an ephemeral PGlite database and verifies protected identities and learner-state isolation.
-6. Obtain independent WorkBuddy database, import and runtime reviews. Save complete raw results outside Git, validate structured outcomes with Zod, and retain findings/dispositions rather than silently rewriting source text.
-7. `scripts/validate-commercial-release-review.ts` validates reviewed outcomes and binds the code hashes. A trusted local release gate must pin the review, successful replay, read-only baseline and normalized draft, record the user's private-use assertion, and explicitly authorize production writes. `scripts/prepare-commercial-release.ts` only prepares checksum-bound SQL; it makes no network/database calls.
+1. Capture read-only production membership/source/content/protected-table snapshots as `five-exam-snapshot.json`, and relevant installed function definitions as `five-exam-live-functions.json`. Recheck live Worker metadata and Git ancestry.
+2. Reuse `normalized-draft.json`, existing source files and the pinned ECDICT CSV. Do not download or reimport commercial data for this correction.
+3. Run `npx tsx scripts/dry-run-exam-source-mapping.ts <private-directory> <pinned-ecdict.csv>` to compute differences and prepare checksum-bound merge/rollback SQL. There is no network/database client.
+4. Run `npx tsx scripts/replay-exam-source-mapping.ts <private-directory> <pinned-ecdict.csv>`. It loads accepted real local data and read-only memberships into PGlite, applies installed function definitions plus the corrective migration, and replays the merge twice. Learner fixtures are synthetic.
+5. Prepare a code-only prompt with `scripts/review-exam-source-mapping.ts`, submit through current WorkBuddy MCP, retain full raw responses and structured findings outside Git. Save model JSON as `five-exam-workbuddy-model.json` and validate with `--validate`. Document engineering dispositions; model findings never automatically modify originals or identities.
+6. Run typecheck, tests, build and a real-text build privacy scan. Browser QA uses synthetic fixtures only; it does not establish authenticated production or physical-device acceptance.
 
-## Production boundary
+Original import tools remain for historical reproducibility, not for repeating production imports or restoring commercial learning targets.
 
-Production import requires an explicitly confirmed target and authorization. Back up the affected identity/catalog/membership tables and original RPC definitions in a non-exposed, access-restricted schema. Capture protected learning/dictionary/relation integrity digests before writing. Apply the migration through Supabase migrations, keep private books unavailable while importing, verify every batch count and content/original-text hash, and replay idempotently before considering activation.
+## Membership and teaching
 
-Entitlements are service-managed, expire explicitly, and do not assert publisher authorization. Ordinary roles have no direct source-table reads or service-RPC execution. The shared `words` table must remain protected by its existing RLS. Source intake is in a non-exposed admin schema and is not an end-user API.
+CET6 receives reviewed Xinghuo identities; IELTS receives reviewed Zhenjing and Wang Lu identities. CET4/Kaoyan require independent exact pinned ECDICT tags. TOEFL requires attributable evidence; do not relabel generic TOEFL files. Skip source records with no usable definition. Never clear or overwrite memberships.
 
-The current authorized book controls the teaching source. Private plans use deterministic word recall and freeze their word, sense and source keys; no original text is sent to DeepSeek. Public ECDICT fallback and prior personal senses remain separate. A new private book cannot become public; missing-source placeholders cannot become available.
+Public membership rows contain normalized headwords and generic merge provenance only. Source-specific evidence stays in a restricted non-exposed admin audit table. ECDICT fields, personal glosses, notes, FSRS, BKT and frozen sessions are not updated by membership SQL.
 
-Deployment authorization is separate from database authorization. Deploy and verify the compatible Worker before enabling any new private catalog rows. Never activate source-missing books or grant access to unrelated accounts. Do not publish private source-derived comprehensive membership candidates without reviewing the permitted publication scope.
+Current-exam mappings select eligible commercial definitions. Source entitlements are independent of permanently unavailable internal catalog rows and expire on every source/frozen-session read. Service RPCs and source tables remain inaccessible to ordinary Data API roles. Unlicensed users get ECDICT fallback; source-only words are not allocated to them.
 
-## Rollback
+General IELTS word recall uses Zhenjing first and Wang Lu as fallback. Preserve alternative sources and original sense order; freeze one teaching source instead of flattening books. This is a source suitability policy, not independently established semantic quality or publisher fidelity. Originals never go to DeepSeek. Existing non-exam personal cards retain their own legacy glosses.
 
-Run `supabase/rollback/private_commercial_books.sql` in the explicitly approved target to disable the private books while preserving source rows and all learner history. Keep the authorization-aware list RPC during an application rollback: restoring the old unfiltered catalog can expose private existence. Do not delete shared identities or restore learner tables over subsequent legitimate learning.
+The Kaoyan private-owner scope is the union of existing personal entries and independently evidenced public Kaoyan members. Existing personal glosses and FSRS cards remain unchanged.
 
-Run `npm run typecheck`, `npm test -- --maxWorkers=2`, `npm run build`, the real-corpus replay and environment-specific database checks. Browser QA uses synthetic fixtures (`scripts/qa/`), never raw commercial text. Local browser dimensions do not establish physical-device or authenticated production acceptance.
+## Future release after explicit confirmation
+
+No new production write or Worker deployment is authorized for this correction dry-run.
+
+After confirmation: refresh drift checks; save restricted membership/catalog/function backups and protected-table digests; apply the corrective migration with source mappings disabled by default; deploy and verify the compatible Worker; only then execute reviewed merge SQL, atomically adding missing memberships and enabling the three supported mappings. Checksum prepared SQL and abort at the first error (`psql -v ON_ERROR_STOP=1` where applicable). Do not activate internal source catalog rows.
+
+Verify licensed/unlicensed source reads, frozen retries, revocation, unchanged learner hashes and idempotence. Rollback disables mappings and removes only added membership rows still bearing the exact merge batch marker. Preserve source originals, shared identities and all learner history, including subsequent cards. Keep the five-target authorization-aware catalog during application rollback; never restore unfiltered source catalogs or old learner tables.

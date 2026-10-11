@@ -17,7 +17,7 @@ export function privateSourceIds(value:unknown):string[]{
  collect(value);return [...ids];
 }
 export async function assertPrivateSourceAccess(value:unknown,db:SupabaseClient,userId:string):Promise<void>{
- for(const id of privateSourceIds(value)){const r=await db.rpc('can_access_exam_book_v1',{p_user_id:userId,p_book_id:id});if(r.error||r.data!==true)throw new PrivateBookAccessError();}
+ for(const id of privateSourceIds(value)){const r=await db.rpc('can_access_private_source_v1',{p_user_id:userId,p_book_id:id});if(r.error||r.data!==true)throw new PrivateBookAccessError();}
 }
 export async function currentBookDefinitions(word:string,db:SupabaseClient,userId=getAuthenticatedUserId()):Promise<SourceDefinition[]> {
  const result=await db.rpc('current_book_definitions_v1',{p_user_id:userId,p_word:normalizeWord(word)});

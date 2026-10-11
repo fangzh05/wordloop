@@ -15,7 +15,10 @@ export async function hydrateExamCards(items:VocabularyItem[],db:SupabaseClient,
  return Promise.all(items.map(async item=>{
   const safe=item.source==='exam_book'?{...item,...await publicExamLexical(item.word,db)}:item;
   const rows=includePrivate?await currentBookDefinitions(item.word,db,userId):[];
-  const defined=rows.filter(r=>r.senses.some(s=>s.definition_cn.trim()));
+  const valid=rows.filter(r=>r.senses.some(s=>s.definition_cn.trim()));
+  // SQL returns reviewed source priority then original row order. Keep alternatives
+  // in detail; one frozen teaching source must not flatten unrelated book senses.
+  const defined=valid.filter(r=>r.book_id===valid[0]?.book_id);
   if(!defined.length)return safe;
   return {...safe,senses:defined.flatMap(r=>r.senses),ipa_us:defined.find(r=>r.ipa_us)?.ipa_us??safe.ipa_us,
    ipa_uk:defined.find(r=>r.ipa_uk)?.ipa_uk??safe.ipa_uk,

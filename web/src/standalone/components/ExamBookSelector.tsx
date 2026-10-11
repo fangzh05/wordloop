@@ -17,8 +17,8 @@ export function ExamBookProvider({tokenKey,children}:{tokenKey:string|null;child
   <p className="exam-book-note">新目标从明天的新词任务生效。今日任务、当前会话和到期复习照常保留。</p>
   <fieldset disabled={saving} className="exam-book-options"><legend>选择学习目标</legend>{data?.books.map(book=><label key={book.id} className="exam-book-option">
    <input type="radio" name="exam-book" value={book.id} disabled={!book.available} checked={pending===book.id} onChange={()=>setPending(book.id)}/>
-   <span><strong>{book.name}</strong><small>{book.scope==='private'?'我的私人词书':'公共词书'} · {book.total.toLocaleString()} 词</small>
-   {book.available?<small>已纳入我的学习 {book.in_learning} · {book.scope==='private'?'词头已掌握':'已掌握'} {book.mastered} · 词书未学习 {book.not_enrolled}</small>:<small>{book.unavailable_reason}</small>}
+   <span><strong>{book.name}</strong><small>{book.scope==='private'?'我的私有词书并集':'公共词书'} · {book.total.toLocaleString()} 词</small>
+   {book.available?<small>已纳入我的学习 {book.in_learning} · 已掌握 {book.mastered} · 词书未学习 {book.not_enrolled}</small>:<small>{book.unavailable_reason}</small>}
    <small>{book.source} · {book.source_version==='pending'?'版本待准备':book.source_version.slice(0,7)} · {book.license}</small></span>
   </label>)}</fieldset>
   {loading&&<p role="status">正在读取词书…</p>}{error&&<p role="alert" className="standalone-status error">{error}</p>}
@@ -28,5 +28,5 @@ export function ExamBookProvider({tokenKey,children}:{tokenKey:string|null;child
 export function CurrentExamBook({compact=false}:{compact?:boolean}){
  const state=useContext(Context);if(!state)return null;
  const current=state.data?.books.find(b=>b.id===state.data?.selected_book_id);
- return <section className={`current-exam-book${compact?' is-compact':''}`} aria-label="当前学习词书"><div><span className="eyebrow">{compact?'当前词书':'学习词书'}</span><strong>{current?.name??(state.loading?'正在读取…':'请选择词书')}</strong>{!compact&&current&&<small>{current.total.toLocaleString()} 词 · 已纳入我的学习 {current.in_learning} · {current.scope==='private'?'词头已掌握':'已掌握'} {current.mastered}</small>}{state.data?.effective_date&&<small>目标生效日期 {state.data.effective_date}</small>}</div><button type="button" className="secondary-button" aria-haspopup="dialog" onClick={state.open}>{compact?'更换':'切换词书'}</button>{state.error&&<p role="alert">{state.error}<button type="button" className="secondary-button" onClick={()=>void state.refresh()}>重试</button></p>}</section>;
+ return <section className={`current-exam-book${compact?' is-compact':''}`} aria-label="当前学习词书"><div><span className="eyebrow">{compact?'当前词书':'学习词书'}</span><strong>{current?.name??(state.loading?'正在读取…':'请选择词书')}</strong>{!compact&&current&&<small>{current.total.toLocaleString()} 词 · 已纳入我的学习 {current.in_learning} · 已掌握 {current.mastered}</small>}{state.data?.effective_date&&<small>目标生效日期 {state.data.effective_date}</small>}</div><button type="button" className="secondary-button" aria-haspopup="dialog" onClick={state.open}>{compact?'更换':'切换词书'}</button>{state.error&&<p role="alert">{state.error}<button type="button" className="secondary-button" onClick={()=>void state.refresh()}>重试</button></p>}</section>;
 }

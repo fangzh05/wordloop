@@ -31,13 +31,19 @@ it('prefers authorized source senses on an existing card and falls back to ECDIC
  const item={word:'fixture',source:'exam_book',senses:[],ipa_us:null} as unknown as VocabularyItem;
  const query:any={select:()=>query,eq:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:{phonetic:null,parts_of_speech:[{label:'n.',definition_zh:'PUBLIC DICTIONARY'}]},error:null})};
  const definition={book_id:source.book_id,entry_key:'entry-1',definition_raw:'PRIVATE TEST',senses:[{pos:'n.',definition_cn:'PRIVATE TEST'}],ipa_us:null,ipa_uk:null,chapter:'test',category:null,is_ai_generated:false,third_party_processing_allowed:false};
- const rpc=vi.fn(async()=>({data:[definition],error:null}));const db={from:()=>query,rpc} as unknown as SupabaseClient;
+ const alternative={...definition,book_id:'ielts-wanglu-807-listening',entry_key:'entry-2',senses:[{pos:'v.',definition_cn:'ALTERNATIVE SOURCE'}]};
+ const rpc=vi.fn(async()=>({data:[definition,alternative],error:null}));const db={from:()=>query,rpc} as unknown as SupabaseClient;
  expect((await hydrateExamCards([item],db,user))[0]?.senses?.[0]?.definition_cn).toBe('PRIVATE TEST');
- definition.senses=[];expect((await hydrateExamCards([item],db,user))[0]?.senses?.[0]?.definition_cn).toBe('PUBLIC DICTIONARY');
+ expect((await hydrateExamCards([item],db,user))[0]?.definition_source?.entry_keys).toEqual(['entry-1']);
+ definition.senses=[];expect((await hydrateExamCards([item],db,user))[0]?.senses?.[0]?.definition_cn).toBe('ALTERNATIVE SOURCE');
+ alternative.senses=[];expect((await hydrateExamCards([item],db,user))[0]?.senses?.[0]?.definition_cn).toBe('PUBLIC DICTIONARY');
  expect(rpc).toHaveBeenCalledWith('current_book_definitions_v1',{p_user_id:user,p_word:'fixture'});
 });
 it('denies revoked frozen sessions before exposing stored source definitions',async()=>{
- const db={rpc:async()=>({data:false,error:null})} as unknown as SupabaseClient;
+ const rpc=vi.fn(async(name:string)=>({data:name==='can_access_private_source_v1',error:null}));const db={rpc} as unknown as SupabaseClient;
+ await expect(assertPrivateSourceAccess({payload:{plan:{private_source_book_id:source.book_id}}},db,user)).resolves.toBeUndefined();
+ expect(rpc).toHaveBeenCalledWith('can_access_private_source_v1',{p_user_id:user,p_book_id:source.book_id});
+ rpc.mockImplementation(async()=>({data:false,error:null}));
  await expect(assertPrivateSourceAccess({payload:{plan:{private_source_book_id:source.book_id}}},db,user)).rejects.toThrow('ACCESS_REVOKED');
 });
 it('has no executable production importer',()=>{

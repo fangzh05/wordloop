@@ -357,7 +357,7 @@ async function successForSession(
 ): Promise<Record<string, unknown>> {
   const state = ensureState(session);
   for(const id of privateSourceIds(state)){
-    const allowed=await getDatabase().rpc('can_access_exam_book_v1',{p_user_id:getAuthenticatedUserId(),p_book_id:id});
+    const allowed=await getDatabase().rpc('can_access_private_source_v1',{p_user_id:getAuthenticatedUserId(),p_book_id:id});
     if(allowed.error||allowed.data!==true)throw new WebApiError(403,'PRIVATE_BOOK_UNAVAILABLE','当前会话的私人词书授权已失效。');
   }
   const displayState = state.widget === "lesson"
