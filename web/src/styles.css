@@ -5236,3 +5236,22 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   .wordloop-shell .lesson-exercise-editorial .lesson-exercise-heading {font-size:2.1rem;}
 }
 
+
+/* Mobile review buttons: override the more specific desktop flex-basis;
+   without this, "不会" expands into an oversized 12rem-tall block. */
+@media(max-width:767px) {
+  .wordloop-shell .review-editorial-workspace .review-answer-bottom > .review-unknown-button.button.secondary,
+  .wordloop-shell .review-editorial-workspace .review-answer-bottom > .review-submit-button.button {
+    display:inline-flex;
+    flex:0 0 auto;
+    width:100%;
+    min-width:0;
+    min-height:52px;
+    height:auto;
+    padding:12px 18px;
+    align-items:center;
+    justify-content:center;
+    box-shadow:none;
+  }
+}
+
