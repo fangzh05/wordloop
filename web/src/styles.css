@@ -5251,3 +5251,69 @@ input.answer-input:focus,textarea:focus {border-color:var(--accent);box-shadow:0
   }
 }
 
+
+/* Review/relearn polishing: match the approved "indulge" reading spread.
+   All original font declarations, content sources and event handlers stay intact. */
+
+/* The pretest should begin with the Chinese question, not a decorative
+   "Write the word" headline. Preserve the typographic kicker and rhythm. */
+.wordloop-shell .pretest-editorial-workspace .study-typographic-kicker {
+  margin-bottom:37px;
+}
+.wordloop-shell .pretest-editorial-workspace .pretest-editorial-question {
+  margin-bottom:38px;
+}
+.wordloop-shell .pretest-editorial-workspace .pretest-instruction {
+  margin-top:17px;
+}
+
+/* Pronunciation: the filled, borderless pale-blue circle seen in the accepted
+   indulge screenshot. SVG triangle only, never a native emoji. */
+.wordloop-shell .lesson-reference-ipa .play-button.lesson-audio {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 32px;
+  width:32px;
+  height:32px;
+  padding:0;
+  border:0;
+  border-radius:50%;
+  background:#e3edf2;
+  color:#2f6581;
+  box-shadow:none;
+  transition:background-color 120ms ease;
+}
+.wordloop-shell .lesson-reference-ipa .play-button.lesson-audio:hover {
+  border:0;
+  background:#d4e5ee;
+}
+.wordloop-shell .lesson-reference-ipa .play-button.lesson-audio:active {
+  background:#c6dae6;
+}
+.wordloop-shell .lesson-reference-ipa .play-button.lesson-audio .lesson-play-glyph {
+  width:16px;
+  height:16px;
+  display:block;
+}
+/* Keep dark-mode contrast without returning to the heavy outlined ring. */
+:root[data-theme="dark"] .wordloop-shell .lesson-reference-ipa .play-button.lesson-audio {
+  border:0;
+  background:#d7e5ed;
+  color:#315f78;
+}
+:root[data-theme="dark"] .wordloop-shell .lesson-reference-ipa .play-button.lesson-audio:hover {
+  background:#e6f0f5;
+}
+@media(prefers-color-scheme:dark) {
+  :root[data-theme="system"] .wordloop-shell .lesson-reference-ipa .play-button.lesson-audio,
+  :root:not([data-theme]) .wordloop-shell .lesson-reference-ipa .play-button.lesson-audio {
+    border:0;
+    background:#d7e5ed;
+    color:#315f78;
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  .wordloop-shell .lesson-reference-ipa .play-button.lesson-audio {transition:none;}
+}
+
