@@ -8,5 +8,5 @@ reviews=json.loads((p/'model-review.json').read_text());pending=json.loads((p/'h
 v=json.loads((p/'backup/verification.json').read_text());(out/'backup-verification.json').write_text(json.dumps({k:x for k,x in v.items() if k!='files'},indent=2))
 for f in out.iterdir():
  if f.is_file() and f.name!='manifest.json':f.write_bytes(f.read_bytes().replace(b'\r\n',b'\n'))
-(out/'manifest.json').write_text(json.dumps({'status':'dry-run only; no production writes','files':{f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in out.iterdir() if f.name!='manifest.json'}},indent=2))
+(out/'manifest.json').write_text(json.dumps({'status':'production data published' if (out/'production-release.json').exists() else 'dry-run only; no production writes','files':{f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in out.iterdir() if f.name!='manifest.json'}},indent=2))
 print(summary)

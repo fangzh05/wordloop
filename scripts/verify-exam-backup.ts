@@ -1,5 +1,5 @@
 import {PGlite} from '@electric-sql/pglite';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const dir=process.argv[2]??'.exam-books/expansion/backup';
 const load=(f:string)=>JSON.parse(readFileSync(`${dir}/${f}`,'utf8'));
@@ -27,7 +27,13 @@ create index exam_word_lookup on exam_book_words(normalized_word,book_id);
 alter table lexical_dictionary_entries add primary key(entry_id);
 alter table lexical_dictionary_entries add unique(language,lemma,source,source_version);`);
   const state=async()=> (await db.query(`select (select count(*) from exam_book_words) members,(select count(*) from lexical_dictionary_entries) dictionary,(select sum(pg_total_relation_size(oid))::bigint from pg_class where relkind='r' and relnamespace in ('public'::regnamespace,coalesce(to_regnamespace('exam_expansion_audit'),0))) bytes`)).rows[0];
-  const before=await state(),sql=readFileSync(`${dir}/../review-import.sql`,'utf8');
+  const before=await state();let sql=readFileSync(`${dir}/../review-import.sql`,'utf8');
+  if(process.argv.includes('--transport')){
+   await db.exec(readFileSync('supabase/migrations/20261011113807_exam_expansion_audit.sql','utf8'));
+   const transportDir='.exam-books/expansion/deployment';
+   for(const file of readdirSync(transportDir).filter(f=>/^part-\d+\.sql$/.test(f)))await db.exec(readFileSync(`${transportDir}/${file}`,'utf8'));
+   sql=readFileSync(`${transportDir}/apply.sql`,'utf8');
+  }
   await db.exec(sql);const first=await state();await db.exec(sql);const second=await state();
   if((first as any).members!==(second as any).members||(first as any).dictionary!==(second as any).dictionary)throw Error('Real backup replay not idempotent');
   const changed=(await db.query(`select count(*) n from exam_expansion_audit.snapshots s join lexical_dictionary_entries t on t.entry_id=s.row_data->>'entry_id' where s.table_name='lexical_dictionary_entries' and to_jsonb(t)<>s.row_data`)).rows[0] as any;

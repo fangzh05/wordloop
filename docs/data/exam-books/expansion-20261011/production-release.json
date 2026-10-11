@@ -1,0 +1,151 @@
+{
+  "batch": "expansion_d7df5e05d9b42663",
+  "authorization": "User: 部署",
+  "worker_redeployed": false,
+  "worker_commit": "40cd372",
+  "worker_version": "f7dd3e3f-762b-4ee3-b222-2390ed46d69c",
+  "counts": {
+    "cet6": {
+      "before": 5406,
+      "after": 6012,
+      "added": 606
+    },
+    "ielts": {
+      "before": 5038,
+      "after": 5508,
+      "added": 470
+    },
+    "toefl": {
+      "before": 6973,
+      "after": 7440,
+      "added": 467
+    },
+    "cet4": {
+      "before": 3846,
+      "after": 3846
+    },
+    "kaoyan": {
+      "before": 7048,
+      "after": 7048
+    },
+    "dictionary": {
+      "before": 26447,
+      "after": 26547,
+      "added": 100
+    },
+    "memberships": {
+      "before": 28311,
+      "after": 29854,
+      "added": 1543
+    }
+  },
+  "validation": {
+    "changed_original_dictionary": 0,
+    "changed_original_members": 0,
+    "changed_non_target_catalog": 0,
+    "uncovered_new_members": 0,
+    "audit_bytes": "97140736",
+    "database_bytes": 403655827
+  },
+  "catalog": {
+    "books": [
+      {
+        "id": "kaoyan",
+        "name": "考研英语",
+        "scope": "private",
+        "total": 7048,
+        "source": "Owner-authorized red book + familiar-word union (normalized headwords only)",
+        "license": "Owner explicitly authorized public distribution of normalized union headwords on 2026-10-11; no definitions or private source records; shared ECDICT data retains MIT license",
+        "mastered": 170,
+        "available": true,
+        "is_public": true,
+        "in_learning": 7048,
+        "not_enrolled": 0,
+        "published_at": "2026-10-11T10:44:10.211307+00:00",
+        "source_version": "owner-authorization-2026-10-11",
+        "unavailable_reason": null
+      },
+      {
+        "id": "cet4",
+        "name": "大学英语四级",
+        "scope": "public",
+        "total": 3846,
+        "source": "ECDICT",
+        "license": "MIT; ECDICT contributors; https://github.com/fangzh05/wordloop/tree/2a53ecc/docs/data/exam-books",
+        "mastered": 114,
+        "available": true,
+        "is_public": true,
+        "in_learning": 3441,
+        "not_enrolled": 405,
+        "published_at": "2026-10-11T10:30:37.875044+00:00",
+        "source_version": "bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b",
+        "unavailable_reason": null
+      },
+      {
+        "id": "cet6",
+        "name": "大学英语六级",
+        "scope": "public",
+        "total": 6012,
+        "source": "ECDICT + curated expansion",
+        "license": "MIT; ECDICT contributors; https://github.com/fangzh05/wordloop/tree/2a53ecc/docs/data/exam-books; supplementary headwords: KyleBing BSD-3-Clause, NAWL CC-BY-SA-4.0, gungorkaya MIT; see WordLoop exam expansion source ledger",
+        "mastered": 153,
+        "available": true,
+        "is_public": true,
+        "in_learning": 4601,
+        "not_enrolled": 1411,
+        "published_at": "2026-10-11T10:30:37.875044+00:00",
+        "source_version": "expansion_d7df5e05d9b42663",
+        "unavailable_reason": null
+      },
+      {
+        "id": "ielts",
+        "name": "雅思 IELTS",
+        "scope": "public",
+        "total": 5508,
+        "source": "ECDICT + curated expansion",
+        "license": "MIT; ECDICT contributors; https://github.com/fangzh05/wordloop/tree/2a53ecc/docs/data/exam-books; supplementary headwords: KyleBing BSD-3-Clause, NAWL CC-BY-SA-4.0, gungorkaya MIT; see WordLoop exam expansion source ledger",
+        "mastered": 117,
+        "available": true,
+        "is_public": true,
+        "in_learning": 3814,
+        "not_enrolled": 1694,
+        "published_at": "2026-10-11T10:30:37.875044+00:00",
+        "source_version": "expansion_d7df5e05d9b42663",
+        "unavailable_reason": null
+      },
+      {
+        "id": "toefl",
+        "name": "托福 TOEFL",
+        "scope": "public",
+        "total": 7440,
+        "source": "ECDICT + curated expansion",
+        "license": "MIT; ECDICT contributors; https://github.com/fangzh05/wordloop/tree/2a53ecc/docs/data/exam-books; supplementary headwords: KyleBing BSD-3-Clause, NAWL CC-BY-SA-4.0, gungorkaya MIT; see WordLoop exam expansion source ledger",
+        "mastered": 112,
+        "available": true,
+        "is_public": true,
+        "in_learning": 3859,
+        "not_enrolled": 3581,
+        "published_at": "2026-10-11T10:30:37.875044+00:00",
+        "source_version": "expansion_d7df5e05d9b42663",
+        "unavailable_reason": null
+      }
+    ],
+    "effective_date": null,
+    "selected_book_id": "kaoyan"
+  },
+  "repeat_import_new_members": 0,
+  "repeat_import_new_dictionary": 0,
+  "fresh_backup": {
+    "scope": "Dictionary/catalog/members only; full learner backup not claimed",
+    "created_utc": "2026-10-11T11:39:04Z",
+    "production_temp_restore_exact": true,
+    "local_restore_exact": true,
+    "local_files": 55,
+    "private_snapshot_batch": "expansion_d7df5e05d9b42663_predeploy"
+  },
+  "protected_tables": 48,
+  "protected_hashes_identical": true,
+  "new_members_chinese_coverage": 1,
+  "physical_safari_acceptance": false,
+  "authenticated_browser_acceptance": false
+}

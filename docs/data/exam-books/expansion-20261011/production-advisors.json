@@ -1,0 +1,37 @@
+[
+  {
+    "name": "rls_enabled_no_policy",
+    "level": "INFO",
+    "count": 48,
+    "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+    "scope": "Existing public schema/Auth; this release adds only a private schema"
+  },
+  {
+    "name": "function_search_path_mutable",
+    "level": "WARN",
+    "count": 1,
+    "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable",
+    "scope": "Existing public schema/Auth; this release adds only a private schema"
+  },
+  {
+    "name": "anon_security_definer_function_executable",
+    "level": "WARN",
+    "count": 1,
+    "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable",
+    "scope": "Existing public schema/Auth; this release adds only a private schema"
+  },
+  {
+    "name": "authenticated_security_definer_function_executable",
+    "level": "WARN",
+    "count": 1,
+    "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable",
+    "scope": "Existing public schema/Auth; this release adds only a private schema"
+  },
+  {
+    "name": "auth_leaked_password_protection",
+    "level": "WARN",
+    "count": 1,
+    "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection",
+    "scope": "Existing public schema/Auth; this release adds only a private schema"
+  }
+]

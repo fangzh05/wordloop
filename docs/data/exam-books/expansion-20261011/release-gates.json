@@ -2,10 +2,11 @@
   "batch": "expansion_d7df5e05d9b42663",
   "payload_hash": "d7df5e05d9b426638e6c3afdd15d79f4b3604077484f5bf31584f7d51d556861",
   "sql_sha256": "187c879f4798608bf28151e7aebb9eecb2b70b1b9bdcd49eaabb11d436e24698",
-  "production_authorized": false,
+  "production_authorized": true,
   "current_backup_verified": true,
   "restore_verified": true,
   "browser_acceptance": false,
-  "publication_ready": false,
-  "warning": "Review artifacts only. This program never connects to a database."
+  "publication_ready": true,
+  "warning": "User authorized deployment; reviewed subset imported transactionally and verified. Browser/device acceptance remains unverified.",
+  "production_import_completed": true
 }

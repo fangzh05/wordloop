@@ -1,0 +1,504 @@
+[
+  {
+    "phase": "after",
+    "created_at": "2026-10-11 11:50:25.176783+00",
+    "data": [
+      {
+        "n": 2747,
+        "hash": "cca0802a91b37718f77a204b4fc3f494",
+        "table": "attempts"
+      },
+      {
+        "n": 1463,
+        "hash": "d00958c6d6e48df2970d8c972b909801",
+        "table": "bkt_updates"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "capture_note_legacy_map"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "capture_note_occurrences"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "capture_notes"
+      },
+      {
+        "n": 117,
+        "hash": "34f73799ff2bc397eaf5c363c523fa4f",
+        "table": "captured_note_occurrences"
+      },
+      {
+        "n": 115,
+        "hash": "7f8a6c4b092e398527904b68cbaabe38",
+        "table": "captured_notes"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "daily_book_targets"
+      },
+      {
+        "n": 1078,
+        "hash": "42c2f04aa42115b13f5288c406c9e83f",
+        "table": "daily_import_words"
+      },
+      {
+        "n": 24,
+        "hash": "a9b2d62d6c724b2b33f44d327ff47964",
+        "table": "daily_imports"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "difficult_sentence_words"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "difficult_sentences"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "evidence_gold_labels"
+      },
+      {
+        "n": 1949,
+        "hash": "3b2a5eddabea6c74ef687edf0f1f2d87",
+        "table": "exercise_skill_evidence"
+      },
+      {
+        "n": 1034,
+        "hash": "dadbe2276f062870deda3d5c68c377f5",
+        "table": "exercise_submission_events"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "family_candidates"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "family_exposures"
+      },
+      {
+        "n": 1,
+        "hash": "3e650372ef0816475de1bc3b767c3033",
+        "table": "family_micro_sessions"
+      },
+      {
+        "n": 1745,
+        "hash": "7f77438929b16503696532db8ad5b0b5",
+        "table": "fsrs_review_logs"
+      },
+      {
+        "n": 3,
+        "hash": "8d45baa14b224c622ddae156ee06a504",
+        "table": "learning_budget_days"
+      },
+      {
+        "n": 974,
+        "hash": "4fd0dcad8e6e7cdff0d7e90c2dbce317",
+        "table": "learning_budget_events"
+      },
+      {
+        "n": 1,
+        "hash": "da9cc53ecc1bd77b09f9d32359d45e28",
+        "table": "learning_settings"
+      },
+      {
+        "n": 339,
+        "hash": "a9ae645e16568f20ab8efc7df624e7c0",
+        "table": "lesson_word_completion_credits"
+      },
+      {
+        "n": 2719,
+        "hash": "b5c34f888d1845eace7b11fcef337f85",
+        "table": "lexical_etymological_links"
+      },
+      {
+        "n": 11,
+        "hash": "ee95b47020ce18892afd1f0ac8d7cee4",
+        "table": "lexical_etymons"
+      },
+      {
+        "n": 36048,
+        "hash": "3fe11f563b089c3fc1f6dc3437fcaeb2",
+        "table": "lexical_forms"
+      },
+      {
+        "n": 2,
+        "hash": "911ad2a969e29b0116aeb5caa91714ad",
+        "table": "lexical_lexeme_morphemes"
+      },
+      {
+        "n": 36048,
+        "hash": "67ce60e9d89a1d6480a1ca0baa6d2c30",
+        "table": "lexical_lexemes"
+      },
+      {
+        "n": 8,
+        "hash": "7fa7018a4871721628462386e1a9354e",
+        "table": "lexical_morphemes"
+      },
+      {
+        "n": 29088,
+        "hash": "9d24e1ee6f3fb27f542005a62ad26721",
+        "table": "lexical_relations"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "lexical_sense_annotations"
+      },
+      {
+        "n": 54697,
+        "hash": "1c8a194b895a3cbe7f0e61afc4f157a1",
+        "table": "lexical_sense_relations"
+      },
+      {
+        "n": 69039,
+        "hash": "007ecd55350e3f1a91cf3c46d284a282",
+        "table": "lexical_senses"
+      },
+      {
+        "n": 4,
+        "hash": "256e4247bb20b9a23d6b41d20e13199f",
+        "table": "lexical_spelling_variants"
+      },
+      {
+        "n": 1,
+        "hash": "b7b4bde57cfa44461454df0c346f2684",
+        "table": "lexical_usage_patterns"
+      },
+      {
+        "n": 1,
+        "hash": "96a7da6960cb0fb83e6b1e7d09a645f7",
+        "table": "note_review_events"
+      },
+      {
+        "n": 1,
+        "hash": "aa28ecf2516f39e8117511dadb85cccc",
+        "table": "note_review_states"
+      },
+      {
+        "n": 1802,
+        "hash": "d5b35d6a1c18ae292edf6716d984e2b4",
+        "table": "skill_evidence_consumption"
+      },
+      {
+        "n": 64,
+        "hash": "abb95b9c8a280b24252133d9c853bbab",
+        "table": "study_sessions"
+      },
+      {
+        "n": 257,
+        "hash": "82b0a5663e33891f121514bccbd323f3",
+        "table": "tutor_shadow_decisions"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "user_book_preferences"
+      },
+      {
+        "n": 1,
+        "hash": "6e6a112ead47986cd07f3549a3a5c74d",
+        "table": "user_lesson_cadence"
+      },
+      {
+        "n": 11,
+        "hash": "c553c05f9c4ec7aab8f51273f7e2558e",
+        "table": "user_skill_state"
+      },
+      {
+        "n": 360,
+        "hash": "0a52929d15a8fed0d75c195beb3ef5d1",
+        "table": "user_word_error_progress"
+      },
+      {
+        "n": 7048,
+        "hash": "56766d3ab24260b7ad0d60f86cdd2433",
+        "table": "user_words"
+      },
+      {
+        "n": 4,
+        "hash": "325e58ca78e6445da986dd6a66c2f1ab",
+        "table": "users"
+      },
+      {
+        "n": 7793,
+        "hash": "1a207aa1f3ccbbb224b53045ba175915",
+        "table": "word_sources"
+      },
+      {
+        "n": 7048,
+        "hash": "1d97f888cb7e077250934f64be809137",
+        "table": "words"
+      }
+    ]
+  },
+  {
+    "phase": "before",
+    "created_at": "2026-10-11 11:39:04.447708+00",
+    "data": [
+      {
+        "n": 2747,
+        "hash": "cca0802a91b37718f77a204b4fc3f494",
+        "table": "attempts"
+      },
+      {
+        "n": 1463,
+        "hash": "d00958c6d6e48df2970d8c972b909801",
+        "table": "bkt_updates"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "capture_note_legacy_map"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "capture_note_occurrences"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "capture_notes"
+      },
+      {
+        "n": 117,
+        "hash": "34f73799ff2bc397eaf5c363c523fa4f",
+        "table": "captured_note_occurrences"
+      },
+      {
+        "n": 115,
+        "hash": "7f8a6c4b092e398527904b68cbaabe38",
+        "table": "captured_notes"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "daily_book_targets"
+      },
+      {
+        "n": 1078,
+        "hash": "42c2f04aa42115b13f5288c406c9e83f",
+        "table": "daily_import_words"
+      },
+      {
+        "n": 24,
+        "hash": "a9b2d62d6c724b2b33f44d327ff47964",
+        "table": "daily_imports"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "difficult_sentence_words"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "difficult_sentences"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "evidence_gold_labels"
+      },
+      {
+        "n": 1949,
+        "hash": "3b2a5eddabea6c74ef687edf0f1f2d87",
+        "table": "exercise_skill_evidence"
+      },
+      {
+        "n": 1034,
+        "hash": "dadbe2276f062870deda3d5c68c377f5",
+        "table": "exercise_submission_events"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "family_candidates"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "family_exposures"
+      },
+      {
+        "n": 1,
+        "hash": "3e650372ef0816475de1bc3b767c3033",
+        "table": "family_micro_sessions"
+      },
+      {
+        "n": 1745,
+        "hash": "7f77438929b16503696532db8ad5b0b5",
+        "table": "fsrs_review_logs"
+      },
+      {
+        "n": 3,
+        "hash": "8d45baa14b224c622ddae156ee06a504",
+        "table": "learning_budget_days"
+      },
+      {
+        "n": 974,
+        "hash": "4fd0dcad8e6e7cdff0d7e90c2dbce317",
+        "table": "learning_budget_events"
+      },
+      {
+        "n": 1,
+        "hash": "da9cc53ecc1bd77b09f9d32359d45e28",
+        "table": "learning_settings"
+      },
+      {
+        "n": 339,
+        "hash": "a9ae645e16568f20ab8efc7df624e7c0",
+        "table": "lesson_word_completion_credits"
+      },
+      {
+        "n": 2719,
+        "hash": "b5c34f888d1845eace7b11fcef337f85",
+        "table": "lexical_etymological_links"
+      },
+      {
+        "n": 11,
+        "hash": "ee95b47020ce18892afd1f0ac8d7cee4",
+        "table": "lexical_etymons"
+      },
+      {
+        "n": 36048,
+        "hash": "3fe11f563b089c3fc1f6dc3437fcaeb2",
+        "table": "lexical_forms"
+      },
+      {
+        "n": 2,
+        "hash": "911ad2a969e29b0116aeb5caa91714ad",
+        "table": "lexical_lexeme_morphemes"
+      },
+      {
+        "n": 36048,
+        "hash": "67ce60e9d89a1d6480a1ca0baa6d2c30",
+        "table": "lexical_lexemes"
+      },
+      {
+        "n": 8,
+        "hash": "7fa7018a4871721628462386e1a9354e",
+        "table": "lexical_morphemes"
+      },
+      {
+        "n": 29088,
+        "hash": "9d24e1ee6f3fb27f542005a62ad26721",
+        "table": "lexical_relations"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "lexical_sense_annotations"
+      },
+      {
+        "n": 54697,
+        "hash": "1c8a194b895a3cbe7f0e61afc4f157a1",
+        "table": "lexical_sense_relations"
+      },
+      {
+        "n": 69039,
+        "hash": "007ecd55350e3f1a91cf3c46d284a282",
+        "table": "lexical_senses"
+      },
+      {
+        "n": 4,
+        "hash": "256e4247bb20b9a23d6b41d20e13199f",
+        "table": "lexical_spelling_variants"
+      },
+      {
+        "n": 1,
+        "hash": "b7b4bde57cfa44461454df0c346f2684",
+        "table": "lexical_usage_patterns"
+      },
+      {
+        "n": 1,
+        "hash": "96a7da6960cb0fb83e6b1e7d09a645f7",
+        "table": "note_review_events"
+      },
+      {
+        "n": 1,
+        "hash": "aa28ecf2516f39e8117511dadb85cccc",
+        "table": "note_review_states"
+      },
+      {
+        "n": 1802,
+        "hash": "d5b35d6a1c18ae292edf6716d984e2b4",
+        "table": "skill_evidence_consumption"
+      },
+      {
+        "n": 64,
+        "hash": "abb95b9c8a280b24252133d9c853bbab",
+        "table": "study_sessions"
+      },
+      {
+        "n": 257,
+        "hash": "82b0a5663e33891f121514bccbd323f3",
+        "table": "tutor_shadow_decisions"
+      },
+      {
+        "n": 0,
+        "hash": null,
+        "table": "user_book_preferences"
+      },
+      {
+        "n": 1,
+        "hash": "6e6a112ead47986cd07f3549a3a5c74d",
+        "table": "user_lesson_cadence"
+      },
+      {
+        "n": 11,
+        "hash": "c553c05f9c4ec7aab8f51273f7e2558e",
+        "table": "user_skill_state"
+      },
+      {
+        "n": 360,
+        "hash": "0a52929d15a8fed0d75c195beb3ef5d1",
+        "table": "user_word_error_progress"
+      },
+      {
+        "n": 7048,
+        "hash": "56766d3ab24260b7ad0d60f86cdd2433",
+        "table": "user_words"
+      },
+      {
+        "n": 4,
+        "hash": "325e58ca78e6445da986dd6a66c2f1ab",
+        "table": "users"
+      },
+      {
+        "n": 7793,
+        "hash": "1a207aa1f3ccbbb224b53045ba175915",
+        "table": "word_sources"
+      },
+      {
+        "n": 7048,
+        "hash": "1d97f888cb7e077250934f64be809137",
+        "table": "words"
+      }
+    ]
+  },
+  {
+    "phase": "restore_verified",
+    "created_at": "2026-10-11 11:40:14.613059+00",
+    "data": {
+      "catalog": 5,
+      "members": 28311,
+      "dictionary": 26447,
+      "exact_json_match": true
+    }
+  }
+]

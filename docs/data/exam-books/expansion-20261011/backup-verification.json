@@ -29,17 +29,17 @@
     "first": {
       "members": 29854,
       "dictionary": 26547,
-      "bytes": 94240768
+      "bytes": 94855168
     },
     "second": {
       "members": 29854,
       "dictionary": 26547,
-      "bytes": 94240768
+      "bytes": 94855168
     },
     "rollback": {
       "members": 28311,
       "dictionary": 26547,
-      "bytes": 94240768
+      "bytes": 94855168
     },
     "existing_dictionary_unchanged": true,
     "note": "Actual backed-up data in isolated PostgreSQL. Storage includes private audit snapshots, approximate production index layout; not a production measurement."
