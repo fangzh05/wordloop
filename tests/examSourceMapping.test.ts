@@ -1,4 +1,5 @@
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
+import {readFileSync} from 'node:fs';
 import type {PGlite} from '@electric-sql/pglite';
 import {privateBookTestDatabase} from '../scripts/lib/privateBookTestDatabase.js';
 import {privateBookImportSql} from '../scripts/lib/privateBookImport.js';
@@ -6,14 +7,14 @@ import {planExamSourceMapping,type MappingSnapshot} from '../scripts/lib/examSou
 import {examSourceMergeSql} from '../scripts/lib/examSourceMergeSql.js';
 import {sha256} from '../scripts/lib/examBooks.js';
 import {examBookId} from '../server/services/examBooks.js';
-let db:PGlite;const a='00000000-0000-4000-8000-000000000001',b='00000000-0000-4000-8000-000000000002';
+let db:PGlite;const a='00000000-0000-4000-8000-000000000001',b='00000000-0000-4000-8000-000000000002',c='00000000-0000-4000-8000-000000000003';
 const v=async(sql:string,args:unknown[]=[]) => (await db.query<any>(sql,args)).rows[0];
-beforeAll(async()=>{db=await privateBookTestDatabase(true);},30000);afterAll(()=>db.close());
+beforeAll(async()=>{db=await privateBookTestDatabase(true);await db.exec(readFileSync(new URL('../supabase/migrations/20261012030001_all_account_private_source_entitlements.sql',import.meta.url),'utf8'));await db.exec('grant select,insert on users to service_role');},30000);afterAll(()=>db.close());
 beforeEach(async()=>{await db.exec(`begin;insert into users(id) values('${a}'),('${b}');update exam_books set is_public=true,is_available=true,published_at=now(),checksum=repeat('a',64) where id in ('cet4','cet6','kaoyan','ielts','toefl');update exam_definition_sources set enabled=true;`);});afterEach(()=>db.exec('rollback'));
 async function seed(book:string){const source={commit:'a'.repeat(40),sha256:'b'.repeat(64),path:'synthetic.json',repo:'fixture'};
  const row={word:'academic',normalized_word:'academic',source_locator:'row:2',source_row:2,entry_key:sha256(JSON.stringify([source.sha256,'row:2','academic'])),senses:[{pos:'adj.',definition_cn:'SYNTHETIC '+book}],definition_raw:'SYNTHETIC '+book,ipa_uk:null,ipa_us:null,chapter:null,category:null};
  await db.exec(privateBookImportSql(book,source,[row],{private_use_attested:true,original_wording_verified:false},true).sql);
- await db.query("insert into exam_book_entitlements(user_id,book_id,rights_evidence,verified_at) values($1,$2,'SYNTHETIC AUTHORIZATION FOR TESTS',now())",[a,book]);
+ await db.query("insert into exam_book_entitlements(user_id,book_id,rights_evidence,verified_at) values($1,$2,'SYNTHETIC AUTHORIZATION FOR TESTS',now()) on conflict(user_id,book_id) do nothing",[a,book]);
 }
 async function choose(user:string,book:string){await db.query('select set_exam_book_v1($1,$2)',[user,book]);await db.query('update user_book_preferences set effective_date=current_date where user_id=$1',[user]);}
 it('only five targets exist in API/catalog even for licensed accounts; source IDs cannot be activated',async()=>{
@@ -30,10 +31,17 @@ it('uses licensed exam sources with stable priority and keeps ECDICT and legacy 
  await choose(a,'ielts');const rows=(await v("select current_book_definitions_v1($1,'academic') v",[a])).v;
  expect(rows.map((r:any)=>r.book_id)).toEqual(['ielts-zhenjing','ielts-wanglu-807-listening']);expect(rows[0]).not.toHaveProperty('provenance');
  await choose(a,'cet6');expect((await v("select current_book_definitions_v1($1,'academic') v",[a])).v.map((r:any)=>r.book_id)).toEqual(['cet6-xinghuo']);
- await choose(b,'ielts');expect((await v("select current_book_definitions_v1($1,'academic') v",[b])).v).toEqual([]);
+ await choose(b,'ielts');expect((await v("select current_book_definitions_v1($1,'academic') v",[b])).v.map((r:any)=>r.book_id)).toEqual(['ielts-zhenjing','ielts-wanglu-807-listening']);
+ await db.exec('set local role service_role');await db.query('insert into users(id) values($1)',[c]);await db.exec('reset role');await choose(c,'ielts');expect((await v("select current_book_definitions_v1($1,'academic') v",[c])).v.map((r:any)=>r.book_id)).toEqual(['ielts-zhenjing','ielts-wanglu-807-listening']);
  await db.query('update exam_book_entitlements set expires_at=now()-interval \'1 second\' where user_id=$1',[a]);expect((await v("select current_book_definitions_v1($1,'academic') v",[a])).v).toEqual([]);
  expect((await v('select senses from words')).senses[0].definition_cn).toBe('PROTECTED RED BOOK');expect((await v('select chinese_translation v from lexical_dictionary_entries')).v).toBe('PUBLIC ECDICT');
  for(const role of ['anon','authenticated'])for(const sql of ['select * from exam_definition_sources',`select can_access_private_source_v1('${a}','ielts-zhenjing')`,`select list_exam_books_source_scope_v1('${a}')`]){await db.exec('savepoint denied;set local role '+role);await expect(db.query(sql)).rejects.toThrow('permission denied');await db.exec('rollback to savepoint denied');}
+});
+it('grants existing accounts when an already imported source is mapped later',async()=>{
+ await db.exec("update exam_definition_sources set enabled=false where source_book_id='ielts-zhenjing'");await seed('ielts-zhenjing');
+ expect((await v("select can_access_private_source_v1($1,'ielts-zhenjing') v",[b])).v).toBe(false);
+ await db.exec("update exam_definition_sources set enabled=true where source_book_id='ielts-zhenjing'");
+ expect((await v("select can_access_private_source_v1($1,'ielts-zhenjing') v",[b])).v).toBe(true);
 });
 it('merges only evidenced memberships idempotently and preserves shared FSRS state',async()=>{
  await seed('cet6-xinghuo');
