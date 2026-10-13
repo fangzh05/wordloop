@@ -6,6 +6,9 @@ describe("per-user learning time shrinkage", () => {
   it("uses static costs for a new learner and keeps the 77 second new-word fallback", () => {
     const profile = buildLearningCostProfile([]);
     expect(profile.costs["lesson:cloze"]?.source).toBe("static");
+    expect(profile.costs["pretest:pronunciation"]?.seconds).toBe(8);
+    expect(profile.costs["pretest:listening_recall"]?.seconds).toBe(8);
+    expect(profile.costs["pretest:pretest_en_definition"]?.seconds).toBe(8);
     expect(profile.new_word_seconds).toBe(77);
     expect(profile.new_word_source).toBe("static");
     expect(profile.new_word_samples).toBe(0);

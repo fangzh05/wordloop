@@ -7,7 +7,12 @@ import { getUserLearningCostProfile, type LearningCostProfile } from "./learning
 import { planAdaptiveDailyBudget, type AdaptiveDailyBudgetPlan, type AdaptiveBudgetReasonCode, type CostConfidence } from "./adaptiveDailyBudget.js";
 
 export interface BudgetForecastDay { date: string; review_seconds: number; review_count?: number }
-export interface BudgetHistoryDay { date: string; effective_seconds?: number; samples?: number; new_words?: number }
+export interface BudgetHistoryDay {
+  date: string; effective_seconds?: number; samples?: number; new_words?: number;
+  predicted_total_ms?: number; prediction_samples?: number; signed_error_total_ms?: number; absolute_error_total_ms?: number;
+  new_word_prediction_samples?: number; new_word_predicted_total_ms?: number;
+  new_word_signed_error_total_ms?: number; new_word_absolute_error_total_ms?: number;
+}
 export interface ExamBudgetGoal {
   book_id?: string;
   target_date: string | null;
@@ -134,7 +139,7 @@ export async function getLearningBudget(db = getDatabase(), userId = getAuthenti
   assertDatabaseResult(r.error);
   if (!r.data || typeof r.data.remaining_seconds !== "number") throw new Error("BUDGET_SNAPSHOT_UNAVAILABLE");
   const profile = await getUserLearningCostProfile(userId, db);
-  const b = { ...r.data, cost_profile: profile } as BudgetSnapshot;
+  const b = { ...r.data, cost_profile: profile, ...(profile.time_history && profile.time_history.length >= 30 ? { time_history: profile.time_history } : {}) } as BudgetSnapshot;
   if (!b.enabled) return { ...b, effective_new_limit: b.new_word_cap, forecast_assumption: "已关闭时间预算自动准入，仍遵守新词安全上限。" };
   if (adaptiveDailyBudgetV2Enabled()) {
     try {

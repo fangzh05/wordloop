@@ -24,6 +24,7 @@ beforeAll(async () => {
   await db.exec(readFileSync(new URL("../supabase/migrations/20261011092451_builtin_exam_books.sql",import.meta.url),"utf8"));
   await db.exec(readFileSync(new URL("../neon/migrations/0006_learning_time_calibration_v2.sql",import.meta.url),"utf8"));
   await db.exec(readFileSync(new URL("../neon/migrations/0007_adaptive_daily_budget_v2.sql",import.meta.url),"utf8"));
+  await db.exec(readFileSync(new URL("../neon/migrations/0008_learning_time_prediction_errors.sql",import.meta.url),"utf8"));
   // PGlite has gen_random_uuid built in; only Supabase's grant defaults differ.
   for (const [table, rows] of [["lexical_lexemes",seed.lexemes],["lexical_senses",seed.senses],["lexical_forms",seed.forms],["lexical_morphemes",seed.morphemes],["lexical_relations",seed.relations]] as const) {
     for (const row of rows) {
@@ -57,6 +58,13 @@ async function answer(id: string,index: number,text: string,content: FamilyLesso
   return (await one("select submit_family_step_v1($1,$2,$3,$4,$5,$6) as value",[u1,id,index,text,JSON.stringify(cardToDatabase(result.card)),JSON.stringify(reviewLogToDatabase(result.log))])).value;
 }
 describe("real PostgreSQL Family transactions", () => {
+  it("keeps the formal-introduction guard when timing prediction is added",async()=>{
+    const definition=(await one("select pg_get_functiondef('public.record_learning_time_v2(uuid,jsonb)'::regprocedure) as definition")).definition as string;
+    expect(definition).toContain("formally_introduced_session_id=s.id");
+    expect(definition).toContain("learning_time_prior_prediction_v2");
+    expect((await one("select public.learning_time_activity_type_v2('listen_repeat','pretest','answer','sentence') as activity")).activity).toBe("pronunciation");
+    expect((await one("select public.learning_time_activity_type_v2('listen_recall','pretest','answer','sentence') as activity")).activity).toBe("listening_recall");
+  });
   it("keeps the flag-off allocator intact and gives V2 a bounded versioned allocator",async()=>{
     const legacy=(await one("select pg_get_functiondef('public.prepare_daily_new_words_budget_v1(uuid,date,integer)'::regprocedure) as definition")).definition as string;
     const adaptive=(await one("select pg_get_functiondef('public.prepare_daily_new_words_budget_v2(uuid,date,integer)'::regprocedure) as definition")).definition as string;

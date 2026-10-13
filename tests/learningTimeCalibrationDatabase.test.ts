@@ -17,6 +17,7 @@ beforeAll(async () => {
     CREATE FUNCTION public.wordloop_authenticated_user_id() RETURNS uuid LANGUAGE sql STABLE AS $$SELECT auth.user_id()$$;
   `);
   await db.exec(readFileSync(new URL("../neon/migrations/0006_learning_time_calibration_v2.sql", import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../neon/migrations/0008_learning_time_prediction_errors.sql", import.meta.url), "utf8"));
 });
 afterAll(() => db.close());
 beforeEach(async () => {
@@ -52,7 +53,49 @@ describe("Neon time calibration migration",()=>{
     await db.query("SELECT record_learning_time_v2($1,$2::jsonb)",[a,JSON.stringify(observation)]);
     const result=await value("SELECT samples,total_ms,histogram FROM user_learning_time_daily WHERE user_id=$1",[a]);
     expect(result.samples).toBe(1);expect(result.total_ms).toBe(18000);expect(result.histogram).toEqual({"3":1});
+    const paired=await value("SELECT prediction_samples,predicted_total_ms,signed_error_total_ms,absolute_error_total_ms FROM user_learning_time_daily WHERE user_id=$1",[a]);
+    expect(paired).toEqual({prediction_samples:1,predicted_total_ms:8000,signed_error_total_ms:10000,absolute_error_total_ms:10000});
     expect((await value("SELECT count(*) n FROM attempts")).n).toBe(0);
+  });
+  it("classifies pronunciation and listening recall independently and pairs one prediction each",async()=>{
+    await db.query("SELECT set_config('test.user',$1,true)",[a]);
+    const day=(await value("SELECT (now() AT TIME ZONE 'Asia/Shanghai')::date::text AS today_local")).today_local;
+    const start=async()=> (await value("SELECT to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS updated_at FROM study_sessions WHERE id=$1",[s])).updated_at as string;
+    const record=async(observation:Record<string,unknown>)=> (await value("SELECT record_learning_time_v2($1,$2::jsonb) accepted",[a,JSON.stringify(observation)])).accepted;
+    await db.query("UPDATE study_sessions SET state=$2::jsonb,updated_at=now()-interval '90 seconds' WHERE id=$1",[s,JSON.stringify({widget:"pretest",phase:"listen_repeat",current_index:0,retry_count:0,current_word:"apple",payload:{mode:"exercise"}})]);
+    const pronunciationStart=await start();
+    const pronunciation={session_id:s,phase:"listen_repeat",index:0,retry:0,stage:"answer",phase_started_at:pronunciationStart,local_date:day,active_ms:5000,finalize:false};
+    expect(await record(pronunciation)).toBe(true);
+    await db.query("UPDATE study_sessions SET state=$2::jsonb,updated_at=now()-interval '60 seconds' WHERE id=$1",[s,JSON.stringify({widget:"pretest",phase:"listen_recall",current_index:0,retry_count:0,current_word:"apple",payload:{mode:"exercise"}})]);
+    expect(await record({...pronunciation,finalize:true})).toBe(true);
+    const recallStart=await start();
+    const listening={...pronunciation,phase:"listen_recall",phase_started_at:recallStart,active_ms:10000};
+    expect(await record(listening)).toBe(true);
+    await db.query("UPDATE study_sessions SET state=$2::jsonb,updated_at=now()-interval '30 seconds' WHERE id=$1",[s,JSON.stringify({widget:"pretest",phase:"pretest_result",current_index:0,retry_count:0,current_word:"apple",payload:{mode:"feedback"}})]);
+    expect(await record({...listening,finalize:true})).toBe(true);
+    const rows=await value("SELECT jsonb_object_agg(activity_type,jsonb_build_object('samples',samples,'predicted',prediction_samples,'predicted_ms',predicted_total_ms)) AS activities FROM user_learning_time_daily WHERE user_id=$1",[a]);
+    expect(rows.activities).toEqual({pronunciation:{samples:1,predicted:1,predicted_ms:8000},listening_recall:{samples:1,predicted:1,predicted_ms:8000}});
+  });
+  it("excludes same-day timing data from deterministic prior predictions",async()=>{
+    await db.query("SELECT set_config('test.user',$1,true)",[a]);
+    await db.query(`INSERT INTO user_learning_time_daily(user_id,local_date,activity_type,scope,stage,samples,total_ms,histogram)
+      VALUES($1,(now() AT TIME ZONE 'Asia/Shanghai')::date-1,'cloze','lesson','answer',30,3000000,'{"20":30}'::jsonb),
+        ($1,(now() AT TIME ZONE 'Asia/Shanghai')::date,'cloze','lesson','answer',30,30000000,'{"100":30}'::jsonb)`,[a]);
+    const today=(await value("SELECT (now() AT TIME ZONE 'Asia/Shanghai')::date::text AS today")).today;
+    const prediction=(await value("SELECT learning_time_prior_prediction_v2($1,$2::date,'cloze','lesson','answer') AS predicted_ms",[a,today])).predicted_ms;
+    expect(prediction).toBe(17600);
+  });
+  it("returns a user-scoped, local-day 30-day history with paired-error aggregates",async()=>{
+    await db.query("SELECT set_config('test.user',$1,true)",[a]);
+    const day=(await value("SELECT (now() AT TIME ZONE 'Asia/Shanghai')::date::text AS today_local")).today_local;
+    await db.query(`INSERT INTO user_learning_time_daily(user_id,local_date,activity_type,scope,stage,samples,total_ms,histogram,prediction_samples,predicted_total_ms,signed_error_total_ms,absolute_error_total_ms)
+      VALUES($1,$2,'cloze','lesson','answer',2,12000,'{"1":2}',2,10000,2000,4000)`,[a,day]);
+    const history=(await value("SELECT user_learning_time_history_v2($1,30) AS history",[a])).history;
+    expect(history).toHaveLength(30);
+    expect(history[0]).toMatchObject({date:day,effective_seconds:12,samples:2,predicted_total_ms:10000,prediction_samples:2,signed_error_total_ms:2000,absolute_error_total_ms:4000});
+    await db.query("SELECT set_config('test.user',$1,true)",[b]);
+    expect((await value("SELECT user_learning_time_history_v2($1,30) AS history",[b])).history[0].samples).toBe(0);
+    await expect(db.query("SELECT user_learning_time_history_v2($1,30)",[a])).rejects.toThrow("UNAUTHORIZED");
   });
   it("isolates profiles by authenticated user and rejects a mismatched subject",async()=>{
     await db.query("SELECT set_config('test.user',$1,true)",[a]);
@@ -152,8 +195,10 @@ describe("Neon time calibration migration",()=>{
     expect(await record(feedback)).toBe(true);
     await db.query("UPDATE study_sessions SET state=$2::jsonb,updated_at=now()-interval '20 seconds' WHERE id=$1",[s,JSON.stringify({widget:"lesson",phase:"lesson_complete",current_index:0,retry_count:0,current_word:"apple",payload:{mode:"feedback"}})]);
     expect(await record({...feedback,finalize:true})).toBe(true);
-    const lifecycle=await value("SELECT canonical_word,active_ms,pretest_samples,lesson_answer_samples,lesson_feedback_samples FROM user_learning_time_word_lifecycle WHERE user_id=$1",[a]);
-    expect(lifecycle).toEqual({canonical_word:"apple",active_ms:4000,pretest_samples:1,lesson_answer_samples:1,lesson_feedback_samples:1});
+    const lifecycle=await value("SELECT canonical_word,active_ms,pretest_samples,lesson_answer_samples,lesson_feedback_samples,predicted_ms FROM user_learning_time_word_lifecycle WHERE user_id=$1",[a]);
+    expect(lifecycle).toEqual({canonical_word:"apple",active_ms:4000,pretest_samples:1,lesson_answer_samples:1,lesson_feedback_samples:1,predicted_ms:77000});
+    const wholeWordError=await value("SELECT prediction_samples,predicted_total_ms,signed_error_total_ms,absolute_error_total_ms FROM user_learning_time_daily WHERE user_id=$1 AND activity_type='__complete_new_word__'",[a]);
+    expect(wholeWordError).toEqual({prediction_samples:1,predicted_total_ms:77000,signed_error_total_ms:-73000,absolute_error_total_ms:73000});
     await db.query("SELECT set_config('test.user',$1,true)",[a]);
     const profile=await value("SELECT count(*)::integer AS rows,max((item->>'samples')::integer) AS samples FROM jsonb_array_elements(user_learning_time_profile_v2($1)) item WHERE item->>'activity_type'='__complete_new_word__'",[a]);
     expect(profile).toEqual({rows:1,samples:1});
@@ -161,8 +206,8 @@ describe("Neon time calibration migration",()=>{
   it("allocates a completed group consolidation to each canonical word exactly once",async()=>{
     await db.query("SELECT set_config('test.user',$1,true)",[a]);
     const day=(await value("SELECT (now() AT TIME ZONE 'Asia/Shanghai')::date::text AS today_local")).today_local;
-    await db.query("INSERT INTO user_learning_time_word_lifecycle(user_id,canonical_word,session_id,local_date,active_ms,pretest_samples,lesson_answer_samples,lesson_feedback_samples) VALUES($1,'apple',$2,$3,10000,1,1,1),($1,'banana',$2,$3,10000,1,1,1)",[a,s,day]);
-    await db.query("INSERT INTO user_learning_time_daily(user_id,local_date,activity_type,scope,stage,samples,total_ms,histogram) VALUES($1,$2,'__complete_new_word__','lesson','answer',2,20000,'{\"2\":2}'::jsonb)",[a,day]);
+    await db.query("INSERT INTO user_learning_time_word_lifecycle(user_id,canonical_word,session_id,local_date,active_ms,pretest_samples,lesson_answer_samples,lesson_feedback_samples,predicted_ms) VALUES($1,'apple',$2,$3,10000,1,1,1,77000),($1,'banana',$2,$3,10000,1,1,1,77000)",[a,s,day]);
+    await db.query("INSERT INTO user_learning_time_daily(user_id,local_date,activity_type,scope,stage,samples,total_ms,histogram,prediction_samples,predicted_total_ms,signed_error_total_ms,absolute_error_total_ms) VALUES($1,$2,'__complete_new_word__','lesson','answer',2,20000,'{\"2\":2}'::jsonb,2,154000,-134000,134000)",[a,day]);
     await db.query("UPDATE study_sessions SET state=$2::jsonb,started_at=now()-interval '5 minutes',updated_at=now()-interval '2 minutes' WHERE id=$1",[s,JSON.stringify({widget:"lesson",phase:"lesson_complete",current_index:0,retry_count:0,payload:{mode:"exercise",consolidation:true,consolidation_status:"exercise",consolidation_target_words:["Apple","banana","apple"],consolidation_plan:{planned_activity_type:"sentence"}}})]);
     const answerStart=await value("SELECT to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS updated_at FROM study_sessions WHERE id=$1",[s]);
     const answer={session_id:s,phase:"lesson_complete",index:0,retry:0,stage:"answer",phase_started_at:answerStart.updated_at,local_date:day,active_ms:90000,finalize:false};
@@ -179,6 +224,8 @@ describe("Neon time calibration migration",()=>{
     expect(lifecycle).toEqual({words:2,allocated:120000,sampled:true});
     const histogram=await value("SELECT samples,total_ms,histogram FROM user_learning_time_daily WHERE user_id=$1 AND activity_type='__complete_new_word__'",[a]);
     expect(histogram).toEqual({samples:2,total_ms:140000,histogram:{"2":0,"14":2}});
+    const errors=await value("SELECT prediction_samples,predicted_total_ms,signed_error_total_ms,absolute_error_total_ms FROM user_learning_time_daily WHERE user_id=$1 AND activity_type='__complete_new_word__'",[a]);
+    expect(errors).toEqual({prediction_samples:2,predicted_total_ms:154000,signed_error_total_ms:-14000,absolute_error_total_ms:14000});
     const profile=await value("SELECT count(*)::integer AS rows,max((item->>'samples')::integer) AS samples FROM jsonb_array_elements(user_learning_time_profile_v2($1)) item WHERE item->>'activity_type'='__complete_new_word__'",[a]);
     expect(profile).toEqual({rows:1,samples:2});
   });

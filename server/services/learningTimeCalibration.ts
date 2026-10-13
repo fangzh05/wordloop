@@ -9,7 +9,20 @@ export const PRIOR_SAMPLES = 20;
 const summarySchema = z.object({ activity_type: z.string(), scope: z.string(), stage: z.enum(["answer", "feedback", "explanation"]), samples: z.number().nonnegative(), total_ms: z.number().nonnegative(), histogram: z.record(z.string(), z.number().nonnegative()), updated_at: z.string() });
 export type TimeSummary = z.infer<typeof summarySchema>;
 export interface CostEstimate { seconds: number; samples: number; confidence: "cold" | "low" | "moderate"; source: "static" | "related" | "personal" }
-export interface LearningCostProfile { version: string; costs: Record<string, CostEstimate>; review_seconds: number; new_word_seconds: number; new_word_source: "lifecycle_estimate" | "static"; new_word_samples: number; new_word_confidence: "cold" | "low" | "moderate"; updated_at: string | null }
+export interface LearningTimeHistoryDay {
+  date: string;
+  effective_seconds: number;
+  samples: number;
+  predicted_total_ms: number;
+  prediction_samples: number;
+  signed_error_total_ms: number;
+  absolute_error_total_ms: number;
+  new_word_prediction_samples: number;
+  new_word_predicted_total_ms: number;
+  new_word_signed_error_total_ms: number;
+  new_word_absolute_error_total_ms: number;
+}
+export interface LearningCostProfile { version: string; costs: Record<string, CostEstimate>; review_seconds: number; new_word_seconds: number; new_word_source: "lifecycle_estimate" | "static"; new_word_samples: number; new_word_confidence: "cold" | "low" | "moderate"; updated_at: string | null; time_history?: LearningTimeHistoryDay[] }
 export function estimateTime(rows: TimeSummary[], activity: string, scope: string, stage: TimeSummary["stage"] = "answer", fallback = activityCost(activity, scope)): CostEstimate {
   const family = (a: string) => a.startsWith("translation") ? "translation" : ["cloze", "exact_cloze", "word_recall", "spelling"].includes(a) ? "recall" : a;
   let selected = rows.filter(r => r.activity_type === activity && r.scope === scope && r.stage === stage);
@@ -29,7 +42,7 @@ export function estimateTime(rows: TimeSummary[], activity: string, scope: strin
 }
 export function buildLearningCostProfile(rows: TimeSummary[]): LearningCostProfile {
   const costs: Record<string, CostEstimate> = {};
-  for (const scope of ["review", "pretest", "lesson", "consolidation"]) for (const activity of ["review", "pretest_cn_to_en", "word_recall", "cloze", "exact_cloze", "collocation", "derivation", "translation_cn_to_en", "translation_en_to_cn", "sentence"]) {
+  for (const scope of ["review", "pretest", "lesson", "consolidation"]) for (const activity of ["review", "pretest_cn_to_en", "pretest_en_definition", "pronunciation", "listening_recall", "word_recall", "cloze", "exact_cloze", "collocation", "derivation", "translation_cn_to_en", "translation_en_to_cn", "sentence"]) {
     costs[`${scope}:${activity}`] = estimateTime(rows, activity, scope);
   }
   const explanation = estimateTime(rows, "explanation", "lesson", "explanation", 30);
@@ -39,6 +52,13 @@ export function buildLearningCostProfile(rows: TimeSummary[]): LearningCostProfi
   return { version: TIME_MODEL_VERSION, costs, review_seconds: costs["review:review"]!.seconds + (costs["review:review:feedback"]?.seconds ?? 0), new_word_seconds: newWord.seconds, new_word_source: newWord.samples ? "lifecycle_estimate" : "static", new_word_samples: newWord.samples, new_word_confidence: newWord.confidence, updated_at: rows.map(r => r.updated_at).sort().at(-1) ?? null };
 }
 const cache = new WeakMap<object, Map<string, { until: number; value: LearningCostProfile }>>();
+const historySchema = z.array(z.object({
+  date: z.string(), effective_seconds: z.number().nonnegative(), samples: z.number().nonnegative(),
+  predicted_total_ms: z.number().nonnegative(), prediction_samples: z.number().nonnegative(),
+  signed_error_total_ms: z.number(), absolute_error_total_ms: z.number().nonnegative(),
+  new_word_prediction_samples: z.number().nonnegative(), new_word_predicted_total_ms: z.number().nonnegative(),
+  new_word_signed_error_total_ms: z.number(), new_word_absolute_error_total_ms: z.number().nonnegative(),
+})).max(30);
 export async function getUserLearningCostProfile(userId = getAuthenticatedUserId(), db = getDatabase()): Promise<LearningCostProfile> {
   if (!learningTimeCalibrationEnabled()) return buildLearningCostProfile([]);
   let entries = cache.get(db);
@@ -46,9 +66,14 @@ export async function getUserLearningCostProfile(userId = getAuthenticatedUserId
   const cached = entries.get(userId);
   if (cached && cached.until > Date.now()) return cached.value;
   try {
-    const result = await db.rpc("user_learning_time_profile_v2", { p_user_id: userId });
+    const [result, history] = await Promise.all([
+      db.rpc("user_learning_time_profile_v2", { p_user_id: userId }),
+      db.rpc("user_learning_time_history_v2", { p_user_id: userId, p_days: 30 }),
+    ]);
     if (result.error) return buildLearningCostProfile([]);
     const value = buildLearningCostProfile(z.array(summarySchema).max(240).parse(result.data));
+    const parsedHistory = history.error ? null : historySchema.safeParse(history.data);
+    value.time_history = parsedHistory?.success ? parsedHistory.data : [];
     if (entries.size >= 64) entries.delete(entries.keys().next().value!);
     entries.set(userId, { until: Date.now() + 60000, value });
     return value;

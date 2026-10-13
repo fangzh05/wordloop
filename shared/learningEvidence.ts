@@ -8,6 +8,7 @@ export function isSkillId(value: string): value is SkillId { return (SKILLS as r
 export const COST_VERSION = "static-v1";
 export function activityCost(activity: string, scope?: string): number {
   if (scope === "consolidation") return 90;
+  if (["pronunciation", "listening_recall", "pretest_cn_to_en", "pretest_en_definition"].includes(activity)) return 8;
   if (["collocation", "derivation"].includes(activity)) return 15;
   if (activity.startsWith("translation")) return 30;
   if (["sentence", "semantic_expression"].includes(activity)) return 45;
