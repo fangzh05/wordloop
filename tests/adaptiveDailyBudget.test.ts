@@ -107,6 +107,14 @@ describe("adaptive daily budget v2", () => {
     expect(simulateNewWordMarginalCurves({ review_cost_seconds: 16 })).toEqual(simulateNewWordMarginalCurves({ review_cost_seconds: 16 }));
     expect(plan()).toEqual(plan());
   });
+  it("reuses the same grade scenario and scales future Review cost linearly", () => {
+    const first = simulateNewWordMarginalCurves({ review_cost_seconds: 16, first_answer_correct_ratio: 0.55 });
+    const sameScenario = simulateNewWordMarginalCurves({ review_cost_seconds: 32, first_answer_correct_ratio: 0.79 });
+    expect(sameScenario.normal).toEqual(first.normal.map((seconds) => seconds * 2));
+    expect(sameScenario.elevated).toEqual(first.elevated.map((seconds) => seconds * 2));
+    expect(simulateNewWordMarginalCurves({ review_cost_seconds: 16, first_answer_correct_ratio: 0.3 }).elevated)
+      .not.toEqual(first.elevated);
+  });
   it("protects against young-card and interval repeat-load pressure", () => {
     expect(plan({ young_count: 2000 }).new_words_admissible_now)
       .toBeLessThan(plan().new_words_admissible_now);

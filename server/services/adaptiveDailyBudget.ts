@@ -115,7 +115,36 @@ export interface MarginalCurveOptions {
   /** Read-only prototype (e.g. a real card shape); never mutated. */
   prototype_card?: Card;
 }
-const marginalCache = new Map<string, NewCardCurves>();
+
+/**
+ * A card's future due dates depend on its grade scenario, not on how many
+ * seconds a user spends per review. Precompute the three possible grade curves
+ * once when the Worker isolate starts, then scale those small integer arrays
+ * per request. This keeps cold budget requests below the Free-plan CPU target.
+ */
+function simulateNewCardReviewCounts(grade: Grade): number[] {
+  const scheduler = createFsrsScheduler(false);
+  let card = scheduler.next(createEmptyCard(new Date(SIMULATION_EPOCH)), new Date(SIMULATION_EPOCH), grade).card;
+  const curve = Array(PLANNING_HORIZON_DAYS).fill(0) as number[];
+  for (let day = 1; day <= PLANNING_HORIZON_DAYS; day++) {
+    const when = new Date(SIMULATION_EPOCH.getTime() + day * 86400000);
+    if (card.due <= when) {
+      curve[day - 1] = (curve[day - 1] ?? 0) + 1;
+      card = scheduler.next(card, when, grade).card;
+    }
+  }
+  return curve;
+}
+
+const NEW_CARD_REVIEW_COUNTS = {
+  again: simulateNewCardReviewCounts(Rating.Again),
+  hard: simulateNewCardReviewCounts(Rating.Hard),
+  good: simulateNewCardReviewCounts(Rating.Good),
+};
+
+function scaleReviewCounts(counts: number[], reviewCostSeconds: number): number[] {
+  return counts.map((count) => count * reviewCostSeconds);
+}
 
 /**
  * Simulate ONE disposable new card's marginal future review cost per day
@@ -125,32 +154,30 @@ const marginalCache = new Map<string, NewCardCurves>();
  */
 export function simulateNewWordMarginalCurves(options: MarginalCurveOptions): NewCardCurves {
   const ratio = options.first_answer_correct_ratio ?? 1;
-  const cacheKey = `${options.review_cost_seconds}:${ratio}`;
-  const cached = !options.prototype_card ? marginalCache.get(cacheKey) : undefined;
-  if (cached) return { normal: [...cached.normal], elevated: [...cached.elevated] };
+  if (!options.prototype_card) {
+    const elevatedCounts = ratio < 0.5 ? NEW_CARD_REVIEW_COUNTS.again
+      : ratio < 0.8 ? NEW_CARD_REVIEW_COUNTS.hard
+        : NEW_CARD_REVIEW_COUNTS.good;
+    return {
+      normal: scaleReviewCounts(NEW_CARD_REVIEW_COUNTS.good, options.review_cost_seconds),
+      elevated: scaleReviewCounts(elevatedCounts, options.review_cost_seconds),
+    };
+  }
   const scheduler = createFsrsScheduler(false);
-  const build = (gradeFor: () => Grade): number[] => {
-    const base = options.prototype_card ? { ...options.prototype_card } : createEmptyCard(SIMULATION_EPOCH);
-    let card = scheduler.next(base, SIMULATION_EPOCH, gradeFor()).card;
+  const build = (grade: Grade): number[] => {
+    const base = { ...options.prototype_card! };
+    let card = scheduler.next(base, SIMULATION_EPOCH, grade).card;
     const curve = Array(PLANNING_HORIZON_DAYS).fill(0) as number[];
     for (let day = 1; day <= PLANNING_HORIZON_DAYS; day++) {
       const when = new Date(SIMULATION_EPOCH.getTime() + day * 86400000);
       if (card.due <= when) {
         curve[day - 1] = (curve[day - 1] ?? 0) + options.review_cost_seconds;
-        card = scheduler.next(card, when, gradeFor()).card;
+        card = scheduler.next(card, when, grade).card;
       }
     }
     return curve;
   };
-  const result = {
-    normal: build(() => Rating.Good),
-    elevated: build(() => elevatedGrade(ratio)),
-  };
-  if (!options.prototype_card) {
-    if (marginalCache.size >= 32) marginalCache.delete(marginalCache.keys().next().value!);
-    marginalCache.set(cacheKey, { normal: [...result.normal], elevated: [...result.elevated] });
-  }
-  return result;
+  return { normal: build(Rating.Good), elevated: build(elevatedGrade(ratio)) };
 }
 
 function statusFor(confidence: CostConfidence | undefined): EstimationStatus {
