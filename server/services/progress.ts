@@ -8,30 +8,43 @@ import { getUserTimeZone } from "./words.js";
 import { z } from "zod";
 import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 
-type StudyProgressState = Pick<StudyState, "widget" | "phase" | "current_index" | "payload">
-  & { flow: Pick<StudyFlow, "relearn_words"> };
+type StudyProgressState = Pick<StudyState, "widget" | "phase" | "current_index">
+  & { flow: Pick<StudyFlow, "relearn_words">; payload: { items?: unknown[] } };
 type ReviewSessionProgressRow = Pick<StudySessionRow, "review_words_count"> & { state: unknown };
 
-// Progress only needs the review cursor, review kinds, and relearn words. The
-// full StudyState schema also walks frozen Lesson exercise plans, which can be
-// large and are irrelevant to these read-only counts.
+// Project only the review cursor, review kinds, and relearn words. Parsing a
+// persisted session with the full StudyState schema copies frozen Lesson plans
+// and feedback that are irrelevant to these read-only counts.
 const studyProgressStateSchema = z.object({
-  version: z.literal(1),
-  date: z.string().trim().min(1),
   widget: z.enum(["pretest", "lesson", "review"]),
   phase: z.enum(STUDY_PHASES),
-  current_word: z.string().trim().max(100).nullable(),
   current_index: z.number().int().min(0),
-  retry_count: z.number().int().min(0),
-  flow: z.object({
-    relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX),
-  }).passthrough().default({ relearn_words: [] }),
-  payload: z.record(z.string(), z.unknown()),
-}).passthrough();
+  relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX).default([]),
+  review_items: z.array(z.unknown()).max(REVIEW_SESSION_MAX).optional(),
+});
 
 function safeStudyState(value: unknown) {
-  const parsed = studyProgressStateSchema.safeParse(value);
-  return parsed.success ? parsed.data as StudyProgressState : null;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const flow = typeof raw.flow === "object" && raw.flow !== null && !Array.isArray(raw.flow)
+    ? raw.flow as Record<string, unknown> : {};
+  const payload = typeof raw.payload === "object" && raw.payload !== null && !Array.isArray(raw.payload)
+    ? raw.payload as Record<string, unknown> : {};
+  const projected = studyProgressStateSchema.safeParse({
+    widget: raw.widget,
+    phase: raw.phase,
+    current_index: raw.current_index,
+    relearn_words: raw.relearn_words ?? flow.relearn_words,
+    review_items: raw.review_items ?? payload.items,
+  });
+  if (!projected.success) return null;
+  return {
+    widget: projected.data.widget,
+    phase: projected.data.phase,
+    current_index: projected.data.current_index,
+    flow: { relearn_words: projected.data.relearn_words },
+    payload: projected.data.review_items === undefined ? {} : { items: projected.data.review_items },
+  } satisfies StudyProgressState;
 }
 
 type NormalizedStudyState = StudyProgressState;
@@ -120,37 +133,49 @@ export function calculateReviewTodayProgressFromParsed(
   };
 }
 
-async function getReviewTodayProgress(db: ReturnType<typeof getDatabase>, userId: string, now: Date): Promise<ProgressResult["review_today"]> {
-  const active = await getActiveStudySession(db, userId);
+async function getReviewTodayProgress(
+  db: ReturnType<typeof getDatabase>,
+  userId: string,
+  now: Date,
+  knownActive?: StudySessionRow | null,
+): Promise<ProgressResult["review_today"]> {
+  const active = knownActive === undefined ? await getActiveStudySession(db, userId) : knownActive;
   if (active?.state?.widget === "review") return calculateReviewTodayProgress(active, []);
 
   const timeZone = await getUserTimeZone(db, userId);
   const today = dateInTimeZone(timeZone, now);
   const { start, end } = localDateRange(today, timeZone);
   const sessionResult = await db.from("study_sessions")
-    .select("review_words_count,state")
+    .select("review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")
     .eq("user_id", userId)
     .gte("started_at", start)
     .lt("started_at", end);
   assertDatabaseResult(sessionResult.error);
-  return calculateReviewTodayProgress(
-    active,
-    (sessionResult.data ?? []) as ReviewSessionProgressRow[],
-  );
+  const sessions = ((sessionResult.data ?? []) as Array<{
+    review_words_count?: number; widget?: unknown; phase?: unknown; current_index?: unknown;
+    relearn_words?: unknown; review_items?: unknown;
+  }>).map(row => ({
+    state: parseStudyStateForReviewProgress(row),
+    review_words_count: row.review_words_count,
+  }));
+  return calculateReviewTodayProgressFromParsed(null, undefined, sessions);
 }
 
 export async function getProgress(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
   now = new Date(),
+  includeBudget = true,
+  knownActive?: StudySessionRow | null,
 ): Promise<ProgressResult> {
   return perf("get_progress", async () => {
     const [{ data, error }, review_today] = await Promise.all([
       db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: now.toISOString() }),
-      getReviewTodayProgress(db, userId, now),
+      getReviewTodayProgress(db, userId, now, knownActive),
     ]);
     assertDatabaseResult(error);
-    return { ...(data as Omit<ProgressResult, "review_today">), review_today, budget: await getLearningBudget(db, userId) };
+    const progress = { ...(data as Omit<ProgressResult, "review_today">), review_today };
+    return includeBudget ? { ...progress, budget: await getLearningBudget(db, userId) } : progress;
   });
 }
 

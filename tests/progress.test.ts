@@ -5,7 +5,8 @@ vi.mock("../server/services/learningBudget.js", async importOriginal => ({
   reserveLearningBudget: vi.fn(async () => undefined),
 }));
 import { describe, expect, it, vi } from "vitest";
-import { calculateProgress, calculateReviewTodayProgress, fsrsForecast, getProgress, parseStudyStateForReviewProgress } from "../server/services/progress.js";
+import { getLearningBudget } from "../server/services/learningBudget.js";
+import { calculateProgress, calculateReviewTodayProgress, calculateReviewTodayProgressFromParsed, fsrsForecast, getProgress, parseStudyStateForReviewProgress } from "../server/services/progress.js";
 import { makeStudyState } from "../server/services/studySessions.js";
 import type { StudyState, VocabularyItem, WordStatus } from "../server/types.js";
 
@@ -174,6 +175,35 @@ describe("progress calculation", () => {
     });
   });
 
+  it("parses the compact JSON projection used for daily session progress", () => {
+    const state = parseStudyStateForReviewProgress({
+      widget: "review",
+      phase: "review",
+      current_index: 1,
+      relearn_words: ["opaque"],
+      review_items: [
+        { word: "one", review_kind: "fsrs_due" },
+        { word: "two", review_kind: "lesson_relearn" },
+        { word: "three", review_kind: "both" },
+      ],
+    });
+
+    expect(state).toEqual({
+      widget: "review",
+      phase: "review",
+      current_index: 1,
+      flow: { relearn_words: ["opaque"] },
+      payload: { items: [
+        { word: "one", review_kind: "fsrs_due" },
+        { word: "two", review_kind: "lesson_relearn" },
+        { word: "three", review_kind: "both" },
+      ] },
+    });
+    expect(calculateReviewTodayProgressFromParsed(state, 1, [])).toEqual({
+      completed: 1, total: 2, remaining: 1,
+    });
+  });
+
   it("carries completed cards from Review snapshot A into active snapshot B", () => {
     const snapshotB = makeStudyState({
       date: "2026-09-27", widget: "review", phase: "review", current_word: "b-2", current_index: 2,
@@ -292,5 +322,35 @@ describe("progress calculation", () => {
 
     expect(progress.today).toMatchObject({ completed: 49, total: 50 });
     expect(progress.review_today).toEqual({ completed: 30, total: 30, remaining: 0 });
+  });
+
+  it("reuses a known session and skips budget planning when only progress counts are needed", async () => {
+    const knownActive = {
+      id: "session",
+      review_words_count: 0,
+      state: makeStudyState({
+        date: "2026-09-28", widget: "lesson", phase: "lesson_exercise", current_word: "opaque", current_index: 0,
+        retry_count: 0, flow: { relearn_words: [] }, payload: { widget: "lesson", mode: "exercise", word: "opaque" },
+      }),
+    };
+    const snapshot = {
+      today: { total: 1, known: 0, uncertain: 0, unknown: 0, completed: 0 },
+      all_time: { total_words: 1, mastered: 0, learning: 1, error_book: 0 },
+      fsrs: { due_now: 0, due_today: 0, tomorrow: 0, due_next_7_days: 0, average_stability: 0 },
+      settings: { daily_new_word_limit: 20 },
+    };
+    const db = {
+      rpc: vi.fn(async () => ({ data: snapshot, error: null })),
+      from: vi.fn(() => tableQuery({ data: [], error: null })),
+    };
+    runtimeMocks.getActiveStudySession.mockClear();
+    vi.mocked(getLearningBudget).mockClear();
+    runtimeMocks.getUserTimeZone.mockResolvedValue("Asia/Shanghai");
+
+    const progress = await getProgress(db as never, "user", new Date("2026-09-28T00:00:00.000Z"), false, knownActive as never);
+
+    expect(progress).not.toHaveProperty("budget");
+    expect(runtimeMocks.getActiveStudySession).not.toHaveBeenCalled();
+    expect(getLearningBudget).not.toHaveBeenCalled();
   });
 });

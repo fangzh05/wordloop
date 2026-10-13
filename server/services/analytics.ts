@@ -431,7 +431,7 @@ export async function getTodayOverview(
     db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: asOf.toISOString() }),
     import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf, timeZone)),
     db.from("captured_notes").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "inbox"),
-    db.from("study_sessions").select("id,state,review_words_count")
+    db.from("study_sessions").select("id,review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")
       .eq("user_id", userId).gte("started_at", start).lt("started_at", end),
   ]);
   assertDb(session.error);
@@ -440,9 +440,11 @@ export async function getTodayOverview(
   assertDb(todaySessions.error);
   const progressData = progressSnapshot.data as Omit<ProgressResult, "review_today">;
   const activeState = parseStudyStateForReviewProgress(session.data?.state);
-  const parsedTodaySessions = ((todaySessions.data ?? []) as Array<Pick<StudySessionRow, "id" | "review_words_count"> & { state: unknown }>).map(row => ({
+  const parsedTodaySessions = ((todaySessions.data ?? []) as Array<Pick<StudySessionRow, "id" | "review_words_count"> & {
+    widget?: unknown; phase?: unknown; current_index?: unknown; relearn_words?: unknown; review_items?: unknown;
+  }>).map(row => ({
     id: row.id,
-    state: row.id === session.data?.id ? activeState : parseStudyStateForReviewProgress(row.state),
+    state: row.id === session.data?.id ? activeState : parseStudyStateForReviewProgress(row),
     review_words_count: row.review_words_count,
   }));
   const reviewToday = calculateReviewTodayProgressFromParsed(activeState, session.data?.review_words_count, parsedTodaySessions);

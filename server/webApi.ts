@@ -373,9 +373,11 @@ function resultForState(
   };
 }
 
-async function progressIfAvailable(): Promise<unknown | undefined> {
+async function progressIfAvailable(active?: StudySessionRow | null): Promise<unknown | undefined> {
   try {
-    return await getProgress();
+    // The standalone study response only needs progress counts. The Today page
+    // loads the detailed budget plan separately from /api/web/budget.
+    return await getProgress(getDatabase(), getAuthenticatedUserId(), new Date(), false, active);
   } catch {
     console.error("WordLoop progress failed", { source: "bootstrap" });
     return undefined;
@@ -397,7 +399,11 @@ async function successForSession(
   extra: Record<string, unknown> = {},
   audioUrl?: string | null,
 ): Promise<Record<string, unknown>> {
-  const state = ensureState(session);
+  // Every caller supplies a StudySessionRow parsed by studySessions or just
+  // created from the validated server state. Avoid parsing its frozen payload
+  // a second time while preparing the response.
+  const state = session.state;
+  if (!state) throw new WebApiError(409, "INVALID_STUDY_STATE", "The active study state is unavailable.");
   if (learningTimeCalibrationEnabled()) {
     try {
       const timezone = await getUserTimeZone();
@@ -432,7 +438,7 @@ async function successForSession(
       response.pretest_summary = counts;
     }
   }
-  const progress = await progressIfAvailable();
+  const progress = await progressIfAvailable(session);
   if (progress !== undefined) response.progress = progress;
   response.pending_consolidation = await pendingConsolidationSummary();
   return response;
@@ -455,7 +461,7 @@ async function doneResponse(revision: string | null = null): Promise<Record<stri
     screen: "done",
     session_revision: revision,
     state: {},
-    progress: await getProgress(),
+    progress: await getProgress(getDatabase(), getAuthenticatedUserId(), new Date(), false),
     pending_consolidation: await pendingConsolidationSummary(),
   };
 }

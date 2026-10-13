@@ -13,7 +13,7 @@ describe("WordLoop hot-path query boundaries", () => {
     expect(code).not.toContain("getTodayWords(");
     expect(code).not.toContain("getDailyNewWordLimit(");
     expect(code).toContain("getUserTimeZone(");
-    expect(code).toContain('.select("review_words_count,state")');
+    expect(code).toContain('.select("review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")');
     expect(code).not.toContain('from("attempts")');
     expect(code).not.toContain("fsrs_review_logs");
   });
