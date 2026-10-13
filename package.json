@@ -23,6 +23,7 @@
     "test:inspector": "npm run build && node scripts/inspect-mcp.mjs",
     "check:shanbay": "node --import tsx scripts/check-shanbay.ts",
     "check:db": "node --import tsx scripts/check-db-schema.ts",
+    "backtest:learning-time": "node --import tsx scripts/backtest-learning-time-calibration.ts",
     "predeploy:check": "npm run typecheck && npm test -- --maxWorkers=2 && npm run build && npm run check:db",
     "evidence:replay": "node --import tsx scripts/replay-learning-evidence.ts"
   },
