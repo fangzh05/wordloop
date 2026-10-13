@@ -7,7 +7,7 @@ import { WebAuthError, authenticateWebUser } from "./webAuth.js";
 import {examBookId,listExamBooks,selectExamBook,listExamBookWords} from './services/examBooks.js';
 import { handleShanbayImportRequest } from "./shanbayImportApi.js";
 import { withUserIdentity } from "./db.js";
-import { getLearningBudget, setLearningBudget, reserveLearningBudget, LearningBudgetReached } from "./services/learningBudget.js";
+import { getLearningBudget, setLearningBudget, setAdaptiveExamGoal, reserveLearningBudget, LearningBudgetReached, addOneGroupBudget, continueDueReview } from "./services/learningBudget.js";
 import { getEvidenceEvaluation, labelEvidence } from "./services/learningModel.js";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase, getLegacyOwnerId, getSupabaseAuthAdminClient, isLegacyOwner, shouldExposeStagingDiagnostics } from "./db.js";
@@ -124,7 +124,10 @@ const mutationBase = { expected_revision: expectedRevisionSchema };
 const webActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("record_learning_time"), observation: timeObservationSchema, ...mutationBase }).strict(),
   z.object({ action: z.literal("set_daily_time_budget"), minutes: z.number().int().min(5).max(240), ...mutationBase }).strict(),
+  z.object({ action: z.literal("set_exam_goal"), target_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(), coverage_target: z.number().int().min(1).max(100000).nullable(), ...mutationBase }).strict(),
   z.object({ action: z.literal("extend_daily_time_budget"), request_id: z.string().uuid(), ...mutationBase }).strict(),
+  z.object({ action: z.literal("continue_due_review"), ...mutationBase }).strict(),
+  z.object({ action: z.literal("continue_one_group"), request_id: z.string().uuid(), ...mutationBase }).strict(),
   z.object({ action: z.literal("set_daily_new_word_limit"), ...setDailyNewWordLimitSchema.shape, ...mutationBase }).strict(),
   z.object({ action: z.literal("continue"), ...mutationBase }).strict(),
   z.object({ action: z.literal("review_submit"), answer: z.string().max(4000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
@@ -208,6 +211,7 @@ function toApiError(error: unknown, requestPath?: string, stagingDiagnostics = f
   }
   const message = error instanceof Error ? error.message : "";
   if ([
+    "EXAM_BOOK_REQUIRED",
     "PRETEST_SESSION_NOT_ACTIVE",
     "PRETEST_FAMILIAR_SOURCE_NOT_ALLOWED",
     "PRETEST_FAMILIAR_CURSOR_MISMATCH",
@@ -215,6 +219,7 @@ function toApiError(error: unknown, requestPath?: string, stagingDiagnostics = f
     "PRETEST_FAMILIAR_RESULT_NOT_ELIGIBLE",
     "PRETEST_WORD_NOT_FOUND",
   ].includes(message)) {
+    if (message === "EXAM_BOOK_REQUIRED") return new WebApiError(409, message, "请先选择考试词书，再设置覆盖目标。");
     return new WebApiError(409, "INVALID_STUDY_STATE", "The current Pretest result cannot perform this action.");
   }
   if (message === "NO_ACTIVE_SESSION" || /No resumable active study session|No active study session/.test(message)) {
@@ -1676,6 +1681,21 @@ async function performAction(action: WebAction): Promise<Record<string, unknown>
     await setLearningBudget(action.action === "set_daily_time_budget" ? action.minutes : undefined, action.action === "extend_daily_time_budget" ? action.request_id : undefined);
     const active = await getActiveStudySession();
     return active ? successForSession(active) : doneResponse();
+  }
+  if (action.action === "set_exam_goal") {
+    await setAdaptiveExamGoal(action.target_date, action.coverage_target);
+    const active = await getActiveStudySession();
+    return active ? successForSession(active) : doneResponse();
+  }
+  if (action.action === "continue_due_review") {
+    await continueDueReview();
+    return resolveBootstrap(action.expected_revision);
+  }
+  if (action.action === "continue_one_group") {
+    if (!await addOneGroupBudget(action.request_id)) {
+      throw new WebApiError(409, "NO_NEXT_STUDY_GROUP", "当前没有可继续安排的新词或到期复习。");
+    }
+    return resolveBootstrap(action.expected_revision);
   }
   if (action.action === "set_daily_new_word_limit") return setDailyNewWordLimitAction(action);
   if (action.action === "refresh_progress") return { screen: "done", session_revision: action.expected_revision, state: {}, progress: await getProgress() };

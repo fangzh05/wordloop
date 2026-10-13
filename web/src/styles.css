@@ -1839,12 +1839,15 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .wordloop-shell .learning-budget-meter > span { display:block; height:100%; background:var(--accent); border-radius:inherit; }
 .wordloop-shell .learning-budget-facts { display:flex; flex-wrap:wrap; gap:8px 24px; margin-top:16px; font-size:.75rem; color:var(--muted); }
 .wordloop-shell .learning-budget-facts b { margin-left:4px; color:var(--text); font-weight:500; font-variant-numeric:tabular-nums; }
+.wordloop-shell .learning-budget-reasons { margin:12px 0 0; padding-left:1.1rem; color:var(--muted); font-size:.75rem; line-height:1.55; }
 .wordloop-shell .learning-budget-actions { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-top:20px; }
-.wordloop-shell .learning-budget-editor { min-width:0; }
-.wordloop-shell .learning-budget-editor summary,.wordloop-shell .learning-evidence-settings > summary { cursor:pointer; min-height:44px; align-content:center; color:var(--muted); font-size:.75rem; }
-.wordloop-shell .learning-budget-controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding-top:12px; }
-.wordloop-shell .learning-budget-controls label { display:flex; align-items:center; gap:10px; font-size:.75rem; }
-.wordloop-shell .learning-budget-controls input { box-sizing:border-box; width:76px; min-height:44px; padding:8px; border:1px solid var(--separator-strong); border-radius:var(--radius-control); background:var(--control); color:var(--text); font:inherit; }
+.wordloop-shell .learning-evidence-settings > summary { cursor:pointer; min-height:44px; align-content:center; color:var(--muted); font-size:.75rem; }
+.wordloop-shell .settings-budget-control { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px 12px; max-width:30rem; margin:.75rem 0; font-size:.8rem; }
+.wordloop-shell .settings-budget-control label { color:var(--muted); }
+.wordloop-shell .settings-budget-control input,.wordloop-shell .settings-budget-control select { box-sizing:border-box; min-width:8rem; min-height:44px; padding:8px 10px; border:1px solid var(--separator-strong); border-radius:var(--radius-control); background:var(--control); color:var(--text); font:inherit; }
+.wordloop-shell .settings-budget-control button { grid-column:2; justify-self:end; min-height:44px; }
+.wordloop-shell .settings-advanced > summary { cursor:pointer; min-height:44px; align-content:center; color:var(--muted); }
+.wordloop-shell .settings-advanced > div { padding-top:.75rem; }
 .wordloop-shell .learning-budget-actions > .button { flex-shrink:0; font-size:.75rem; }
 .wordloop-shell .today-due-summary small { color:var(--muted); font-size:.6875rem; }
 .wordloop-shell .learning-evidence-settings p { color:var(--muted); font-size:.75rem; }

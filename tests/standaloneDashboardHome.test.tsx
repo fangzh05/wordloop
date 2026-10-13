@@ -63,7 +63,7 @@ describe("Standalone Dashboard and Study navigation", () => {
     const view = reviewView();
     const markup = renderToStaticMarkup(<StandaloneDashboard view={view} busy={false} onContinue={() => undefined} />);
 
-    expect(visibleStandalonePage("dashboard", view.screen)).toBe("dashboard");
+    expect(visibleStandalonePage("dashboard")).toBe("dashboard");
     expect(markup).toContain("今日复习");
     expect(markup).toContain("18 / 25");
     expect(markup).toContain("今日新词");
@@ -143,7 +143,7 @@ describe("Standalone Dashboard and Study navigation", () => {
 
     expect(markup).toContain("← 返回");
     expect(markup).toContain("19 / 25");
-    expect(visibleStandalonePage("study", view.screen)).toBe("study");
+    expect(visibleStandalonePage("study")).toBe("study");
     expect(dashboardContinueBehavior(view)).toBe("study");
     expect(view.state.current_index).toBe(18);
     expect(view.session_revision).toBe("review-revision-18");
@@ -176,7 +176,7 @@ describe("Standalone Dashboard and Study navigation", () => {
     expect(activeStudySummary(lesson)).toBe("Lesson · constrain");
   });
 
-  it("keeps a completed round in study and only exits when the budget is paused", () => {
+  it("keeps a completed round in study until the learner chooses where to go", () => {
     const doneView: WebApiResponse = {
       screen: "done",
       session_revision: null,
@@ -185,8 +185,7 @@ describe("Standalone Dashboard and Study navigation", () => {
     };
     const markup = renderToStaticMarkup(<StandaloneDashboard view={doneView} busy={false} onContinue={() => undefined} />);
 
-    expect(visibleStandalonePage("study", doneView.screen)).toBe("study");
-    expect(visibleStandalonePage("study", doneView.screen, true)).toBe("dashboard");
+    expect(visibleStandalonePage("study")).toBe("study");
     expect(activeStudySummary(doneView)).toBeNull();
     expect(dashboardContinueBehavior(doneView)).toBe("continue");
     expect(markup).toContain("继续学习");
@@ -219,7 +218,7 @@ describe("Standalone Dashboard and Study navigation", () => {
     expect(dashboardContinueBehavior(completedReview)).toBe("continue");
   });
 
-  it("reopens the Dashboard task after raising the server-saved target from 50 to 70", () => {
+  it("keeps the advanced new-word ceiling out of the daily dashboard", () => {
     const previouslyComplete: WebApiResponse = {
       screen: "done",
       session_revision: null,
@@ -243,9 +242,8 @@ describe("Standalone Dashboard and Study navigation", () => {
     expect(todayTasksComplete(previouslyComplete.progress)).toBe(true);
     expect(markup).toContain("50 / 70");
     expect(markup).toContain("剩余 20");
-    expect(markup).toContain("每日目标");
-    expect(markup).toContain(">70</strong>");
-    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain("每日目标");
+    expect(markup).not.toContain(">70</strong>");
     expect(todayTasksComplete(raisedTarget.progress)).toBe(false);
     expect(dashboardNextStep(raisedTarget)).toBe("预测试");
     expect(markup).not.toContain("今日任务完成");

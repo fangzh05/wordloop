@@ -4,9 +4,10 @@ vi.mock("../server/services/learningBudget.js", async importOriginal => ({
   getLearningBudget: vi.fn(async () => ({ date:"2026-10-02",daily_minutes:45,remaining_seconds:2700,estimated_used_seconds:0,due_count:0,overdue_count:0,new_word_cap:50,effective_new_limit:50,enabled:true,forecast:[] })),
   reserveLearningBudget: vi.fn(async () => undefined),
   setLearningBudget: vi.fn(async () => ({})),
+  setAdaptiveExamGoal: mocks.setExamGoal,
 }));
 vi.mock("../server/services/learningModel.js", () => ({ getEvidenceEvaluation: vi.fn(async () => ({ reviewed_count: 0, rows: [] })), labelEvidence: vi.fn(async () => ({saved:true})) }));
-import { getLearningBudget, setLearningBudget } from "../server/services/learningBudget.js";
+import { getLearningBudget, setLearningBudget, setAdaptiveExamGoal } from "../server/services/learningBudget.js";
 import { labelEvidence } from "../server/services/learningModel.js";
 import { lessonExercisePlanSchema } from "../shared/toolContracts.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   getVocabularyItemsByWords: vi.fn(),
   recordPretestResult: vi.fn(),
   setDailyNewWordLimit: vi.fn(),
+  setExamGoal: vi.fn(),
   getPronunciationAudio: vi.fn(),
   buildReviewWidgetPayload: vi.fn(),
   recordAttempt: vi.fn(),
@@ -385,6 +387,12 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(setLearningBudget).toHaveBeenNthCalledWith(1,undefined,request_id);
     expect(setLearningBudget).toHaveBeenNthCalledWith(2,undefined,request_id);
     expect(mocks.recordAttempt).not.toHaveBeenCalled();
+  });
+  it("returns a conflict when an exam goal is set before choosing an exam book", async () => {
+    vi.mocked(setAdaptiveExamGoal).mockRejectedValueOnce(new Error("EXAM_BOOK_REQUIRED"));
+    const response = await handleWebApiRequest(post({ action:"set_exam_goal", target_date:null, coverage_target:null }));
+    expect(response.status).toBe(409);
+    expect(await body(response)).toMatchObject({ error:{ code:"EXAM_BOOK_REQUIRED" } });
   });
   it("requires a bearer token, returns no-store headers, and rejects client-owned cursor fields", async () => {
     const missing = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap"));

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { getLearningBudget, newWordAllowance, newWordAdmissionLimit, newWordForecast, reserveLearningBudget, LearningBudgetReached, type BudgetSnapshot } from "../server/services/learningBudget.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { addOneGroupBudget, getAdaptiveBudgetPlan, getLearningBudget, newWordAllowance, newWordAdmissionLimit, newWordForecast, reserveLearningBudget, LearningBudgetReached, type BudgetSnapshot } from "../server/services/learningBudget.js";
 import { updateBkt, predictCorrect, predictionMetrics } from "../server/services/bkt.js";
 import { plannedSkillEvidence } from "../server/services/plannedSubmission.js";
 import type { LessonExercisePlan } from "../shared/toolContracts.js";
@@ -51,8 +51,10 @@ describe("fixed shadow BKT", () => {
   });
 });
 describe("time budget admission", () => {
-  it("keeps replenishing batches despite overdue reviews, while preserving the no-overdue forecast", () => {
-    expect(newWordAllowance({ ...budget, overdue_count: 150, due_count: 1000 })).toBe(35);
+  beforeEach(() => vi.stubEnv("WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2", "true"));
+  afterEach(() => vi.unstubAllEnvs());
+  it("pauses new words when due and overdue review exceeds capacity", () => {
+    expect(newWordAllowance({ ...budget, overdue_count: 150, due_count: 1000 })).toBe(0);
     expect(newWordAllowance({ ...budget, due_count: 338 })).toBe(0);
   });
   it("counts prior new words and limits admission by remaining time and user cap", () => {
@@ -60,16 +62,18 @@ describe("time budget admission", () => {
     expect(newWordAdmissionLimit({ ...overdue, new_words_started_today: 5 })).toBe(6);
     expect(newWordAdmissionLimit({ ...overdue, new_words_started_today: 6 })).toBe(6);
     expect(newWordAdmissionLimit({ ...overdue, remaining_seconds: 76 })).toBe(0);
-    expect(newWordAdmissionLimit({ ...overdue, remaining_seconds: 154 })).toBe(2);
+    expect(newWordAdmissionLimit({ ...overdue, remaining_seconds: 154 })).toBe(1);
     expect(newWordAdmissionLimit({ ...overdue, new_word_cap: 3 })).toBe(3);
     expect(newWordAllowance({ ...overdue, new_words_started_today: 5, remaining_seconds: 76 })).toBe(5);
     expect(newWordAdmissionLimit({ ...overdue, enabled: false })).toBe(6);
+    expect(newWordAdmissionLimit({ ...overdue, enabled: false, new_word_cap: 3 })).toBe(3);
+    expect(newWordAdmissionLimit({ ...overdue, enabled: false, new_word_cap: 3, new_words_started_today: 2 })).toBe(1);
   });
   it("uses the authenticated learner's calibrated costs when admitting new words", () => {
     const personal = { ...budget, overdue_count: 1, new_word_cap: 20, remaining_seconds: 300,
       cost_profile: { version: "personal-time-v2-pilot", costs: {}, review_seconds: 20, new_word_seconds: 150,
         new_word_source: "lifecycle_estimate" as const, new_word_samples: 20, new_word_confidence: "low" as const, updated_at: null } };
-    expect(newWordAllowance(personal)).toBe(2);
+    expect(newWordAllowance(personal)).toBe(1);
     expect(newWordAllowance({ ...personal, cost_profile: undefined })).toBe(3);
   });
   it("reserves study and consolidation costs and respects the word cap", () => {
@@ -78,7 +82,7 @@ describe("time budget admission", () => {
     expect(newWordAllowance(budget)).toBeLessThanOrEqual(Math.floor(2700 / 77));
   });
   it("uses cumulative limits after a completed round", () => {
-    expect(newWordAllowance({ ...budget, new_words_started_today: 20, remaining_seconds: 770 })).toBe(30);
+    expect(newWordAllowance({ ...budget, new_words_started_today: 20, remaining_seconds: 770 })).toBe(29);
     expect(newWordAdmissionLimit({ ...budget, new_words_started_today: 49 })).toBe(1);
     expect(newWordAdmissionLimit({ ...budget, new_words_started_today: 50 })).toBe(0);
   });
@@ -87,6 +91,71 @@ describe("time budget admission", () => {
     const before = JSON.stringify(input); expect(newWordAllowance(input)).toBe(0); expect(JSON.stringify(input)).toBe(before);
     expect(newWordForecast(2)).toHaveLength(7);
     expect(newWordForecast(2)).toEqual(newWordForecast(2));
+  });
+  it("uses the unified cumulative target in actual next-round admission", () => {
+    expect(newWordAdmissionLimit({ ...budget, effective_new_limit: 2, new_words_started_today: 1 })).toBe(1);
+    expect(newWordAdmissionLimit({ ...budget, effective_new_limit: 0 })).toBe(0);
+  });
+  it("does not start new words after the user explicitly continues Review only", () => {
+    expect(newWordAdmissionLimit({ ...budget, review_override: true, remaining_seconds: 0,
+      estimated_used_seconds: 2700, effective_new_limit: 20, new_words_started_today: 3 })).toBe(0);
+  });
+  it("aligns future forecasts by local date and prefers review counts over stale static seconds", () => {
+    const snapshot: BudgetSnapshot = { ...budget, date: "2026-10-02", new_word_cap: 0,
+      forecast: [
+        { date: "2026-10-02", review_count: 100, review_seconds: 800 },
+        { date: "2026-10-03", review_count: 2, review_seconds: 1 },
+        { date: "2026-10-04", review_seconds: 37 },
+      ] };
+    const p = getAdaptiveBudgetPlan(snapshot);
+    expect(p.future_burden_normal.per_day_seconds[0]).toBe(16);
+    expect(p.future_burden_normal.per_day_seconds[1]).toBe(37);
+  });
+  it("returns one V2 plan from the shared backend and supports flag rollback", async () => {
+    const db = { rpc: vi.fn(async () => ({ data: budget, error: null })) } as any;
+    vi.stubEnv("WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2", "true");
+    try {
+      const result = await getLearningBudget(db, "user-a");
+      expect(result.adaptive_plan?.recommended_new_words_total).toBe(result.effective_new_limit);
+      expect(result.reason_codes).toContain("low_history_confidence");
+      vi.stubEnv("WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2", "false");
+      expect((await getLearningBudget(db, "user-a")).adaptive_plan).toBeUndefined();
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it("keeps the V1 fallback target cumulative so prior words are not subtracted twice", async () => {
+    const snapshot = { ...budget, daily_minutes: 30, remaining_seconds: 300, new_words_started_today: 4 };
+    const db = { rpc: vi.fn(async (name: string) => ({ data: name === "learning_budget_snapshot_v1" ? snapshot : true, error: null })) } as any;
+    vi.stubEnv("WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2", "false");
+    vi.stubEnv("WORDLOOP_TIME_CALIBRATION_V2", "false");
+    try {
+      const result = await getLearningBudget(db, "user-a");
+      expect(result.effective_new_limit).toBe(7);
+      expect(newWordAdmissionLimit(result)).toBe(3);
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it("adds a calibrated group budget after the adaptive daily target is reached", async () => {
+    const snapshot = { ...budget, remaining_seconds: 0, new_words_started_today: 9, new_word_cap: 20, due_count: 2 };
+    const db = { rpc: vi.fn(async (name: string) => ({ data: name === "learning_budget_snapshot_v1" ? snapshot : true, error: null })) } as any;
+    vi.stubEnv("WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2", "true");
+    vi.stubEnv("WORDLOOP_TIME_CALIBRATION_V2", "false");
+    try {
+      expect(await addOneGroupBudget("00000000-0000-4000-8000-0000000000AA", db, "user-a")).toBe(true);
+      expect(db.rpc).toHaveBeenLastCalledWith("set_learning_budget_v1", {
+        p_user_id: "user-a", p_minutes: null, p_add_key: "group:00000000-0000-4000-8000-0000000000AA:538",
+      });
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it("includes validated feedback reading time in an exercise reservation", async () => {
+    const row = { activity_type: "translation_cn_to_en", scope: "lesson", stage: "feedback",
+      samples: 30, total_ms: 150000, histogram: { "1": 30 }, updated_at: "2026-10-02T00:00:00Z" };
+    const db = { rpc: vi.fn(async (name: string) => ({ data: name === "user_learning_time_profile_v2" ? [row] : true, error: null })) } as any;
+    vi.stubEnv("WORDLOOP_TIME_CALIBRATION_V2", "true");
+    try {
+      await reserveLearningBudget("exercise:feedback", "translation_cn_to_en", "lesson", db, "user-a");
+      expect(db.rpc).toHaveBeenLastCalledWith("reserve_learning_budget_v1", {
+        p_user_id: "user-a", p_task_key: "exercise:feedback", p_seconds: 67, p_activity: "translation_cn_to_en",
+      });
+    } finally { vi.unstubAllEnvs(); }
   });
   it("distinguishes budget rejection from database failure", async () => {
     const db = { rpc: vi.fn(async () => ({ data: false, error: null })) } as any;

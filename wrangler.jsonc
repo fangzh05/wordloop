@@ -19,7 +19,8 @@
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_P1lM0vqrWtO23O8VoJTabQ_FI-Dsuo0",
     "NEON_DATA_API_URL": "https://ep-silent-paper-aznrjrrz.apirest.c-3.ap-southeast-1.aws.neon.tech/neondb/rest/v1",
     "NEON_JWT_AUDIENCE": "wordloop-neon-api",
-    "WORDLOOP_TIME_CALIBRATION_V2": "false"
+    "WORDLOOP_TIME_CALIBRATION_V2": "true",
+    "WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2": "true"
   },
   "assets": {
     "directory": "./dist/assets",

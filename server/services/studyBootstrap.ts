@@ -244,7 +244,7 @@ export async function getStudyBootstrap(options?: {
     const budget = await getLearningBudget(db, userId);
     if (options?.startNewRound === false && !active?.state) return { action: "done" };
     // Resume feedback and a question already on screen; never discard its draft.
-    if (budget.enabled && budget.remaining_seconds < 8 && (!active?.state || ["review_complete", "pretest_complete"].includes(active.state.phase))) return { action: "budget_complete" };
+    if (budget.enabled && budget.remaining_seconds < 8 && !budget.review_override && (!active?.state || ["review_complete", "pretest_complete"].includes(active.state.phase))) return { action: "budget_complete" };
     let normalizedActive = active?.state
       ? { ...active, state: normalizeStudyStateForRead(active.state) }
       : active;

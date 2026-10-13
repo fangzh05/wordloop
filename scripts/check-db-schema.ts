@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createClient } from "@supabase/supabase-js";
+import { getDatabase, withUserIdentity } from "../server/db.js";
 
 type SchemaCheck = {
   table: string;
@@ -33,6 +33,12 @@ const checks: SchemaCheck[] = [
   { table: "user_skill_state", column: "p_mastery", migration: "20261002024106" },
   { table: "learning_settings", column: "daily_minutes", migration: "20261002024106" },
   { table: "learning_budget_events", column: "task_key", migration: "20261002024106" },
+  { table: "learning_budget_days", column: "review_override", migration: "0007_adaptive_daily_budget_v2" },
+  { table: "user_words", column: "formally_introduced_date", migration: "0007_adaptive_daily_budget_v2" },
+  { table: "user_words", column: "formally_introduced_session_id", migration: "0007_adaptive_daily_budget_v2" },
+  { table: "user_book_preferences", column: "exam_deadline", migration: "0007_adaptive_daily_budget_v2" },
+  { table: "user_book_preferences", column: "coverage_target", migration: "0007_adaptive_daily_budget_v2" },
+  { table: "user_learning_time_daily", column: "total_ms", migration: "0006_learning_time_calibration_v2" },
   { table: "evidence_gold_labels", column: "reviewed_at", migration: "20261002024106" },
   { table: "bkt_updates", column: "prediction", migration: "20261002024106" },
   { table: "tutor_shadow_decisions", column: "suggested_activity", migration: "20261002024106" },
@@ -57,7 +63,7 @@ const checks: SchemaCheck[] = [
 const rpcChecks: RpcCheck[] = [
   { name: "family_graph_schema_v1", args: {}, migration: "20261007053500", expectTrue: true },
   { name: "get_family_graph_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_lexeme: "en:reconcile:v", p_limit: 1 }, migration: "20261007053500" },
-  { name: "learning_budget_snapshot_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000" }, migration: "20261002024106" },
+  { name: "learning_budget_snapshot_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000" }, migration: "0007_adaptive_daily_budget_v2" },
   { name: "pending_skill_evidence_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000" }, migration: "20261002024106" },
   {
     name: "get_today_words_v2",
@@ -109,22 +115,27 @@ function isSchemaMismatch(message: string): boolean {
 
 async function main(): Promise<void> {
   const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    console.error("WordLoop database schema check requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  const dataApiUrl = process.env.NEON_DATA_API_URL;
+  const workerKey = process.env.NEON_WORKER_JWT_PRIVATE_JWK;
+  const userId = process.env.WORDLOOP_DB_CHECK_USER_ID ?? process.env.DEV_USER_ID;
+  if (!url || !dataApiUrl || !workerKey || !userId) {
+    console.error("WordLoop Neon schema check requires SUPABASE_URL, NEON_DATA_API_URL, NEON_WORKER_JWT_PRIVATE_JWK and DEV_USER_ID (or WORDLOOP_DB_CHECK_USER_ID).");
     process.exitCode = 1;
     return;
   }
-
-  const db = createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const results = await Promise.all(checks.map(async (check) => {
-    const { error } = await db.from(check.table).select(check.column).limit(0);
-    return { check, error };
-  }));
-  const rpcResults = await Promise.all(rpcChecks.map(async (check) => {
-    const { data, error } = await db.rpc(check.name, check.args);
-    return { check, data, error };
-  }));
+  const issuer = process.env.NEON_JWT_ISSUER ?? `${new URL(url).origin}/auth/v1`;
+  const { results, rpcResults } = await withUserIdentity(userId, async () => {
+    const db = getDatabase();
+    const results = await Promise.all(checks.map(async (check) => {
+      const { error } = await db.from(check.table).select(check.column).limit(0);
+      return { check, error };
+    }));
+    const rpcResults = await Promise.all(rpcChecks.map(async (check) => {
+      const { data, error } = await db.rpc(check.name, check.args);
+      return { check, data, error };
+    }));
+    return { results, rpcResults };
+  }, issuer);
   const failures = results.filter((result) => result.error);
   const rpcFailures = rpcResults.filter((result) => result.error || (result.check.expectTrue && result.data !== true));
   if (failures.length === 0 && rpcFailures.length === 0) {

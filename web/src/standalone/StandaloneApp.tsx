@@ -1,8 +1,8 @@
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useLearningTime } from "./useLearningTime.js";
 import { Button } from "../components/Button.js";
 import { FamilyEntry } from "../family/FamilyPanel.js";
-import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
+import type { DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
 import { CaptureNotesPage } from "./CaptureNotesPage.js";
 import { NoteReviewPage } from "./NoteReviewPage.js";
 import { Icon } from "./DesignIcons.js";
@@ -35,12 +35,8 @@ type PageStatus = "loading" | "auth" | "ready";
 type StandalonePage = "dashboard" | "study" | "notes" | "note_review";
 type RetryFields = Record<string, unknown> | null;
 
-export function visibleStandalonePage(
-  page: StandalonePage,
-  screen: WebApiResponse["screen"] | null,
-  budgetPaused = false,
-): StandalonePage {
-  return page === "study" && screen === "done" && budgetPaused ? "dashboard" : page;
+export function visibleStandalonePage(page: StandalonePage): StandalonePage {
+  return page;
 }
 
 function initialToken(): string | null {
@@ -376,25 +372,18 @@ export function StandaloneProgressBlock({ title, completed, total, emptyText, de
   </div>;
 }
 
-export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWordLimit, isStudying = false, onOpenNotes = () => undefined, captureInboxCount = null }: {
+export function StandaloneDashboard({ view, busy, onContinue, isStudying = false, onOpenNotes = () => undefined, captureInboxCount = null }: {
   view: WebApiResponse;
   busy: boolean;
   onContinue: () => void;
-  onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
   isStudying?: boolean;
   onOpenNotes?: () => void;
   captureInboxCount?: number | null;
 }): React.JSX.Element {
-  const [dailyLimitExpanded, setDailyLimitExpanded] = useState(false);
-  const dailyLimitEditorId = useId();
   const hasProgress = hasDashboardProgress(view.progress);
   const progress = record(view.progress);
   const review = record(progress.review_today);
   const today = record(progress.today);
-  const settings = record(progress.settings);
-  const dailyLimitValue = settings.daily_new_word_limit;
-  const dailyLimit = typeof dailyLimitValue === "number" && Number.isInteger(dailyLimitValue)
-    && dailyLimitValue >= 1 && dailyLimitValue <= 200 ? dailyLimitValue : null;
   const allTime = record(progress.all_time);
   const fsrs = record(progress.fsrs);
   const activeSummary = activeStudySummary(view);
@@ -429,26 +418,6 @@ export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWord
           emptyText="暂无新词"
           detail={`已完成 · 剩余 ${Math.max(0, numberValue(today.total) - numberValue(today.completed))}`}
         />
-        {dailyLimit !== null && <div className="standalone-daily-goal">
-          <button
-            className="standalone-daily-goal-toggle"
-            type="button"
-            aria-expanded={dailyLimitExpanded}
-            aria-controls={dailyLimitEditorId}
-            disabled={busy}
-            onClick={() => setDailyLimitExpanded((expanded) => !expanded)}
-          >
-            <span>每日目标</span><strong>{dailyLimit}</strong><span className="standalone-daily-goal-chevron" aria-hidden="true">{dailyLimitExpanded ? "⌄" : "›"}</span>
-          </button>
-          <div id={dailyLimitEditorId} hidden={!dailyLimitExpanded}>
-            {dailyLimitExpanded && onSaveDailyNewWordLimit && <DailyNewWordLimitEditor
-              limit={dailyLimit}
-              onSave={onSaveDailyNewWordLimit}
-              compact
-              disabled={busy}
-            />}
-          </div>
-        </div>}
         {todayTasksComplete(view.progress) && <p className="standalone-status" role="status">今日任务完成</p>}
       </> : <p className="standalone-status" role="status">进度暂时无法读取</p>}
       {activeSummary && <div className="standalone-active-study">
@@ -491,12 +460,11 @@ export function StandaloneDashboard({ view, busy, onContinue, onSaveDailyNewWord
   </>;
 }
 
-export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSaveDailyNewWordLimit, onOpenNotes = () => undefined, captureInboxCount = null, hasMainContent, children }: {
+export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onOpenNotes = () => undefined, captureInboxCount = null, hasMainContent, children }: {
   page: StandalonePage;
   view: WebApiResponse | null;
   busy: boolean;
   onContinue: () => void;
-  onSaveDailyNewWordLimit?: (limit: number) => Promise<DailyNewWordLimitSaveResult>;
   onOpenNotes?: () => void;
   captureInboxCount?: number | null;
   hasMainContent: boolean;
@@ -512,7 +480,7 @@ export function StandaloneResponsiveLayout({ page, view, busy, onContinue, onSav
     data-main-content={hasMainContent ? "true" : "false"}
   >
     <aside className="standalone-sidebar" aria-label="Dashboard" aria-hidden={!view}>
-      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onSaveDailyNewWordLimit={onSaveDailyNewWordLimit} onOpenNotes={onOpenNotes} captureInboxCount={captureInboxCount} />}
+      {view && <StandaloneDashboard view={view} busy={busy} onContinue={onContinue} onOpenNotes={onOpenNotes} captureInboxCount={captureInboxCount} />}
     </aside>
     <section className="standalone-main" aria-label="学习区">
       {children}
@@ -852,7 +820,7 @@ export default function StandaloneApp(): React.JSX.Element {
       const section = sectionFromHash();
       if (!section) return;
       setAppSection(section);
-      setPage(section === "study" && view?.screen !== "done" ? "study" : section === "capture" ? "notes" : "dashboard");
+      setPage(section === "study" ? "study" : section === "capture" ? "notes" : "dashboard");
       setSelectedVocabularyWordId(null);
     };
     window.addEventListener("popstate", restoreSection);
@@ -1000,14 +968,6 @@ export default function StandaloneApp(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (!reviewFeedback && view?.screen === "done" && view.budget_paused) setPage((currentPage) => {
-      if (currentPage !== "study") return currentPage;
-      setAppSection("today");
-      return "dashboard";
-    });
-  }, [view?.screen, view?.budget_paused, reviewFeedback]);
-
-  useEffect(() => {
     const refreshWhenVisible = () => {
       if (document.visibilityState !== "visible" || !token) return;
       if (!deferVisibilityBootstrap(requestInFlightRef, refreshPendingRef)) void loadBootstrap();
@@ -1104,7 +1064,7 @@ export default function StandaloneApp(): React.JSX.Element {
     const previousDraftContext = lessonDraftContext(view?.state);
     let actionResponse: WebApiResponse | null = null;
     await runForegroundRequest(requestInFlightRef, async () => {
-      if (!["refresh_progress", "set_daily_time_budget", "extend_daily_time_budget", "set_daily_new_word_limit"].includes(actionName)) await flushLearningTime(false);
+      if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) await flushLearningTime(false);
       setBusy(actionName || "action");
       setErrorMessage("");
       setNotice("");
@@ -1112,14 +1072,14 @@ export default function StandaloneApp(): React.JSX.Element {
       setRetryFields(stableFields);
       try {
         const next = await postAction(action);
-        if (!["refresh_progress", "set_daily_time_budget", "extend_daily_time_budget", "set_daily_new_word_limit"].includes(actionName)) await flushLearningTime(true);
+        if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) await flushLearningTime(true);
         actionResponse = next;
         sessionRevisionRef.current = next.session_revision ?? sessionRevisionRef.current;
         if (actionName === "refresh_progress") {
           setView((previous) => previous ? { ...previous, progress: next.progress } : next);
     } else {
       setView(next);
-      if (actionName === "continue") setPage(next.budget_paused ? "dashboard" : "study");
+      if (["continue", "continue_due_review", "continue_one_group"].includes(actionName)) setPage(next.budget_paused ? "dashboard" : "study");
       if (actionName === "consolidation_start") { setAppSection("study"); setPage("study"); }
       if (actionName === "consolidation_defer") { setAppSection("today"); setPage("dashboard"); }
           setRetryFields(null);
@@ -1205,7 +1165,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
   const state = view?.state ?? {};
   const payload = record(state.payload);
-  const visiblePage = visibleStandalonePage(page, view?.screen ?? null, view?.budget_paused === true);
+  const visiblePage = visibleStandalonePage(page);
   const currentIndex = typeof state.current_index === "number" ? state.current_index : 0;
   const busyLabel = busy === "lesson_next"
     ? payload.navigation && record(payload.navigation).action === "round_complete" ? "正在检查本轮任务…" : "正在生成下一词…"
@@ -1248,7 +1208,6 @@ export default function StandaloneApp(): React.JSX.Element {
       view={null}
       busy={busy !== null}
       onContinue={continueFromDashboard}
-      onSaveDailyNewWordLimit={saveDailyNewWordLimit}
       onOpenNotes={() => navigateSection("capture")}
       captureInboxCount={captureCounts?.inbox ?? null}
       hasMainContent={hasMainContent}
@@ -1304,7 +1263,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {visiblePage === "study" && reviewFeedback && <section className="widget-card standalone-card lesson-card study-task-card"><StandaloneLessonFeedback word={reviewFeedback.word} progressLabel={reviewFeedback.progress} feedback={reviewFeedback.feedback} busy={busy !== null} busyLabel={busyLabel} notice="" nextWord={true} nextLabel="继续" continueOnly onBack={backToToday} onRetry={() => { void flushLearningTime().then(() => setReviewFeedback(null)); }} onNext={() => { void flushLearningTime().then(() => setReviewFeedback(null)); }} /></section>}
 
-    {visiblePage === "study" && !reviewFeedback && view?.screen === "done" && <section className="widget-card standalone-card study-task-card"><StandaloneLessonHeader title="本轮学习已完成" progressLabel="今日学习" onBack={backToToday}/><div className="standalone-content"><p>当前没有待学任务。你可以留在这里，稍后继续检查。</p><Button disabled={busy !== null} onClick={() => void dispatch({action:"continue"})}>继续学习</Button></div></section>}
+    {visiblePage === "study" && !reviewFeedback && view?.screen === "done" && <section className="widget-card standalone-card study-task-card"><StandaloneLessonHeader title={view.budget_paused ? "今日预算已用完" : "本轮学习已完成"} progressLabel="今日学习" onBack={backToToday}/><div className="standalone-content"><p>{view.budget_paused ? "当前学习记录和未完成复习都已保留。你可以增加一组学习预算，或自主继续到期复习。" : "当前这一轮已经完成，可以继续下一轮，或返回今日首页。"}</p><div className="standalone-actions"><Button disabled={busy !== null} onClick={() => void dispatch(view.budget_paused ? {action:"continue_one_group",request_id:crypto.randomUUID()} : {action:"continue"})}>{view.budget_paused ? "继续学一组" : "继续学习"}</Button>{view.budget_paused && numberValue(record(record(view.progress).fsrs).due_now) > 0 && <Button className="secondary" disabled={busy !== null} onClick={() => void dispatch({action:"continue_due_review"})}>继续到期复习</Button>}<Button className="secondary" disabled={busy !== null} onClick={backToToday}>返回首页</Button></div></div></section>}
 
     {visiblePage === "study" && !reviewFeedback && view?.screen === "review" && (() => {
       const items = list(payload.items);
@@ -1436,6 +1395,16 @@ export default function StandaloneApp(): React.JSX.Element {
       dailyLimit={numberValue(record(record(view?.progress).settings).daily_new_word_limit) || null}
       busy={busy !== null}
       onSaveDailyNewWordLimit={saveDailyNewWordLimit}
+      onSaveDailyTimeBudget={async minutes => {
+        const saved = await dispatch({ action: "set_daily_time_budget", minutes });
+        if (!saved) throw new Error("每日时间预算未能保存。");
+        return saved;
+      }}
+      onSaveExamGoal={async (targetDate, coverageTarget) => {
+        const saved = await dispatch({ action: "set_exam_goal", target_date: targetDate, coverage_target: coverageTarget });
+        if (!saved) throw new Error("考试目标未能保存。");
+        return saved;
+      }}
     />
     {selectedVocabularyWordId && appSection !== "vocabulary" && <WordDetailPanel
       userWordId={selectedVocabularyWordId}

@@ -122,7 +122,10 @@ export function newNoteReviewIdempotencyKey(): string {
 
 export type WebAction =
   | { action: "set_daily_time_budget"; minutes: number; expected_revision: string | null }
+  | { action: "set_exam_goal"; target_date: string | null; coverage_target: number | null; expected_revision: string | null }
   | { action: "extend_daily_time_budget"; request_id: string; expected_revision: string | null }
+  | { action: "continue_due_review"; expected_revision: string | null }
+  | { action: "continue_one_group"; request_id: string; expected_revision: string | null }
   | { action: "set_daily_new_word_limit"; limit: number; expected_revision: string | null }
   | { action: string; expected_revision: string | null; [key: string]: unknown };
 
@@ -542,8 +545,8 @@ export function promoteCapturedNote(id: string): Promise<CapturedNotePromotion> 
   return captureRequest<CapturedNotePromotion>(`/api/web/captures/${encodeURIComponent(id)}/promote`, { method: "POST" });
 }
 
-export function getBudget(): Promise<import("../../../server/services/learningBudget.js").BudgetSnapshot> {
-  return request("/api/web/budget", { method: "GET" });
+export function getBudget(signal?: AbortSignal): Promise<import("../../../server/services/learningBudget.js").BudgetSnapshot> {
+  return request("/api/web/budget", { method: "GET", signal });
 }
 export function getEvidenceReport(): Promise<any> { return request("/api/web/evidence", { method: "GET" }); }
 export function saveEvidenceLabel(id: number, outcome: string, error_label: string): Promise<{ saved: boolean }> {

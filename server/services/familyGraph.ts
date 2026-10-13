@@ -7,6 +7,7 @@ import { buildFamilyLesson } from "./familyLesson.js";
 import { scheduleReview, cardToDatabase, reviewLogToDatabase } from "./fsrsScheduler.js";
 import { getFamilyDictionary } from "./familyDictionary.js";
 import { FamilyServiceError } from "./familyErrors.js";
+import { getLearningBudget, newWordAdmissionLimit } from "./learningBudget.js";
 export { FamilyServiceError } from "./familyErrors.js";
 
 function fail(error: { message?: string; code?: string } | null): void {
@@ -90,7 +91,15 @@ export async function startFamilyMicroSession(lexeme: string, requestId: string)
     const code=error instanceof Error&&/^FAMILY_[A-Z_]+$/.test(error.message)?error.message:"FAMILY_CONTENT_UNAVAILABLE";
     throw new FamilyServiceError(409,code,code==="FAMILY_CONTENT_UNAVAILABLE"?"这个词暂时缺少可用释义，无法开始短练习。请重试或继续原来的学习。":decision.reason);
   }
-  const r = await db.rpc("start_family_micro_v1", { p_user_id: userId, p_request_id: requestId, p_lesson: lesson });
+  let plannedLesson: FamilyLesson & { new_word_budget_admitted?: boolean } = lesson;
+  if (["B", "C"].includes(lesson.stage) && lesson.target_id) {
+    const budget = await getLearningBudget(db, userId);
+    if (newWordAdmissionLimit(budget) < 1) {
+      throw new FamilyServiceError(409, "FAMILY_BUDGET_REACHED", "今日没有可安排的新词额度；可以先完成到期复习或增加学习时间。");
+    }
+    plannedLesson = { ...lesson, new_word_budget_admitted: true };
+  }
+  const r = await db.rpc("start_family_micro_v1", { p_user_id: userId, p_request_id: requestId, p_lesson: plannedLesson });
   fail(r.error);
   return familySessionView(r.data as MicroRow);
 }

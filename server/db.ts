@@ -38,6 +38,11 @@ export function learningTimeCalibrationEnabled(): boolean {
   return activeEnv().WORDLOOP_TIME_CALIBRATION_V2 === "true";
 }
 
+/** Opt-in until the additive Neon migration is applied and the worker is ready. */
+export function adaptiveDailyBudgetV2Enabled(): boolean {
+  return activeEnv().WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2 === "true";
+}
+
 export function getShanbayImportBridgeConfig(): { url: string; secret: string } | null {
   const env = activeEnv();
   if (!env.SHANBAY_IMPORT_WORKER_URL || !env.SHANBAY_IMPORT_BRIDGE_SECRET) return null;

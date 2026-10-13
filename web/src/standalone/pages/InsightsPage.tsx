@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { getAnalytics } from "../apiClient.js";
+import { getAnalytics, getBudget } from "../apiClient.js";
 import type { ReadModelEnvelope } from "../apiClient.js";
+import type { BudgetSnapshot } from "../../../../server/services/learningBudget.js";
 
 type Section = "overview" | "memory" | "weakness" | "activity";
 type Range = "7d" | "30d" | "90d";
@@ -55,6 +56,18 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const [focusRows, setFocusRows] = useState<Array<Record<string, unknown>>>([]);
+  const [budget, setBudget] = useState<BudgetSnapshot | null>(null);
+  const [budgetError, setBudgetError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void getBudget(controller.signal).then(value => {
+      if (!controller.signal.aborted) { setBudget(value); setBudgetError(""); }
+    }).catch(() => {
+      if (!controller.signal.aborted) setBudgetError("学习时间记录暂时不可用。");
+    });
+    return () => controller.abort();
+  }, [tokenKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -87,6 +100,9 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
   const memoryScatter = rows(data.scatter_points);
   const weakMatrix = rows(data.historical_error_matrix);
   const activity = rows(data.days);
+  const measuredTime = (budget?.time_history ?? []).filter(day => (day.samples ?? 0) > 0);
+  const measuredSeconds = measuredTime.reduce((sum, day) => sum + (day.effective_seconds ?? 0), 0);
+  const introducedWords = (budget?.new_word_history ?? []).filter(day => (day.new_words ?? 0) > 0);
 
   const histogramLists = useMemo(() => ({
     stability: rows(stability.histogram), difficulty: rows(difficulty.histogram), retrievability: rows(retrievability.histogram),
@@ -138,6 +154,19 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
         </section>
         <section className="insight-panel"><h2>关注词</h2><FocusList values={focusRows} onOpenWord={onOpenWord} /></section>
         <section className="insight-panel"><h2>首次回忆成功趋势</h2><TrendBars values={trend} target={number(result.coverage.target_retention)} /></section>
+        <section className="insight-panel"><h2>有效学习时间与新词</h2>
+          {budgetError && <p className="standalone-status error" role="alert">{budgetError}</p>}
+          {budget && <div className="insight-metric-grid compact">
+            <Metric label="近 14 天有效学习" value={measuredTime.length ? `${(measuredSeconds / 60).toFixed(0)} 分钟` : "样本不足"} note={measuredTime.length ? `${measuredTime.reduce((sum, day) => sum + (day.samples ?? 0), 0)} 个有效计时样本` : "不从提交间隔推算"} />
+            <Metric label="近 14 天正式引入" value={introducedWords.length ? count(introducedWords.reduce((sum, day) => sum + (day.new_words ?? 0), 0)) : "暂无记录"} note="按唯一词首次进入 Lesson 计数" />
+            <Metric label="今日复习积压" value={`${count(budget.due_count)} / ${count(budget.overdue_count)}`} note="到期 / 逾期" />
+            <Metric label="新词成本状态" value={budget.cost_profile?.new_word_confidence === "moderate" ? "个人估算" : "初始估算"} note={`${budget.cost_profile?.new_word_samples ?? 0} 个完整教学样本`} />
+          </div>}
+          {measuredTime.length ? <><h3>每日有效时长（14 天）</h3><BarList values={measuredTime.map(day => ({ date: day.date, count: Math.round((day.effective_seconds ?? 0) / 60) }))} /><p className="muted-copy">仅统计前台、非等待、通过服务端校验的有效学习计时。</p></> : <p className="muted-copy">目前没有足够的有效计时记录。旧提交时间缺少可靠的阅读与作答时长，未作回填。</p>}
+          {introducedWords.length ? <><h3>每日正式新词（14 天）</h3><BarList values={introducedWords.map(day => ({ date: day.date, count: day.new_words ?? 0 }))} /></> : <p className="muted-copy">升级后的首次正式引入将从现在开始记录；重复练习和预测试不重复计数。</p>}
+          {budget?.adaptive_plan && <p className="muted-copy">未来 7 天预计复习：正常 {Math.ceil(budget.adaptive_plan.future_burden_normal.next_7_days_seconds / 60)} 分钟，偏高 {Math.ceil(budget.adaptive_plan.future_burden_elevated.next_7_days_seconds / 60)} 分钟。14 天正常情景 {Math.ceil(budget.adaptive_plan.future_burden_normal.next_14_days_seconds / 60)} 分钟，偏高情景 {Math.ceil(budget.adaptive_plan.future_burden_elevated.next_14_days_seconds / 60)} 分钟。</p>}
+          <p className="muted-copy">逐题预测误差需要预测与实际时间成对记录；目前不显示未经验证的误差值。</p>
+        </section>
       </>}
 
       {section === "memory" && <>

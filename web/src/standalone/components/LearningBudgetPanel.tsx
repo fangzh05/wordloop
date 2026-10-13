@@ -8,13 +8,12 @@ export function LearningBudgetPanel({ revision, paused, onAction, onBudgetChange
   onBudgetChange?: (budget: BudgetSnapshot) => void;
 }) {
   const [budget, setBudget] = useState<BudgetSnapshot>();
-  const [minutes, setMinutes] = useState(45);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [extraKey, setExtraKey] = useState(() => crypto.randomUUID());
   useEffect(() => {
     let alive = true;
-    getBudget().then(b => { if (alive) { setBudget(b); setMinutes(b.daily_minutes); setError(""); onBudgetChange?.(b); } })
+    getBudget().then(b => { if (alive) { setBudget(b); setError(""); onBudgetChange?.(b); } })
       .catch(() => { if (alive) setError("学习时间暂时无法加载，请稍后重试。"); });
     return () => { alive = false; };
   }, [revision, paused, onBudgetChange]);
@@ -28,24 +27,36 @@ export function LearningBudgetPanel({ revision, paused, onAction, onBudgetChange
     } catch { setError("设置未能确认保存，请重试。"); } finally { setBusy(false); }
   }
   const totalSeconds = budget ? budget.daily_minutes * 60 + budget.extra_seconds : 0;
-  const usedPercent = totalSeconds ? Math.min(100, budget!.estimated_used_seconds / totalSeconds * 100) : 0;
+  const usedSeconds = budget?.effective_used_seconds ?? budget?.estimated_used_seconds ?? 0;
+  const usedPercent = totalSeconds ? Math.min(100, usedSeconds / totalSeconds * 100) : 0;
+  const reasons: Record<string, string> = {
+    due_review_priority: "今日复习任务优先，已按预计复习时间安排新词。",
+    budget_nearly_exhausted: "可分配时间接近用尽，已减少新词。",
+    future_workload_high: "未来复习负担偏高，已收紧今天的新词量。",
+    new_word_ceiling_reached: "已达到你设置的新词安全上限。",
+    low_history_confidence: "个人有效学习样本较少，当前按初始成本估算。",
+    exam_deadline_risk: "按当前预算，预计无法在目标日期前覆盖计划词汇；可以增加学习时间或调整目标范围。",
+  };
+  const reasonText = (budget?.reason_codes ?? []).map(code => reasons[code]).filter(Boolean);
   return <section className="learning-budget-summary" aria-label="学习时间">
     <div className="learning-budget-heading">
       <div><h3>学习时间</h3><p>{budget ? `今日 ${budget.daily_minutes} 分钟${budget.extra_seconds ? ` · 已加练 ${Math.round(budget.extra_seconds / 60)} 分钟` : ""}` : "正在读取今日时间…"}</p></div>
       {budget && <span className="learning-budget-remaining"><b>{Math.floor(budget.remaining_seconds / 60)}</b><span>分钟可用</span></span>}
     </div>
     {budget && <>
-      <div className="learning-budget-meter" role="progressbar" aria-label="今日预计时间安排" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(usedPercent)} aria-valuetext={`预计已安排 ${Math.ceil(budget.estimated_used_seconds / 60)} 分钟`}><span style={{width:`${usedPercent}%`}} /></div>
-      <p className="learning-budget-note">预计已安排 {Math.ceil(budget.estimated_used_seconds / 60)} 分钟{paused ? " · 待学任务已保留" : " · 按题型估算"}</p>
-      <div className="learning-budget-facts"><span>待复习 <b>{budget.due_count}</b></span><span>逾期 <b>{budget.overdue_count}</b></span><span>可新增 <b>{budget.effective_new_limit}</b></span></div>
-      {budget.overdue_count > 0 && budget.effective_new_limit === 0 && <p className="learning-budget-note">先处理逾期复习，再安排新词。</p>}
+      <div className="learning-budget-meter" role="progressbar" aria-label="今日学习时间" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(usedPercent)} aria-valuetext={`已学习或预留约 ${Math.ceil(usedSeconds / 60)} 分钟`}><span style={{width:`${usedPercent}%`}} /></div>
+      <p className="learning-budget-note">{budget.effective_used_seconds !== undefined ? `有效学习 ${Math.ceil(usedSeconds / 60)} 分钟` : `已安排约 ${Math.ceil(usedSeconds / 60)} 分钟`}{paused ? " · 待学任务已保留" : " · 当前题目可以完成"}</p>
+      <div className="learning-budget-facts">
+        <span>到期复习 <b>{budget.due_count}</b></span>
+        <span>预计复习 <b>{Math.ceil((budget.estimated_review_seconds ?? budget.due_count * (budget.cost_profile?.review_seconds ?? 8)) / 60)} 分钟</b></span>
+        <span>今日已引入 <b>{budget.new_words_started_today ?? 0}</b></span>
+        <span>推荐新词 <b>{budget.effective_new_limit ?? 0}</b></span>
+        <span>预计今日合计 <b>{Math.ceil((budget.estimated_total_seconds ?? usedSeconds) / 60)} 分钟</b></span>
+      </div>
+      {reasonText.length > 0 && <ul className="learning-budget-reasons">{reasonText.map((note, index) => <li key={`${budget.date}-${index}`}>{note}</li>)}</ul>}
+      {budget.adaptive_plan && <p className="learning-budget-note">未来 7 天正常情景约 {Math.ceil(budget.adaptive_plan.future_burden_normal.next_7_days_seconds / 60)} 分钟，偏高情景约 {Math.ceil(budget.adaptive_plan.future_burden_elevated.next_7_days_seconds / 60)} 分钟。{budget.forecast_assumption}</p>}
     </>}
     <div className="learning-budget-actions">
-      <details className="learning-budget-editor"><summary>调整每日时间</summary>
-        <div className="learning-budget-controls"><label>每日分钟数 <input aria-label="每日学习分钟数" type="number" min={5} max={240} value={minutes} onChange={e => setMinutes(Number(e.target.value))} /></label>
-          <Button className="secondary" type="button" disabled={busy || !budget || !Number.isInteger(minutes) || minutes < 5 || minutes > 240} onClick={() => void run({action:"set_daily_time_budget",minutes})}>保存</Button></div>
-        <p className="learning-budget-note">用时为估计；未完成的复习继续保留。</p>
-      </details>
       <Button className="secondary" type="button" disabled={busy || !budget} onClick={() => void run({ action: "extend_daily_time_budget", request_id: extraKey })}>{busy ? "正在保存…" : "今天加练 15 分钟"}</Button>
     </div>
     {error && <p className="standalone-status error" role="alert">{error}</p>}
