@@ -27,7 +27,9 @@ export function LearningBudgetPanel({ revision, paused, onAction, onBudgetChange
     } catch { setError("设置未能确认保存，请重试。"); } finally { setBusy(false); }
   }
   const totalSeconds = budget ? budget.daily_minutes * 60 + budget.extra_seconds : 0;
-  const usedSeconds = budget?.effective_used_seconds ?? budget?.estimated_used_seconds ?? 0;
+  // Reserved tasks are charged against remaining time; the meter and daily
+  // total must show the same reserved-aware value, not measured time alone.
+  const usedSeconds = budget?.estimated_used_seconds ?? budget?.effective_used_seconds ?? 0;
   const usedPercent = totalSeconds ? Math.min(100, usedSeconds / totalSeconds * 100) : 0;
   const reasons: Record<string, string> = {
     due_review_priority: "今日复习任务优先，已按预计复习时间安排新词。",
@@ -45,7 +47,7 @@ export function LearningBudgetPanel({ revision, paused, onAction, onBudgetChange
     </div>
     {budget && <>
       <div className="learning-budget-meter" role="progressbar" aria-label="今日学习时间" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(usedPercent)} aria-valuetext={`已学习或预留约 ${Math.ceil(usedSeconds / 60)} 分钟`}><span style={{width:`${usedPercent}%`}} /></div>
-      <p className="learning-budget-note">{budget.effective_used_seconds !== undefined ? `有效学习 ${Math.ceil(usedSeconds / 60)} 分钟` : `已安排约 ${Math.ceil(usedSeconds / 60)} 分钟`}{paused ? " · 待学任务已保留" : " · 当前题目可以完成"}</p>
+      <p className="learning-budget-note">{budget.effective_used_seconds !== undefined ? `有效学习 ${Math.ceil(budget.effective_used_seconds / 60)} 分钟` : `已安排约 ${Math.ceil(usedSeconds / 60)} 分钟`}{paused ? " · 待学任务已保留" : " · 当前题目可以完成"}</p>
       <div className="learning-budget-facts">
         <span>到期复习 <b>{budget.due_count}</b></span>
         <span>预计复习 <b>{Math.ceil((budget.estimated_review_seconds ?? budget.due_count * (budget.cost_profile?.review_seconds ?? 8)) / 60)} 分钟</b></span>

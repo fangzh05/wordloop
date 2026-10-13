@@ -133,6 +133,25 @@ describe("time budget admission", () => {
       expect(newWordAdmissionLimit(result)).toBe(3);
     } finally { vi.unstubAllEnvs(); }
   });
+  it("counts reserved task cost in the displayed estimated total, not measured time alone", async () => {
+    // The snapshot charges max(reserved, actual) against remaining seconds and
+    // excludes reserved Reviews from the plan's projections, so the displayed
+    // total must start from the reserved-aware used value. Preferring
+    // effective_used_seconds (measured only) would understate by reserved - actual.
+    const snapshot = { ...budget, remaining_seconds: 1500,
+      estimated_used_seconds: 1200, effective_used_seconds: 300,
+      due_count: 0, overdue_count: 0, unreserved_due_count: 0, unreserved_overdue_count: 0,
+      new_word_cap: 0, new_words_started_today: 0 };
+    const db = { rpc: vi.fn(async (name: string) => ({ data: name === "learning_budget_snapshot_v1" ? snapshot : true, error: null })) } as any;
+    vi.stubEnv("WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2", "true");
+    vi.stubEnv("WORDLOOP_TIME_CALIBRATION_V2", "false");
+    try {
+      const result = await getLearningBudget(db, "user-a");
+      expect(result.estimated_review_seconds).toBe(0);
+      expect(result.estimated_new_word_seconds).toBe(0);
+      expect(result.estimated_total_seconds).toBe(1200);
+    } finally { vi.unstubAllEnvs(); }
+  });
   it("adds a calibrated group budget after the adaptive daily target is reached", async () => {
     const snapshot = { ...budget, remaining_seconds: 0, new_words_started_today: 9, new_word_cap: 20, due_count: 2 };
     const db = { rpc: vi.fn(async (name: string) => ({ data: name === "learning_budget_snapshot_v1" ? snapshot : true, error: null })) } as any;

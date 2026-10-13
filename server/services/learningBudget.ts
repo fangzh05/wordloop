@@ -143,7 +143,11 @@ export async function getLearningBudget(db = getDatabase(), userId = getAuthenti
       const assumption = isPersonal
         ? `完整新词成本由个人 ${profile.new_word_samples} 个有效教学样本收缩估算。`
         : "学习历史不足，使用原有 77 秒/新词冷启动成本。";
-      const estimatedTotal = (b.effective_used_seconds ?? b.estimated_used_seconds)
+      // The snapshot charges max(measured, reserved) against remaining time;
+      // the displayed total must use the same reserved-aware value, because the
+      // plan's projections already exclude tasks covered by a reservation.
+      const usedSeconds = Math.max(b.estimated_used_seconds, b.effective_used_seconds ?? 0);
+      const estimatedTotal = usedSeconds
         + plan.projected_review_seconds + plan.projected_new_word_seconds;
       return {
         ...b,
