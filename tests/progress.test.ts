@@ -5,7 +5,7 @@ vi.mock("../server/services/learningBudget.js", async importOriginal => ({
   reserveLearningBudget: vi.fn(async () => undefined),
 }));
 import { describe, expect, it, vi } from "vitest";
-import { calculateProgress, calculateReviewTodayProgress, fsrsForecast, getProgress } from "../server/services/progress.js";
+import { calculateProgress, calculateReviewTodayProgress, fsrsForecast, getProgress, parseStudyStateForReviewProgress } from "../server/services/progress.js";
 import { makeStudyState } from "../server/services/studySessions.js";
 import type { StudyState, VocabularyItem, WordStatus } from "../server/types.js";
 
@@ -152,6 +152,26 @@ describe("progress calculation", () => {
 
     expect(review).toEqual({ completed: 25, total: 25, remaining: 0 });
     expect(today.today).toMatchObject({ completed: 6, total: 50 });
+  });
+
+  it("projects progress fields without validating frozen Lesson exercise plans", () => {
+    const lesson = makeStudyState({
+      date: "2026-09-27", widget: "lesson", phase: "lesson_explain", current_word: "opaque", current_index: 0,
+      retry_count: 0, flow: { relearn_words: ["opaque"], lesson_words: ["opaque"] },
+      payload: { widget: "lesson", mode: "explain", word: "opaque" },
+    });
+    const stateWithFrozenPlans = {
+      ...lesson,
+      flow: {
+        ...lesson.flow,
+        exercise_plans: Array.from({ length: 160 }, (_, index) => ({ corrupt_plan: index })),
+      },
+    } as unknown;
+
+    expect(parseStudyStateForReviewProgress(stateWithFrozenPlans)).toMatchObject({
+      widget: "lesson",
+      flow: { relearn_words: ["opaque"] },
+    });
   });
 
   it("carries completed cards from Review snapshot A into active snapshot B", () => {

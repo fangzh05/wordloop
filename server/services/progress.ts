@@ -1,19 +1,40 @@
 import { getLearningBudget } from "./learningBudget.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { ProgressResult, StudySessionRow, VocabularyItem } from "../types.js";
+import { STUDY_PHASES, type ProgressResult, type StudySessionRow, type StudyState, type StudyFlow, type VocabularyItem } from "../types.js";
 import { addCalendarDays, assertDatabaseResult, dateInTimeZone, localDateRange } from "./shared.js";
 import { perf } from "./perf.js";
-import { getActiveStudySession, normalizeStudyStateForRead, studyStateSchema } from "./studySessions.js";
+import { getActiveStudySession } from "./studySessions.js";
 import { getUserTimeZone } from "./words.js";
+import { z } from "zod";
+import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 
+type StudyProgressState = Pick<StudyState, "widget" | "phase" | "current_index" | "payload">
+  & { flow: Pick<StudyFlow, "relearn_words"> };
 type ReviewSessionProgressRow = Pick<StudySessionRow, "review_words_count"> & { state: unknown };
 
+// Progress only needs the review cursor, review kinds, and relearn words. The
+// full StudyState schema also walks frozen Lesson exercise plans, which can be
+// large and are irrelevant to these read-only counts.
+const studyProgressStateSchema = z.object({
+  version: z.literal(1),
+  date: z.string().trim().min(1),
+  widget: z.enum(["pretest", "lesson", "review"]),
+  phase: z.enum(STUDY_PHASES),
+  current_word: z.string().trim().max(100).nullable(),
+  current_index: z.number().int().min(0),
+  retry_count: z.number().int().min(0),
+  flow: z.object({
+    relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX),
+  }).passthrough().default({ relearn_words: [] }),
+  payload: z.record(z.string(), z.unknown()),
+}).passthrough();
+
 function safeStudyState(value: unknown) {
-  const parsed = studyStateSchema.safeParse(value);
-  return parsed.success ? normalizeStudyStateForRead(parsed.data) : null;
+  const parsed = studyProgressStateSchema.safeParse(value);
+  return parsed.success ? parsed.data as StudyProgressState : null;
 }
 
-type NormalizedStudyState = NonNullable<ReturnType<typeof safeStudyState>>;
+type NormalizedStudyState = StudyProgressState;
 
 export function parseStudyStateForReviewProgress(value: unknown): NormalizedStudyState | null {
   return safeStudyState(value);

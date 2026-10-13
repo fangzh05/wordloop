@@ -242,10 +242,8 @@ export async function getStudyBootstrap(options?: {
     if (options && (active?.updated_at ?? null) !== options.expectedRevision) {
       throw new StaleStudyStateError();
     }
-    const budget = await getLearningBudget(db, userId);
     if (options?.startNewRound === false && !active?.state) return { action: "done" };
     // Resume feedback and a question already on screen; never discard its draft.
-    if (budget.enabled && budget.remaining_seconds < 8 && !budget.review_override && (!active?.state || ["review_complete", "pretest_complete"].includes(active.state.phase))) return { action: "budget_complete" };
     let normalizedActive = active?.state && options?.activeStateNormalized !== true
       ? { ...active, state: normalizeStudyStateForRead(active.state) }
       : active;
@@ -253,6 +251,16 @@ export async function getStudyBootstrap(options?: {
       && normalizedActive.state.flow?.lesson_words === undefined
       && ["lesson_explain", "lesson_exercise", "lesson_feedback"].includes(normalizedActive.state.phase)) {
       normalizedActive = await normalizeLegacyLessonSession(normalizedActive, db, userId);
+    }
+    // A frozen task may always be resumed and completed, even when today's
+    // automatic admission budget is exhausted. Only read the planner at a
+    // task boundary where it can admit another Review/Pretest or start a flow.
+    const atAdmissionBoundary = !normalizedActive?.state
+      || ["review_complete", "pretest_complete"].includes(normalizedActive.state.phase);
+    const budget = atAdmissionBoundary ? await getLearningBudget(db, userId) : undefined;
+    if (budget?.enabled && budget.remaining_seconds < 8 && !budget.review_override
+      && (!normalizedActive?.state || ["review_complete", "pretest_complete"].includes(normalizedActive.state.phase))) {
+      return { action: "budget_complete" };
     }
     if (normalizedActive?.state) {
       if (options?.startNewRound === false && ["review_complete", "pretest_complete"].includes(normalizedActive.state.phase)) {
@@ -266,14 +274,19 @@ export async function getStudyBootstrap(options?: {
         return { action: "resume", widget: "lesson", phase: "lesson_complete" };
       }
       if (normalizedActive.state.widget === "review" && normalizedActive.state.phase === "review_complete") {
-        return continueCompletedReview(normalizedActive, options?.deferLessonQueueFreeze ?? false, budget);
+        return continueCompletedReview(normalizedActive, options?.deferLessonQueueFreeze ?? false, budget ?? await getLearningBudget(db, userId));
       }
       if (normalizedActive.state.widget === "pretest" && normalizedActive.state.phase === "pretest_complete") {
-        return continueCompletedPretest(normalizedActive, options?.deferLessonQueueFreeze ?? false, budget);
+        return continueCompletedPretest(normalizedActive, options?.deferLessonQueueFreeze ?? false, budget ?? await getLearningBudget(db, userId));
       }
       return { action: "resume", widget: normalizedActive.state.widget, phase: normalizedActive.state.phase };
     }
 
-    return bootstrapFreshFlow(db, userId, options?.deferLessonQueueFreeze ?? false, budget);
+    return bootstrapFreshFlow(
+      db,
+      userId,
+      options?.deferLessonQueueFreeze ?? false,
+      budget ?? await getLearningBudget(db, userId),
+    );
   });
 }

@@ -431,7 +431,7 @@ export async function getTodayOverview(
     db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: asOf.toISOString() }),
     import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf, timeZone)),
     db.from("captured_notes").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "inbox"),
-    db.from("study_sessions").select("state,review_words_count")
+    db.from("study_sessions").select("id,state,review_words_count")
       .eq("user_id", userId).gte("started_at", start).lt("started_at", end),
   ]);
   assertDb(session.error);
@@ -440,13 +440,14 @@ export async function getTodayOverview(
   assertDb(todaySessions.error);
   const progressData = progressSnapshot.data as Omit<ProgressResult, "review_today">;
   const activeState = parseStudyStateForReviewProgress(session.data?.state);
-  const parsedTodaySessions = ((todaySessions.data ?? []) as Array<Pick<StudySessionRow, "review_words_count"> & { state: unknown }>).map(row => ({
-    state: parseStudyStateForReviewProgress(row.state),
+  const parsedTodaySessions = ((todaySessions.data ?? []) as Array<Pick<StudySessionRow, "id" | "review_words_count"> & { state: unknown }>).map(row => ({
+    id: row.id,
+    state: row.id === session.data?.id ? activeState : parseStudyStateForReviewProgress(row.state),
     review_words_count: row.review_words_count,
   }));
   const reviewToday = calculateReviewTodayProgressFromParsed(activeState, session.data?.review_words_count, parsedTodaySessions);
   const relearnWords = new Set<string>();
-  const normalizedStates = [activeState, ...parsedTodaySessions.map(row => row.state)];
+  const normalizedStates = [activeState, ...parsedTodaySessions.filter(row => row.id !== session.data?.id).map(row => row.state)];
   for (const normalizedState of normalizedStates) {
     if (!normalizedState) continue;
     for (const word of normalizedState.flow.relearn_words) {
