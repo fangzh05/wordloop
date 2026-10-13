@@ -49,21 +49,33 @@ describe("Neon Data API identity bridge", () => {
 
   it("issues short-lived internal tokens with only the verified user identity", async () => {
 
-    await withUserIdentity(learner, async () => { await getDatabase().from("users").select("id").limit(1); }, "https://staging.wordloop.workers.dev");
+    await withUserIdentity(learner, async () => {
+      await getDatabase().from("users").select("id").limit(1);
+      await getDatabase().from("users").select("id").limit(1);
+    }, "https://staging.wordloop.workers.dev");
+    await withUserIdentity(learner, async () => { await getDatabase().from("users").select("id").limit(1); }, "https://wordloop.zehaoo.top");
     await withUserIdentity(owner, async () => { await getDatabase().from("users").select("id").limit(1); }, "https://staging.wordloop.workers.dev");
 
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(4);
     const first = requests[0]!.token.split(".");
     const second = requests[1]!.token.split(".");
+    const differentIssuer = requests[2]!.token.split(".");
+    const ownerToken = requests[3]!.token.split(".");
     expect(first).toHaveLength(3);
     expect(second).toHaveLength(3);
+    expect(differentIssuer).toHaveLength(3);
+    expect(ownerToken).toHaveLength(3);
+    expect(requests[0]!.token).toBe(requests[1]!.token);
     expect(decodePart(first[1]!).sub).toBe(learner);
     expect(decodePart(first[1]!).role).toBe("authenticated");
     expect(decodePart(first[1]!).iss).toBe("https://staging.wordloop.workers.dev");
     expect(decodePart(first[1]!).aud).toBe("wordloop-neon-api");
     expect(decodePart(first[1]!).exp as number).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 60);
-    expect(decodePart(second[1]!).sub).toBe(owner);
-    expect(decodePart(second[1]!).role).toBe("wordloop_admin");
+    expect(decodePart(differentIssuer[1]!).sub).toBe(learner);
+    expect(decodePart(differentIssuer[1]!).iss).toBe("https://wordloop.zehaoo.top");
+    expect(requests[0]!.token).not.toBe(requests[2]!.token);
+    expect(decodePart(ownerToken[1]!).sub).toBe(owner);
+    expect(decodePart(ownerToken[1]!).role).toBe("wordloop_admin");
   });
 
   it("publishes only the public EC verification key", () => {

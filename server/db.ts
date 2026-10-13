@@ -25,6 +25,7 @@ let client: SupabaseClient | undefined;
 let authClient: SupabaseClient | undefined;
 let authAdminClient: SupabaseClient | undefined;
 const neonClients = new Map<string, SupabaseClient>();
+const neonAccessTokens = new Map<string, { expiresAt: number; token: Promise<string> }>();
 let neonSigningKey: CryptoKey | undefined;
 let runtimeEnv: Record<string, unknown> | undefined;
 
@@ -55,7 +56,7 @@ export function configureRuntimeEnv(env: Record<string, unknown>): void {
   const configKeys = [
     "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_PUBLISHABLE_KEY",
     "NEON_DATA_API_URL", "NEON_JWT_AUDIENCE", "NEON_WORKER_JWT_PRIVATE_JWK",
-    "WORDLOOP_STAGING_DIAGNOSTICS",
+    "NEON_JWT_ISSUER", "WORDLOOP_STAGING_DIAGNOSTICS",
   ];
   const changed = configKeys.some((key) => runtimeEnv?.[key] !== env[key]);
   runtimeEnv = env;
@@ -64,6 +65,7 @@ export function configureRuntimeEnv(env: Record<string, unknown>): void {
     authClient = undefined;
     authAdminClient = undefined;
     neonClients.clear();
+    neonAccessTokens.clear();
     neonSigningKey = undefined;
   }
 }
@@ -165,26 +167,44 @@ async function getNeonSigningKey(): Promise<CryptoKey> {
 async function getNeonWorkerAccessToken(scopedIdentity?: RequestIdentity): Promise<string> {
   const identity = scopedIdentity ?? requestIdentity.getStore();
   if (!identity?.userId) throw new Error("Neon access requires a verified WordLoop user identity.");
-  const jwk = getNeonPrivateJwk();
   const env = activeEnv();
   const issuer = z.string().url().parse(env.NEON_JWT_ISSUER ?? identity.issuer);
   const audience = z.string().min(1).parse(env.NEON_JWT_AUDIENCE ?? "wordloop-neon-api");
   const now = Math.floor(Date.now() / 1000);
   const role = isLegacyOwner(identity.userId) ? "wordloop_admin" : "authenticated";
-  const header = encodeJson({ alg: "ES256", typ: "JWT", kid: jwk.kid ?? NEON_JWT_KID });
-  const payload = encodeJson({
-    iss: issuer,
-    aud: audience,
-    sub: identity.userId,
-    role,
-    iat: now,
-    exp: now + 60,
-  });
-  const signingInput = `${header}.${payload}`;
-  const signature = new Uint8Array(await crypto.subtle.sign(
-    { name: "ECDSA", hash: "SHA-256" }, await getNeonSigningKey(), encoder.encode(signingInput),
-  ));
-  return `${signingInput}.${base64Url(signature)}`;
+  const cacheKey = JSON.stringify([issuer, audience, identity.userId, role]);
+  const cached = neonAccessTokens.get(cacheKey);
+  if (cached && cached.expiresAt > now + 5) return cached.token;
+  if (cached) neonAccessTokens.delete(cacheKey);
+
+  const token = (async () => {
+    const jwk = getNeonPrivateJwk();
+    const header = encodeJson({ alg: "ES256", typ: "JWT", kid: jwk.kid ?? NEON_JWT_KID });
+    const payload = encodeJson({
+      iss: issuer,
+      aud: audience,
+      sub: identity.userId,
+      role,
+      iat: now,
+      exp: now + 60,
+    });
+    const signingInput = `${header}.${payload}`;
+    const signature = new Uint8Array(await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" }, await getNeonSigningKey(), encoder.encode(signingInput),
+    ));
+    return `${signingInput}.${base64Url(signature)}`;
+  })();
+  neonAccessTokens.set(cacheKey, { expiresAt: now + 60, token });
+  if (neonAccessTokens.size > 128) {
+    const oldestKey = neonAccessTokens.keys().next().value;
+    if (oldestKey !== undefined) neonAccessTokens.delete(oldestKey);
+  }
+  try {
+    return await token;
+  } catch (error) {
+    if (neonAccessTokens.get(cacheKey)?.token === token) neonAccessTokens.delete(cacheKey);
+    throw error;
+  }
 }
 
 /** Public verification key for Neon Data API's external JWT provider. */
@@ -294,6 +314,7 @@ export function resetDatabaseForTests(): void {
   authClient = undefined;
   authAdminClient = undefined;
   neonClients.clear();
+  neonAccessTokens.clear();
   neonSigningKey = undefined;
   runtimeEnv = undefined;
 }
