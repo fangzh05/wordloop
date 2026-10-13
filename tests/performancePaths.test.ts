@@ -21,7 +21,7 @@ describe("WordLoop hot-path query boundaries", () => {
   it("uses shared progress semantics without repeating active or daily-session queries in Today overview", () => {
     const analytics = source("server/services/analytics.ts");
     expect(analytics).toContain('rpc("get_progress_snapshot_v1"');
-    expect(analytics).toContain("calculateReviewTodayProgress(");
+    expect(analytics).toContain("calculateReviewTodayProgressFromParsed(");
     expect(analytics).not.toContain('import("./progress.js").then(({ getProgress })');
     expect(analytics.match(/from\("study_sessions"\)/g) ?? []).toHaveLength(2);
   });

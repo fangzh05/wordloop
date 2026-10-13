@@ -54,8 +54,9 @@ export async function getTodayCompletedLessonWords(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
   now = new Date(),
+  timeZoneOverride?: string,
 ): Promise<Set<string>> {
-  const timeZone = await getUserTimeZone(db, userId);
+  const timeZone = timeZoneOverride ?? await getUserTimeZone(db, userId);
   const date = dateInTimeZone(timeZone, now);
   const { start, end } = localDateRange(date, timeZone);
   const { data, error } = await db

@@ -15,6 +15,10 @@ function safeStudyState(value: unknown) {
 
 type NormalizedStudyState = NonNullable<ReturnType<typeof safeStudyState>>;
 
+export function parseStudyStateForReviewProgress(value: unknown): NormalizedStudyState | null {
+  return safeStudyState(value);
+}
+
 function isFormalReviewItem(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const reviewKind = (value as { review_kind?: unknown }).review_kind;
@@ -40,13 +44,27 @@ export function calculateReviewTodayProgress(
   active: Pick<StudySessionRow, "state"> & Partial<Pick<StudySessionRow, "review_words_count">> | null,
   sessions: readonly ReviewSessionProgressRow[],
 ): ProgressResult["review_today"] {
-  const activeState = safeStudyState(active?.state);
+  return calculateReviewTodayProgressFromParsed(
+    parseStudyStateForReviewProgress(active?.state),
+    active?.review_words_count,
+    sessions.map(session => ({
+      state: parseStudyStateForReviewProgress(session.state),
+      review_words_count: session.review_words_count,
+    })),
+  );
+}
+
+export function calculateReviewTodayProgressFromParsed(
+  activeState: NormalizedStudyState | null,
+  activeReviewWordsCount: number | undefined,
+  sessions: readonly { state: NormalizedStudyState | null; review_words_count?: number }[],
+): ProgressResult["review_today"] {
   if (activeState?.widget === "review") {
     const reviewTotal = reviewSnapshotTotal(activeState);
     const currentSnapshotCompleted = completedReviewSnapshot(activeState);
-    const storedReviewCount = typeof active?.review_words_count === "number"
-      && Number.isFinite(active.review_words_count)
-      ? Math.max(0, active.review_words_count)
+    const storedReviewCount = typeof activeReviewWordsCount === "number"
+      && Number.isFinite(activeReviewWordsCount)
+      ? Math.max(0, activeReviewWordsCount)
       : 0;
     const reviewCompleted = Math.max(
       storedReviewCount,
@@ -62,7 +80,7 @@ export function calculateReviewTodayProgress(
     const count = typeof session.review_words_count === "number" && Number.isFinite(session.review_words_count)
       ? Math.max(0, session.review_words_count)
       : 0;
-    const state = safeStudyState(session.state);
+    const state = session.state;
     if (state?.widget === "review") {
       const currentCompleted = completedReviewSnapshot(state);
       const accumulatedCompleted = Math.max(count, currentCompleted);

@@ -7,8 +7,7 @@ import { cardFromUserWord, createFsrsScheduler } from "./fsrsScheduler.js";
 import { addCalendarDays, dateInTimeZone, localDateRange } from "./shared.js";
 import { getUserTimeZone } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
-import { normalizeStudyStateForRead, studyStateSchema } from "./studySessions.js";
-import { calculateReviewTodayProgress } from "./progress.js";
+import { calculateReviewTodayProgressFromParsed, parseStudyStateForReviewProgress } from "./progress.js";
 
 const DEFINITION_VERSION = "wordloop-analytics-v1" as const;
 const PAGE_SIZE = 1000;
@@ -430,7 +429,7 @@ export async function getTodayOverview(
     db.from("study_sessions").select("id,state,started_at,updated_at,ended_at,review_words_count")
       .eq("user_id", userId).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle(),
     db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: asOf.toISOString() }),
-    import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf)),
+    import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf, timeZone)),
     db.from("captured_notes").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "inbox"),
     db.from("study_sessions").select("state,review_words_count")
       .eq("user_id", userId).gte("started_at", start).lt("started_at", end),
@@ -440,18 +439,15 @@ export async function getTodayOverview(
   assertDb(inboxCount.error);
   assertDb(todaySessions.error);
   const progressData = progressSnapshot.data as Omit<ProgressResult, "review_today">;
-  const reviewToday = calculateReviewTodayProgress(
-    session.data as (Pick<StudySessionRow, "state"> & Partial<Pick<StudySessionRow, "review_words_count">>) | null,
-    (todaySessions.data ?? []) as Array<Pick<StudySessionRow, "review_words_count"> & { state: unknown }>,
-  );
+  const activeState = parseStudyStateForReviewProgress(session.data?.state);
+  const parsedTodaySessions = ((todaySessions.data ?? []) as Array<Pick<StudySessionRow, "review_words_count"> & { state: unknown }>).map(row => ({
+    state: parseStudyStateForReviewProgress(row.state),
+    review_words_count: row.review_words_count,
+  }));
+  const reviewToday = calculateReviewTodayProgressFromParsed(activeState, session.data?.review_words_count, parsedTodaySessions);
   const relearnWords = new Set<string>();
-  const activeParsedState = session.data ? studyStateSchema.safeParse(session.data.state) : null;
-  const activeState = activeParsedState?.success ? normalizeStudyStateForRead(activeParsedState.data) : null;
-  const rawStates = [session.data?.state, ...(todaySessions.data ?? []).map((item: { state: unknown }) => item.state)];
-  for (const [index, rawState] of rawStates.entries()) {
-    const parsed = index === 0 ? activeParsedState : studyStateSchema.safeParse(rawState);
-    if (!parsed?.success) continue;
-    const normalizedState = index === 0 ? activeState : normalizeStudyStateForRead(parsed.data);
+  const normalizedStates = [activeState, ...parsedTodaySessions.map(row => row.state)];
+  for (const normalizedState of normalizedStates) {
     if (!normalizedState) continue;
     for (const word of normalizedState.flow.relearn_words) {
       const normalized = normalizeWord(word);

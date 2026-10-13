@@ -107,6 +107,9 @@ vi.mock("../server/services/studySessions.js", async () => {
   return {
     ...actual,
     getActiveStudySession: vi.fn(async () => mocks.active),
+    getActiveStudySessionRevision: vi.fn(async () => mocks.active
+      ? { id: mocks.active.id, updated_at: mocks.active.updated_at }
+      : null),
     assertActiveStudySessionRevision: vi.fn(async (expectedRevision: string | null, expectedSessionId?: string) => {
       if ((mocks.active?.updated_at ?? null) !== expectedRevision || (expectedSessionId && mocks.active?.id !== expectedSessionId)) {
         throw new actual.StaleStudyStateError();

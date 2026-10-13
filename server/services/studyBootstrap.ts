@@ -232,6 +232,7 @@ export async function getStudyBootstrap(options?: {
   expectedRevision: string | null;
   deferLessonQueueFreeze?: boolean;
   startNewRound?: boolean;
+  activeStateNormalized?: boolean;
 }): Promise<StudyBootstrapResult> {
   return perf("get_study_bootstrap", async () => {
     const db = getDatabase();
@@ -245,7 +246,7 @@ export async function getStudyBootstrap(options?: {
     if (options?.startNewRound === false && !active?.state) return { action: "done" };
     // Resume feedback and a question already on screen; never discard its draft.
     if (budget.enabled && budget.remaining_seconds < 8 && !budget.review_override && (!active?.state || ["review_complete", "pretest_complete"].includes(active.state.phase))) return { action: "budget_complete" };
-    let normalizedActive = active?.state
+    let normalizedActive = active?.state && options?.activeStateNormalized !== true
       ? { ...active, state: normalizeStudyStateForRead(active.state) }
       : active;
     if (normalizedActive?.state?.widget === "lesson"

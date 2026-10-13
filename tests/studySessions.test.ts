@@ -5,6 +5,7 @@ import {
   advanceStudyState,
   finishStudySession,
   getActiveStudySession,
+  getActiveStudySessionRevision,
   isCompletedLessonRound,
   isStudySessionSchemaMismatch,
   makeStudyState,
@@ -1161,5 +1162,25 @@ describe("study session migration", () => {
     expect(isStudySessionSchemaMismatch({ message: "column public.study_sessions.updated_at does not exist", code: "42703" })).toBe(true);
     expect(isStudySessionSchemaMismatch({ message: "Database connection failed" })).toBe(false);
     expect(isStudySessionSchemaMismatch({ message: "permission denied for table study_sessions" })).toBe(false);
+  });
+});
+
+describe("active study session revision reads", () => {
+  it("checks the active session revision without selecting or parsing its state", async () => {
+    const row = { id: "session-1", updated_at: "revision-1" };
+    const builder: Record<string, any> = {};
+    builder.select = vi.fn(() => builder);
+    builder.eq = vi.fn(() => builder);
+    builder.is = vi.fn(() => builder);
+    builder.order = vi.fn(() => builder);
+    builder.limit = vi.fn(() => builder);
+    builder.maybeSingle = vi.fn(async () => ({ data: row, error: null }));
+    const db = { from: vi.fn(() => builder) };
+
+    await expect(getActiveStudySessionRevision(db as any, "user-1")).resolves.toEqual(row);
+    expect(db.from).toHaveBeenCalledWith("study_sessions");
+    expect(builder.select).toHaveBeenCalledWith("id,updated_at");
+    expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(builder.is).toHaveBeenCalledWith("ended_at", null);
   });
 });

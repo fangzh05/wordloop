@@ -19,6 +19,7 @@ import {
   assertActiveStudySessionRevision,
   finishStudySession,
   getActiveStudySession,
+  getActiveStudySessionRevision,
   getPretestResults,
   getStudyDate,
   isCompletedLessonRound,
@@ -471,11 +472,11 @@ async function prepareBootstrap(expectedRevision?: string | null, startNewRound 
   let revision = active?.updated_at ?? null;
   if (expectedRevision !== undefined && revision !== expectedRevision) throw new StaleStudyStateError();
   if (active?.state) {
-    let state = normalizeStudyStateForRead(active.state);
+    let state = active.state;
     if (state.widget === "lesson" && state.flow.lesson_words === undefined) {
       active = await normalizeLegacyLessonSession(active, db, userId, revision);
       revision = active.updated_at;
-      state = normalizeStudyStateForRead(active.state!);
+      state = active.state!;
     }
     if (state.widget === "lesson" && state.flow.lesson_words !== undefined && state.phase !== "lesson_complete") {
       const completedBeforeSession = await getCompletedLessonWords(db, userId, active.started_at);
@@ -525,11 +526,12 @@ async function prepareBootstrap(expectedRevision?: string | null, startNewRound 
     expectedRevision: revision,
     deferLessonQueueFreeze: true,
     startNewRound,
+    activeStateNormalized: true,
   });
-  const latest = await getActiveStudySession(db, userId);
+  const latest = await getActiveStudySessionRevision(db, userId);
   if ((latest?.id ?? null) !== (active?.id ?? null)
     || (latest?.updated_at ?? null) !== revision) throw new StaleStudyStateError();
-  return { bootstrap, active: latest, revision };
+  return { bootstrap, active, revision };
 }
 
 async function persistPretest(
