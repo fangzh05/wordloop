@@ -443,20 +443,36 @@ async function successForSession(
     const progress = await progressIfAvailable(session);
     if (progress !== undefined) response.progress = progress;
   }
-  response.pending_consolidation = await pendingConsolidationSummary();
+  response.pending_consolidation = await pendingConsolidationSummary(session);
   return response;
 }
 
-async function pendingConsolidationSummary(): Promise<Record<string, unknown> | null> {
-  const cadence = await getLessonCadence();
-  const pending = cadence.pending_task;
-  if (!pending) return null;
-  const activity = pending.plan.planned_activity_type;
+function consolidationSummary(activity: string, estimatedSeconds: number): Record<string, unknown> {
   const label = activity === "translation_en_to_cn" ? "长难句英译中"
     : activity === "translation_cn_to_en" ? "完整中译英"
       : activity === "sentence" ? "情境造句"
         : activity === "collocation" ? "搭配练习" : "应用巩固";
-  return { activity_type: activity, label, estimated_seconds: pending.plan.estimated_seconds };
+  return { activity_type: activity, label, estimated_seconds: estimatedSeconds };
+}
+
+async function pendingConsolidationSummary(active?: StudySessionRow | null): Promise<Record<string, unknown> | null> {
+  const state = active?.state;
+  const plan = state?.widget === "lesson" && state.phase === "lesson_complete"
+    && state.payload.consolidation === true && state.payload.consolidation_status === "pending"
+    ? state.payload.consolidation_plan
+    : null;
+  if (typeof plan === "object" && plan !== null && !Array.isArray(plan)) {
+    const activity = Reflect.get(plan, "planned_activity_type");
+    const estimatedSeconds = Reflect.get(plan, "estimated_seconds");
+    if (typeof activity === "string" && typeof estimatedSeconds === "number"
+      && Number.isFinite(estimatedSeconds) && estimatedSeconds >= 0) {
+      return consolidationSummary(activity, estimatedSeconds);
+    }
+  }
+  const cadence = await getLessonCadence();
+  const pending = cadence.pending_task;
+  if (!pending) return null;
+  return consolidationSummary(pending.plan.planned_activity_type, pending.plan.estimated_seconds);
 }
 
 async function doneResponse(revision: string | null = null, includeProgress = true): Promise<Record<string, unknown>> {

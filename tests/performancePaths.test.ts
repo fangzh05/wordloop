@@ -13,7 +13,6 @@ describe("WordLoop hot-path query boundaries", () => {
     expect(code).not.toContain("getTodayWords(");
     expect(code).not.toContain("getDailyNewWordLimit(");
     expect(code).toContain("getUserTimeZone(");
-    expect(code).toContain('.select("review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")');
     expect(code).not.toContain('from("attempts")');
     expect(code).not.toContain("fsrs_review_logs");
   });
@@ -24,7 +23,10 @@ describe("WordLoop hot-path query boundaries", () => {
     expect(analytics).toContain("calculateReviewTodayProgressFromParsed(");
     expect(analytics).toContain("target_retention: FSRS_REQUEST_RETENTION");
     expect(analytics).not.toContain('import("./progress.js").then(({ getProgress })');
-    expect(analytics.match(/from\("study_sessions"\)/g) ?? []).toHaveLength(2);
+    expect(analytics).toContain('.select("id,review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words")');
+    expect(analytics).toContain('.select("id,review_items:state->payload->items")');
+    expect(analytics).toContain('.eq("state->>widget", "review")');
+    expect(analytics.match(/from\("study_sessions"\)/g) ?? []).toHaveLength(3);
   });
 
   it("uses review candidates from SQL and keeps learning context lightweight", () => {

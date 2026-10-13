@@ -425,26 +425,33 @@ export async function getTodayOverview(
 ) {
   const { asOf, timeZone } = await context(db, userId);
   const { start, end } = localDateRange(dateInTimeZone(timeZone, asOf), timeZone);
-  const [session, progressSnapshot, completedLessonWords, inboxCount, todaySessions] = await Promise.all([
+  const [session, progressSnapshot, completedLessonWords, inboxCount, todaySessions, todayReviewSessions] = await Promise.all([
     db.from("study_sessions").select("id,started_at,updated_at,review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")
       .eq("user_id", userId).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle(),
     db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: asOf.toISOString() }),
     import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf, timeZone)),
     db.from("captured_notes").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "inbox"),
-    db.from("study_sessions").select("id,review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")
+    db.from("study_sessions").select("id,review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words")
       .eq("user_id", userId).gte("started_at", start).lt("started_at", end),
+    db.from("study_sessions").select("id,review_items:state->payload->items")
+      .eq("user_id", userId).eq("state->>widget", "review").gte("started_at", start).lt("started_at", end),
   ]);
   assertDb(session.error);
   assertDb(progressSnapshot.error);
   assertDb(inboxCount.error);
   assertDb(todaySessions.error);
+  assertDb(todayReviewSessions.error);
   const progressData = progressSnapshot.data as Omit<ProgressResult, "review_today">;
   const activeState = parseStudyStateForReviewProgress(session.data);
+  const reviewItemsBySession = new Map(((todayReviewSessions.data ?? []) as Array<{ id: string; review_items?: unknown }>).map((row) => [row.id, row.review_items]));
   const parsedTodaySessions = ((todaySessions.data ?? []) as Array<Pick<StudySessionRow, "id" | "review_words_count"> & {
-    widget?: unknown; phase?: unknown; current_index?: unknown; relearn_words?: unknown; review_items?: unknown;
+    widget?: unknown; phase?: unknown; current_index?: unknown; relearn_words?: unknown;
   }>).map(row => ({
     id: row.id,
-    state: row.id === session.data?.id ? activeState : parseStudyStateForReviewProgress(row),
+    state: row.id === session.data?.id ? activeState : parseStudyStateForReviewProgress({
+      ...row,
+      review_items: reviewItemsBySession.get(row.id),
+    }),
     review_words_count: row.review_words_count,
   }));
   const reviewToday = calculateReviewTodayProgressFromParsed(activeState, session.data?.review_words_count, parsedTodaySessions);
