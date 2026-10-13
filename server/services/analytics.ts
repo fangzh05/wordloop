@@ -426,7 +426,7 @@ export async function getTodayOverview(
   const { asOf, timeZone } = await context(db, userId);
   const { start, end } = localDateRange(dateInTimeZone(timeZone, asOf), timeZone);
   const [session, progressSnapshot, completedLessonWords, inboxCount, todaySessions] = await Promise.all([
-    db.from("study_sessions").select("id,state,started_at,updated_at,ended_at,review_words_count")
+    db.from("study_sessions").select("id,started_at,updated_at,review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")
       .eq("user_id", userId).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle(),
     db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: asOf.toISOString() }),
     import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf, timeZone)),
@@ -439,7 +439,7 @@ export async function getTodayOverview(
   assertDb(inboxCount.error);
   assertDb(todaySessions.error);
   const progressData = progressSnapshot.data as Omit<ProgressResult, "review_today">;
-  const activeState = parseStudyStateForReviewProgress(session.data?.state);
+  const activeState = parseStudyStateForReviewProgress(session.data);
   const parsedTodaySessions = ((todaySessions.data ?? []) as Array<Pick<StudySessionRow, "id" | "review_words_count"> & {
     widget?: unknown; phase?: unknown; current_index?: unknown; relearn_words?: unknown; review_items?: unknown;
   }>).map(row => ({

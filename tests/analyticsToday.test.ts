@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTodayOverview } from "../server/services/analytics.js";
-import { makeStudyState } from "../server/services/studySessions.js";
 
 const mocks = vi.hoisted(() => ({
   getTodayCompletedLessonWords: vi.fn(async () => new Set(["beta", "gamma"])),
@@ -50,16 +49,11 @@ describe("Today overview progress reuse", () => {
       new_words_count: 0,
       review_words_count: 1,
       updated_at: "2026-10-14T00:01:00.000Z",
-      state: makeStudyState({
-        date: "2026-10-14",
-        widget: "review",
-        phase: "review",
-        current_word: "beta",
-        current_index: 1,
-        retry_count: 0,
-        flow: { relearn_words: ["beta"] },
-        payload: { widget: "review", items: reviewItems },
-      }),
+      widget: "review",
+      phase: "review",
+      current_index: 1,
+      relearn_words: ["beta"],
+      review_items: reviewItems,
     };
     const progressSnapshot = {
       today: { total: 8, known: 3, uncertain: 2, unknown: 3, completed: 5 },

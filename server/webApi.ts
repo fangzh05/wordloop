@@ -418,7 +418,7 @@ async function successForSession(
     const allowed=await getDatabase().rpc('can_access_private_source_v1',{p_user_id:getAuthenticatedUserId(),p_book_id:id});
     if(allowed.error||allowed.data!==true)throw new WebApiError(403,'PRIVATE_BOOK_UNAVAILABLE','当前会话的私人词书授权已失效。');
   }
-  const displayState = state.widget === "lesson"
+  const displayState = state.widget === "lesson" && state.phase !== "lesson_complete"
     ? { ...state, payload: await withLessonClozeHint(state.payload) }
     : state;
   const response = resultForState(session, displayState, extra);
