@@ -18,7 +18,8 @@
     "SUPABASE_URL": "https://jgzzrlnmakllhurjiazh.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_P1lM0vqrWtO23O8VoJTabQ_FI-Dsuo0",
     "NEON_DATA_API_URL": "https://ep-silent-paper-aznrjrrz.apirest.c-3.ap-southeast-1.aws.neon.tech/neondb/rest/v1",
-    "NEON_JWT_AUDIENCE": "wordloop-neon-api"
+    "NEON_JWT_AUDIENCE": "wordloop-neon-api",
+    "WORDLOOP_TIME_CALIBRATION_V2": "false"
   },
   "assets": {
     "directory": "./dist/assets",

@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import { useLearningTime } from "./useLearningTime.js";
 import { Button } from "../components/Button.js";
 import { FamilyEntry } from "../family/FamilyPanel.js";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
@@ -803,6 +804,7 @@ export default function StandaloneApp(): React.JSX.Element {
   const [answer, setAnswer] = useState("");
   const [notice, setNotice] = useState("");
   const [reviewFeedback, setReviewFeedback] = useState<{word:string; progress:string; feedback:Record<string,unknown>} | null>(null);
+  const flushLearningTime = useLearningTime(view?.learning_time, page === "study" && appSection === "study", busy !== null, reviewFeedback !== null);
   const [noticeIndex, setNoticeIndex] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [authError, setAuthError] = useState("");
@@ -1102,6 +1104,7 @@ export default function StandaloneApp(): React.JSX.Element {
     const previousDraftContext = lessonDraftContext(view?.state);
     let actionResponse: WebApiResponse | null = null;
     await runForegroundRequest(requestInFlightRef, async () => {
+      if (!["refresh_progress", "set_daily_time_budget", "extend_daily_time_budget", "set_daily_new_word_limit"].includes(actionName)) await flushLearningTime(false);
       setBusy(actionName || "action");
       setErrorMessage("");
       setNotice("");
@@ -1109,6 +1112,7 @@ export default function StandaloneApp(): React.JSX.Element {
       setRetryFields(stableFields);
       try {
         const next = await postAction(action);
+        if (!["refresh_progress", "set_daily_time_budget", "extend_daily_time_budget", "set_daily_new_word_limit"].includes(actionName)) await flushLearningTime(true);
         actionResponse = next;
         sessionRevisionRef.current = next.session_revision ?? sessionRevisionRef.current;
         if (actionName === "refresh_progress") {
@@ -1298,7 +1302,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {pageStatus === "ready" && !view && !errorMessage && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>正在加载今日学习…</p></div></section>}
 
-    {visiblePage === "study" && reviewFeedback && <section className="widget-card standalone-card lesson-card study-task-card"><StandaloneLessonFeedback word={reviewFeedback.word} progressLabel={reviewFeedback.progress} feedback={reviewFeedback.feedback} busy={busy !== null} busyLabel={busyLabel} notice="" nextWord={true} nextLabel="继续" continueOnly onBack={backToToday} onRetry={() => setReviewFeedback(null)} onNext={() => setReviewFeedback(null)} /></section>}
+    {visiblePage === "study" && reviewFeedback && <section className="widget-card standalone-card lesson-card study-task-card"><StandaloneLessonFeedback word={reviewFeedback.word} progressLabel={reviewFeedback.progress} feedback={reviewFeedback.feedback} busy={busy !== null} busyLabel={busyLabel} notice="" nextWord={true} nextLabel="继续" continueOnly onBack={backToToday} onRetry={() => { void flushLearningTime().then(() => setReviewFeedback(null)); }} onNext={() => { void flushLearningTime().then(() => setReviewFeedback(null)); }} /></section>}
 
     {visiblePage === "study" && !reviewFeedback && view?.screen === "done" && <section className="widget-card standalone-card study-task-card"><StandaloneLessonHeader title="本轮学习已完成" progressLabel="今日学习" onBack={backToToday}/><div className="standalone-content"><p>当前没有待学任务。你可以留在这里，稍后继续检查。</p><Button disabled={busy !== null} onClick={() => void dispatch({action:"continue"})}>继续学习</Button></div></section>}
 

@@ -65,6 +65,13 @@ describe("time budget admission", () => {
     expect(newWordAllowance({ ...overdue, new_words_started_today: 5, remaining_seconds: 76 })).toBe(5);
     expect(newWordAdmissionLimit({ ...overdue, enabled: false })).toBe(6);
   });
+  it("uses the authenticated learner's calibrated costs when admitting new words", () => {
+    const personal = { ...budget, overdue_count: 1, new_word_cap: 20, remaining_seconds: 300,
+      cost_profile: { version: "personal-time-v2-pilot", costs: {}, review_seconds: 20, new_word_seconds: 150,
+        new_word_source: "lifecycle_estimate" as const, new_word_samples: 20, new_word_confidence: "low" as const, updated_at: null } };
+    expect(newWordAllowance(personal)).toBe(2);
+    expect(newWordAllowance({ ...personal, cost_profile: undefined })).toBe(3);
+  });
   it("reserves study and consolidation costs and respects the word cap", () => {
     expect(newWordAllowance({ ...budget, new_word_cap: 3 })).toBe(3);
     expect(newWordAllowance({ ...budget, remaining_seconds: 76 })).toBe(0);

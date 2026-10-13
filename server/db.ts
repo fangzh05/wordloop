@@ -34,6 +34,10 @@ function activeEnv(): Record<string, unknown> {
   return {};
 }
 
+export function learningTimeCalibrationEnabled(): boolean {
+  return activeEnv().WORDLOOP_TIME_CALIBRATION_V2 === "true";
+}
+
 export function getShanbayImportBridgeConfig(): { url: string; secret: string } | null {
   const env = activeEnv();
   if (!env.SHANBAY_IMPORT_WORKER_URL || !env.SHANBAY_IMPORT_BRIDGE_SECRET) return null;

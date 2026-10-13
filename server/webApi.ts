@@ -1,4 +1,8 @@
 import {privateSourceIds,PrivateBookAccessError} from './services/sourceDictionary.js';
+import { learningTimeCalibrationEnabled } from "./db.js";
+import { recordLearningTime, timeObservationSchema } from "./services/learningTimeCalibration.js";
+import { getUserTimeZone } from "./services/words.js";
+import { dateInTimeZone } from "./services/shared.js";
 import { WebAuthError, authenticateWebUser } from "./webAuth.js";
 import {examBookId,listExamBooks,selectExamBook,listExamBookWords} from './services/examBooks.js';
 import { handleShanbayImportRequest } from "./shanbayImportApi.js";
@@ -118,6 +122,7 @@ import { familyGraphQuerySchema, familyStartSchema, familyAnswerSchema } from ".
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
 const webActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("record_learning_time"), observation: timeObservationSchema, ...mutationBase }).strict(),
   z.object({ action: z.literal("set_daily_time_budget"), minutes: z.number().int().min(5).max(240), ...mutationBase }).strict(),
   z.object({ action: z.literal("extend_daily_time_budget"), request_id: z.string().uuid(), ...mutationBase }).strict(),
   z.object({ action: z.literal("set_daily_new_word_limit"), ...setDailyNewWordLimitSchema.shape, ...mutationBase }).strict(),
@@ -387,6 +392,16 @@ async function successForSession(
   audioUrl?: string | null,
 ): Promise<Record<string, unknown>> {
   const state = ensureState(session);
+  if (learningTimeCalibrationEnabled()) {
+    try {
+      const timezone = await getUserTimeZone();
+      const stage = state.widget === "review" && state.phase === "review_complete" ? "feedback"
+        : state.phase === "lesson_explain" ? "explanation"
+          : state.phase.includes("feedback") || state.phase === "pretest_result" || state.payload.mode === "feedback" ? "feedback" : "answer";
+      const scope = state.widget === "review" ? "review" : state.widget === "pretest" ? "pretest" : state.payload.consolidation === true ? "consolidation" : "lesson";
+      extra = { ...extra, learning_time: { session_id: session.id, phase: state.phase, index: state.current_index, retry: state.retry_count, stage, scope, consolidation: state.payload.consolidation === true, consolidation_status: state.payload.consolidation_status, phase_started_at: session.updated_at, local_date: dateInTimeZone(timezone), timezone } };
+    } catch { /* telemetry cannot interrupt learning */ }
+  }
   for(const id of privateSourceIds(state)){
     const allowed=await getDatabase().rpc('can_access_private_source_v1',{p_user_id:getAuthenticatedUserId(),p_book_id:id});
     if(allowed.error||allowed.data!==true)throw new WebApiError(403,'PRIVATE_BOOK_UNAVAILABLE','当前会话的私人词书授权已失效。');
@@ -1656,6 +1671,7 @@ async function setDailyNewWordLimitAction(
 }
 
 async function performAction(action: WebAction): Promise<Record<string, unknown>> {
+  if (action.action === "record_learning_time") return recordLearningTime(action.observation);
   if (action.action === "set_daily_time_budget" || action.action === "extend_daily_time_budget") {
     await setLearningBudget(action.action === "set_daily_time_budget" ? action.minutes : undefined, action.action === "extend_daily_time_budget" ? action.request_id : undefined);
     const active = await getActiveStudySession();
