@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTodayOverview } from "../server/services/analytics.js";
+import { dateInTimeZone, localDateRange } from "../server/services/shared.js";
 
 const mocks = vi.hoisted(() => ({
-  getTodayCompletedLessonWords: vi.fn(async () => new Set(["beta", "gamma"])),
+  getTodayCompletedLessonWords: vi.fn(async (_db?: unknown, _userId?: string, _now?: Date, _timeZone?: string, _range?: { start: string; end: string }) => new Set(["beta", "gamma"])),
   getUserTimeZone: vi.fn(async () => "Asia/Shanghai"),
 }));
 
@@ -84,6 +85,8 @@ describe("Today overview progress reuse", () => {
     expect(result.captures.inbox_count).toBe(4);
     expect(rpc).toHaveBeenCalledOnce();
     expect(rpc).toHaveBeenCalledWith("get_progress_snapshot_v1", expect.objectContaining({ p_user_id: "user-1" }));
+    const [, , asOf, timeZone, range] = mocks.getTodayCompletedLessonWords.mock.calls[0]!;
+    expect(range).toEqual(localDateRange(dateInTimeZone(timeZone!, asOf!), timeZone!));
     expect(from.mock.calls.filter(([table]) => table === "study_sessions")).toHaveLength(3);
     expect(queryCalls).toContainEqual(["eq", "state->>widget", "review"]);
   });

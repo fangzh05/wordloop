@@ -423,13 +423,13 @@ export async function getTodayOverview(
   db: SupabaseClient = getDatabase(),
   userId = getAuthenticatedUserId(),
 ) {
-  const { asOf, timeZone } = await context(db, userId);
-  const { start, end } = localDateRange(dateInTimeZone(timeZone, asOf), timeZone);
+  const { asOf, timeZone, today } = await context(db, userId);
+  const { start, end } = localDateRange(today, timeZone);
   const [session, progressSnapshot, completedLessonWords, inboxCount, todaySessions, todayReviewSessions] = await Promise.all([
     db.from("study_sessions").select("id,started_at,updated_at,review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")
       .eq("user_id", userId).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle(),
     db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: asOf.toISOString() }),
-    import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf, timeZone)),
+    import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf, timeZone, { start, end })),
     db.from("captured_notes").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "inbox"),
     db.from("study_sessions").select("id,review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words")
       .eq("user_id", userId).gte("started_at", start).lt("started_at", end),
