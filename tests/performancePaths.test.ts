@@ -55,7 +55,8 @@ describe("WordLoop hot-path query boundaries", () => {
     expect(bootstrap).toContain("ensureTodayQueue(db, userId)");
     expect(bootstrap.indexOf("const queue = await ensureTodayQueue"))
       .toBeLessThan(reviewCall);
-    expect(bootstrap).toContain("getTodayWords(queue.date, db, userId)");
+    expect(bootstrap).toContain("getTodayWords(queue.date, db, userId, { hydrateExamCards: false })");
+    expect(bootstrap).toContain("hydrateSelectedWords(admitted, db, userId)");
   });
 
   it("ensures the daily queue before the dashboard reads progress", () => {

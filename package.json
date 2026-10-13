@@ -11,7 +11,9 @@
     "build:server": "tsc -p tsconfig.build.json",
     "build:worker": "node --import tsx scripts/build-worker.ts",
     "dev:worker": "npm run build && wrangler dev",
+    "dev:neon-staging": "npm run build && wrangler --config wrangler.neon-staging.jsonc dev",
     "deploy:worker": "npm run build && wrangler deploy",
+    "deploy:neon-staging": "npm run build && wrangler --config wrangler.neon-staging.jsonc deploy",
     "test:worker-mcp": "node scripts/smoke-worker-mcp.mjs",
     "start": "node node-dist/server/index.js",
     "typecheck": "tsc --noEmit",
@@ -27,6 +29,7 @@
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@neondatabase/postgrest-js": "^0.2.0-beta",
     "@supabase/supabase-js": "^2.57.4",
     "cytoscape": "3.33.1",
     "dotenv": "^17.2.2",

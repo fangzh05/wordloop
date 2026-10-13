@@ -11,6 +11,7 @@ import {
   visibleStandalonePage,
 } from "../web/src/standalone/StandaloneApp.js";
 import type { WebApiResponse } from "../web/src/standalone/apiClient.js";
+import { TodayPage } from "../web/src/standalone/pages/TodayPage.js";
 
 const progress = {
   today: { total: 50, known: 0, uncertain: 0, unknown: 0, completed: 0 },
@@ -36,6 +37,28 @@ function reviewView(): WebApiResponse {
 }
 
 describe("Standalone Dashboard and Study navigation", () => {
+  it("shows currently due FSRS reviews instead of the count scheduled in today's sessions", () => {
+    const view = reviewView();
+    view.progress = {
+      ...view.progress!,
+      review_today: { completed: 0, total: 0, remaining: 0 },
+      fsrs: { ...view.progress!.fsrs, due_now: 116 },
+    };
+    const markup = renderToStaticMarkup(<TodayPage
+      view={view}
+      busy={false}
+      tokenKey={null}
+      onBudgetAction={async () => ({})}
+      onContinue={() => undefined}
+      onStartConsolidation={() => undefined}
+      onOpenCapture={() => undefined}
+      onOpenVocabulary={() => undefined}
+    />);
+
+    expect(markup).toContain("目前有 116 个到期词待复习");
+    expect(markup).toContain("当前到期");
+  });
+
   it("shows independent daily progress and resumes the active Review cursor from Dashboard", () => {
     const view = reviewView();
     const markup = renderToStaticMarkup(<StandaloneDashboard view={view} busy={false} onContinue={() => undefined} />);

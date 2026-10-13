@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildReviewWidgetItems, reviewWidgetItemFromVocabulary } from "../server/tools/renderWidgets.js";
+import { buildReviewWidgetItems, reviewWidgetItemFromVocabulary, REVIEW_WIDGET_BATCH_SIZE } from "../server/tools/renderWidgets.js";
 import type { ReviewVocabularyItem } from "../server/types.js";
 
 function item(word: string): ReviewVocabularyItem {
@@ -24,6 +24,10 @@ function item(word: string): ReviewVocabularyItem {
 }
 
 describe("server-owned review widget payload", () => {
+  it("keeps each hydrated review round within the Worker request budget", () => {
+    expect(REVIEW_WIDGET_BATCH_SIZE).toBe(12);
+  });
+
   it("projects persisted vocabulary data and forces the deterministic direction", () => {
     const item: ReviewVocabularyItem = {
       word: "recur",

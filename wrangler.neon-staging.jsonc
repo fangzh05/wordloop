@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wordloop-neon-staging",
+  "main": "./dist/server/index.js",
+  "compatibility_date": "2026-10-10",
+  "workers_dev": true,
+  "vars": {
+    "SUPABASE_URL": "https://jgzzrlnmakllhurjiazh.supabase.co",
+    "DEV_USER_ID": "32903a88-9955-4b3e-b7ad-47623764cb25",
+    "WORDLOOP_STAGING_DIAGNOSTICS": "true",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_P1lM0vqrWtO23O8VoJTabQ_FI-Dsuo0",
+    "NEON_DATA_API_URL": "https://ep-silent-paper-aznrjrrz.apirest.c-3.ap-southeast-1.aws.neon.tech/neondb/rest/v1",
+    "NEON_JWT_AUDIENCE": "wordloop-neon-api"
+  },
+  "assets": {
+    "directory": "./dist/assets",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/health", "/api/*", "/.well-known/*"]
+  }
+}

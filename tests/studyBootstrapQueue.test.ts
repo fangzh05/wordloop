@@ -126,7 +126,7 @@ describe("study bootstrap daily queue invariant", () => {
     mocks.getTodayWords.mockResolvedValue([word(1, "new")]);
     const before = JSON.stringify(active);
     expect(await getStudyBootstrap({ activeSession: active, expectedRevision: "revision", startNewRound: true, deferLessonQueueFreeze: true })).toMatchObject({ action: "pretest", date: "2026-10-05" });
-    expect(mocks.getTodayWords).toHaveBeenCalledWith("2026-10-05", expect.anything(), expect.any(String));
+    expect(mocks.getTodayWords).toHaveBeenCalledWith("2026-10-05", expect.anything(), expect.any(String), { hydrateExamCards: false });
     expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
     expect(JSON.stringify(active)).toBe(before);
   });
@@ -176,9 +176,15 @@ describe("study bootstrap daily queue invariant", () => {
     expect((result as { action: "pretest"; words: VocabularyItem[] }).words).toHaveLength(6);
     expect(mocks.ensureTodayQueue).toHaveBeenCalledOnce();
     expect(mocks.getDueReviewSelection).toHaveBeenCalledOnce();
+    expect(mocks.getDueReviewSelection.mock.calls[0]?.[4]).toEqual({ hydrateExamCards: false });
     expect(mocks.ensureTodayQueue.mock.invocationCallOrder[0]!)
       .toBeLessThan(mocks.getDueReviewSelection.mock.invocationCallOrder[0]!);
-    expect(mocks.getTodayWords).toHaveBeenCalledWith(queue.date, {}, expect.any(String));
+    expect(mocks.getTodayWords).toHaveBeenCalledWith(queue.date, {}, expect.any(String), { hydrateExamCards: false });
+    expect(mocks.getVocabularyItemsByWords).toHaveBeenCalledWith(
+      (result as { action: "pretest"; words: VocabularyItem[] }).words.map((item) => item.word),
+      {},
+      expect.any(String),
+    );
   });
 
   it("prepares today's queue before short-circuiting to review", async () => {

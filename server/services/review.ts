@@ -147,6 +147,7 @@ export async function getDueReviewSelection(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
   now = new Date(),
+  options: { hydrateExamCards?: boolean } = {},
 ): Promise<{
   rollingReview: ReviewVocabularyItem[];
   oldRandomReview: VocabularyItem[];
@@ -161,7 +162,7 @@ export async function getDueReviewSelection(
       if (page.length < 1000) break;
     }
     const selected=selectDueReviewWords(candidates, limit, now);
-    const hydrated=await hydrateExamCards(selected,db,userId);
+    const hydrated=options.hydrateExamCards === false ? selected : await hydrateExamCards(selected,db,userId);
     return { rollingReview: hydrated.map(item=>decorateReviewWord(item,now)), oldRandomReview: [] };
 
   });

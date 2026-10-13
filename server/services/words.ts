@@ -217,13 +217,15 @@ export async function getTodayWords(
   date: string,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  options: { hydrateExamCards?: boolean } = {},
 ): Promise<VocabularyItem[]> {
   const { data, error } = await db.rpc("get_today_words_v2", {
     p_user_id: userId,
     p_date: date,
   });
   assertDatabaseResult(error);
-  return hydrateExamCards(((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc),db,userId);
+  const items = ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
+  return options.hydrateExamCards === false ? items : hydrateExamCards(items,db,userId);
 }
 
 /** Read only the persisted words needed to resume a session-aware lesson queue. */

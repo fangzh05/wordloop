@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { lessonInputSchema, registerRenderTools, reviewWidgetItemFromVocabulary } from "../server/tools/renderWidgets.js";
+import { lessonInputSchema, registerRenderTools, reviewWidgetItemFromVocabulary, REVIEW_WIDGET_BATCH_SIZE } from "../server/tools/renderWidgets.js";
 import type { ReviewVocabularyItem } from "../server/types.js";
 import { lessonPayloadSchema } from "../web/src/lesson/LessonWidget.js";
 
@@ -491,7 +491,7 @@ describe("Review render tool schema compatibility", () => {
       const legacy = payloadOf(await client.callTool({ name: "render_review_widget", arguments: {} }));
       const v2 = payloadOf(await client.callTool({ name: "render_review_widget_v2", arguments: {} }));
       expect(v2).toEqual(legacy);
-      expect(mockedGetDueReviewSelection).toHaveBeenCalledWith(200, {}, "00000000-0000-0000-0000-000000000001");
+      expect(mockedGetDueReviewSelection).toHaveBeenCalledWith(REVIEW_WIDGET_BATCH_SIZE, {}, "00000000-0000-0000-0000-000000000001");
     });
   });
 

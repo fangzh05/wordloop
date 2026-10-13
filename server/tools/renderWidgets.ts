@@ -994,6 +994,11 @@ export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): Revi
   });
 }
 
+// Each review word may require a dictionary lookup and a source-definition RPC.
+// Keep a round below Cloudflare's per-invocation outbound request limit while
+// leaving the full due count and persisted review state unchanged.
+export const REVIEW_WIDGET_BATCH_SIZE = 12;
+
 export function buildReviewWidgetItems(
   candidates: ReviewVocabularyItem[],
   limit = REVIEW_SESSION_MAX,
@@ -1033,10 +1038,10 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
     ? active.state
     : null;
   if (completedReviewState) throw new Error("REVIEW_STAGE_COMPLETE: 本组复习已完成，请继续预测试或补学。");
-  const { rollingReview } = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
+  const { rollingReview } = await getDueReviewSelection(REVIEW_WIDGET_BATCH_SIZE, db, userId);
   const candidates = rollingReview;
   if (candidates.length === 0) throw new Error("No review words are currently due.");
-  const items = buildReviewWidgetItems(candidates, REVIEW_SESSION_MAX);
+  const items = buildReviewWidgetItems(candidates, REVIEW_WIDGET_BATCH_SIZE);
   if (items.length === 0) throw new Error("到期复习词缺少释义数据。");
   const payload = reviewWidgetPayloadSchema.parse({
     widget: "review",

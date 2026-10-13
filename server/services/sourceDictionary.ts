@@ -1,6 +1,6 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {z} from 'zod';
-import {getAuthenticatedUserId} from '../db.js';
+import {getAuthenticatedUserId,shouldExposeStagingDiagnostics} from '../db.js';
 import {normalizeWord} from './wordNormalization.js';
 import {getFamilyDictionary} from './familyDictionary.js';
 const sourceSchema=z.object({book_id:z.string(),entry_key:z.string(),definition_raw:z.string(),senses:z.array(z.object({pos:z.string(),definition_cn:z.string(),definition_en:z.string().nullable().optional()})),
@@ -8,6 +8,9 @@ const sourceSchema=z.object({book_id:z.string(),entry_key:z.string(),definition_
  third_party_processing_allowed:z.boolean()});
 export type SourceDefinition=z.infer<typeof sourceSchema>;
 export class PrivateBookAccessError extends Error {readonly status=403;readonly code='PRIVATE_BOOK_ACCESS_REVOKED';constructor(){super('PRIVATE_BOOK_ACCESS_REVOKED');}}
+function safeDiagnosticMessage(value:unknown):string{
+ return String(value??'unknown error').replace(/Bearer\s+\S+/gi,'Bearer [redacted]').replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,'[token]').replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,'[email]').replace(/\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/gi,'[id]').replace(/https?:\/\/[^\s"'()]+/gi,'[url]').replace(/[\r\n\t]+/g,' ').slice(0,180);
+}
 export function privateSourceIds(value:unknown):string[]{
  const ids=new Set<string>();
  const collect=(v:unknown):void=>{if(!v||typeof v!=='object')return;const obj=v as Record<string,unknown>;
@@ -23,8 +26,8 @@ export async function currentBookDefinitions(word:string,db:SupabaseClient,userI
  const result=await db.rpc('current_book_definitions_v1',{p_user_id:userId,p_word:normalizeWord(word)});
  // Rolling migration compatibility. Missing RPC contains no private data.
  if(result.error?.code==='PGRST202')return [];
- if(result.error)throw Error('来源释义暂时不可用。');
- const parsed=z.array(sourceSchema).safeParse(result.data??[]);if(!parsed.success)throw Error('来源释义暂时不可用。');return parsed.data;
+ if(result.error){if(shouldExposeStagingDiagnostics(userId))console.error('WordLoop staging source definitions RPC failed',{code:result.error.code??null,message:safeDiagnosticMessage(result.error.message)});throw Error('来源释义暂时不可用。');}
+ const parsed=z.array(sourceSchema).safeParse(result.data??[]);if(!parsed.success){if(shouldExposeStagingDiagnostics(userId))console.error('WordLoop staging source definitions response invalid',{issue_count:parsed.error.issues.length});throw Error('来源释义暂时不可用。');}return parsed.data;
 }
 export async function sourceDictionaryDetail(word:string,db:SupabaseClient,userId=getAuthenticatedUserId()){
  const [current,dictionary]=await Promise.all([currentBookDefinitions(word,db,userId),getFamilyDictionary(word,db)]);

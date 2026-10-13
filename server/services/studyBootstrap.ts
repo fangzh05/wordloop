@@ -14,6 +14,7 @@ import {
   StaleStudyStateError,
 } from "./studySessions.js";
 import { getTodayWords, getVocabularyItemsByWords } from "./words.js";
+import { normalizeWord } from "./wordNormalization.js";
 import {
   buildLessonWords,
   filterNewWordsWithoutLessonHistory,
@@ -41,6 +42,27 @@ async function firstLessonWord(
   const [item] = await getVocabularyItemsByWords([first], db, userId);
   if (!item) throw new Error("LESSON_WORD_NOT_FOUND");
   return item;
+}
+
+async function hydrateSelectedWords(
+  words: VocabularyItem[],
+  db: ReturnType<typeof getDatabase>,
+  userId: string,
+): Promise<VocabularyItem[]> {
+  if (words.length === 0) return [];
+  const hydrated = await getVocabularyItemsByWords(words.map((item) => item.word), db, userId);
+  const byWord = new Map(hydrated.map((item) => [normalizeWord(item.word), item]));
+  return words.map((item) => {
+    const selected = byWord.get(normalizeWord(item.word));
+    if (!selected) throw new Error("TODAY_WORD_NOT_FOUND");
+    return {
+      ...item,
+      senses: selected.senses?.length ? selected.senses : (item.senses ?? []),
+      ipa_us: selected.ipa_us ?? item.ipa_us,
+      ipa_uk: selected.ipa_uk ?? item.ipa_uk,
+      ...(selected.definition_source ? { definition_source: selected.definition_source } : {}),
+    };
+  });
 }
 
 async function freezeAndReadFirstLessonWord(
@@ -81,12 +103,14 @@ async function continueCompletedReview(
   if (!date) return { action: "done" };
 
   const [todayWords, completedLessonWords] = await Promise.all([
-    getTodayWords(date, db, userId),
+    getTodayWords(date, db, userId, { hydrateExamCards: false }),
     getCompletedLessonWords(db, userId),
   ]);
   const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
   const admitted = newWords.slice(0, newWordAdmissionLimit(budget));
-  if (admitted.length > 0) return { action: "pretest", words: admitted, date };
+  if (admitted.length > 0) {
+    return { action: "pretest", words: await hydrateSelectedWords(admitted, db, userId), date };
+  }
 
   const existingLessonWords = lessonWordsFromFlow(active.state?.flow ?? { relearn_words: [] });
   if (existingLessonWords !== undefined) {
@@ -132,7 +156,7 @@ export async function continueCompletedPretest(
   // Replenish before reading candidates, keeping the session's date and cursor.
   await ensureDailyQueueForDate(date, db, userId);
   const [todayWords, completedLessonWords] = await Promise.all([
-    getTodayWords(date, db, userId),
+    getTodayWords(date, db, userId, { hydrateExamCards: false }),
     getCompletedLessonWords(db, userId),
   ]);
   const existingLessonWords = lessonWordsFromFlow(active.state?.flow ?? { relearn_words: [] });
@@ -159,7 +183,9 @@ export async function continueCompletedPretest(
     if (planned.action === "lesson") return planned;
     const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
     const admitted = newWords.slice(0, newWordAdmissionLimit(budget ?? await getLearningBudget(db, userId)));
-    return admitted.length > 0 ? { action: "pretest", words: admitted } : planned;
+    return admitted.length > 0
+      ? { action: "pretest", words: await hydrateSelectedWords(admitted, db, userId) }
+      : planned;
   }
   const frozen = await freezeAndReadFirstLessonWord(active, todayWords);
   if (frozen.word) return { action: "lesson", word: frozen.word };
@@ -167,7 +193,7 @@ export async function continueCompletedPretest(
   const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
   const admitted = newWords.slice(0, newWordAdmissionLimit(budget ?? await getLearningBudget(db, userId)));
   return admitted.length > 0
-    ? { action: "pretest", words: admitted }
+    ? { action: "pretest", words: await hydrateSelectedWords(admitted, db, userId) }
     : { action: "done" };
 }
 
@@ -179,19 +205,22 @@ async function bootstrapFreshFlow(
 ): Promise<StudyBootstrapResult> {
   const queue = await ensureTodayQueue(db, userId);
 
-  const review = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
+  // Bootstrap only needs to know whether a due queue exists. Hydrating every
+  // review card here fans out one or more Neon requests per word before the
+  // bounded Review widget is built, exceeding the Worker subrequest limit.
+  const review = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId, new Date(), { hydrateExamCards: false });
   if (review.rollingReview.length > 0) {
     return { action: "review", count: review.rollingReview.length };
   }
 
   const [todayWords, completedLessonWords] = await Promise.all([
-    getTodayWords(queue.date, db, userId),
+    getTodayWords(queue.date, db, userId, { hydrateExamCards: false }),
     getCompletedLessonWords(db, userId),
   ]);
   const newWords = filterNewWordsWithoutLessonHistory(todayWords, completedLessonWords);
   const admitted = newWords.slice(0, newWordAdmissionLimit(budget));
   if (admitted.length > 0) {
-    return { action: "pretest", words: admitted };
+    return { action: "pretest", words: await hydrateSelectedWords(admitted, db, userId) };
   }
 
   const lessonWords = buildLessonWords([], todayWords, completedLessonWords);

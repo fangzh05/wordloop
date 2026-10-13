@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
+import { LexicalAtlas } from "./LexicalAtlas.js";
 import { callServerTool, sendUserMessage, subscribeToApp, toolResultData } from "../mcpBridge.js";
 import { loadDictionaryPronunciationAudio, playPronunciation, pronunciationButtonLabel, selectEnglishVoice } from "../pronunciation/audio.js";
 import { z } from "zod";
@@ -297,7 +298,7 @@ export function lessonEyebrowLabel(progress?: string): string {
 
 export function buildLessonExerciseHeader(input: {activityType:string;wrapup:boolean;progress?:string;title?:string}): {eyebrow:string;heading:string} {
   if(input.wrapup)return {eyebrow:'长难句收尾',heading:'先找主干，再翻译'};
-  if(input.activityType==='exact_cloze')return {eyebrow:'新词学习'+(input.progress?' · '+input.progress:''),heading:'填空练习'};
+  if(input.activityType==='exact_cloze')return {eyebrow:input.progress ?? '学习练习',heading:'填空练习'};
   return {eyebrow:input.title??'练习',heading:input.progress??'当前练习'};
 }
 
@@ -461,6 +462,7 @@ export function LessonFeedbackNextStep({ canContinue, navigation }: {
 
 export function LessonWidget(): React.JSX.Element {
   const [payload, setPayload] = useState<Payload | null>(null);
+  const [lexicalAtlasOpen, setLexicalAtlasOpen] = useState(false);
   const [localMode, setLocalMode] = useState<Mode | null>(null);
   const [answer, setAnswer] = useState("");
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
@@ -927,7 +929,7 @@ export function LessonWidget(): React.JSX.Element {
     {payload.mode === "explain" && payload.ipa ? <div className="lesson-ipa">{payload.ipa}</div> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>核心义</h2><p>{payload.meaning_zh}</p></section> : null}
     {payload.mode === "explain" && payload.collocations.length ? <section className="lesson-section"><h2>高频搭配</h2><ul>{payload.collocations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
-    {payload.mode === "explain" && payload.derivations.length ? <section className="lesson-section"><h2>词族</h2><ul>{payload.derivations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
+    {payload.mode === "explain" ? <section className="lesson-section lesson-family-section"><div className="lesson-family-heading"><h2>词族</h2><Button className="secondary family-entry" type="button" onClick={() => setLexicalAtlasOpen(true)}>词族</Button></div>{payload.derivations.length ? <ul>{payload.derivations.map((entry) => <li key={entry}>{entry}</li>)}</ul> : <p>暂无已核验的现代派生词。</p>}</section> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{payload.example_en}</p>{payload.example_zh ? <p className="lesson-example-translation">{payload.example_zh}</p> : null}</section> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>补充</h2><p>{payload.note}</p></section> : null}
     <button className="play-button lesson-audio" type="button" onClick={play} disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)} aria-label={"播放 " + payload.word}>
@@ -938,6 +940,7 @@ export function LessonWidget(): React.JSX.Element {
       <span>发音来自 Merriam-Webster's Learner's Dictionary</span>
     </div> : null}
     <Button onClick={() => void startExercise()}>开始练习 <ArrowIcon className="button-icon trailing" /></Button>
+    {payload.mode === "explain" && lexicalAtlasOpen ? <LexicalAtlas word={payload.word} derivations={payload.derivations} onClose={() => setLexicalAtlasOpen(false)} /> : null}
     {error ? <p className="error-text" role="alert">{error}</p> : null}
   </section>;
 }

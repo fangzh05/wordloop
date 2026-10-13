@@ -102,7 +102,14 @@ export function deepSeekMessage(code: string, task: "grading" | "generation"): s
 
 function messageFor(error: unknown, deepSeekTask: "grading" | "generation" = "grading"): string {
   if (error instanceof ApiError) {
-    if (error.code === "INTERNAL_SERVER_ERROR") return "请求未完成，请重试。";
+    if (error.code === "INTERNAL_SERVER_ERROR") {
+      // Staging diagnostics are emitted by the Worker only for its configured
+      // owner account. Keep ordinary users on the generic message, but do not
+      // discard the safe error type/database code needed to debug staging.
+      return /\[staging诊断: [A-Za-z0-9_ ]+\]$/.test(error.message)
+        ? error.message
+        : "请求未完成，请重试。";
+    }
     if (error.code.startsWith("DEEPSEEK_")) return deepSeekMessage(error.code, deepSeekTask);
     return error.message;
   }

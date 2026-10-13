@@ -228,7 +228,11 @@ describe("guided lesson widget", () => {
       wrapup: false,
       progress: "6 / 6",
       title: "empire",
-    })).toEqual({ eyebrow: "新词学习 · 6 / 6", heading: "填空练习" });
+    })).toEqual({ eyebrow: "6 / 6", heading: "填空练习" });
+    expect(buildLessonExerciseHeader({activityType: "exact_cloze", wrapup: false, progress: "复习补学 5 / 6"}))
+      .toEqual({eyebrow: "复习补学 5 / 6", heading: "填空练习"});
+    expect(buildLessonExerciseHeader({activityType: "exact_cloze", wrapup: false, progress: "新词学习 1 / 4"}))
+      .toEqual({eyebrow: "新词学习 1 / 4", heading: "填空练习"});
   });
 
   it("ignores every Lesson tool input", () => {
