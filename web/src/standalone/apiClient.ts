@@ -239,6 +239,7 @@ export interface TodayOverview {
     review: { completed: number; total: number; remaining: number; scope: "active_session" | "today_recorded_sessions" };
     pretest: { total: number; completed: number; known: number; uncertain: number; unknown: number };
     formal_learning: { completed_words: number; completed_distinct_words: number; new_words: number; relearn_words: number };
+    due_now: number;
   };
   captures: { inbox_count: number };
 }

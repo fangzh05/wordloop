@@ -398,6 +398,7 @@ async function successForSession(
   session: StudySessionRow,
   extra: Record<string, unknown> = {},
   audioUrl?: string | null,
+  includeProgress = true,
 ): Promise<Record<string, unknown>> {
   // Every caller supplies a StudySessionRow parsed by studySessions or just
   // created from the validated server state. Avoid parsing its frozen payload
@@ -438,8 +439,10 @@ async function successForSession(
       response.pretest_summary = counts;
     }
   }
-  const progress = await progressIfAvailable(session);
-  if (progress !== undefined) response.progress = progress;
+  if (includeProgress) {
+    const progress = await progressIfAvailable(session);
+    if (progress !== undefined) response.progress = progress;
+  }
   response.pending_consolidation = await pendingConsolidationSummary();
   return response;
 }
@@ -456,12 +459,12 @@ async function pendingConsolidationSummary(): Promise<Record<string, unknown> | 
   return { activity_type: activity, label, estimated_seconds: pending.plan.estimated_seconds };
 }
 
-async function doneResponse(revision: string | null = null): Promise<Record<string, unknown>> {
+async function doneResponse(revision: string | null = null, includeProgress = true): Promise<Record<string, unknown>> {
   return {
     screen: "done",
     session_revision: revision,
     state: {},
-    progress: await getProgress(getDatabase(), getAuthenticatedUserId(), new Date(), false),
+    ...(includeProgress ? { progress: await getProgress(getDatabase(), getAuthenticatedUserId(), new Date(), false) } : {}),
     pending_consolidation: await pendingConsolidationSummary(),
   };
 }
@@ -757,9 +760,10 @@ async function createLessonFromBootstrap(
 }
 
 async function resolveBootstrap(expectedRevision?: string | null, startNewRound = true): Promise<Record<string, unknown>> {
+  const includeProgress = startNewRound;
   const prepared = await prepareBootstrap(expectedRevision, startNewRound);
   const { bootstrap, active, revision } = prepared;
-  if (bootstrap.action === "budget_complete") return { ...await doneResponse(revision), budget_paused: true };
+  if (bootstrap.action === "budget_complete") return { ...await doneResponse(revision, includeProgress), budget_paused: true };
   if (bootstrap.action === "resume") {
     if (!active) throw new WebApiError(409, "NO_ACTIVE_SESSION", "There is no active study session to resume.");
     if (active.state?.widget === "lesson" && active.state.payload.mode === "generation_error" && active.state.current_word) {
@@ -770,13 +774,13 @@ async function resolveBootstrap(expectedRevision?: string | null, startNewRound 
         index: active.state.current_index,
         expectedRevision: active.updated_at,
         sessionId: active.id,
-      })).session);
+      })).session, {}, undefined, includeProgress);
     }
     const consolidation = active.state?.widget === "lesson" ? lessonConsolidation(active.state) : null;
     if (active.state?.phase === "lesson_complete" && consolidation?.consolidation_status === "pending") {
-      return successForSession(active);
+      return successForSession(active, {}, undefined, includeProgress);
     }
-    return successForSession(active);
+    return successForSession(active, {}, undefined, includeProgress);
   }
   if (bootstrap.action === "review") {
     await buildReviewWidgetPayload(0, revision);
@@ -798,7 +802,7 @@ async function resolveBootstrap(expectedRevision?: string | null, startNewRound 
     });
     return { ...await resolveBootstrap(null), round_complete: true };
   }
-  return doneResponse(revision);
+  return doneResponse(revision, includeProgress);
 }
 
 function activeState(active: StudySessionRow | null, widget?: StudyState["widget"]): StudyState {

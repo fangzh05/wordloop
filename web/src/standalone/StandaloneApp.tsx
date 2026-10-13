@@ -877,7 +877,9 @@ export default function StandaloneApp(): React.JSX.Element {
         const progressView = await postAction({ action: "refresh_progress", expected_revision: sessionRevisionRef.current });
         sessionRevisionRef.current = progressView.session_revision ?? sessionRevisionRef.current;
         if (progressView.progress) {
-          setView((current) => current?.progress ? current : progressView);
+          setView((current) => current
+            ? current.progress ? current : { ...current, progress: progressView.progress }
+            : progressView);
         }
       } catch {
         // Keep the safe generation error and retry action visible if progress is unavailable.
@@ -902,6 +904,10 @@ export default function StandaloneApp(): React.JSX.Element {
         const next = await getBootstrap(overrideToken ?? activeToken);
         sessionRevisionRef.current = next.session_revision ?? null;
         setView(next);
+        if (!next.progress && appSection === "study"
+          && (next.screen === "done" || next.state.phase === "review_complete")) {
+          refreshProgressPendingRef.current = true;
+        }
         if (appSection === "study" && next.screen !== "done") setPage("study");
         setPageStatus("ready");
         setNotice("");

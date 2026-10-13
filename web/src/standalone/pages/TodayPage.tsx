@@ -73,7 +73,7 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
 
   const progress = today?.progress;
   const review = progress?.review;
-  const dueReviewCount = view?.progress?.fsrs.due_now;
+  const dueReviewCount = today?.progress.due_now ?? view?.progress?.fsrs.due_now;
   const reviewProgressNote = review?.scope === "active_session"
     ? "当前这一轮"
     : number(review?.total) > 0 ? "今日已安排复习" : "今日尚未安排复习";
@@ -108,7 +108,7 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
         <strong>{dueReviewCount ?? "—"}</strong>
         <small>当前到期</small>
       </div>
-      {view?.screen === "done" && number(view.progress?.fsrs.due_now) > 0 && <p>仍有 {number(view.progress?.fsrs.due_now)} 个到期词待复习，开始下一轮时安排。</p>}
+      {view?.screen === "done" && number(dueReviewCount) > 0 && <p>仍有 {number(dueReviewCount)} 个到期词待复习，开始下一轮时安排。</p>}
       <Button className="primary today-primary-action" type="button" disabled={busy || !view} onClick={onContinue}>
         {busy ? busyLabel ?? "正在处理…" : view?.budget_paused ? "查看保留的任务" : active ? "继续学习" : "开始下一轮"}
       </Button>

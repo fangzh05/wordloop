@@ -79,6 +79,7 @@ describe("Today overview progress reuse", () => {
     expect(result.progress.review).toMatchObject({ completed: 1, total: 3, remaining: 2, scope: "active_session" });
     expect(result.progress.pretest).toEqual(progressSnapshot.today);
     expect(result.progress.formal_learning).toMatchObject({ completed_words: 2, new_words: 1, relearn_words: 1 });
+    expect(result.progress.due_now).toBe(3);
     expect(result.captures.inbox_count).toBe(4);
     expect(rpc).toHaveBeenCalledOnce();
     expect(rpc).toHaveBeenCalledWith("get_progress_snapshot_v1", expect.objectContaining({ p_user_id: "user-1" }));

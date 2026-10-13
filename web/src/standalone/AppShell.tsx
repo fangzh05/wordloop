@@ -38,6 +38,7 @@ export function SettingsSheet({ open, onClose, appearance, onAppearanceChange, d
   const [saveError, setSaveError] = useState("");
   const [targetRetention, setTargetRetention] = useState<number | null>(null);
   const [dailyMinutes, setDailyMinutes] = useState(45);
+  const [resolvedDailyLimit, setResolvedDailyLimit] = useState(dailyLimit);
   const [examBookId, setExamBookId] = useState<string | null>(null);
   const [examDate, setExamDate] = useState("");
   const [coverageTarget, setCoverageTarget] = useState("");
@@ -78,6 +79,7 @@ export function SettingsSheet({ open, onClose, appearance, onAppearanceChange, d
       if (controller.signal.aborted) return;
       setTargetRetention(today.target_retention);
       setDailyMinutes(budget.daily_minutes);
+      setResolvedDailyLimit(budget.new_word_cap);
       setExamBookId(budget.exam_goal?.book_id ?? null);
       setExamDate(budget.exam_goal?.target_date ?? "");
       setCoverageTarget(budget.exam_goal?.coverage_target ? String(budget.exam_goal.coverage_target) : "");
@@ -104,7 +106,7 @@ export function SettingsSheet({ open, onClose, appearance, onAppearanceChange, d
         <div className="settings-budget-control"><label htmlFor="exam-coverage-target">计划覆盖词量（可选）</label><input id="exam-coverage-target" type="number" min={1} max={100000} placeholder="全部词书词汇" value={coverageTarget} disabled={busy || !examBookId} onChange={event => setCoverageTarget(event.target.value)} /></div>
         <button type="button" className="secondary-button" disabled={busy || !onSaveExamGoal || !examBookId || (coverageTarget !== "" && (!Number.isInteger(Number(coverageTarget)) || Number(coverageTarget) < 1 || Number(coverageTarget) > 100000))} onClick={async () => { setSaveError(""); try { await onSaveExamGoal?.(examDate || null, coverageTarget ? Number(coverageTarget) : null); const budget = await getBudget(); setExamBookId(budget.exam_goal?.book_id ?? null); setExamDate(budget.exam_goal?.target_date ?? ""); setCoverageTarget(budget.exam_goal?.coverage_target ? String(budget.exam_goal.coverage_target) : ""); } catch (error) { setSaveError(error instanceof Error ? error.message : "考试目标保存失败，请重试。"); } }}>保存考试目标</button>
       </div>
-      <details className="settings-section settings-advanced"><summary>高级设置</summary><div><h3>每日新词安全上限</h3><p>这是最多新增多少个词，不是每天必须完成的数量。降低上限不会删除已学记录。</p>{dailyLimit !== null && onSaveDailyNewWordLimit ? <DailyNewWordLimitEditor limit={dailyLimit} onSave={async (limit) => { setSaveError(""); try { return await onSaveDailyNewWordLimit(limit); } catch (error) { setSaveError(error instanceof Error ? error.message : "上限保存失败，请重试。"); throw error; } }} disabled={busy} /> : <p>当前上限暂时不可读取。</p>}</div></details>
+      <details className="settings-section settings-advanced"><summary>高级设置</summary><div><h3>每日新词安全上限</h3><p>这是最多新增多少个词，不是每天必须完成的数量。降低上限不会删除已学记录。</p>{resolvedDailyLimit !== null && onSaveDailyNewWordLimit ? <DailyNewWordLimitEditor limit={resolvedDailyLimit} onSave={async (limit) => { setSaveError(""); try { return await onSaveDailyNewWordLimit(limit); } catch (error) { setSaveError(error instanceof Error ? error.message : "上限保存失败，请重试。"); throw error; } }} onSaved={({ limit }) => setResolvedDailyLimit(limit)} disabled={busy} /> : <p>当前上限暂时不可读取。</p>}</div></details>
       {saveError && <p role="alert" className="standalone-status error">{saveError}</p>}
       <div className="settings-section"><h3>目标记忆率</h3><p>{targetRetention === null ? "暂时不可读取" : `${(targetRetention * 100).toFixed(0)}%`} · 只读，由当前 FSRS 调度配置决定。</p></div>
       <div className="settings-section"><h3>账号</h3><a className="auth-link" href="/reset-password">设置 / 修改密码</a><button type="button" className="settings-open-button" disabled={busy} onClick={async () => { try { const auth = await getAuthClient(); const result = await auth.auth.signOut({ scope: "local" }); if (result.error) throw result.error; clearToken(); sessionStorage.removeItem("wordloop_draft"); window.location.assign("/login"); } catch { setSaveError("退出失败，请重试。"); } }}>退出登录</button></div>

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { analyticsEnvelopeSchema, analyticsRangeSchema, todayOverviewSchema, type AnalyticsEnvelope, type AnalyticsRange, type AnalyticsSection } from "../../shared/analyticsContracts.js";
 import type { ProgressResult, StudySessionRow, UserWordRow } from "../types.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import { cardFromUserWord, createFsrsScheduler } from "./fsrsScheduler.js";
+import { cardFromUserWord, createFsrsScheduler, FSRS_REQUEST_RETENTION } from "./fsrsScheduler.js";
 import { addCalendarDays, dateInTimeZone, localDateRange } from "./shared.js";
 import { getUserTimeZone } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
@@ -465,7 +465,7 @@ export async function getTodayOverview(
   return todayOverviewSchema.parse({
     as_of: asOf.toISOString(),
     timezone: timeZone,
-    target_retention: Number(createFsrsScheduler().parameters.request_retention),
+    target_retention: FSRS_REQUEST_RETENTION,
     active_session: session.data ? {
       active: true,
       phase,
@@ -485,6 +485,7 @@ export async function getTodayOverview(
         new_words: Math.max(0, completedLessonWords.size - completedRelearnWords),
         relearn_words: completedRelearnWords,
       },
+      due_now: progressData.fsrs.due_now,
     },
     captures: { inbox_count: inboxCount.count ?? 0 },
   });

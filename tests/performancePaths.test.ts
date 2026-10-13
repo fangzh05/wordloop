@@ -22,6 +22,7 @@ describe("WordLoop hot-path query boundaries", () => {
     const analytics = source("server/services/analytics.ts");
     expect(analytics).toContain('rpc("get_progress_snapshot_v1"');
     expect(analytics).toContain("calculateReviewTodayProgressFromParsed(");
+    expect(analytics).toContain("target_retention: FSRS_REQUEST_RETENTION");
     expect(analytics).not.toContain('import("./progress.js").then(({ getProgress })');
     expect(analytics.match(/from\("study_sessions"\)/g) ?? []).toHaveLength(2);
   });

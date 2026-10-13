@@ -19,6 +19,8 @@ const parameters = {
   enable_short_term: false,
 };
 
+export const FSRS_REQUEST_RETENTION = parameters.request_retention;
+
 export function createFsrsScheduler(enableFuzz = true) {
   return fsrs({ ...parameters, enable_fuzz: enableFuzz });
 }

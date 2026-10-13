@@ -444,6 +444,30 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(mocks.getAnalytics).toHaveBeenCalledOnce();
   });
 
+  it("keeps read-only bootstrap resume light and hydrates progress on an explicit continue", async () => {
+    const state = makeStudyState({
+      date, widget: "pretest", phase: "pretest", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "resume", widget: "pretest", phase: "pretest" });
+
+    const bootstrap = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const bootstrapPayload = await body(bootstrap);
+    expect(bootstrap.status).toBe(200);
+    expect(bootstrapPayload).toMatchObject({ screen: "pretest", state: { phase: "pretest" } });
+    expect(bootstrapPayload).not.toHaveProperty("progress");
+    expect(mocks.getProgress).not.toHaveBeenCalled();
+
+    const continued = await handleWebApiRequest(post({ action: "continue" }, "rev-a"));
+    expect(continued.status).toBe(200);
+    expect(await body(continued)).toMatchObject({ progress: { today: { completed: 0, total: 1 } } });
+    expect(mocks.getProgress).toHaveBeenCalledOnce();
+  });
+
   it("serves vocabulary search and detail through owner-scoped read services", async () => {
     const page = await handleWebApiRequest(new Request("https://wordloop.test/api/web/vocabulary?q=harvest&filter=in_memory&filter=due&limit=50", {
       headers: { authorization: `Bearer ${mocks.token}` },
