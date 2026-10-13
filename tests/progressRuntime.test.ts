@@ -7,6 +7,7 @@ vi.mock("../server/services/learningBudget.js", async importOriginal => ({
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeStudyState } from "../server/services/studySessions.js";
 import { getProgress } from "../server/services/progress.js";
+import { getLearningBudget } from "../server/services/learningBudget.js";
 
 const mocks = vi.hoisted(() => ({
   getDatabase: vi.fn(),
@@ -81,5 +82,15 @@ describe("getProgress with historical session snapshots", () => {
     expect(progress.all_time).toMatchObject({ total_words: 6593, mastered: 46, error_book: 45 });
     expect(progress.fsrs.due_now).toBe(6);
     expect(progress.review_today).toMatchObject({ total: 17, completed: 17, remaining: 0 });
+    expect(progress.budget).toMatchObject({ enabled: true, daily_minutes: 45 });
+    expect(getLearningBudget).toHaveBeenCalledOnce();
+  });
+
+  it("skips budget planning when the caller only needs progress", async () => {
+    const progress = await getProgress(undefined, undefined, new Date("2026-10-02T00:00:00Z"), { includeBudget: false });
+
+    expect(progress.today).toMatchObject({ total: 50, completed: 12 });
+    expect(progress).not.toHaveProperty("budget");
+    expect(getLearningBudget).not.toHaveBeenCalled();
   });
 });

@@ -104,6 +104,7 @@ export async function getProgress(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
   now = new Date(),
+  options: { includeBudget?: boolean } = {},
 ): Promise<ProgressResult> {
   return perf("get_progress", async () => {
     const [{ data, error }, review_today] = await Promise.all([
@@ -111,7 +112,10 @@ export async function getProgress(
       getReviewTodayProgress(db, userId, now),
     ]);
     assertDatabaseResult(error);
-    return { ...(data as Omit<ProgressResult, "review_today">), review_today, budget: await getLearningBudget(db, userId) };
+    const progress = { ...(data as Omit<ProgressResult, "review_today">), review_today };
+    return options.includeBudget === false
+      ? progress
+      : { ...progress, budget: await getLearningBudget(db, userId) };
   });
 }
 

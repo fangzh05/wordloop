@@ -428,7 +428,7 @@ export async function getTodayOverview(
   const [session, progress, completedLessonWords, inboxCount] = await Promise.all([
     db.from("study_sessions").select("id,state,started_at,updated_at,ended_at")
       .eq("user_id", userId).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle(),
-    import("./progress.js").then(({ getProgress }) => getProgress(db, userId, asOf)),
+    import("./progress.js").then(({ getProgress }) => getProgress(db, userId, asOf, { includeBudget: false })),
     import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf)),
     db.from("captured_notes").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "inbox"),
   ]);

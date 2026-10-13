@@ -18,6 +18,11 @@ describe("WordLoop hot-path query boundaries", () => {
     expect(code).not.toContain("fsrs_review_logs");
   });
 
+  it("does not run the budget planner for the Today overview progress snapshot", () => {
+    const analytics = source("server/services/analytics.ts");
+    expect(analytics).toContain('getProgress(db, userId, asOf, { includeBudget: false })');
+  });
+
   it("uses review candidates from SQL and keeps learning context lightweight", () => {
     const review = source("server/services/review.ts");
     expect(review).toContain("get_review_candidates_v1");
