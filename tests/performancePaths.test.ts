@@ -18,9 +18,12 @@ describe("WordLoop hot-path query boundaries", () => {
     expect(code).not.toContain("fsrs_review_logs");
   });
 
-  it("does not run the budget planner for the Today overview progress snapshot", () => {
+  it("uses shared progress semantics without repeating active or daily-session queries in Today overview", () => {
     const analytics = source("server/services/analytics.ts");
-    expect(analytics).toContain('getProgress(db, userId, asOf, { includeBudget: false })');
+    expect(analytics).toContain('rpc("get_progress_snapshot_v1"');
+    expect(analytics).toContain("calculateReviewTodayProgress(");
+    expect(analytics).not.toContain('import("./progress.js").then(({ getProgress })');
+    expect(analytics.match(/from\("study_sessions"\)/g) ?? []).toHaveLength(2);
   });
 
   it("uses review candidates from SQL and keeps learning context lightweight", () => {
