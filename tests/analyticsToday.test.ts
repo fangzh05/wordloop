@@ -32,7 +32,7 @@ function queryBuilder(result: unknown, calls: unknown[][] = []) {
 describe("Today overview progress reuse", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("reuses its active and daily session rows for Review progress", async () => {
+  it("uses durable formal Review logs while reusing session rows for relearn counts", async () => {
     const reviewItems = ["alpha", "beta", "gamma"].map(word => ({
       word,
       meaning_zh: "词义",
@@ -78,7 +78,7 @@ describe("Today overview progress reuse", () => {
 
     const result = await getTodayOverview(db, "user-1");
 
-    expect(result.progress.review).toMatchObject({ completed: 1, total: 3, remaining: 2, scope: "active_session" });
+    expect(result.progress.review).toMatchObject({ completed: 4, total: 7, remaining: 3, scope: "today_recorded_sessions" });
     expect(result.progress.pretest).toEqual(progressSnapshot.today);
     expect(result.progress.formal_learning).toMatchObject({ completed_words: 2, new_words: 1, relearn_words: 1 });
     expect(result.progress.due_now).toBe(3);
@@ -87,8 +87,10 @@ describe("Today overview progress reuse", () => {
     expect(rpc).toHaveBeenCalledWith("get_progress_snapshot_v1", expect.objectContaining({ p_user_id: "user-1" }));
     const [, , asOf, timeZone, range] = mocks.getTodayCompletedLessonWords.mock.calls[0]!;
     expect(range).toEqual(localDateRange(dateInTimeZone(timeZone!, asOf!), timeZone!));
-    expect(from.mock.calls.filter(([table]) => table === "study_sessions")).toHaveLength(3);
-    expect(queryCalls).toContainEqual(["eq", "state->>widget", "review"]);
+    expect(from.mock.calls.filter(([table]) => table === "study_sessions")).toHaveLength(2);
+    expect(from.mock.calls.filter(([table]) => table === "fsrs_review_logs")).toHaveLength(1);
+    expect(queryCalls).toContainEqual(["eq", "review_source", "review"]);
+    expect(queryCalls).toContainEqual(["select", "id", { count: "exact", head: true }]);
   });
 
   it("loads Review snapshots selectively and retains completed Review counts after later stages", async () => {
@@ -106,7 +108,7 @@ describe("Today overview progress reuse", () => {
         if (studySessionReads === 2) return queryBuilder({ data: sessionRows, error: null }, queryCalls);
         return queryBuilder({ data: [{ id: "review-1", review_items: reviewItems }], error: null }, queryCalls);
       }
-      return queryBuilder({ data: null, count: 0, error: null }, queryCalls);
+      return queryBuilder({ data: null, count: table === "fsrs_review_logs" ? 5 : 0, error: null }, queryCalls);
     });
     const progressSnapshot = {
       today: { total: 0, known: 0, uncertain: 0, unknown: 0, completed: 0 },
@@ -119,6 +121,8 @@ describe("Today overview progress reuse", () => {
     const result = await getTodayOverview({ from, rpc } as unknown as SupabaseClient, "user-1");
 
     expect(result.progress.review).toEqual({ completed: 5, total: 5, remaining: 0, scope: "today_recorded_sessions" });
-    expect(queryCalls).toContainEqual(["eq", "state->>widget", "review"]);
+    expect(from.mock.calls.filter(([table]) => table === "study_sessions")).toHaveLength(2);
+    expect(from.mock.calls.filter(([table]) => table === "fsrs_review_logs")).toHaveLength(1);
+    expect(queryCalls).toContainEqual(["eq", "review_source", "review"]);
   });
 });
