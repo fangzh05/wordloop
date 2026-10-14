@@ -1,0 +1,20 @@
+{
+  "checked_at": "2026-10-14T17:52:20.160Z",
+  "deployed_commit": "a6260a39798e4d14fd2c17d3b76333b091aad101",
+  "worker_version": "fa90d49a-0b6a-4ca2-8424-670d984eb99b",
+  "bundle_match": true,
+  "bundle_sha256": "cc5a13901e00429aa44e49acede17695ab8938942a1d1f5844bd6c3aae2ce990",
+  "tests": {
+    "passed": 1012,
+    "failed": 0,
+    "skipped": 2,
+    "skipped_reason": "Optional Supabase remote write tests: isolated credentials not configured"
+  },
+  "browser_checks": {
+    "existing_signed_in_account_dashboard": "passed",
+    "resume_existing_session": "passed",
+    "refresh_restore_same_phase_and_cursor": "passed",
+    "test_answer_submitted": false,
+    "ordinary_learner_role_verified": false
+  }
+}

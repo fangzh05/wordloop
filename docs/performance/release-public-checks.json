@@ -1,0 +1,38 @@
+[
+  {
+    "request_id": null,
+    "path": "/health",
+    "status": 200,
+    "server_timing": [
+      "cfEdge;dur=222,cfOrigin;dur=0,cfWorker;dur=0"
+    ]
+  },
+  {
+    "request_id": null,
+    "path": "/api/web/auth/config",
+    "status": 200,
+    "server_timing": [
+      "cfEdge;dur=32,cfOrigin;dur=0,cfWorker;dur=0"
+    ]
+  },
+  {
+    "request_id": [
+      "f7813a93-043d-4baf-b75c-f09ae99f0cba"
+    ],
+    "path": "/api/web/bootstrap",
+    "status": 401,
+    "server_timing": [
+      "cfEdge;dur=446,cfOrigin;dur=0,cfWorker;dur=2"
+    ]
+  },
+  {
+    "request_id": [
+      "74a148f3-2244-48e8-9a72-c59cf56277fa"
+    ],
+    "path": "/api/web/budget",
+    "status": 401,
+    "server_timing": [
+      "cfEdge;dur=40,cfOrigin;dur=0,cfWorker;dur=2"
+    ]
+  }
+]

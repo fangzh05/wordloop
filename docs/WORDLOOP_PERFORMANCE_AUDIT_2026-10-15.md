@@ -2,6 +2,8 @@
 
 日期：2026-10-15（Asia/Shanghai）。分支：`codex/production-performance-audit`。本轮没有部署、上传 Worker 版本、修改生产数据库、创建索引、安装扩展或调整实例规格。原始工作区的未提交修改完整保留。
 
+> 以下第 1–9 节是首次诊断时的历史快照。用户随后授权“修复后部署”，最新修复、测试与生产发布结果见第 10 节。
+
 ## 结论与验收状态
 
 已证明存在的冗余是同一请求内重复预算预留和重复时区读取，已消除可复用的往返。当前证据还不能把用户感知卡顿归因于单一生产瓶颈，也不能宣布 800 ms / 3 秒 / 生产 P50 降低 30% 达标。
@@ -215,3 +217,28 @@ AI：现有配置和开放语义判断均保留。没有实际 schema repair 频
 剩余工作是取得获准的隔离生产等价环境，先解决/明确 main 基线测试失败，再在同设备网络、同区域/规格、普通 authenticated 身份、相同类型/长度题目、相同冷热缓存条件下采集基线与改动。每类至少 100 样本用于初步 P95，P99 需要更大样本并报告置信与误差；失败请求和重试必须保留。逐项核查重复 submission、预算扣减、证据消费、恢复和跨设备版本，比较数据库次数与 AI 次数后再评估 P95 800 ms / 3 秒和 P50 降低 30%。
 
 在这些证据到位前，不能认证生产等价性能测试完成，也不能断言实际瓶颈已最终定位。生产部署仍须用户确认；本报告不是上线许可。
+
+
+## 10. 后续修复与生产发布（2026-10-15）
+
+用户已明确授权修复后部署。本次修复的是过时测试契约及测试 SQL 加载，不改变正式学习统计、FSRS/BKT 数学或生产 schema。
+
+- `analyticsToday` / `progressRuntime` 改为验证权威正式 Review 日志数量，而非旧会话 cursor 或 review_words_count；同时断言按 review_source、日期和用户过滤，且不重复加载完整会话题目。
+- `performancePaths` 保留防全词库扫描的约束，更新为当前正式日志计数和两个小会话读取的边界。
+- `familyDatabase` 的 SQL fixture 统一 LF，修复 Windows CRLF 与 migration dollar-quoted marker 不一致；原有迁移文件和生产数据库均未修改。23 个此前未能执行的测试全部通过。
+- 全量结果：**1012 通过、0 失败、2 跳过**，122 个文件通过。剩余两个是 `supabase.integration.test.ts` 中需要隔离 Supabase service-role 环境的远程写库测试；本机没有该配置，未启用生产凭据替代隔离环境。
+- 类型检查、Web/Worker 构建、dry-run 通过。
+
+部署的代码提交：`a6260a39798e4d14fd2c17d3b76333b091aad101`。Worker：`wordloop-app`；版本：`fa90d49a-0b6a-4ca2-8424-670d984eb99b`；版本标签：`perf-a6260a3`。使用仓库正式 wrangler.jsonc 和 --keep-vars 发布，保留既有变量与密钥，Neon Data API、预算/时间校准 V2 绑定保持原值。没有执行数据库迁移、索引、扩展或实例变更。
+
+发布后核验：
+
+- 生产 Worker 上传包与本次 dry-run 产物逐字节一致，SHA-256 `cc5a13901e00429aa44e49acede17695ab8938942a1d1f5844bd6c3aae2ce990`。
+- 生产 app.js 与本次构建逐字节一致，SHA-256 `a58d6e96d7909b404f1273a484832876d8d67ff0c406dbd4c349440226b21776`。
+- `/health` 和 `/api/web/auth/config` 返回 200；无凭据 `/api/web/bootstrap` 和 `/api/web/budget` 返回 401，且带新的 request ID。Cloudflare 可附加自己的 Server-Timing；应用阶段 Server-Timing 仍保持默认关闭。
+- 使用 Chrome 中现有登录状态，在独立新标签页打开今日页，正式复习、学习进度和预算加载成功；继续学习可恢复服务端已有会话，刷新后阶段与游标保持一致。没有输入或提交测试答案，也没有读取密码/JWT。此证据只覆盖这个现有账号，未证明所有普通用户角色。
+- Workers 实时 tail 捕获新结构化日志。其中一个 `record_learning_time` 请求 200，worker_total_ms=528、auth_ms=323、db_calls=2。这证明追踪与真实认证/数据库路径工作；不是用户点击总耗时、不是 P95，也不能用单样本宣称性能目标达标。
+
+证据：[release-verification.json](performance/release-verification.json)、[release-public-checks.json](performance/release-public-checks.json)、[release-safe-traces.json](performance/release-safe-traces.json)。原始发布和测试日志保留在工作区忽略的 `release-*.log`。
+
+本次部署已完成。真实答题 P50/P95/P99、同网络前后对照、多设备及普通账号矩阵仍属于第 9 节列出的后续性能验收缺口。
