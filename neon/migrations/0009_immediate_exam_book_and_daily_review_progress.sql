@@ -1,5 +1,5 @@
 -- Switching a study book changes today's target immediately. Preserve the
--- existing queue and session snapshots; only move the preference boundary and
+-- existing queue and session snapshots, and only move the preference boundary and
 -- today's target row.
 CREATE OR REPLACE FUNCTION public.set_exam_book_v1(p_user_id uuid, p_book_id text)
 RETURNS jsonb
