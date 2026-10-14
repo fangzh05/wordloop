@@ -17,6 +17,14 @@ describe("exam-focused teaching policy", () => {
     expect(TEACHING_PROMPT).not.toContain("每完成 2 轮做一次 30–40 词的连贯听写");
   });
 
+  it("scores only the text replacing a blank, excluding words already shown after it", () => {
+    expect(TEACHING_PROMPT).toContain("accepted_answers 和 feedback.reference_answer 只能包含替换空格的文字");
+    expect(TEACHING_PROMPT).toContain("答案是“descent”，不是“descent into”");
+    expect(TEACHING_PROMPT).toContain("答案是“into”");
+    expect(LESSON_GENERATION_PROMPT).toContain("accepted_answers 只能包含将替换空格的内容");
+    expect(LESSON_GENERATION_PROMPT).toContain("不能把空格旁已经显示的词加入答案");
+  });
+
   it("keeps lesson derivations and existing explain fields", () => {
     const source = readFileSync(new URL("../server/tools/renderWidgets.ts", import.meta.url), "utf8");
     expect(source).toMatch(/derivations:\s*z\.array/);

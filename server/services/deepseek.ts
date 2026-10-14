@@ -229,6 +229,25 @@ function canonicalWordTokens(value: string): string[] {
   return canonicalizeRecallForm(value).match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? [];
 }
 
+function blankContextTokens(value: string): string[] {
+  return value.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)?.map((token) => token.toLocaleLowerCase()) ?? [];
+}
+
+function repeatsVisibleBlankContext(prompt: string, answer: string): boolean {
+  const parts = prompt.split("___");
+  if (parts.length !== 2) return false;
+  const before = blankContextTokens(parts[0] ?? "");
+  const after = blankContextTokens(parts[1] ?? "");
+  const answerTokens = blankContextTokens(answer);
+  for (let count = Math.min(before.length, answerTokens.length); count > 0; count -= 1) {
+    if (before.slice(-count).every((token, index) => token === answerTokens[index])) return true;
+  }
+  for (let count = Math.min(after.length, answerTokens.length); count > 0; count -= 1) {
+    if (answerTokens.slice(-count).every((token, index) => token === after[index])) return true;
+  }
+  return false;
+}
+
 function containsTokenSequence(haystack: readonly string[], needle: readonly string[]): boolean {
   if (needle.length === 0 || needle.length > haystack.length) return false;
   return haystack.some((_, start) => needle.every((token, offset) => haystack[start + offset] === token));
@@ -296,6 +315,12 @@ export function validateGeneratedLessonExercise(
     }
     if (!exercise.accepted_answers?.length) {
       issues.push({ path: ["exercise", "accepted_answers"], message: "A fixed-answer exercise requires accepted_answers." });
+    }
+    if (exercise.accepted_answers?.some((answer) => repeatsVisibleBlankContext(exercise.prompt, answer))) {
+      issues.push({
+        path: ["exercise", "accepted_answers"],
+        message: "For a blank, accepted_answers must contain only the missing text and must not repeat words already shown beside it.",
+      });
     }
     if (promptContainsTarget(exercise.prompt, context.word)) {
       issues.push({ path: ["exercise", "prompt"], message: "The target word must not appear outside the blank." });

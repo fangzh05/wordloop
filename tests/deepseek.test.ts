@@ -436,6 +436,28 @@ describe("DeepSeek stateless JSON client", () => {
     expect(hyphenVariantLeak.some((issue) => issue.message.includes("target word"))).toBe(true);
   });
 
+  it("rejects fixed answers that repeat words already shown beside a blank", () => {
+    const context = {
+      ...lessonInput,
+      word: "descent",
+      error_focus: "collocation" as const,
+      plan: { ...lessonInput.plan, target_sense: "下降", planned_activity_type: "collocation" as const, error_focus: "collocation" as const },
+    };
+    const repeatedContext = {
+      activity_type: "collocation" as const,
+      instruction: "根据搭配，在空格处填写缺失的词。",
+      prompt: "The route included a steep ___ into the valley.",
+      accepted_answers: ["descent into"],
+      multiline: false,
+    };
+    const validBlankAnswer = { ...repeatedContext, accepted_answers: ["descent"] };
+
+    expect(validateGeneratedLessonExercise(context, { example_en: example, exercise: repeatedContext }))
+      .toContainEqual(expect.objectContaining({ path: ["exercise", "accepted_answers"], message: expect.stringContaining("must not repeat") }));
+    expect(validateGeneratedLessonExercise(context, { example_en: example, exercise: validBlankAnswer }))
+      .not.toContainEqual(expect.objectContaining({ path: ["exercise", "accepted_answers"] }));
+  });
+
   it("keeps ordinary Lesson generation closed while allowing a targeted collocation task", () => {
     const collocationExercise = {
       activity_type: "collocation" as const,

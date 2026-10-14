@@ -290,6 +290,15 @@ export function feedbackGuidanceLabel(reveal: boolean): string {
   return reveal ? "解释" : "错因与改法";
 }
 
+/** Keep the frozen original exercise visible while explaining the answer. */
+export function LessonFeedbackQuestion({ exercise }: { exercise: ExercisePayload }): React.JSX.Element {
+  return <section className="lesson-feedback-question" aria-label="本题原题">
+    <span>本题原题</span>
+    <strong>{exercise.instruction}</strong>
+    <p>{exercise.prompt}</p>
+  </section>;
+}
+
 export function lessonEyebrowLabel(progress?: string): string {
   if (progress?.startsWith("复习补学")) return "复习词";
   if (progress?.startsWith("新词学习")) return "新词";
@@ -890,6 +899,7 @@ export function LessonWidget(): React.JSX.Element {
         </div>
         <FocusButton />
       </header>
+      <LessonFeedbackQuestion exercise={payload.exercise} />
       {feedback?.user_answer || answer ? <div className="lesson-answer"><span>你的答案</span><p>{feedback?.user_answer ?? answer}</p></div> : null}
       {!correct ? <div className="lesson-feedback">
         {feedback?.error_layer ? <p><strong>错误层：</strong>{feedback.error_layer}</p> : null}

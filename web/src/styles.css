@@ -333,6 +333,10 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .lesson-example-translation { color: var(--muted); }
 .lesson-exercise-heading { margin-top: 0.5rem; color: var(--text); font-size: 1rem; line-height: 1.4; }
 .lesson-prompt { margin-top: 0.75rem; padding: 1rem; border-radius: 14px; background: var(--control); color: var(--text); font-size: 1.05rem; line-height: 1.65; white-space: pre-wrap; }
+.lesson-feedback-question { margin-top: 0.7rem; padding: 0.85rem; border: 1px solid var(--separator); border-radius: 14px; background: var(--material-raised); }
+.lesson-feedback-question > span { display: block; color: var(--muted); font-size: 0.78rem; font-weight: 650; }
+.lesson-feedback-question > strong { display: block; margin-top: 0.35rem; color: var(--text); font-size: 0.9rem; line-height: 1.45; }
+.lesson-feedback-question > p { margin: 0.45rem 0 0; color: var(--text); font-size: 1rem; line-height: 1.6; white-space: pre-wrap; }
 .lesson-answer { margin-top: 0.7rem; padding: 0.85rem; border-radius: 14px; background: var(--control); }
 .lesson-answer > span { color: var(--muted); font-size: 0.78rem; font-weight: 650; }
 .lesson-answer p { margin: 0.35rem 0 0; white-space: pre-wrap; font-size: 0.94rem; line-height: 1.55; }

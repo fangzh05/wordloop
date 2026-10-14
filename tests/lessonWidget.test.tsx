@@ -11,6 +11,7 @@ import {
   buildRoundCompleteMessage,
   canStartNextLesson,
   feedbackGuidanceLabel,
+  LessonFeedbackQuestion,
   lessonEyebrowLabel,
   LESSON_MOUNT_RECOVERY_DELAY_MS,
   LESSON_VISIBILITY_RECOVERY_DELAY_MS,
@@ -450,6 +451,18 @@ describe("guided lesson widget", () => {
   it("labels first-error guidance separately from a revealed explanation", () => {
     expect(feedbackGuidanceLabel(false)).toBe("错因与改法");
     expect(feedbackGuidanceLabel(true)).toBe("解释");
+  });
+
+  it("shows the original prompt and exact blank instruction on the feedback card", () => {
+    const markup = renderToStaticMarkup(<LessonFeedbackQuestion exercise={{
+      activity_type: "collocation",
+      instruction: "根据搭配，在空格处填写缺失的词。",
+      prompt: "The route included a steep ___ into the valley.",
+      multiline: false,
+    }} />);
+    expect(markup).toContain("本题原题");
+    expect(markup).toContain("根据搭配，在空格处填写缺失的词。");
+    expect(markup).toContain("The route included a steep ___ into the valley.");
   });
 
   it("accepts future server metadata without dropping a valid feedback card", () => {
