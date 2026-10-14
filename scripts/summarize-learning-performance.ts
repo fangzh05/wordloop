@@ -8,13 +8,16 @@ export function distribution(values: number[]) {
 type Row = Record<string, any>;
 export function summarize(rows: Row[]) {
   const workers = rows.filter(r => r.event === "wordloop_request_performance");
-  const clients = new Map(rows.filter(r => r.event === "wordloop_interaction_performance").map(r=>[r.request_id,r]));
+  const clients = new Map(rows.filter(r => r.event === "wordloop_client_performance").map(r=>[r.request_id,r]));
+  for (const r of rows.filter(r => r.event === "wordloop_interaction_performance")) clients.set(r.request_id, r);
   const operations: Record<string, any> = {};
   for (const operation of new Set(workers.map(r=>String(r.operation)))) {
     const group = workers.filter(r=>r.operation===operation);
     const joined = group.map(r=>clients.get(r.request_id)).filter((r): r is Row => !!r);
     operations[operation] = {
       worker: distribution(group.map(r=>r.worker_total_ms)), client: distribution(joined.map(r=>r.client_total_ms)),
+      client_interaction: distribution(joined.filter(r=>r.event === "wordloop_interaction_performance").map(r=>r.client_total_ms)),
+      client_api_only: distribution(joined.filter(r=>r.event === "wordloop_client_performance").map(r=>r.client_total_ms)),
       telemetry_before: distribution(joined.map(r=>r.telemetry_before_ms)), telemetry_after: distribution(joined.map(r=>r.telemetry_after_ms)),
       error_rate: group.filter(r=>!r.success).length/group.length,
       mean_db_calls: group.reduce((n,r)=>n+r.db_calls,0)/group.length,
@@ -39,7 +42,7 @@ function extract(value: any): Row[] {
   if (typeof value === "string") { try { return extract(JSON.parse(value)); } catch { return []; } }
   if (Array.isArray(value)) return value.flatMap(extract);
   if (!value || typeof value !== "object") return [];
-  if (["wordloop_request_performance","wordloop_interaction_performance"].includes(value.event)) return [value];
+  if (["wordloop_request_performance","wordloop_interaction_performance","wordloop_client_performance"].includes(value.event)) return [value];
   return extract(value.logs ?? value.message ?? []);
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

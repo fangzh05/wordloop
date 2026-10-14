@@ -53,7 +53,12 @@ export async function traceWebRequest(request: Request, options: { sampleRate?: 
   const supplied = request.headers.get("x-wordloop-request-id");
   const requestId = supplied && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(supplied) ? supplied : crypto.randomUUID();
   const rate = Number.isFinite(options.sampleRate) ? Math.min(1, Math.max(0, options.sampleRate!)) : 0.1;
-  const t: Trace = { request_id: requestId, operation: request.method === "GET" ? "read" : "request", sampled: Math.random() < rate, started: performance.now(), timings: Object.fromEntries(stages.map(s => [s, 0])) as Record<Stage, number>, db_calls: 0, ai: [], memo: new WeakMap() };
+  const readOperations: Record<string, string> = {
+    "/api/web/bootstrap": "bootstrap", "/api/web/today": "today", "/api/web/budget": "budget",
+    "/api/web/evidence": "evidence", "/api/web/analytics": "analytics",
+  };
+  const operation = request.method === "GET" ? readOperations[new URL(request.url).pathname] ?? "read" : "request";
+  const t: Trace = { request_id: requestId, operation, sampled: Math.random() < rate, started: performance.now(), timings: Object.fromEntries(stages.map(s => [s, 0])) as Record<Stage, number>, db_calls: 0, ai: [], memo: new WeakMap() };
   return storage.run(t, async () => {
     let status = 500;
     try {
