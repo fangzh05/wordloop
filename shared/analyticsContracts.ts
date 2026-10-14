@@ -42,7 +42,7 @@ export const todayOverviewSchema = z.object({
       completed: nonnegativeIntegerSchema,
       total: nonnegativeIntegerSchema,
       remaining: nonnegativeIntegerSchema,
-      scope: z.enum(["active_session", "today_recorded_sessions"]),
+      scope: z.literal("today_recorded_sessions"),
     }).strict(),
     pretest: z.object({
       total: nonnegativeIntegerSchema,

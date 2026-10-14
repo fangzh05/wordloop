@@ -232,7 +232,7 @@ export interface TodayOverview {
   target_retention: number;
   active_session: { active: boolean; phase: string; phase_detail: string | null; started_at: string | null; updated_at: string | null };
   progress: {
-    review: { completed: number; total: number; remaining: number; scope: "active_session" | "today_recorded_sessions" };
+    review: { completed: number; total: number; remaining: number; scope: "today_recorded_sessions" };
     pretest: { total: number; completed: number; known: number; uncertain: number; unknown: number };
     formal_learning: { completed_words: number; completed_distinct_words: number; new_words: number; relearn_words: number };
   };

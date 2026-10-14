@@ -127,7 +127,7 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
       {todayError && <p className="standalone-status error" role="alert">{todayError}</p>}
       {!today && !todayError && <p className="standalone-status" role="status">正在读取今日进度…</p>}
       {today && <div className="today-progress-list">
-        <ProgressRow title="正式复习" detail={`${number(review?.completed)} / ${number(review?.total)}`} note={review?.scope === "active_session" ? "当前这一轮" : "今日正式复习"} />
+        <ProgressRow title="正式复习" detail={`${number(review?.completed)} / ${number(review?.total)}`} note="今日已复习 / 今日安排" />
         <ProgressRow title="预测试" detail={`${number(pretest?.completed)} / ${number(pretest?.total)}`} note="先判断熟悉程度" />
         <ProgressRow title="正式学习" detail={`${number(lesson?.completed_distinct_words)} 个词`} note={`新词 ${number(lesson?.new_words)} · 复习补学 ${number(lesson?.relearn_words)}`} />
       </div>}

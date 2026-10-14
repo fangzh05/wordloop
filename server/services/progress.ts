@@ -3,7 +3,7 @@ import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { ProgressResult, StudySessionRow, VocabularyItem } from "../types.js";
 import { addCalendarDays, assertDatabaseResult, dateInTimeZone, localDateRange } from "./shared.js";
 import { perf } from "./perf.js";
-import { getActiveStudySession, normalizeStudyStateForRead, studyStateSchema } from "./studySessions.js";
+import { normalizeStudyStateForRead, studyStateSchema } from "./studySessions.js";
 import { getUserTimeZone } from "./words.js";
 
 type ReviewSessionProgressRow = Pick<StudySessionRow, "review_words_count"> & { state: unknown };
@@ -82,9 +82,8 @@ export function calculateReviewTodayProgress(
 }
 
 async function getReviewTodayProgress(db: ReturnType<typeof getDatabase>, userId: string, now: Date): Promise<ProgressResult["review_today"]> {
-  const active = await getActiveStudySession(db, userId);
-  if (active?.state?.widget === "review") return calculateReviewTodayProgress(active, []);
-
+  // Dashboard progress is day-scoped even when a Review session is active;
+  // include its snapshot with every other session started in the local day.
   const timeZone = await getUserTimeZone(db, userId);
   const today = dateInTimeZone(timeZone, now);
   const { start, end } = localDateRange(today, timeZone);
@@ -95,7 +94,7 @@ async function getReviewTodayProgress(db: ReturnType<typeof getDatabase>, userId
     .lt("started_at", end);
   assertDatabaseResult(sessionResult.error);
   return calculateReviewTodayProgress(
-    active,
+    null,
     (sessionResult.data ?? []) as ReviewSessionProgressRow[],
   );
 }

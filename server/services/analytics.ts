@@ -470,7 +470,7 @@ export async function getTodayOverview(
     progress: {
       review: {
         ...progress.review_today,
-        scope: phase === "review" ? "active_session" : "today_recorded_sessions",
+        scope: "today_recorded_sessions",
       },
       pretest: progress.today,
       formal_learning: {
