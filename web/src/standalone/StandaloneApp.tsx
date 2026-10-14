@@ -1054,11 +1054,13 @@ export default function StandaloneApp(): React.JSX.Element {
 
   const dispatch = async (fields: Record<string, unknown>): Promise<WebApiResponse | null> => {
     const actionName = String(fields.action ?? "");
+    const settingsActions = new Set(["set_daily_time_budget", "set_exam_goal"]);
     const answerActions = new Set(["review_submit", "pretest_submit", "lesson_submit", "consolidation_submit", "wrapup_submit"]);
     if (answerActions.has(actionName) && fields.mark_unknown !== true
       && (typeof fields.answer !== "string" || !fields.answer.trim())) return null;
     if (requestInFlightRef.current) {
       setNotice("上一个请求仍在处理中，请稍候。超时后会恢复重试。");
+      if (settingsActions.has(actionName)) throw new Error("上一个请求仍在处理中，请稍候后重试。");
       return null;
     }
     const stableFields = ["lesson_submit", "consolidation_submit", "wrapup_submit"].includes(actionName)
@@ -1069,6 +1071,7 @@ export default function StandaloneApp(): React.JSX.Element {
     const submittedIndex = typeof view?.state.current_index === "number" ? view.state.current_index : null;
     const previousDraftContext = lessonDraftContext(view?.state);
     let actionResponse: WebApiResponse | null = null;
+    let actionError: unknown = null;
     await runForegroundRequest(requestInFlightRef, async () => {
       if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) await flushLearningTime(false);
       setBusy(actionName || "action");
@@ -1107,6 +1110,7 @@ export default function StandaloneApp(): React.JSX.Element {
           } else if (next.result?.message) setNotice(next.result.message);
         }
       } catch (error) {
+        actionError = error;
         if (error instanceof UnauthorizedError) {
           enterAuth(true);
         } else if (error instanceof StaleStudyStateError) {
@@ -1132,6 +1136,11 @@ export default function StandaloneApp(): React.JSX.Element {
         setBusy(null);
       }
     }, flushPendingRefresh);
+    if (settingsActions.has(actionName) && actionError) {
+      throw new Error(actionError instanceof UnauthorizedError
+        ? "登录已过期，请重新登录。"
+        : messageFor(actionError));
+    }
     return actionResponse;
   };
 

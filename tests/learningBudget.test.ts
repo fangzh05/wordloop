@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addOneGroupBudget, getAdaptiveBudgetPlan, getLearningBudget, newWordAllowance, newWordAdmissionLimit, newWordForecast, reserveLearningBudget, LearningBudgetReached, type BudgetSnapshot } from "../server/services/learningBudget.js";
+import { addOneGroupBudget, getAdaptiveBudgetPlan, getLearningBudget, newWordAllowance, newWordAdmissionLimit, newWordForecast, reserveLearningBudget, setAdaptiveExamGoal, LearningBudgetReached, type BudgetSnapshot } from "../server/services/learningBudget.js";
 import { updateBkt, predictCorrect, predictionMetrics } from "../server/services/bkt.js";
 import { plannedSkillEvidence } from "../server/services/plannedSubmission.js";
 import type { LessonExercisePlan } from "../shared/toolContracts.js";
@@ -132,6 +132,51 @@ describe("time budget admission", () => {
       expect(result.effective_new_limit).toBe(7);
       expect(newWordAdmissionLimit(result)).toBe(3);
     } finally { vi.unstubAllEnvs(); }
+  });
+  it("persists an implicitly selected legacy exam book before saving its goal", async () => {
+    const snapshot = { ...budget, exam_goal: { book_id: "kaoyan", target_date: "2026-12-22", coverage_target: null } };
+    const calls: Array<[string, Record<string, unknown>]> = [];
+    const db = { rpc: vi.fn(async (name: string, args: Record<string, unknown>) => {
+      calls.push([name, args]);
+      if (name === "set_adaptive_exam_goal_v2") return { data: calls.filter(([rpc]) => rpc === name).length > 1, error: null };
+      if (name === "list_exam_books_v1") return { data: { selected_book_id: "kaoyan" }, error: null };
+      if (name === "learning_budget_snapshot_v1") return { data: snapshot, error: null };
+      return { data: { book_id: "kaoyan" }, error: null };
+    }) } as any;
+
+    await setAdaptiveExamGoal("2026-12-22", null, db, "user-a");
+
+    expect(calls.map(([name]) => name)).toEqual([
+      "set_adaptive_exam_goal_v2", "list_exam_books_v1", "set_exam_book_v1",
+      "set_adaptive_exam_goal_v2", "learning_budget_snapshot_v1",
+    ]);
+    expect(calls[2]).toEqual(["set_exam_book_v1", { p_user_id: "user-a", p_book_id: "kaoyan" }]);
+    expect(calls[3]).toEqual(["set_adaptive_exam_goal_v2", {
+      p_user_id: "user-a", p_exam_deadline: "2026-12-22", p_coverage_target: null,
+    }]);
+  });
+  it("keeps exam goal saving on the direct path for an explicitly selected book", async () => {
+    const db = { rpc: vi.fn(async (name: string) => ({
+      data: name === "set_adaptive_exam_goal_v2" ? true : budget,
+      error: null,
+    })) } as any;
+
+    await setAdaptiveExamGoal(null, 500, db, "user-a");
+
+    expect(db.rpc.mock.calls.map(([name]: [string]) => name)).toEqual([
+      "set_adaptive_exam_goal_v2", "learning_budget_snapshot_v1",
+    ]);
+  });
+  it("still requires a selected book when the server has no explicit or legacy default", async () => {
+    const db = { rpc: vi.fn(async (name: string) => ({
+      data: name === "set_adaptive_exam_goal_v2" ? false : { selected_book_id: null },
+      error: null,
+    })) } as any;
+
+    await expect(setAdaptiveExamGoal(null, null, db, "user-a")).rejects.toThrow("EXAM_BOOK_REQUIRED");
+    expect(db.rpc.mock.calls.map(([name]: [string]) => name)).toEqual([
+      "set_adaptive_exam_goal_v2", "list_exam_books_v1",
+    ]);
   });
   it("counts reserved task cost in the displayed estimated total, not measured time alone", async () => {
     // The snapshot charges max(reserved, actual) against remaining seconds and

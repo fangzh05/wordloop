@@ -211,12 +211,34 @@ export async function setAdaptiveExamGoal(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
 ) {
-  const result = await db.rpc("set_adaptive_exam_goal_v2", {
-    p_user_id: userId,
-    p_exam_deadline: targetDate,
-    p_coverage_target: coverageTarget,
-  });
-  assertDatabaseResult(result.error);
-  if (result.data !== true) throw new Error("EXAM_BOOK_REQUIRED");
+  const saveGoal = async () => {
+    const result = await db.rpc("set_adaptive_exam_goal_v2", {
+      p_user_id: userId,
+      p_exam_deadline: targetDate,
+      p_coverage_target: coverageTarget,
+    });
+    assertDatabaseResult(result.error);
+    return result.data === true;
+  };
+
+  let saved = await saveGoal();
+  if (!saved) {
+    // list_exam_books_v1 can expose the legacy owner's Kaoyan vocabulary as
+    // the current book even when no preference row exists yet. Persist that
+    // same selected book through the canonical selector before saving its
+    // goal, so the displayed selection and the goal RPC share one row.
+    const catalog = await db.rpc("list_exam_books_v1", { p_user_id: userId });
+    assertDatabaseResult(catalog.error);
+    const selectedBook = catalog.data && typeof catalog.data === "object" && !Array.isArray(catalog.data)
+      ? Reflect.get(catalog.data, "selected_book_id")
+      : null;
+    const selectedBookId = typeof selectedBook === "string" ? selectedBook.trim() : "";
+    if (!selectedBookId) throw new Error("EXAM_BOOK_REQUIRED");
+
+    const selected = await db.rpc("set_exam_book_v1", { p_user_id: userId, p_book_id: selectedBookId });
+    assertDatabaseResult(selected.error);
+    saved = await saveGoal();
+  }
+  if (!saved) throw new Error("EXAM_BOOK_REQUIRED");
   return getLearningBudget(db, userId);
 }
