@@ -1,4 +1,4 @@
-import { measure } from "./perf.js";
+import { requestMemo, measure } from "./perf.js";
 import { adaptiveDailyBudgetV2Enabled, getAuthenticatedUserId, getDatabase } from "../db.js";
 import { assertDatabaseResult } from "./shared.js";
 import { activityCost } from "../../shared/learningEvidence.js";
@@ -177,7 +177,10 @@ export async function getLearningBudget(db = getDatabase(), userId = getAuthenti
   return { ...b, effective_new_limit: newWordAllowanceV1(b), forecast_assumption: `${costNote}；沿用保守静态准入。` };
 }
 export async function reserveLearningBudget(key: string, activity: string, scope?: string, db = getDatabase(), userId = getAuthenticatedUserId()) {
-  return measure("budget_ms", () => reserveBudget(key, activity, scope, db, userId));
+  // The RPC permanently reserves this user/task key under a database lock.
+  // Reuse only a successful result in this request; independent callers still reserve.
+  return requestMemo(db, JSON.stringify(["budget-reservation", userId, key, activity, scope]),
+    () => measure("budget_ms", () => reserveBudget(key, activity, scope, db, userId)));
 }
 async function reserveBudget(key: string, activity: string, scope: string | undefined, db: ReturnType<typeof getDatabase>, userId: string) {
   const profile = await getUserLearningCostProfile(userId, db);

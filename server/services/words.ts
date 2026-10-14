@@ -1,3 +1,4 @@
+import { requestMemo } from "./perf.js";
 import { getLearningBudget, reserveLearningBudget } from "./learningBudget.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { adaptiveDailyBudgetV2Enabled, getAuthenticatedUserId, getDatabase } from "../db.js";
@@ -84,9 +85,11 @@ function relationOne<T>(value: T | T[]): T {
 }
 
 export async function getUserTimeZone(db = getDatabase(), userId = getAuthenticatedUserId()): Promise<string> {
-  const { data, error } = await db.from("users").select("timezone").eq("id", userId).maybeSingle();
-  assertDatabaseResult(error);
-  return (data as { timezone?: string } | null)?.timezone ?? "Asia/Shanghai";
+  return requestMemo(db, JSON.stringify(["timezone", userId]), async () => {
+    const { data, error } = await db.from("users").select("timezone").eq("id", userId).maybeSingle();
+    assertDatabaseResult(error);
+    return (data as { timezone?: string } | null)?.timezone ?? "Asia/Shanghai";
+  });
 }
 
 export async function getDailyNewWordLimit(

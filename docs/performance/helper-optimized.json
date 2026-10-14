@@ -1,0 +1,12 @@
+{
+  "evidence": "controlled helper-path fixture; not production E2E",
+  "fixture_rtt_ms": 20,
+  "samples": 40,
+  "db_calls": 80,
+  "calls_per_sample": 2,
+  "ai_calls": 0,
+  "mean_ms": 62.28128750000002,
+  "p50_ms": 62.01140000000032,
+  "p95_ms": 63.08789999999999,
+  "p99_ms": 76.98460000000006
+}
