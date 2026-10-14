@@ -9,11 +9,13 @@ WordLoop 是一个围绕**持久化学习状态、主动回忆和明确教学策
 - ChatGPT 内的 MCP App + 交互式 Widget；
 - 独立响应式 Web App。
 
-它的目标不是做一个“会聊天的背单词机器人”，而是把长期记忆、主动输出、用法训练、阅读积累、薄弱技能诊断和词族扩展拆成可控的模块。Supabase/Postgres 是事实来源；FSRS 负责长期词汇调度；BKT 估计技能薄弱点；确定性 planner 决定题型；DeepSeek 只在计划已经冻结之后生成内容或做必要的语义批改。
+它的目标不是做一个“会聊天的背单词机器人”，而是把长期记忆、主动输出、用法训练、阅读积累、薄弱技能诊断和词族扩展拆成可控的模块。生产 Worker 使用 Neon Postgres 保存学习数据，Supabase Auth 负责账号登录；本地和旧部署仍可使用 Supabase 数据库路径。FSRS 负责长期词汇调度；BKT 估计技能薄弱点；确定性 planner 决定题型；DeepSeek 只在计划已经冻结之后生成内容或做必要的语义批改。
 
-> 当前 package：`0.1.0`  
-> 技术栈：Node.js 20+、TypeScript、React 19、Supabase/Postgres、MCP Apps、ts-fsrs、Cytoscape.js  
-> 当前功能最完整的产品线：`codex/local-family-graph`
+> 当前 package：`0.1.0`
+>
+> 技术栈：Node.js 20+、TypeScript、React 19、Neon Postgres、Supabase Auth、MCP Apps、ts-fsrs、Cytoscape.js
+>
+> 生产发布：GitHub `main` → Cloudflare Worker `wordloop-app`
 
 ## 产品模型
 
@@ -156,6 +158,8 @@ BKT 不能改变已经展示的题、正式 Review 顺序、Review rating 或 FS
 每日新词上限只是 ceiling。WordLoop 在安排新任务前估算成本，优先处理 overdue Review，并结合短期 FSRS workload forecast 控制后续新词量。
 
 用户可以显式加练 15 分钟。budget stop 只表示预计学习时间已用完，不代表所有 due task 已完成。
+
+逐用户学习时间校准 V2 会按学习阶段记录经过校验的有效学习时间。自适应每日预算 V2 在个人样本足够时使用个人估算，冷启动阶段使用静态成本。计时估算不会改变 FSRS rating 或 due date。Today 页面按学习者本地日期显示“当日已完成正式复习 / 当日安排复习”。更换词书会立即更新当天目标；已经冻结的学习会话仍按保存的快照继续。
 
 完整规则见 `docs/EVIDENCE_BUDGET.md`。
 
@@ -342,7 +346,8 @@ flowchart LR
   W --> R
 
   R --> A[Auth + Study Orchestration]
-  A --> S[(Supabase/Postgres)]
+  A --> S[(Neon Postgres — 学习数据)]
+  R --> AU[Supabase Auth]
 
   A --> F[FSRS v6]
   A --> P[Deterministic Exercise Planner]
@@ -423,8 +428,13 @@ wordloop/
 | 变量 | 是否需要 | 用途 |
 | --- | --- | --- |
 | `SUPABASE_URL` | 是 | Supabase 项目地址 |
-| `SUPABASE_SERVICE_ROLE_KEY` | 是 | 仅服务端数据库凭据 |
+| `SUPABASE_SERVICE_ROLE_KEY` | 是 | 仅服务端使用的 Supabase 管理凭据 |
 | `SUPABASE_PUBLISHABLE_KEY` | 私测 Web | 浏览器可用的 Supabase Auth key |
+| `NEON_DATA_API_URL` | 生产 Worker | 学习数据使用的 Neon Data API REST 地址 |
+| `NEON_JWT_AUDIENCE` | 生产 Worker | Neon Data API 认证请求的 audience |
+| `NEON_WORKER_JWT_PRIVATE_JWK` | 生产 secret | Neon 请求使用的服务端签名密钥 |
+| `WORDLOOP_TIME_CALIBRATION_V2` | 生产 Worker | 启用逐用户有效学习时间采集与估算 |
+| `WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2` | 生产 Worker | 启用自适应每日任务规划 |
 | `DEV_USER_ID` | owner / 旧路径 | 可信 owner UUID |
 | `DEEPSEEK_API_KEY` | Lesson 生成 / 语义批改 | 服务端模型 key |
 | `WORDLOOP_WEB_TOKEN` | 可选 owner 兼容 | 旧 owner/integration Bearer token |
@@ -445,9 +455,17 @@ wordloop/
 
 ## 数据库与迁移
 
-全新数据库运行当前 `setup.sql`。
+全新数据库先运行当前 `setup.sql`，再应用所选后端的迁移。生产 Worker 使用 Neon Postgres 保存学习数据，Supabase Auth 负责账号登录。已有 Neon schema 按顺序只应用缺失迁移：
 
-已有数据库只按顺序执行缺失 migration。当前产品线的重要迁移包括：
+- `neon/migrations/0001_data_api_security.sql`
+- `neon/migrations/0006_learning_time_calibration_v2.sql`
+- `neon/migrations/0007_adaptive_daily_budget_v2.sql`
+- `neon/migrations/0008_learning_time_prediction_errors.sql`
+- `neon/migrations/0009_immediate_exam_book_and_daily_review_progress.sql`
+
+迁移 `0009` 会让所选词书在学习者当天立即生效，并添加当日正式复习统计使用的索引。已存在的未来日期会在该账号下次加载词书目录时自动修正。
+
+已有 Supabase 兼容数据库只按顺序执行缺失 migration。该路径的重要迁移包括：
 
 - `202609290001_capture_notes.sql`
 - `20260929120641_captured_notes.sql`
@@ -514,13 +532,11 @@ npx @modelcontextprotocol/inspector --web http://127.0.0.1:3000/mcp
 
 ## 当前开发状态
 
-当前功能最完整的产品线是 `codex/local-family-graph`。
+GitHub `main` 是 Cloudflare Worker `wordloop-app` 的生产源码。生产版本包含 Neon 学习数据、Supabase Auth、BKT、Capture 与 Note Review、Local Family Graph、逐用户学习时间校准 V2 和自适应每日预算 V2。
 
-它包含当前的 BKT、时间预算、Capture / Note Review、私测认证、Local Family Graph、词汇语料与双语词典。
+时间模型只使用经过校验的有效学习时长；个人样本积累前使用静态冷启动估算。模型排除判题和网络等待，也不会改变 FSRS 调度。Today 页面按学习者本地日期统计正式复习，更换词书后当天目标立即生效。
 
-PR #2 的 latency optimization 已在 2026-10-07 合入兄弟分支 `codex/exercise-balanced-learning-flow`。那条代码线包含更紧凑的 semantic grading、较低的模型输出上限、减少 frozen-plan 写入以及额外 timing diagnostics。**在两条代码线真正合流之前，本 README 不把这些实现描述成当前分支已经具备。**
-
-这个区分是刻意的：README 应该描述实际存在的代码，而不是描述一个目前没有任何单一 branch 真正包含的“概念全集”。
+实验分支的代码合入 `main` 并完成部署后才属于生产功能。本 README 描述生产代码，不把尚未合并的分支功能当作已上线功能。
 
 ## 当前限制
 

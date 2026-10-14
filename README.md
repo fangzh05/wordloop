@@ -9,11 +9,13 @@ It exposes the same state through two clients:
 - a ChatGPT MCP App with interactive widgets;
 - a standalone responsive Web App.
 
-The product is designed for long-term vocabulary acquisition, active recall, usage practice, reading capture, weak-skill diagnosis, and controlled word-family expansion. Supabase/Postgres is the source of truth. FSRS schedules long-term vocabulary review. BKT estimates skill-level weakness. A deterministic planner decides what task to show. DeepSeek is restricted to content generation and semantic grading after the plan has already been fixed.
+The product is designed for long-term vocabulary acquisition, active recall, usage practice, reading capture, weak-skill diagnosis, and controlled word-family expansion. The production Worker uses Neon Postgres as the source of truth for learning data, with Supabase Auth for account sign-in. A Supabase-backed database path remains available for local and legacy deployments. FSRS schedules long-term vocabulary review. BKT estimates skill-level weakness. A deterministic planner decides what task to show. DeepSeek is restricted to content generation and semantic grading after the plan has already been fixed.
 
-> Package: `0.1.0`  
-> Runtime: Node.js 20+, TypeScript, React 19, Supabase/Postgres, MCP Apps, ts-fsrs, Cytoscape.js  
-> Current feature-complete product line: `codex/local-family-graph`
+> Package: `0.1.0`
+>
+> Runtime: Node.js 20+, TypeScript, React 19, Neon Postgres, Supabase Auth, MCP Apps, ts-fsrs, Cytoscape.js
+>
+> Production release: GitHub `main` → Cloudflare Worker `wordloop-app`
 
 ## Product model
 
@@ -156,6 +158,8 @@ The default learning budget is 45 minutes per local day.
 The daily new-word limit remains a ceiling. WordLoop estimates task cost before admitting new work, prioritizes overdue Review, and uses a short FSRS workload forecast to avoid overloading future days.
 
 The user can explicitly add 15 minutes. A budget stop means estimated study time is exhausted; it does not mean every due item has been completed.
+
+Per-user learning-time calibration V2 records validated active time by study phase. Adaptive daily budget V2 uses personal estimates when enough observations exist and static cold-start costs otherwise. Timing estimates do not change FSRS ratings or due dates. The Today page reports completed formal reviews against the reviews scheduled for the learner's local day. Changing the study book updates today's target immediately; an already-frozen session remains resumable with its saved snapshot.
 
 See `docs/EVIDENCE_BUDGET.md`.
 
@@ -342,7 +346,8 @@ flowchart LR
   W --> R
 
   R --> A[Auth + Study Orchestration]
-  A --> S[(Supabase/Postgres)]
+  A --> S[(Neon Postgres — learning data)]
+  R --> AU[Supabase Auth]
 
   A --> F[FSRS v6]
   A --> P[Deterministic Exercise Planner]
@@ -425,8 +430,13 @@ Copy `.env.example` to `.env` for local development.
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `SUPABASE_URL` | Yes | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only database credential |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only Supabase admin credential |
 | `SUPABASE_PUBLISHABLE_KEY` | Private-beta Web | Browser-safe Supabase Auth key |
+| `NEON_DATA_API_URL` | Production Worker | Neon Data API REST endpoint for learner data |
+| `NEON_JWT_AUDIENCE` | Production Worker | Audience for authenticated Neon Data API requests |
+| `NEON_WORKER_JWT_PRIVATE_JWK` | Production secret | Server-only signing key for Neon requests |
+| `WORDLOOP_TIME_CALIBRATION_V2` | Production Worker | Enables per-user active-time collection and estimates |
+| `WORDLOOP_ADAPTIVE_DAILY_BUDGET_V2` | Production Worker | Enables the adaptive daily workload planner |
 | `DEV_USER_ID` | Owner / legacy paths | Trusted owner UUID |
 | `DEEPSEEK_API_KEY` | Generated Lesson / semantic grading | Server-only model credential |
 | `WORDLOOP_WEB_TOKEN` | Optional owner compatibility | Legacy owner/integration Bearer token |
@@ -447,9 +457,17 @@ Secrets must remain server-side and must not be embedded in browser bundles.
 
 ## Database setup and migrations
 
-For a fresh database, apply the current `setup.sql`.
+Initialize a fresh database with the current `setup.sql`, then apply the migrations for the selected backend. The production Worker uses Neon Postgres as its canonical learner database and Supabase Auth as its sign-in provider. For an established Neon schema, apply only missing Neon migrations in order:
 
-For an existing database, apply only missing migrations in order. Important migrations on the current product line include:
+- `neon/migrations/0001_data_api_security.sql`
+- `neon/migrations/0006_learning_time_calibration_v2.sql`
+- `neon/migrations/0007_adaptive_daily_budget_v2.sql`
+- `neon/migrations/0008_learning_time_prediction_errors.sql`
+- `neon/migrations/0009_immediate_exam_book_and_daily_review_progress.sql`
+
+Migration `0009` makes a selected book effective on the learner's current local day and adds the index used by daily formal-review counts. It also repairs legacy future-dated selections when that authenticated learner next loads the book catalog.
+
+For an existing Supabase-backed compatibility database, apply only missing migrations in order. Important migrations on that path include:
 
 - `202609290001_capture_notes.sql`
 - `20260929120641_captured_notes.sql`
@@ -516,13 +534,11 @@ npx @modelcontextprotocol/inspector --web http://127.0.0.1:3000/mcp
 
 ## Development status
 
-The current feature-complete product line is `codex/local-family-graph`.
+GitHub `main` is the production source for the Cloudflare Worker `wordloop-app`. The production line includes Neon-backed learning state, Supabase Auth, BKT, Capture and Note Review, Local Family Graph, per-user learning-time calibration V2, and adaptive daily budget V2.
 
-It contains the current BKT, budget, Capture/Note Review, private-beta authentication, Local Family Graph, lexical corpus and bilingual dictionary work.
+The time model uses validated active study time and starts from static cold-start estimates until personal observations accumulate. It excludes grading and network waits, and it never changes FSRS scheduling. The Today page uses same-day formal-review events and the learner's local-day review schedule. Study-book changes apply to today's target.
 
-PR #2 / the latency-optimization work was merged into the sibling `codex/exercise-balanced-learning-flow` line on 2026-10-07. That code line contains compact semantic grading, reduced model-output ceilings, frozen-plan write reduction and additional timing diagnostics. Those changes are **not claimed as present in this branch until the two lines are actually merged**.
-
-This distinction is intentional: the README should describe code that exists, not a conceptual superset that no single branch currently contains.
+Experimental feature branches are not production releases until their code is merged into `main` and deployed. This README describes the production line rather than treating unmerged branch work as available.
 
 ## Current limits
 
