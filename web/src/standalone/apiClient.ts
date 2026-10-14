@@ -152,11 +152,16 @@ export function clearToken(): void {
 }
 
 export async function request<T = WebApiResponse>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
+  const clientStarted = performance.now();
+  const requestId = globalThis.crypto.randomUUID();
+  let httpStatus = 0;
+  let succeeded = false;
   const token = await currentAccessToken() ?? tokenOverride ?? storedToken();
   if (!token) throw new UnauthorizedError();
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
   headers.set("accept", "application/json");
+  headers.set("x-wordloop-request-id", requestId);
   const controller = new AbortController();
   const abort = () => controller.abort();
   init.signal?.addEventListener("abort", abort, { once: true });
@@ -170,6 +175,7 @@ export async function request<T = WebApiResponse>(path: string, init: RequestIni
   });
   try {
   const response = await Promise.race([fetch(path, { ...init, headers, signal: controller.signal, cache: "no-store" }), deadline]);
+  httpStatus = response.status;
   let payload: T & { error?: { code: string; message: string } };
   try {
     payload = await Promise.race([response.json(), deadline]) as T & { error?: { code: string; message: string } };
@@ -186,6 +192,7 @@ export async function request<T = WebApiResponse>(path: string, init: RequestIni
       response.status,
     );
   }
+  succeeded = true;
   return payload;
   } catch (error) {
     if (controller.signal.aborted && !init.signal?.aborted) {
@@ -194,6 +201,7 @@ export async function request<T = WebApiResponse>(path: string, init: RequestIni
     throw error;
   } finally {
     clearTimeout(timer);
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wordloop-request-performance", { detail: { request_id: requestId, operation: path === "/api/web/action" ? "action" : path.split("/").slice(0, 4).join("/"), client_total_ms: Math.max(0, performance.now() - clientStarted), http_status: httpStatus, success: succeeded } }));
     init.signal?.removeEventListener("abort", abort);
   }
 }

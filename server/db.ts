@@ -1,3 +1,4 @@
+import { instrumentDatabaseFetch } from "./services/perf.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { fetchWithToken, NeonPostgrestClient } from "@neondatabase/postgrest-js";
@@ -92,7 +93,7 @@ export function getDatabase(): SupabaseClient {
       dataApiUrl,
       options: {
         db: { schema: "public" },
-        global: { fetch: fetchWithToken(() => getNeonWorkerAccessToken(identity)) },
+        global: { fetch: instrumentDatabaseFetch(fetchWithToken(() => getNeonWorkerAccessToken(identity))) },
       },
     }) as unknown as SupabaseClient;
     neonClients.set(identityKey, scopedClient);
@@ -106,6 +107,7 @@ export function getDatabase(): SupabaseClient {
   const serviceRoleKey = z.string().min(20).parse(env.data.SUPABASE_SERVICE_ROLE_KEY);
   client = createClient(env.data.SUPABASE_URL, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: instrumentDatabaseFetch(fetch) },
   });
   return client;
 }

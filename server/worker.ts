@@ -10,6 +10,8 @@ type AssetBinding = { fetch(request: Request): Promise<Response> };
 
 type WorkerEnv = {
   ASSETS?: AssetBinding;
+  WORDLOOP_PERF_SAMPLE_RATE?: string;
+  WORDLOOP_SERVER_TIMING?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
@@ -86,7 +88,7 @@ export const worker = {
       try { return new Response(JSON.stringify(getPublicAuthConfig()), { headers: { "content-type": "application/json", "cache-control": "no-store" } }); }
       catch { return response(JSON.stringify({ error: { message: "登录服务暂时不可用。" } }), "application/json", 503); }
     }
-    if (url.pathname.startsWith("/api/web/")) return handleWebApiRequest(request);
+    if (url.pathname.startsWith("/api/web/")) return handleWebApiRequest(request, { sampleRate: env.WORDLOOP_PERF_SAMPLE_RATE === undefined ? undefined : Number(env.WORDLOOP_PERF_SAMPLE_RATE), serverTiming: env.WORDLOOP_SERVER_TIMING === "true" });
     // GPT Sites reserves /mcp before requests reach the Worker. Keep the standard
     // Streamable HTTP protocol on a non-reserved public path instead.
     if (url.pathname !== "/api/mcp") {

@@ -1,3 +1,4 @@
+import { measure } from "./perf.js";
 import { adaptiveDailyBudgetV2Enabled, getAuthenticatedUserId, getDatabase } from "../db.js";
 import { assertDatabaseResult } from "./shared.js";
 import { activityCost } from "../../shared/learningEvidence.js";
@@ -176,6 +177,9 @@ export async function getLearningBudget(db = getDatabase(), userId = getAuthenti
   return { ...b, effective_new_limit: newWordAllowanceV1(b), forecast_assumption: `${costNote}；沿用保守静态准入。` };
 }
 export async function reserveLearningBudget(key: string, activity: string, scope?: string, db = getDatabase(), userId = getAuthenticatedUserId()) {
+  return measure("budget_ms", () => reserveBudget(key, activity, scope, db, userId));
+}
+async function reserveBudget(key: string, activity: string, scope: string | undefined, db: ReturnType<typeof getDatabase>, userId: string) {
   const profile = await getUserLearningCostProfile(userId, db);
   const costScope = scope ?? (activity === "review" ? "review" : activity === "pretest" ? "pretest" : "lesson");
   const costActivity = activity === "pretest" ? "pretest_cn_to_en" : activity;

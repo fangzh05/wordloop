@@ -1,3 +1,4 @@
+import { recordAiAttempt } from "./perf.js";
 import {privateSourceIds} from './sourceDictionary.js';
 import { z } from "zod";
 import { getDeepSeekApiKey } from "../db.js";
@@ -459,7 +460,7 @@ async function deepSeekJson<T>(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.timeoutMs);
-    const attemptStarted = Date.now();
+    const attemptStarted = performance.now();
     let headersMs: number | undefined;
     let outcome = "error";
     let retryReason: string | undefined;
@@ -487,7 +488,7 @@ async function deepSeekJson<T>(
           max_tokens: attempt === 0 ? options.maxTokens : options.repairMaxTokens ?? options.maxTokens,
         }),
       });
-      headersMs = Date.now() - attemptStarted;
+      headersMs = performance.now() - attemptStarted;
       httpStatus = response.status;
       if (!response.ok) {
         if (attempt === 0 && retryableHttpStatuses.has(response.status)) {
@@ -584,10 +585,11 @@ async function deepSeekJson<T>(
       throw requestError;
     } finally {
       clearTimeout(timer);
+      recordAiAttempt({ task: options.task, attempt: attempt + 1, total_ms: Math.max(0, performance.now() - attemptStarted), outcome, retry_reason: retryReason, http_status: httpStatus });
       if (typeof process !== "undefined" && process.env.WORDLOOP_PERF_LOG === "1") {
         console.log("[wordloop deepseek]", {
           task: options.task, attempt: attempt + 1, retry: attempt > 0,
-          headers_ms: headersMs, total_ms: Date.now() - attemptStarted,
+          headers_ms: headersMs, total_ms: performance.now() - attemptStarted,
           outcome, http_status: httpStatus, finish_reason: finishReason,
           retry_reason: retryReason, completion_tokens: completionTokens,
         });

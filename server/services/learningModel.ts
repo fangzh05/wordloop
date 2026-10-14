@@ -1,3 +1,4 @@
+import { measure } from "./perf.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { assertDatabaseResult } from "./shared.js";
 import { BKT_PARAMS, BKT_VERSION, predictCorrect, predictionMetrics, updateBkt } from "./bkt.js";
@@ -29,7 +30,7 @@ export async function consumeSkillEvidence(db = getDatabase(), userId = getAuthe
 }
 
 export async function tryConsumeSkillEvidence(db = getDatabase(), userId = getAuthenticatedUserId()) {
-  try { await consumeSkillEvidence(db, userId); }
+  try { await measure("bkt_ms", () => consumeSkillEvidence(db, userId)); }
   catch { console.warn("BKT projection pending replay"); }
 }
 
