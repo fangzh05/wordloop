@@ -10,7 +10,9 @@ describe("request performance tracing", () => {
         setTraceOperation("lesson_submit");
         await measure("auth_ms", async () => {});
         const dbFetch = instrumentDatabaseFetch(async () => new Response(new ReadableStream({ async start(c) { await new Promise(r => setTimeout(r, 5)); c.enqueue(new TextEncoder().encode('{"secret":"private-answer"}')); c.close(); } })));
-        await dbFetch("https://db.test/rest/v1/users?jwt=private-jwt");
+        const fetched = await dbFetch("https://db.test/rest/v1/users?jwt=private-jwt");
+        expect(fetched.bodyUsed).toBe(false);
+        expect(await fetched.json()).toEqual({ secret: "private-answer" });
         recordAiAttempt({ task: "semantic_lesson_grading", attempt: 1, total_ms: 10, outcome: "retry", retry_reason: "invalid_schema" });
         recordAiAttempt({ task: "semantic_lesson_grading", attempt: 2, total_ms: 12, outcome: "success" });
         return new Response("{}", { status: 200 });

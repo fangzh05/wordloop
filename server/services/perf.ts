@@ -36,12 +36,16 @@ export function instrumentDatabaseFetch(fetcher: typeof fetch): typeof fetch {
     t.db_calls++;
     const method = init?.method ?? (input instanceof Request ? input.method : "GET");
     const pathname = new URL(input instanceof Request ? input.url : String(input)).pathname;
-    const readRpc = /\/(learning_budget_snapshot_v1|pending_skill_evidence_v1|get_[a-z0-9_]+|list_[a-z0-9_]+|can_access_private_source_v1)$/.test(pathname);
-    return measure(method === "GET" || method === "HEAD" || readRpc ? "db_read_ms" : "db_write_ms", async () => {
-      const result = await fetcher(input, init);
-      const body = await result.arrayBuffer();
-      return new Response(result.status === 204 || result.status === 205 || result.status === 304 ? null : body, { status: result.status, statusText: result.statusText, headers: result.headers });
-    });
+    const readRpc = /\/(learning_budget_snapshot_v1|user_learning_time_profile_v2|user_learning_time_history_v2|pending_skill_evidence_v1|get_[a-z0-9_]+|list_[a-z0-9_]+|can_access_private_source_v1)$/.test(pathname);
+    const stage = method === "GET" || method === "HEAD" || readRpc ? "db_read_ms" : "db_write_ms";
+    const result = await measure(stage, () => fetcher(input, init));
+    // PostgREST consumes text(); keep the original Response and streaming body.
+    // Time consumption when it happens instead of buffering another copy here.
+    const text = result.text.bind(result);
+    const json = result.json.bind(result);
+    result.text = () => measure(stage, text);
+    result.json = () => measure(stage, json);
+    return result;
   };
 }
 export async function traceWebRequest(request: Request, options: { sampleRate?: number; serverTiming?: boolean }, work: () => Promise<Response>): Promise<Response> {
