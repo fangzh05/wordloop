@@ -12,19 +12,24 @@ import type { UserWordRow } from "../server/types.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FamilyLesson } from "../shared/familyContracts.js";
 
+// Git may check SQL out as CRLF on Windows. Dollar-quoted migration markers
+// must use the same LF normalization as pg_get_functiondef in the migration.
+function readSql(file: URL, encoding: "utf8"): string {
+  return readFileSync(file, encoding).replace(/\r\n/g, "\n");
+}
 const db = new PGlite();
 const u1 = "00000000-0000-4000-8000-000000000001", u2 = "00000000-0000-4000-8000-000000000002";
 const sid = "00000000-0000-4000-8000-000000000003";
 const files = ["202609130001_initial_wordloop.sql","202609130002_fsrs_shanbay.sql","202609150004_study_session_state.sql","20260927143358_exact_cloze_activity_type.sql","20260929120641_captured_notes.sql","20260930043404_balanced_exercise_plans.sql","20261002024106_evidence_budget.sql","20261007053500_local_family_graph.sql"];
 beforeAll(async () => {
   await db.exec("create role anon; create role anonymous; create role authenticated; create role service_role bypassrls; create role wordloop_admin; create schema auth; create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.user',true),'')::uuid$$; create function public.wordloop_authenticated_user_id() returns uuid language sql stable as $$select auth.uid()$$;");
-  for (const file of files) await db.exec(readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), "utf8").replace("create extension if not exists pgcrypto;", ""));
-  await db.exec(readFileSync(new URL("../supabase/migrations/20261007095603_lexical_dictionary_entries.sql",import.meta.url),"utf8"));
-  await db.exec(readFileSync(new URL("../supabase/migrations/20261011082546_replenish_new_words_budget.sql",import.meta.url),"utf8"));
-  await db.exec(readFileSync(new URL("../supabase/migrations/20261011092451_builtin_exam_books.sql",import.meta.url),"utf8"));
-  await db.exec(readFileSync(new URL("../neon/migrations/0006_learning_time_calibration_v2.sql",import.meta.url),"utf8"));
-  await db.exec(readFileSync(new URL("../neon/migrations/0007_adaptive_daily_budget_v2.sql",import.meta.url),"utf8"));
-  await db.exec(readFileSync(new URL("../neon/migrations/0008_learning_time_prediction_errors.sql",import.meta.url),"utf8"));
+  for (const file of files) await db.exec(readSql(new URL(`../supabase/migrations/${file}`, import.meta.url), "utf8").replace("create extension if not exists pgcrypto;", ""));
+  await db.exec(readSql(new URL("../supabase/migrations/20261007095603_lexical_dictionary_entries.sql",import.meta.url),"utf8"));
+  await db.exec(readSql(new URL("../supabase/migrations/20261011082546_replenish_new_words_budget.sql",import.meta.url),"utf8"));
+  await db.exec(readSql(new URL("../supabase/migrations/20261011092451_builtin_exam_books.sql",import.meta.url),"utf8"));
+  await db.exec(readSql(new URL("../neon/migrations/0006_learning_time_calibration_v2.sql",import.meta.url),"utf8"));
+  await db.exec(readSql(new URL("../neon/migrations/0007_adaptive_daily_budget_v2.sql",import.meta.url),"utf8"));
+  await db.exec(readSql(new URL("../neon/migrations/0008_learning_time_prediction_errors.sql",import.meta.url),"utf8"));
   // PGlite has gen_random_uuid built in; only Supabase's grant defaults differ.
   for (const [table, rows] of [["lexical_lexemes",seed.lexemes],["lexical_senses",seed.senses],["lexical_forms",seed.forms],["lexical_morphemes",seed.morphemes],["lexical_relations",seed.relations]] as const) {
     for (const row of rows) {
