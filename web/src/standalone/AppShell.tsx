@@ -6,6 +6,7 @@ import { Icon } from "./DesignIcons.js";
 import { useEffect, useId, useRef, useState } from "react";
 import { DailyNewWordLimitEditor, type DailyNewWordLimitSaveResult } from "../components/DailyNewWordLimitEditor.js";
 import { getBudget, getTodayOverview } from "./apiClient.js";
+import { CurrentExamBook, useExamBookSelection } from "./components/ExamBookSelector.js";
 
 export type AppSection = "today" | "study" | "capture" | "insights" | "vocabulary";
 const navItems: Array<{ section: AppSection; label: string; icon: string }> = [
@@ -35,6 +36,7 @@ export function SettingsSheet({ open, onClose, appearance, onAppearanceChange, d
   onSaveExamGoal?: (targetDate: string | null, coverageTarget: number | null) => Promise<unknown>;
 }): React.JSX.Element | null {
   const headingId = useId();
+  const examBookSelection = useExamBookSelection();
   const [saveError, setSaveError] = useState("");
   const [targetRetention, setTargetRetention] = useState<number | null>(null);
   const [dailyMinutes, setDailyMinutes] = useState(45);
@@ -42,6 +44,9 @@ export function SettingsSheet({ open, onClose, appearance, onAppearanceChange, d
   const [examBookId, setExamBookId] = useState<string | null>(null);
   const [examDate, setExamDate] = useState("");
   const [coverageTarget, setCoverageTarget] = useState("");
+  const currentExamBookId = examBookSelection?.data
+    ? examBookSelection.data.selected_book_id
+    : examBookId;
   const sheetRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const closeHandlerRef = useRef(onClose);
@@ -101,10 +106,12 @@ export function SettingsSheet({ open, onClose, appearance, onAppearanceChange, d
           {[20, 30, 45, 60, 90, 120].map(value => <option key={value} value={value}>{value} 分钟</option>)}
         </select><button type="button" className="secondary-button" disabled={busy || !onSaveDailyTimeBudget} onClick={async () => { setSaveError(""); try { await onSaveDailyTimeBudget?.(dailyMinutes); const budget = await getBudget(); setDailyMinutes(budget.daily_minutes); } catch (error) { setSaveError(error instanceof Error ? error.message : "时间预算保存失败，请重试。"); } }}>保存时间预算</button></div>
       </div>
-      <div className="settings-section"><h3>考试目标</h3><p>{examBookId ? `当前词书：${examBookId}。覆盖统计按唯一词头计算。` : "请先在今日页面选择目标考试词书。"}</p>
-        <div className="settings-budget-control"><label htmlFor="exam-deadline">考试日期（可选）</label><input id="exam-deadline" type="date" value={examDate} disabled={busy || !examBookId} onChange={event => setExamDate(event.target.value)} /></div>
-        <div className="settings-budget-control"><label htmlFor="exam-coverage-target">计划覆盖词量（可选）</label><input id="exam-coverage-target" type="number" min={1} max={100000} placeholder="全部词书词汇" value={coverageTarget} disabled={busy || !examBookId} onChange={event => setCoverageTarget(event.target.value)} /></div>
-        <button type="button" className="secondary-button" disabled={busy || !onSaveExamGoal || !examBookId || (coverageTarget !== "" && (!Number.isInteger(Number(coverageTarget)) || Number(coverageTarget) < 1 || Number(coverageTarget) > 100000))} onClick={async () => { setSaveError(""); try { await onSaveExamGoal?.(examDate || null, coverageTarget ? Number(coverageTarget) : null); const budget = await getBudget(); setExamBookId(budget.exam_goal?.book_id ?? null); setExamDate(budget.exam_goal?.target_date ?? ""); setCoverageTarget(budget.exam_goal?.coverage_target ? String(budget.exam_goal.coverage_target) : ""); } catch (error) { setSaveError(error instanceof Error ? error.message : "考试目标保存失败，请重试。"); } }}>保存考试目标</button>
+      <div className="settings-section"><h3>考试目标</h3>
+        <p>{currentExamBookId ? "考试目标将用于当前选中的词书，覆盖统计按唯一词头计算。" : "先选择目标考试词书，再设置考试日期和覆盖量。"}</p>
+        <CurrentExamBook compact />
+        <div className="settings-budget-control"><label htmlFor="exam-deadline">考试日期（可选）</label><input id="exam-deadline" type="date" value={examDate} disabled={busy || !currentExamBookId} onChange={event => setExamDate(event.target.value)} /></div>
+        <div className="settings-budget-control"><label htmlFor="exam-coverage-target">计划覆盖词量（可选）</label><input id="exam-coverage-target" type="number" min={1} max={100000} placeholder="全部词书词汇" value={coverageTarget} disabled={busy || !currentExamBookId} onChange={event => setCoverageTarget(event.target.value)} /></div>
+        <button type="button" className="secondary-button" disabled={busy || !onSaveExamGoal || !currentExamBookId || (coverageTarget !== "" && (!Number.isInteger(Number(coverageTarget)) || Number(coverageTarget) < 1 || Number(coverageTarget) > 100000))} onClick={async () => { setSaveError(""); try { await onSaveExamGoal?.(examDate || null, coverageTarget ? Number(coverageTarget) : null); const budget = await getBudget(); setExamBookId(examBookSelection?.data?.selected_book_id ?? budget.exam_goal?.book_id ?? null); setExamDate(budget.exam_goal?.target_date ?? ""); setCoverageTarget(budget.exam_goal?.coverage_target ? String(budget.exam_goal.coverage_target) : ""); } catch (error) { setSaveError(error instanceof Error ? error.message : "考试目标保存失败，请重试。"); } }}>保存考试目标</button>
       </div>
       <details className="settings-section settings-advanced"><summary>高级设置</summary><div><h3>每日新词安全上限</h3><p>这是最多新增多少个词，不是每天必须完成的数量。降低上限不会删除已学记录。</p>{resolvedDailyLimit !== null && onSaveDailyNewWordLimit ? <DailyNewWordLimitEditor limit={resolvedDailyLimit} onSave={async (limit) => { setSaveError(""); try { return await onSaveDailyNewWordLimit(limit); } catch (error) { setSaveError(error instanceof Error ? error.message : "上限保存失败，请重试。"); throw error; } }} onSaved={({ limit }) => setResolvedDailyLimit(limit)} disabled={busy} /> : <p>当前上限暂时不可读取。</p>}</div></details>
       {saveError && <p role="alert" className="standalone-status error">{saveError}</p>}
