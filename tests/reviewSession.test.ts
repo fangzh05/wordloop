@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REVIEW_SESSION_MAX, reviewWidgetPayloadSchema } from "../shared/toolContracts.js";
-import { buildLearningQueue, findNextLearningWord, selectDueReviewWords } from "../server/services/review.js";
+import { buildLearningQueue, findNextLearningWord, reviewRetrievability, selectDueReviewWords } from "../server/services/review.js";
 import { advanceStudyState, makeStudyState } from "../server/services/studySessions.js";
 import { buildReviewAnswerSubmission, buildReviewSubmission } from "../web/src/review/ReviewWidget.js";
 import type { ReviewWidgetItem } from "../shared/toolContracts.js";
@@ -57,6 +57,33 @@ describe("single Review session gate", () => {
     ], REVIEW_SESSION_MAX, now);
     expect(selected.map((item) => item.word)).toEqual(["alpha", "zulu"]);
     expect(selected.every((item) => item.is_due)).toBe(true);
+  });
+
+  it("preserves FSRS risk ordering while scoring each due card before sorting", () => {
+    const now = new Date("2026-09-16T00:00:00Z");
+    const candidates = [
+      reviewItem("stable", "2026-09-15T00:00:00Z"),
+      reviewItem("fragile", "2026-09-15T00:00:00Z"),
+      reviewItem("unseen", "2026-09-15T00:00:00Z"),
+      reviewItem("tie-break", "2026-09-15T00:00:00Z"),
+    ].map((item, index) => ({
+      ...item,
+      last_reviewed_at: index === 2 ? null : index < 2 ? "2026-09-10T00:00:00Z" : "2026-09-15T00:00:00Z",
+      fsrs_stability: index === 0 ? 20 : index === 1 ? 0.5 : 1,
+      wrong_count: index === 3 ? 2 : 0,
+    }));
+    const expected = candidates
+      .map((item) => ({ item, risk: reviewRetrievability(item, now) }))
+      .sort((a, b) => {
+        const risk = a.risk - b.risk;
+        if (Math.abs(risk) > 1e-12) return risk;
+        if (a.item.wrong_count !== b.item.wrong_count) return b.item.wrong_count - a.item.wrong_count;
+        return a.item.word.localeCompare(b.item.word);
+      })
+      .map(({ item }) => item.word);
+    expect(selectDueReviewWords(candidates, REVIEW_SESSION_MAX, now).map((item) => item.word)).toEqual(expected);
+    expect(expected[0]).toBe("unseen");
+    expect(expected.indexOf("fragile")).toBeLessThan(expected.indexOf("stable"));
   });
 
   it("deduplicates the session re-learn queue before today's learning queue", () => {

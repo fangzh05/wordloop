@@ -5,6 +5,7 @@ vi.mock("../server/services/learningBudget.js", async importOriginal => ({
   reserveLearningBudget: vi.fn(async () => undefined),
 }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getLearningBudget } from "../server/services/learningBudget.js";
 import type { VocabularyItem } from "../server/types.js";
 
 const completedLessonMocks = vi.hoisted(() => ({
@@ -112,12 +113,15 @@ describe("study bootstrap daily queue invariant", () => {
     expect(JSON.stringify(active)).toBe(before);
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
     expect(mocks.getDueReviewSelection).not.toHaveBeenCalled();
+    expect(getLearningBudget).not.toHaveBeenCalled();
   });
   it("does not start a fresh round on refresh, but an explicit start can query due cards", async () => {
     expect(await getStudyBootstrap({ activeSession: null, expectedRevision: null, startNewRound: false })).toEqual({ action: "done" });
+    expect(getLearningBudget).not.toHaveBeenCalled();
     expect(mocks.ensureTodayQueue).not.toHaveBeenCalled();
     mocks.getDueReviewSelection.mockResolvedValue({ rollingReview: [word(1, "review")], oldRandomReview: [] });
     expect(await getStudyBootstrap({ activeSession: null, expectedRevision: null, startNewRound: true })).toEqual({ action: "review", count: 1 });
+    expect(getLearningBudget).toHaveBeenCalledOnce();
   });
   it("hands a completed cross-day snapshot to today's Pretest while preserving all old progress", async () => {
     const active = { updated_at: "revision", review_words_count: 238, state: { version: 1, date: "2026-10-04", widget: "review", phase: "review_complete", current_index: 106, current_word: null,

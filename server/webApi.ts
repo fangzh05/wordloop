@@ -1,9 +1,13 @@
 import {privateSourceIds,PrivateBookAccessError} from './services/sourceDictionary.js';
+import { learningTimeCalibrationEnabled } from "./db.js";
+import { recordLearningTime, timeObservationSchema } from "./services/learningTimeCalibration.js";
+import { getUserTimeZone } from "./services/words.js";
+import { dateInTimeZone } from "./services/shared.js";
 import { WebAuthError, authenticateWebUser } from "./webAuth.js";
 import {examBookId,listExamBooks,selectExamBook,listExamBookWords} from './services/examBooks.js';
 import { handleShanbayImportRequest } from "./shanbayImportApi.js";
 import { withUserIdentity } from "./db.js";
-import { getLearningBudget, setLearningBudget, reserveLearningBudget, LearningBudgetReached } from "./services/learningBudget.js";
+import { getLearningBudget, setLearningBudget, setAdaptiveExamGoal, reserveLearningBudget, LearningBudgetReached, addOneGroupBudget, continueDueReview } from "./services/learningBudget.js";
 import { getEvidenceEvaluation, labelEvidence } from "./services/learningModel.js";
 import { z } from "zod";
 import { getAuthenticatedUserId, getDatabase, getLegacyOwnerId, getSupabaseAuthAdminClient, isLegacyOwner, shouldExposeStagingDiagnostics } from "./db.js";
@@ -15,6 +19,7 @@ import {
   assertActiveStudySessionRevision,
   finishStudySession,
   getActiveStudySession,
+  getActiveStudySessionRevision,
   getPretestResults,
   getStudyDate,
   isCompletedLessonRound,
@@ -118,8 +123,12 @@ import { familyGraphQuerySchema, familyStartSchema, familyAnswerSchema } from ".
 const expectedRevisionSchema = z.string().trim().min(1).nullable();
 const mutationBase = { expected_revision: expectedRevisionSchema };
 const webActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("record_learning_time"), observation: timeObservationSchema, ...mutationBase }).strict(),
   z.object({ action: z.literal("set_daily_time_budget"), minutes: z.number().int().min(5).max(240), ...mutationBase }).strict(),
+  z.object({ action: z.literal("set_exam_goal"), target_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(), coverage_target: z.number().int().min(1).max(100000).nullable(), ...mutationBase }).strict(),
   z.object({ action: z.literal("extend_daily_time_budget"), request_id: z.string().uuid(), ...mutationBase }).strict(),
+  z.object({ action: z.literal("continue_due_review"), ...mutationBase }).strict(),
+  z.object({ action: z.literal("continue_one_group"), request_id: z.string().uuid(), ...mutationBase }).strict(),
   z.object({ action: z.literal("set_daily_new_word_limit"), ...setDailyNewWordLimitSchema.shape, ...mutationBase }).strict(),
   z.object({ action: z.literal("continue"), ...mutationBase }).strict(),
   z.object({ action: z.literal("review_submit"), answer: z.string().max(4000), mark_unknown: z.boolean().optional(), ...mutationBase }).strict(),
@@ -203,6 +212,7 @@ function toApiError(error: unknown, requestPath?: string, stagingDiagnostics = f
   }
   const message = error instanceof Error ? error.message : "";
   if ([
+    "EXAM_BOOK_REQUIRED",
     "PRETEST_SESSION_NOT_ACTIVE",
     "PRETEST_FAMILIAR_SOURCE_NOT_ALLOWED",
     "PRETEST_FAMILIAR_CURSOR_MISMATCH",
@@ -210,6 +220,7 @@ function toApiError(error: unknown, requestPath?: string, stagingDiagnostics = f
     "PRETEST_FAMILIAR_RESULT_NOT_ELIGIBLE",
     "PRETEST_WORD_NOT_FOUND",
   ].includes(message)) {
+    if (message === "EXAM_BOOK_REQUIRED") return new WebApiError(409, message, "请先选择考试词书，再设置覆盖目标。");
     return new WebApiError(409, "INVALID_STUDY_STATE", "The current Pretest result cannot perform this action.");
   }
   if (message === "NO_ACTIVE_SESSION" || /No resumable active study session|No active study session/.test(message)) {
@@ -362,9 +373,11 @@ function resultForState(
   };
 }
 
-async function progressIfAvailable(): Promise<unknown | undefined> {
+async function progressIfAvailable(active?: StudySessionRow | null): Promise<unknown | undefined> {
   try {
-    return await getProgress();
+    // The standalone study response only needs progress counts. The Today page
+    // loads the detailed budget plan separately from /api/web/budget.
+    return await getProgress(getDatabase(), getAuthenticatedUserId(), new Date(), false, active);
   } catch {
     console.error("WordLoop progress failed", { source: "bootstrap" });
     return undefined;
@@ -385,13 +398,28 @@ async function successForSession(
   session: StudySessionRow,
   extra: Record<string, unknown> = {},
   audioUrl?: string | null,
+  includeProgress = true,
 ): Promise<Record<string, unknown>> {
-  const state = ensureState(session);
+  // Every caller supplies a StudySessionRow parsed by studySessions or just
+  // created from the validated server state. Avoid parsing its frozen payload
+  // a second time while preparing the response.
+  const state = session.state;
+  if (!state) throw new WebApiError(409, "INVALID_STUDY_STATE", "The active study state is unavailable.");
+  if (learningTimeCalibrationEnabled()) {
+    try {
+      const timezone = await getUserTimeZone();
+      const stage = state.widget === "review" && state.phase === "review_complete" ? "feedback"
+        : state.phase === "lesson_explain" ? "explanation"
+          : state.phase.includes("feedback") || state.phase === "pretest_result" || state.payload.mode === "feedback" ? "feedback" : "answer";
+      const scope = state.widget === "review" ? "review" : state.widget === "pretest" ? "pretest" : state.payload.consolidation === true ? "consolidation" : "lesson";
+      extra = { ...extra, learning_time: { session_id: session.id, phase: state.phase, index: state.current_index, retry: state.retry_count, stage, scope, consolidation: state.payload.consolidation === true, consolidation_status: state.payload.consolidation_status, phase_started_at: session.updated_at, local_date: dateInTimeZone(timezone), timezone } };
+    } catch { /* telemetry cannot interrupt learning */ }
+  }
   for(const id of privateSourceIds(state)){
     const allowed=await getDatabase().rpc('can_access_private_source_v1',{p_user_id:getAuthenticatedUserId(),p_book_id:id});
     if(allowed.error||allowed.data!==true)throw new WebApiError(403,'PRIVATE_BOOK_UNAVAILABLE','当前会话的私人词书授权已失效。');
   }
-  const displayState = state.widget === "lesson"
+  const displayState = state.widget === "lesson" && state.phase !== "lesson_complete"
     ? { ...state, payload: await withLessonClozeHint(state.payload) }
     : state;
   const response = resultForState(session, displayState, extra);
@@ -411,30 +439,48 @@ async function successForSession(
       response.pretest_summary = counts;
     }
   }
-  const progress = await progressIfAvailable();
-  if (progress !== undefined) response.progress = progress;
-  response.pending_consolidation = await pendingConsolidationSummary();
+  if (includeProgress) {
+    const progress = await progressIfAvailable(session);
+    if (progress !== undefined) response.progress = progress;
+  }
+  response.pending_consolidation = await pendingConsolidationSummary(session);
   return response;
 }
 
-async function pendingConsolidationSummary(): Promise<Record<string, unknown> | null> {
-  const cadence = await getLessonCadence();
-  const pending = cadence.pending_task;
-  if (!pending) return null;
-  const activity = pending.plan.planned_activity_type;
+function consolidationSummary(activity: string, estimatedSeconds: number): Record<string, unknown> {
   const label = activity === "translation_en_to_cn" ? "长难句英译中"
     : activity === "translation_cn_to_en" ? "完整中译英"
       : activity === "sentence" ? "情境造句"
         : activity === "collocation" ? "搭配练习" : "应用巩固";
-  return { activity_type: activity, label, estimated_seconds: pending.plan.estimated_seconds };
+  return { activity_type: activity, label, estimated_seconds: estimatedSeconds };
 }
 
-async function doneResponse(revision: string | null = null): Promise<Record<string, unknown>> {
+async function pendingConsolidationSummary(active?: StudySessionRow | null): Promise<Record<string, unknown> | null> {
+  const state = active?.state;
+  const plan = state?.widget === "lesson" && state.phase === "lesson_complete"
+    && state.payload.consolidation === true && state.payload.consolidation_status === "pending"
+    ? state.payload.consolidation_plan
+    : null;
+  if (typeof plan === "object" && plan !== null && !Array.isArray(plan)) {
+    const activity = Reflect.get(plan, "planned_activity_type");
+    const estimatedSeconds = Reflect.get(plan, "estimated_seconds");
+    if (typeof activity === "string" && typeof estimatedSeconds === "number"
+      && Number.isFinite(estimatedSeconds) && estimatedSeconds >= 0) {
+      return consolidationSummary(activity, estimatedSeconds);
+    }
+  }
+  const cadence = await getLessonCadence();
+  const pending = cadence.pending_task;
+  if (!pending) return null;
+  return consolidationSummary(pending.plan.planned_activity_type, pending.plan.estimated_seconds);
+}
+
+async function doneResponse(revision: string | null = null, includeProgress = true): Promise<Record<string, unknown>> {
   return {
     screen: "done",
     session_revision: revision,
     state: {},
-    progress: await getProgress(),
+    ...(includeProgress ? { progress: await getProgress(getDatabase(), getAuthenticatedUserId(), new Date(), false) } : {}),
     pending_consolidation: await pendingConsolidationSummary(),
   };
 }
@@ -451,11 +497,11 @@ async function prepareBootstrap(expectedRevision?: string | null, startNewRound 
   let revision = active?.updated_at ?? null;
   if (expectedRevision !== undefined && revision !== expectedRevision) throw new StaleStudyStateError();
   if (active?.state) {
-    let state = normalizeStudyStateForRead(active.state);
+    let state = active.state;
     if (state.widget === "lesson" && state.flow.lesson_words === undefined) {
       active = await normalizeLegacyLessonSession(active, db, userId, revision);
       revision = active.updated_at;
-      state = normalizeStudyStateForRead(active.state!);
+      state = active.state!;
     }
     if (state.widget === "lesson" && state.flow.lesson_words !== undefined && state.phase !== "lesson_complete") {
       const completedBeforeSession = await getCompletedLessonWords(db, userId, active.started_at);
@@ -505,11 +551,12 @@ async function prepareBootstrap(expectedRevision?: string | null, startNewRound 
     expectedRevision: revision,
     deferLessonQueueFreeze: true,
     startNewRound,
+    activeStateNormalized: true,
   });
-  const latest = await getActiveStudySession(db, userId);
+  const latest = await getActiveStudySessionRevision(db, userId);
   if ((latest?.id ?? null) !== (active?.id ?? null)
     || (latest?.updated_at ?? null) !== revision) throw new StaleStudyStateError();
-  return { bootstrap, active: latest, revision };
+  return { bootstrap, active, revision };
 }
 
 async function persistPretest(
@@ -729,9 +776,10 @@ async function createLessonFromBootstrap(
 }
 
 async function resolveBootstrap(expectedRevision?: string | null, startNewRound = true): Promise<Record<string, unknown>> {
+  const includeProgress = startNewRound;
   const prepared = await prepareBootstrap(expectedRevision, startNewRound);
   const { bootstrap, active, revision } = prepared;
-  if (bootstrap.action === "budget_complete") return { ...await doneResponse(revision), budget_paused: true };
+  if (bootstrap.action === "budget_complete") return { ...await doneResponse(revision, includeProgress), budget_paused: true };
   if (bootstrap.action === "resume") {
     if (!active) throw new WebApiError(409, "NO_ACTIVE_SESSION", "There is no active study session to resume.");
     if (active.state?.widget === "lesson" && active.state.payload.mode === "generation_error" && active.state.current_word) {
@@ -742,13 +790,13 @@ async function resolveBootstrap(expectedRevision?: string | null, startNewRound 
         index: active.state.current_index,
         expectedRevision: active.updated_at,
         sessionId: active.id,
-      })).session);
+      })).session, {}, undefined, includeProgress);
     }
     const consolidation = active.state?.widget === "lesson" ? lessonConsolidation(active.state) : null;
     if (active.state?.phase === "lesson_complete" && consolidation?.consolidation_status === "pending") {
-      return successForSession(active);
+      return successForSession(active, {}, undefined, includeProgress);
     }
-    return successForSession(active);
+    return successForSession(active, {}, undefined, includeProgress);
   }
   if (bootstrap.action === "review") {
     await buildReviewWidgetPayload(0, revision);
@@ -770,7 +818,7 @@ async function resolveBootstrap(expectedRevision?: string | null, startNewRound 
     });
     return { ...await resolveBootstrap(null), round_complete: true };
   }
-  return doneResponse(revision);
+  return doneResponse(revision, includeProgress);
 }
 
 function activeState(active: StudySessionRow | null, widget?: StudyState["widget"]): StudyState {
@@ -1656,10 +1704,26 @@ async function setDailyNewWordLimitAction(
 }
 
 async function performAction(action: WebAction): Promise<Record<string, unknown>> {
+  if (action.action === "record_learning_time") return recordLearningTime(action.observation);
   if (action.action === "set_daily_time_budget" || action.action === "extend_daily_time_budget") {
     await setLearningBudget(action.action === "set_daily_time_budget" ? action.minutes : undefined, action.action === "extend_daily_time_budget" ? action.request_id : undefined);
     const active = await getActiveStudySession();
     return active ? successForSession(active) : doneResponse();
+  }
+  if (action.action === "set_exam_goal") {
+    await setAdaptiveExamGoal(action.target_date, action.coverage_target);
+    const active = await getActiveStudySession();
+    return active ? successForSession(active) : doneResponse();
+  }
+  if (action.action === "continue_due_review") {
+    await continueDueReview();
+    return resolveBootstrap(action.expected_revision);
+  }
+  if (action.action === "continue_one_group") {
+    if (!await addOneGroupBudget(action.request_id)) {
+      throw new WebApiError(409, "NO_NEXT_STUDY_GROUP", "当前没有可继续安排的新词或到期复习。");
+    }
+    return resolveBootstrap(action.expected_revision);
   }
   if (action.action === "set_daily_new_word_limit") return setDailyNewWordLimitAction(action);
   if (action.action === "refresh_progress") return { screen: "done", session_revision: action.expected_revision, state: {}, progress: await getProgress() };

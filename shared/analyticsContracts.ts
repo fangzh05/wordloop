@@ -57,6 +57,7 @@ export const todayOverviewSchema = z.object({
       new_words: nonnegativeIntegerSchema,
       relearn_words: nonnegativeIntegerSchema,
     }).strict(),
+    due_now: nonnegativeIntegerSchema,
   }).strict(),
   captures: z.object({ inbox_count: nonnegativeIntegerSchema }).strict(),
 }).strict();

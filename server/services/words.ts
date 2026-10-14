@@ -1,6 +1,6 @@
 import { getLearningBudget, reserveLearningBudget } from "./learningBudget.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAuthenticatedUserId, getDatabase } from "../db.js";
+import { adaptiveDailyBudgetV2Enabled, getAuthenticatedUserId, getDatabase } from "../db.js";
 import type { UserWordRow, VocabularyItem, WordStatus } from "../types.js";
 import { assertDatabaseResult, dateInTimeZone, errorLayers } from "./shared.js";
 import { normalizeWord, prepareWordList } from "./wordNormalization.js";
@@ -321,7 +321,10 @@ export async function prepareDailyNewWords(
 ): Promise<{ date: string; prepared: number; added: number; limit: number }> {
   const targetDate = date ?? dateInTimeZone(await getUserTimeZone(db, userId));
   const budget = await getLearningBudget(db, userId);
-  const { data, error } = await db.rpc("prepare_daily_new_words_budget_v1", { p_user_id: userId, p_date: targetDate, p_budget_limit: budget.effective_new_limit });
+  const allocator = adaptiveDailyBudgetV2Enabled()
+    ? "prepare_daily_new_words_budget_v2"
+    : "prepare_daily_new_words_budget_v1";
+  const { data, error } = await db.rpc(allocator, { p_user_id: userId, p_date: targetDate, p_budget_limit: budget.effective_new_limit });
   assertDatabaseResult(error);
   return data as { date: string; prepared: number; added: number; limit: number };
 }

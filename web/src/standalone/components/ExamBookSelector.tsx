@@ -3,6 +3,7 @@ import {request} from '../apiClient.js';
 type Book={id:string;name:string;source:string;source_version:string;license:string;is_public:boolean;available:boolean;scope:'public'|'private';unavailable_reason:string|null;total:number;in_learning:number;mastered:number;not_enrolled:number};
 type Catalog={selected_book_id:string|null;effective_date:string|null;books:Book[]};
 const Context=createContext<{data:Catalog|null;error:string;loading:boolean;refresh:()=>Promise<void>;open:()=>void}|null>(null);
+export function useExamBookSelection(){return useContext(Context);}
 export function ExamBookProvider({tokenKey,children}:{tokenKey:string|null;children:ReactNode}) {
  const[data,setData]=useState<Catalog|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false),[open,setOpen]=useState(false);
  const[pending,setPending]=useState(''),[saving,setSaving]=useState(false);
@@ -14,7 +15,7 @@ export function ExamBookProvider({tokenKey,children}:{tokenKey:string|null;child
  return <Context.Provider value={{data,error,loading,refresh,open:()=>{setOpen(true);void refresh();}}}>{children}
  <dialog ref={dialog} className="settings-sheet exam-book-sheet" aria-labelledby="exam-books-title" onCancel={event=>{event.preventDefault();if(!saving)setOpen(false);}} onClick={event=>{if(event.target===event.currentTarget&&!saving)setOpen(false);}}>
   <header><div><span className="eyebrow">LEARNING TARGET</span><h2 id="exam-books-title">学习词书</h2></div><button className="secondary-button" disabled={saving} onClick={()=>setOpen(false)}>关闭</button></header>
-  <p className="exam-book-note">新目标从明天的新词任务生效。今日任务、当前会话和到期复习照常保留。</p>
+  <p className="exam-book-note">新目标立即用于后续新词安排。已开始的会话和到期复习照常保留。</p>
   <fieldset disabled={saving} className="exam-book-options"><legend>选择学习目标</legend>{data?.books.map(book=><label key={book.id} className="exam-book-option">
    <input type="radio" name="exam-book" value={book.id} disabled={!book.available} checked={pending===book.id} onChange={()=>setPending(book.id)}/>
    <span><strong>{book.name}</strong><small>{book.scope==='private'?'我的私有词书并集':'公共词书'} · {book.total.toLocaleString()} 词</small>
@@ -28,5 +29,5 @@ export function ExamBookProvider({tokenKey,children}:{tokenKey:string|null;child
 export function CurrentExamBook({compact=false}:{compact?:boolean}){
  const state=useContext(Context);if(!state)return null;
  const current=state.data?.books.find(b=>b.id===state.data?.selected_book_id);
- return <section className={`current-exam-book${compact?' is-compact':''}`} aria-label="当前学习词书"><div><span className="eyebrow">{compact?'当前词书':'学习词书'}</span><strong>{current?.name??(state.loading?'正在读取…':'请选择词书')}</strong>{!compact&&current&&<small>{current.total.toLocaleString()} 词 · 已纳入我的学习 {current.in_learning} · 已掌握 {current.mastered}</small>}{state.data?.effective_date&&<small>目标生效日期 {state.data.effective_date}</small>}</div><button type="button" className="secondary-button" aria-haspopup="dialog" onClick={state.open}>{compact?'更换':'切换词书'}</button>{state.error&&<p role="alert">{state.error}<button type="button" className="secondary-button" onClick={()=>void state.refresh()}>重试</button></p>}</section>;
+ return <section className={`current-exam-book${compact?' is-compact':''}`} aria-label="当前学习词书"><div><span className="eyebrow">{compact?'当前词书':'学习词书'}</span><strong>{current?.name??(state.loading?'正在读取…':'请选择词书')}</strong>{!compact&&current&&<small>{current.total.toLocaleString()} 词 · 已纳入我的学习 {current.in_learning} · 已掌握 {current.mastered}</small>}{state.data?.effective_date&&<small>目标生效日期 {state.data.effective_date}</small>}</div><button type="button" className="secondary-button" aria-haspopup="dialog" onClick={state.open}>{current?(compact?'更换':'切换词书'):(compact?'选择':'选择词书')}</button>{state.error&&<p role="alert">{state.error}<button type="button" className="secondary-button" onClick={()=>void state.refresh()}>重试</button></p>}</section>;
 }

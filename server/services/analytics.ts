@@ -1,13 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { analyticsEnvelopeSchema, analyticsRangeSchema, todayOverviewSchema, type AnalyticsEnvelope, type AnalyticsRange, type AnalyticsSection } from "../../shared/analyticsContracts.js";
-import type { UserWordRow } from "../types.js";
+import type { ProgressResult, UserWordRow } from "../types.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import { cardFromUserWord, createFsrsScheduler } from "./fsrsScheduler.js";
+import { cardFromUserWord, createFsrsScheduler, FSRS_REQUEST_RETENTION } from "./fsrsScheduler.js";
 import { addCalendarDays, dateInTimeZone, localDateRange } from "./shared.js";
 import { getUserTimeZone } from "./words.js";
 import { normalizeWord } from "./wordNormalization.js";
-import { normalizeStudyStateForRead, studyStateSchema } from "./studySessions.js";
+import { calculateDailyFormalReviewProgress, getFormalReviewCountForDay, parseStudyStateForReviewProgress } from "./progress.js";
 
 const DEFINITION_VERSION = "wordloop-analytics-v1" as const;
 const PAGE_SIZE = 1000;
@@ -423,28 +423,34 @@ export async function getTodayOverview(
   db: SupabaseClient = getDatabase(),
   userId = getAuthenticatedUserId(),
 ) {
-  const { asOf, timeZone } = await context(db, userId);
-  const { start, end } = localDateRange(dateInTimeZone(timeZone, asOf), timeZone);
-  const [session, progress, completedLessonWords, inboxCount] = await Promise.all([
-    db.from("study_sessions").select("id,state,started_at,updated_at,ended_at")
+  const { asOf, timeZone, today } = await context(db, userId);
+  const { start, end } = localDateRange(today, timeZone);
+  const [session, progressSnapshot, completedLessonWords, inboxCount, todaySessions, completedReviews] = await Promise.all([
+    db.from("study_sessions").select("id,started_at,updated_at,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words")
       .eq("user_id", userId).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle(),
-    import("./progress.js").then(({ getProgress }) => getProgress(db, userId, asOf)),
-    import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf)),
+    db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: asOf.toISOString() }),
+    import("./attempts.js").then(({ getTodayCompletedLessonWords }) => getTodayCompletedLessonWords(db, userId, asOf, timeZone, { start, end })),
     db.from("captured_notes").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "inbox"),
+    db.from("study_sessions").select("id,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words")
+      .eq("user_id", userId).gte("started_at", start).lt("started_at", end),
+    getFormalReviewCountForDay(db, userId, start, end),
   ]);
   assertDb(session.error);
+  assertDb(progressSnapshot.error);
   assertDb(inboxCount.error);
-  const todaySessions = await db.from("study_sessions").select("state")
-    .eq("user_id", userId).gte("started_at", start).lt("started_at", end);
   assertDb(todaySessions.error);
+  const progressData = progressSnapshot.data as Omit<ProgressResult, "review_today">;
+  const activeState = parseStudyStateForReviewProgress(session.data);
+  const parsedTodaySessions = ((todaySessions.data ?? []) as Array<{ id: string;
+    widget?: unknown; phase?: unknown; current_index?: unknown; relearn_words?: unknown;
+  }>).map(row => ({
+    id: row.id,
+    state: row.id === session.data?.id ? activeState : parseStudyStateForReviewProgress(row),
+  }));
+  const reviewToday = calculateDailyFormalReviewProgress(completedReviews, progressData.fsrs.due_now);
   const relearnWords = new Set<string>();
-  const activeParsedState = session.data ? studyStateSchema.safeParse(session.data.state) : null;
-  const activeState = activeParsedState?.success ? normalizeStudyStateForRead(activeParsedState.data) : null;
-  const rawStates = [session.data?.state, ...(todaySessions.data ?? []).map((item: { state: unknown }) => item.state)];
-  for (const [index, rawState] of rawStates.entries()) {
-    const parsed = index === 0 ? activeParsedState : studyStateSchema.safeParse(rawState);
-    if (!parsed?.success) continue;
-    const normalizedState = index === 0 ? activeState : normalizeStudyStateForRead(parsed.data);
+  const normalizedStates = [activeState, ...parsedTodaySessions.filter(row => row.id !== session.data?.id).map(row => row.state)];
+  for (const normalizedState of normalizedStates) {
     if (!normalizedState) continue;
     for (const word of normalizedState.flow.relearn_words) {
       const normalized = normalizeWord(word);
@@ -459,7 +465,7 @@ export async function getTodayOverview(
   return todayOverviewSchema.parse({
     as_of: asOf.toISOString(),
     timezone: timeZone,
-    target_retention: Number(createFsrsScheduler().parameters.request_retention),
+    target_retention: FSRS_REQUEST_RETENTION,
     active_session: session.data ? {
       active: true,
       phase,
@@ -469,16 +475,17 @@ export async function getTodayOverview(
     } : { active: false, phase: "idle", phase_detail: null, started_at: null, updated_at: null },
     progress: {
       review: {
-        ...progress.review_today,
-        scope: phase === "review" ? "active_session" : "today_recorded_sessions",
+        ...reviewToday,
+        scope: "today_recorded_sessions",
       },
-      pretest: progress.today,
+      pretest: progressData.today,
       formal_learning: {
         completed_words: completedLessonWords.size,
         completed_distinct_words: completedLessonWords.size,
         new_words: Math.max(0, completedLessonWords.size - completedRelearnWords),
         relearn_words: completedRelearnWords,
       },
+      due_now: progressData.fsrs.due_now,
     },
     captures: { inbox_count: inboxCount.count ?? 0 },
   });

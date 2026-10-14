@@ -54,10 +54,11 @@ export async function getTodayCompletedLessonWords(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
   now = new Date(),
+  timeZoneOverride?: string,
+  rangeOverride?: { start: string; end: string },
 ): Promise<Set<string>> {
-  const timeZone = await getUserTimeZone(db, userId);
-  const date = dateInTimeZone(timeZone, now);
-  const { start, end } = localDateRange(date, timeZone);
+  const timeZone = timeZoneOverride ?? await getUserTimeZone(db, userId);
+  const { start, end } = rangeOverride ?? localDateRange(dateInTimeZone(timeZone, now), timeZone);
   const { data, error } = await db
     .from("attempts")
     .select("word:words!inner(normalized_word)")

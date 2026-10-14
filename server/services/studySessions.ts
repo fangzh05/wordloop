@@ -373,6 +373,23 @@ export async function getActiveStudySession(
   return data ? parseSession(data) : null;
 }
 
+/** Read only the concurrency token when the caller already has a validated session snapshot. */
+export async function getActiveStudySessionRevision(
+  db = getDatabase(),
+  userId = getAuthenticatedUserId(),
+): Promise<{ id: string; updated_at: string } | null> {
+  const { data, error } = await db
+    .from("study_sessions")
+    .select("id,updated_at")
+    .eq("user_id", userId)
+    .is("ended_at", null)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  assertStudySessionDatabaseResult(error);
+  return data as { id: string; updated_at: string } | null;
+}
+
 export async function getOrCreateActiveStudySession(
   initialState?: StudyState,
   db = getDatabase(),

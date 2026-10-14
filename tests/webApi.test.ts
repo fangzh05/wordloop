@@ -4,9 +4,10 @@ vi.mock("../server/services/learningBudget.js", async importOriginal => ({
   getLearningBudget: vi.fn(async () => ({ date:"2026-10-02",daily_minutes:45,remaining_seconds:2700,estimated_used_seconds:0,due_count:0,overdue_count:0,new_word_cap:50,effective_new_limit:50,enabled:true,forecast:[] })),
   reserveLearningBudget: vi.fn(async () => undefined),
   setLearningBudget: vi.fn(async () => ({})),
+  setAdaptiveExamGoal: mocks.setExamGoal,
 }));
 vi.mock("../server/services/learningModel.js", () => ({ getEvidenceEvaluation: vi.fn(async () => ({ reviewed_count: 0, rows: [] })), labelEvidence: vi.fn(async () => ({saved:true})) }));
-import { getLearningBudget, setLearningBudget } from "../server/services/learningBudget.js";
+import { getLearningBudget, setLearningBudget, setAdaptiveExamGoal } from "../server/services/learningBudget.js";
 import { labelEvidence } from "../server/services/learningModel.js";
 import { lessonExercisePlanSchema } from "../shared/toolContracts.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   getVocabularyItemsByWords: vi.fn(),
   recordPretestResult: vi.fn(),
   setDailyNewWordLimit: vi.fn(),
+  setExamGoal: vi.fn(),
   getPronunciationAudio: vi.fn(),
   buildReviewWidgetPayload: vi.fn(),
   recordAttempt: vi.fn(),
@@ -105,6 +107,9 @@ vi.mock("../server/services/studySessions.js", async () => {
   return {
     ...actual,
     getActiveStudySession: vi.fn(async () => mocks.active),
+    getActiveStudySessionRevision: vi.fn(async () => mocks.active
+      ? { id: mocks.active.id, updated_at: mocks.active.updated_at }
+      : null),
     assertActiveStudySessionRevision: vi.fn(async (expectedRevision: string | null, expectedSessionId?: string) => {
       if ((mocks.active?.updated_at ?? null) !== expectedRevision || (expectedSessionId && mocks.active?.id !== expectedSessionId)) {
         throw new actual.StaleStudyStateError();
@@ -386,6 +391,12 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(setLearningBudget).toHaveBeenNthCalledWith(2,undefined,request_id);
     expect(mocks.recordAttempt).not.toHaveBeenCalled();
   });
+  it("returns a conflict when an exam goal is set before choosing an exam book", async () => {
+    vi.mocked(setAdaptiveExamGoal).mockRejectedValueOnce(new Error("EXAM_BOOK_REQUIRED"));
+    const response = await handleWebApiRequest(post({ action:"set_exam_goal", target_date:null, coverage_target:null }));
+    expect(response.status).toBe(409);
+    expect(await body(response)).toMatchObject({ error:{ code:"EXAM_BOOK_REQUIRED" } });
+  });
   it("requires a bearer token, returns no-store headers, and rejects client-owned cursor fields", async () => {
     const missing = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap"));
     expect(missing.status).toBe(401);
@@ -431,6 +442,30 @@ describe("Standalone Web API shared-state boundaries", () => {
     }));
     expect(invalid.status).toBe(400);
     expect(mocks.getAnalytics).toHaveBeenCalledOnce();
+  });
+
+  it("keeps read-only bootstrap resume light and hydrates progress on an explicit continue", async () => {
+    const state = makeStudyState({
+      date, widget: "pretest", phase: "pretest", current_word: "fixture", current_index: 0, retry_count: 0,
+      flow: { relearn_words: [] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(state);
+    mocks.bootstrap.mockResolvedValue({ action: "resume", widget: "pretest", phase: "pretest" });
+
+    const bootstrap = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const bootstrapPayload = await body(bootstrap);
+    expect(bootstrap.status).toBe(200);
+    expect(bootstrapPayload).toMatchObject({ screen: "pretest", state: { phase: "pretest" } });
+    expect(bootstrapPayload).not.toHaveProperty("progress");
+    expect(mocks.getProgress).not.toHaveBeenCalled();
+
+    const continued = await handleWebApiRequest(post({ action: "continue" }, "rev-a"));
+    expect(continued.status).toBe(200);
+    expect(await body(continued)).toMatchObject({ progress: { today: { completed: 0, total: 1 } } });
+    expect(mocks.getProgress).toHaveBeenCalledOnce();
   });
 
   it("serves vocabulary search and detail through owner-scoped read services", async () => {

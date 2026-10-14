@@ -67,8 +67,8 @@ export function reviewRetrievability(item: VocabularyItem, now = new Date()): nu
   if (!item.last_reviewed_at || item.fsrs_stability <= 0) return 0;
   return createFsrsScheduler(false).get_retrievability(cardFromUserWord(item as unknown as UserWordRow), now, false);
 }
-function byDuePriority(a: ReviewVocabularyItem, b: ReviewVocabularyItem, now = new Date()): number {
-  const risk = reviewRetrievability(a, now) - reviewRetrievability(b, now);
+function byDuePriority(a: ReviewVocabularyItem, b: ReviewVocabularyItem, now: Date, aRisk: number, bRisk: number): number {
+  const risk = aRisk - bRisk;
   if (Math.abs(risk) > 1e-12) return risk;
   if (a.wrong_count !== b.wrong_count) return b.wrong_count - a.wrong_count;
   const aTime = a.next_review_at ? Date.parse(a.next_review_at) : Number.MAX_SAFE_INTEGER;
@@ -85,11 +85,25 @@ export function selectDueReviewWords(
   now = new Date(),
 ): ReviewVocabularyItem[] {
   const boundedLimit = Math.max(0, Math.min(REVIEW_SESSION_MAX, limit));
-  return all
+  const due = all
     .filter((word) => reviewDueAt(word, now))
-    .map((word) => decorateReviewWord(word, now))
-    .sort((a, b) => byDuePriority(a, b, now))
-    .slice(0, boundedLimit);
+    .map((word) => decorateReviewWord(word, now));
+  // Retrievability is pure for a fixed card and date. Compute it once per card
+  // and reuse one scheduler; doing the FSRS calculation inside Array.sort's
+  // comparator repeats it O(n log n) times on every Today/bootstrap request.
+  let scheduler: ReturnType<typeof createFsrsScheduler> | undefined;
+  const scored = due.map((item) => {
+    if (!item.last_reviewed_at || item.fsrs_stability <= 0) return { item, risk: 0 };
+    scheduler ??= createFsrsScheduler(false);
+    return {
+      item,
+      risk: scheduler.get_retrievability(cardFromUserWord(item as unknown as UserWordRow), now, false),
+    };
+  });
+  return scored
+    .sort((a, b) => byDuePriority(a.item, b.item, now, a.risk, b.risk))
+    .slice(0, boundedLimit)
+    .map(({ item }) => item);
 }
 
 /**

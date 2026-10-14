@@ -1,19 +1,56 @@
 import { getLearningBudget } from "./learningBudget.js";
 import { getAuthenticatedUserId, getDatabase } from "../db.js";
-import type { ProgressResult, StudySessionRow, VocabularyItem } from "../types.js";
+import { STUDY_PHASES, type ProgressResult, type StudySessionRow, type StudyState, type StudyFlow, type VocabularyItem } from "../types.js";
 import { addCalendarDays, assertDatabaseResult, dateInTimeZone, localDateRange } from "./shared.js";
 import { perf } from "./perf.js";
-import { getActiveStudySession, normalizeStudyStateForRead, studyStateSchema } from "./studySessions.js";
 import { getUserTimeZone } from "./words.js";
+import { z } from "zod";
+import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
 
+type StudyProgressState = Pick<StudyState, "widget" | "phase" | "current_index">
+  & { flow: Pick<StudyFlow, "relearn_words">; payload: { items?: unknown[] } };
 type ReviewSessionProgressRow = Pick<StudySessionRow, "review_words_count"> & { state: unknown };
 
+// Project only the review cursor, review kinds, and relearn words. Parsing a
+// persisted session with the full StudyState schema copies frozen Lesson plans
+// and feedback that are irrelevant to these read-only counts.
+const studyProgressStateSchema = z.object({
+  widget: z.enum(["pretest", "lesson", "review"]),
+  phase: z.enum(STUDY_PHASES),
+  current_index: z.number().int().min(0),
+  relearn_words: z.array(z.string().trim().min(1).max(100)).max(REVIEW_SESSION_MAX).default([]),
+  review_items: z.array(z.unknown()).max(REVIEW_SESSION_MAX).optional(),
+});
+
 function safeStudyState(value: unknown) {
-  const parsed = studyStateSchema.safeParse(value);
-  return parsed.success ? normalizeStudyStateForRead(parsed.data) : null;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const flow = typeof raw.flow === "object" && raw.flow !== null && !Array.isArray(raw.flow)
+    ? raw.flow as Record<string, unknown> : {};
+  const payload = typeof raw.payload === "object" && raw.payload !== null && !Array.isArray(raw.payload)
+    ? raw.payload as Record<string, unknown> : {};
+  const projected = studyProgressStateSchema.safeParse({
+    widget: raw.widget,
+    phase: raw.phase,
+    current_index: raw.current_index,
+    relearn_words: raw.relearn_words ?? flow.relearn_words,
+    review_items: raw.review_items ?? payload.items,
+  });
+  if (!projected.success) return null;
+  return {
+    widget: projected.data.widget,
+    phase: projected.data.phase,
+    current_index: projected.data.current_index,
+    flow: { relearn_words: projected.data.relearn_words },
+    payload: projected.data.review_items === undefined ? {} : { items: projected.data.review_items },
+  } satisfies StudyProgressState;
 }
 
-type NormalizedStudyState = NonNullable<ReturnType<typeof safeStudyState>>;
+type NormalizedStudyState = StudyProgressState;
+
+export function parseStudyStateForReviewProgress(value: unknown): NormalizedStudyState | null {
+  return safeStudyState(value);
+}
 
 function isFormalReviewItem(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -40,13 +77,27 @@ export function calculateReviewTodayProgress(
   active: Pick<StudySessionRow, "state"> & Partial<Pick<StudySessionRow, "review_words_count">> | null,
   sessions: readonly ReviewSessionProgressRow[],
 ): ProgressResult["review_today"] {
-  const activeState = safeStudyState(active?.state);
+  return calculateReviewTodayProgressFromParsed(
+    parseStudyStateForReviewProgress(active?.state),
+    active?.review_words_count,
+    sessions.map(session => ({
+      state: parseStudyStateForReviewProgress(session.state),
+      review_words_count: session.review_words_count,
+    })),
+  );
+}
+
+export function calculateReviewTodayProgressFromParsed(
+  activeState: NormalizedStudyState | null,
+  activeReviewWordsCount: number | undefined,
+  sessions: readonly { state: NormalizedStudyState | null; review_words_count?: number }[],
+): ProgressResult["review_today"] {
   if (activeState?.widget === "review") {
     const reviewTotal = reviewSnapshotTotal(activeState);
     const currentSnapshotCompleted = completedReviewSnapshot(activeState);
-    const storedReviewCount = typeof active?.review_words_count === "number"
-      && Number.isFinite(active.review_words_count)
-      ? Math.max(0, active.review_words_count)
+    const storedReviewCount = typeof activeReviewWordsCount === "number"
+      && Number.isFinite(activeReviewWordsCount)
+      ? Math.max(0, activeReviewWordsCount)
       : 0;
     const reviewCompleted = Math.max(
       storedReviewCount,
@@ -62,7 +113,7 @@ export function calculateReviewTodayProgress(
     const count = typeof session.review_words_count === "number" && Number.isFinite(session.review_words_count)
       ? Math.max(0, session.review_words_count)
       : 0;
-    const state = safeStudyState(session.state);
+    const state = session.state;
     if (state?.widget === "review") {
       const currentCompleted = completedReviewSnapshot(state);
       const accumulatedCompleted = Math.max(count, currentCompleted);
@@ -81,37 +132,59 @@ export function calculateReviewTodayProgress(
   };
 }
 
-async function getReviewTodayProgress(db: ReturnType<typeof getDatabase>, userId: string, now: Date): Promise<ProgressResult["review_today"]> {
-  const active = await getActiveStudySession(db, userId);
-  if (active?.state?.widget === "review") return calculateReviewTodayProgress(active, []);
-
+async function getReviewTodayProgress(
+  db: ReturnType<typeof getDatabase>,
+  userId: string,
+  now: Date,
+): Promise<number> {
   const timeZone = await getUserTimeZone(db, userId);
   const today = dateInTimeZone(timeZone, now);
   const { start, end } = localDateRange(today, timeZone);
-  const sessionResult = await db.from("study_sessions")
-    .select("review_words_count,state")
+  return getFormalReviewCountForDay(db, userId, start, end);
+}
+
+export async function getFormalReviewCountForDay(
+  db: ReturnType<typeof getDatabase>,
+  userId: string,
+  start: string,
+  end: string,
+): Promise<number> {
+  const result = await db.from("fsrs_review_logs")
+    .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .gte("started_at", start)
-    .lt("started_at", end);
-  assertDatabaseResult(sessionResult.error);
-  return calculateReviewTodayProgress(
-    active,
-    (sessionResult.data ?? []) as ReviewSessionProgressRow[],
-  );
+    .eq("review_source", "review")
+    .gte("reviewed_at", start)
+    .lt("reviewed_at", end);
+  assertDatabaseResult(result.error);
+  return Math.max(0, result.count ?? 0);
+}
+
+export function calculateDailyFormalReviewProgress(
+  completedReviews: number,
+  dueReviews: number,
+): ProgressResult["review_today"] {
+  const completed = Number.isFinite(completedReviews) ? Math.max(0, Math.floor(completedReviews)) : 0;
+  const remaining = Number.isFinite(dueReviews) ? Math.max(0, Math.floor(dueReviews)) : 0;
+  return { completed, total: completed + remaining, remaining };
 }
 
 export async function getProgress(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
   now = new Date(),
+  includeBudget = true,
+  knownActive?: StudySessionRow | null,
 ): Promise<ProgressResult> {
   return perf("get_progress", async () => {
-    const [{ data, error }, review_today] = await Promise.all([
+    const [{ data, error }, completedReviews] = await Promise.all([
       db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: now.toISOString() }),
       getReviewTodayProgress(db, userId, now),
     ]);
     assertDatabaseResult(error);
-    return { ...(data as Omit<ProgressResult, "review_today">), review_today, budget: await getLearningBudget(db, userId) };
+    const progressData = data as Omit<ProgressResult, "review_today">;
+    const review_today = calculateDailyFormalReviewProgress(completedReviews, progressData.fsrs.due_now);
+    const progress = { ...progressData, review_today };
+    return includeBudget ? { ...progress, budget: await getLearningBudget(db, userId) } : progress;
   });
 }
 

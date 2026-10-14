@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { getAnalytics } from "../apiClient.js";
+import { getAnalytics, getBudget } from "../apiClient.js";
 import type { ReadModelEnvelope } from "../apiClient.js";
+import type { BudgetSnapshot } from "../../../../server/services/learningBudget.js";
+import { summarizeLearningTime, type LearningTimeWindowDays } from "../learningTimeInsights.js";
 
 type Section = "overview" | "memory" | "weakness" | "activity";
 type Range = "7d" | "30d" | "90d";
@@ -49,12 +51,25 @@ function BarList({ values, onSelect }: { values: Array<Record<string, unknown>>;
 export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null; onOpenWord: (userWordId: string) => void }): React.JSX.Element {
   const [section, setSection] = useState<Section>("overview");
   const [range, setRange] = useState<Range>("30d");
+  const [timeWindow, setTimeWindow] = useState<LearningTimeWindowDays>(14);
   const [matrixDisplay, setMatrixDisplay] = useState<MatrixDisplay>("count");
   const [result, setResult] = useState<ReadModelEnvelope<AnalyticsData> | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const [focusRows, setFocusRows] = useState<Array<Record<string, unknown>>>([]);
+  const [budget, setBudget] = useState<BudgetSnapshot | null>(null);
+  const [budgetError, setBudgetError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void getBudget(controller.signal).then(value => {
+      if (!controller.signal.aborted) { setBudget(value); setBudgetError(""); }
+    }).catch(() => {
+      if (!controller.signal.aborted) setBudgetError("学习时间记录暂时不可用。");
+    });
+    return () => controller.abort();
+  }, [tokenKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -87,6 +102,8 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
   const memoryScatter = rows(data.scatter_points);
   const weakMatrix = rows(data.historical_error_matrix);
   const activity = rows(data.days);
+  const timeSummary = summarizeLearningTime(budget?.time_history ?? [], timeWindow);
+  const introducedWords = (budget?.new_word_history ?? []).filter(day => (day.new_words ?? 0) > 0);
 
   const histogramLists = useMemo(() => ({
     stability: rows(stability.histogram), difficulty: rows(difficulty.histogram), retrievability: rows(retrievability.histogram),
@@ -138,6 +155,25 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
         </section>
         <section className="insight-panel"><h2>关注词</h2><FocusList values={focusRows} onOpenWord={onOpenWord} /></section>
         <section className="insight-panel"><h2>首次回忆成功趋势</h2><TrendBars values={trend} target={number(result.coverage.target_retention)} /></section>
+        <section className="insight-panel"><h2>有效学习时间与新词</h2>
+          {budgetError && <p className="standalone-status error" role="alert">{budgetError}</p>}
+          <div className="matrix-display-controls" role="group" aria-label="学习时间统计范围">
+            {([7, 14, 30] as const).map(days => <button key={days} type="button" aria-pressed={timeWindow === days} onClick={() => setTimeWindow(days)}>{days} 天</button>)}
+          </div>
+          {budget && <div className="insight-metric-grid compact">
+            <Metric label={`近 ${timeWindow} 天有效学习`} value={timeSummary.samples ? `${(timeSummary.effective_seconds / 60).toFixed(0)} 分钟` : "暂无记录"} note={timeSummary.samples ? `${count(timeSummary.samples)} 个有效计时样本` : "不从提交间隔推算"} />
+            <Metric label="逐题预测 MAE" value={timeSummary.mean_absolute_error_seconds === null ? "暂无配对" : `${timeSummary.mean_absolute_error_seconds.toFixed(1)} 秒`} note={timeSummary.prediction_samples ? `${count(timeSummary.prediction_samples)} 个预测与实际配对` : "有效计时开始后显示"} />
+            <Metric label="逐题平均偏差" value={timeSummary.mean_signed_error_seconds === null ? "暂无配对" : `${timeSummary.mean_signed_error_seconds > 0 ? "+" : ""}${timeSummary.mean_signed_error_seconds.toFixed(1)} 秒`} note="实际耗时 − 预测耗时；正值表示实际更久" />
+            <Metric label="近 14 天正式引入" value={introducedWords.length ? count(introducedWords.reduce((sum, day) => sum + (day.new_words ?? 0), 0)) : "暂无记录"} note="按唯一词首次进入 Lesson 计数" />
+            <Metric label="今日复习积压" value={`${count(budget.due_count)} / ${count(budget.overdue_count)}`} note="到期 / 逾期" />
+            <Metric label="新词成本状态" value={budget.cost_profile?.new_word_confidence === "moderate" ? "个人估算" : "初始估算"} note={`${budget.cost_profile?.new_word_samples ?? 0} 个完整教学样本`} />
+            <Metric label="完整新词预测 MAE" value={timeSummary.new_word_mean_absolute_error_seconds === null ? "暂无配对" : `${timeSummary.new_word_mean_absolute_error_seconds.toFixed(1)} 秒`} note={timeSummary.new_word_prediction_samples ? `${count(timeSummary.new_word_prediction_samples)} 个已完成唯一词样本` : "覆盖必要教学阶段后显示"} />
+          </div>}
+          {timeSummary.samples ? <><h3>每日有效时长（近 {timeWindow} 天）</h3><BarList values={[...timeSummary.days].reverse().map(day => ({ date: day.date, count: Math.round((day.effective_seconds ?? 0) / 60) }))} /><p className="muted-copy">仅统计前台、非等待、通过服务端校验的有效学习计时。</p></> : <p className="muted-copy">所选期间暂无有效计时记录。旧提交时间缺少可靠的阅读与作答时长，未作回填。</p>}
+          {introducedWords.length ? <><h3>每日正式新词（14 天）</h3><BarList values={introducedWords.map(day => ({ date: day.date, count: day.new_words ?? 0 }))} /></> : <p className="muted-copy">升级后的首次正式引入将从现在开始记录；重复练习和预测试不重复计数。</p>}
+          {budget?.adaptive_plan && <p className="muted-copy">未来 7 天预计复习：正常 {Math.ceil(budget.adaptive_plan.future_burden_normal.next_7_days_seconds / 60)} 分钟，偏高 {Math.ceil(budget.adaptive_plan.future_burden_elevated.next_7_days_seconds / 60)} 分钟。14 天正常情景 {Math.ceil(budget.adaptive_plan.future_burden_normal.next_14_days_seconds / 60)} 分钟，偏高情景 {Math.ceil(budget.adaptive_plan.future_burden_elevated.next_14_days_seconds / 60)} 分钟。</p>}
+          <p className="muted-copy">成本预测按当前用户的历史计时与静态先验确定；每题预测在采集开始时冻结，网络和模型等待不计入实际耗时。完整新词指标随巩固阶段完成而更新。</p>
+        </section>
       </>}
 
       {section === "memory" && <>
@@ -175,7 +211,7 @@ export function InsightsPage({ tokenKey, onOpenWord }: { tokenKey: string | null
           <ActivityGrid values={activity} onSelect={(date) => { const found = activity.find((item) => item.local_date === date); if (found) setResult((current) => current ? { ...current, data: { ...current.data, selected_day: found } } : current); }} />
         </section>
         {data.selected_day && <section className="insight-panel"><h2>{String(object(data.selected_day).local_date)} 明细</h2><div className="insight-metric-grid compact">{Object.entries(object(data.selected_day)).filter(([key]) => key !== "local_date").map(([key, value]) => <Metric key={key} label={activityLabel(key)} value={count(value)} />)}</div></section>}
-        <section className="insight-panel"><h2>活动口径</h2><p className="muted-copy">首次引入取每词最早预测试日志。首次正式学习完成和专注时长缺少可靠埋点，因此不显示。</p></section>
+        <section className="insight-panel"><h2>活动口径</h2><p className="muted-copy">新词按唯一词的首次正式引入计数；有效学习时间只来自通过服务端校验的前台计时。升级前缺少可靠计时的数据不回填。</p></section>
       </>}
     </div>}
   </section>;
@@ -236,5 +272,5 @@ function errorLabel(value: string): string {
   return ({ meaning: "词义", collocation: "搭配", grammar: "语法", pronunciation: "发音", spelling: "拼写", unclassified: "未分类" } as Record<string, string>)[value] ?? value;
 }
 function activityLabel(value: string): string {
-  return ({ formal_review_count: "正式 review 次数", distinct_review_words: "不同复习词", pretest_count: "预测试次数", first_introductions: "首次引入", capture_count: "捕获次数", ordinary_attempt_count: "练习尝试", distinct_attempt_words: "练习词数", first_formal_learning_completion: "首次正式学习完成", review: "正式复习", exact_cloze: "语境填空", sentence: "情境造句", translation_en_to_cn: "英译中", translation_cn_to_en: "中译英", pretest_cn_to_en:"预测试", word_recall:"单词回忆", collocation:"搭配" } as Record<string, string>)[value] ?? value;
+  return ({ formal_review_count: "正式 review 次数", distinct_review_words: "不同复习词", pretest_count: "预测试次数", first_introductions: "首次引入", capture_count: "捕获次数", ordinary_attempt_count: "练习尝试", distinct_attempt_words: "练习词数", first_formal_learning_completion: "首次正式学习完成", review: "正式复习", exact_cloze: "语境填空", sentence: "情境造句", translation_en_to_cn: "英译中", translation_cn_to_en: "中译英", pretest_cn_to_en:"预测试", pretest_en_definition:"英英释义预测试", pronunciation:"跟读发音", listening_recall:"听音复原", word_recall:"单词回忆", collocation:"搭配" } as Record<string, string>)[value] ?? value;
 }

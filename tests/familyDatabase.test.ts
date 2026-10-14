@@ -17,11 +17,15 @@ const u1 = "00000000-0000-4000-8000-000000000001", u2 = "00000000-0000-4000-8000
 const sid = "00000000-0000-4000-8000-000000000003";
 const files = ["202609130001_initial_wordloop.sql","202609130002_fsrs_shanbay.sql","202609150004_study_session_state.sql","20260927143358_exact_cloze_activity_type.sql","20260929120641_captured_notes.sql","20260930043404_balanced_exercise_plans.sql","20261002024106_evidence_budget.sql","20261007053500_local_family_graph.sql"];
 beforeAll(async () => {
-  await db.exec("create role anon; create role authenticated; create role service_role bypassrls;");
+  await db.exec("create role anon; create role anonymous; create role authenticated; create role service_role bypassrls; create role wordloop_admin; create schema auth; create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.user',true),'')::uuid$$; create function public.wordloop_authenticated_user_id() returns uuid language sql stable as $$select auth.uid()$$;");
   for (const file of files) await db.exec(readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), "utf8").replace("create extension if not exists pgcrypto;", ""));
   await db.exec(readFileSync(new URL("../supabase/migrations/20261007095603_lexical_dictionary_entries.sql",import.meta.url),"utf8"));
+  await db.exec(readFileSync(new URL("../supabase/migrations/20261011082546_replenish_new_words_budget.sql",import.meta.url),"utf8"));
+  await db.exec(readFileSync(new URL("../supabase/migrations/20261011092451_builtin_exam_books.sql",import.meta.url),"utf8"));
+  await db.exec(readFileSync(new URL("../neon/migrations/0006_learning_time_calibration_v2.sql",import.meta.url),"utf8"));
+  await db.exec(readFileSync(new URL("../neon/migrations/0007_adaptive_daily_budget_v2.sql",import.meta.url),"utf8"));
+  await db.exec(readFileSync(new URL("../neon/migrations/0008_learning_time_prediction_errors.sql",import.meta.url),"utf8"));
   // PGlite has gen_random_uuid built in; only Supabase's grant defaults differ.
-  await db.exec("grant all on all tables in schema public to service_role; grant all on all sequences in schema public to service_role;");
   for (const [table, rows] of [["lexical_lexemes",seed.lexemes],["lexical_senses",seed.senses],["lexical_forms",seed.forms],["lexical_morphemes",seed.morphemes],["lexical_relations",seed.relations]] as const) {
     for (const row of rows) {
       const keys = Object.keys(row), values = Object.values(row).map((v) => typeof v === "object" && v !== null ? JSON.stringify(v) : v);
@@ -32,6 +36,7 @@ beforeAll(async () => {
 afterAll(() => db.close());
 beforeEach(async () => {
   await db.exec("begin");
+  await db.query("select set_config('test.user',$1,true)",[u1]);
   await db.query("insert into users(id) values($1),($2)", [u1,u2]);
   await db.query("select ensure_user_word_v1($1,'reconcile','reconcile','test',false)", [u1]);
   await db.query("update user_words set fsrs_reps=3,fsrs_stability=8,consecutive_correct=3,status='review',next_review_at=now()+interval '8 days' where user_id=$1", [u1]);
@@ -53,6 +58,63 @@ async function answer(id: string,index: number,text: string,content: FamilyLesso
   return (await one("select submit_family_step_v1($1,$2,$3,$4,$5,$6) as value",[u1,id,index,text,JSON.stringify(cardToDatabase(result.card)),JSON.stringify(reviewLogToDatabase(result.log))])).value;
 }
 describe("real PostgreSQL Family transactions", () => {
+  it("keeps the formal-introduction guard when timing prediction is added",async()=>{
+    const definition=(await one("select pg_get_functiondef('public.record_learning_time_v2(uuid,jsonb)'::regprocedure) as definition")).definition as string;
+    expect(definition).toContain("formally_introduced_session_id=s.id");
+    expect(definition).toContain("learning_time_prior_prediction_v2");
+    expect((await one("select public.learning_time_activity_type_v2('listen_repeat','pretest','answer','sentence') as activity")).activity).toBe("pronunciation");
+    expect((await one("select public.learning_time_activity_type_v2('listen_recall','pretest','answer','sentence') as activity")).activity).toBe("listening_recall");
+  });
+  it("keeps the flag-off allocator intact and gives V2 a bounded versioned allocator",async()=>{
+    const legacy=(await one("select pg_get_functiondef('public.prepare_daily_new_words_budget_v1(uuid,date,integer)'::regprocedure) as definition")).definition as string;
+    const adaptive=(await one("select pg_get_functiondef('public.prepare_daily_new_words_budget_v2(uuid,date,integer)'::regprocedure) as definition")).definition as string;
+    const family=(await one("select pg_get_functiondef('public.submit_family_step_v1(uuid,uuid,integer,text,jsonb,jsonb)'::regprocedure) as definition")).definition as string;
+    expect(legacy).toContain("77.0");
+    expect(legacy).toContain("*8");
+    expect(adaptive).not.toContain("77.0");
+    expect(adaptive).toContain("exam_word_in_scope_v1");
+    expect(adaptive).toContain("wordloop_authenticated_user_id");
+    expect(family).toContain("new_word_budget_admitted");
+    expect(family).toContain("learning_budget_snapshot_v1");
+    expect((await one("select has_function_privilege('authenticated','public.prepare_daily_new_words_budget_v2(uuid,date,integer)','execute') allowed")).allowed).toBe(true);
+    expect((await one("select has_function_privilege('wordloop_admin','public.prepare_daily_new_words_budget_v2(uuid,date,integer)','execute') allowed")).allowed).toBe(true);
+    expect((await one("select has_function_privilege('service_role','public.prepare_daily_new_words_budget_v2(uuid,date,integer)','execute') allowed")).allowed).toBe(false);
+    await db.query("select public.set_learning_budget_v1($1,null,$2)",[u1,"group:00000000-0000-4000-8000-0000000000AA:538"]);
+    expect((await one("select extra_seconds from learning_budget_days where user_id=$1 and local_date=(now() at time zone 'Asia/Shanghai')::date",[u1])).extra_seconds).toBe(538);
+  });
+  it("rejects V2 allocator calls whose user differs from the authenticated subject",async()=>{
+    const today=(await one("select (now() at time zone 'Asia/Shanghai')::date::text as local_day")).local_day as string;
+    await db.exec("savepoint cross_user_allocator");
+    await expect(db.query("select prepare_daily_new_words_budget_v2($1,$2::date,20)",[u2,today])).rejects.toThrow("UNAUTHORIZED");
+    await db.exec("rollback to savepoint cross_user_allocator");
+  });
+  it("does not charge a frozen due Review twice in the adaptive snapshot",async()=>{
+    const word=(await one("select word_id from user_words where user_id=$1",[u1])).word_id as string;
+    const today=(await one("select (now() at time zone 'Asia/Shanghai')::date::text as local_day")).local_day as string;
+    await db.query("update user_words set status='review',fsrs_reps=1,fsrs_scheduled_days=1,next_review_at=now()-interval '2 hours' where user_id=$1 and word_id=$2",[u1,word]);
+    const before=(await one("select public.learning_budget_snapshot_v1($1) value",[u1])).value;
+    expect(before.due_count).toBe(1);
+    await db.query("insert into learning_budget_events(user_id,task_key,local_date,estimated_seconds,activity_type) values($1,$2,$3,30,'review')",[u1,`review:${word}:2026-10-13T08:00:00.000Z`,today]);
+    const after=(await one("select public.learning_budget_snapshot_v1($1) value",[u1])).value;
+    expect(after.due_count).toBe(0);
+    expect(after.unreserved_due_count).toBe(0);
+    expect(after.unreserved_overdue_count).toBe(0);
+    expect(after.outstanding_due_count).toBe(1);
+    expect(after.reserved_due_count).toBe(1);
+  });
+  it("stores an optional exam deadline and reports unique uncovered book words",async()=>{
+    const today=(await one("select (now() at time zone 'Asia/Shanghai')::date::text as local_day")).local_day as string;
+    await db.query("update exam_books set is_available=true,is_public=true,published_at=now(),checksum=repeat('a',64),license='MIT' where id='cet4'");
+    await db.query("insert into exam_book_words(book_id,normalized_word,source,source_version,source_records) values('cet4','reconcile','test','fixture',ARRAY[1])");
+    await db.query("insert into user_book_preferences(user_id,book_id,effective_date) values($1,'cet4',$2::date) on conflict(user_id) do update set book_id=excluded.book_id,effective_date=excluded.effective_date",[u1,today]);
+    expect((await one("select set_adaptive_exam_goal_v2($1,$2::date+10,1) ok",[u1,today])).ok).toBe(true);
+    const goal=(await one("select public.learning_budget_snapshot_v1($1)->'exam_goal' value",[u1])).value;
+    expect(goal).toMatchObject({book_id:"cet4",coverage_target:1,total_unique_words:1,covered_unique_words:0,remaining_unique_words:1});
+    expect(goal.target_date).not.toBeNull();
+    expect((await one("select set_adaptive_exam_goal_v2($1,null,1) ok",[u1])).ok).toBe(true);
+    const noDeadline=(await one("select public.learning_budget_snapshot_v1($1)->'exam_goal' value",[u1])).value;
+    expect(noDeadline.target_date).toBeNull();
+  });
   it("imports bilingual entries idempotently without touching lexical relations, cards, or frozen sessions",async()=>{
     const before=await one("select (select count(*) from lexical_relations) relations,(select to_jsonb(x) from user_words x where user_id=$1) card,(select state from study_sessions where id=$2) session",[u1,sid]);
     const rows=buildEcdictCorpus('word,definition,translation,pos\nact,v. perform,"n. 行动\\nvi. 表演\\nvt. 扮演",\n',["act"]).dictionary_entries;
@@ -122,6 +184,7 @@ describe("real PostgreSQL Family transactions", () => {
     const before=await one("select state,updated_at,new_words_count,review_words_count from study_sessions where id=$1",[sid]);
     const baseBefore=await one("select fsrs_stability,fsrs_reps,fsrs_state,next_review_at from user_words where user_id=$1",[u1]);
     const content=await lesson(), row=await start(content);
+    expect(row.lesson.new_word_budget_admitted).toBeUndefined();
     let response:any;
     for(let i=0;i<content.steps.length;i++) response=await answer(row.id,i,content.steps[i]!.answer,content);
     expect(response.completed).toBe(true); expect(response.activated).toBe(true);
@@ -133,6 +196,34 @@ describe("real PostgreSQL Family transactions", () => {
     expect(card.fsrs_reps).toBe(1); expect(new Date(card.next_review_at).getTime()).toBeGreaterThan(Date.now());
     expect((await one("select count(*) as n from fsrs_review_logs")).n).toBe(1);
     expect((await one("select count(*) as n from attempts where activity_type='collocation' and scope='consolidation'")).n).toBe(2);
+  });
+  it("blocks Family activation when V2 explicitly denied admission", async () => {
+    const content=await lesson();
+    const row=await start({ ...content, new_word_budget_admitted:false } as FamilyLesson);
+    for(let i=0;i<content.steps.length-1;i++) await answer(row.id,i,content.steps[i]!.answer,content);
+    await db.exec("savepoint denied_family_budget");
+    await expect(answer(row.id,content.steps.length-1,content.steps.at(-1)!.answer,content))
+      .rejects.toThrow("FAMILY_BUDGET_REACHED");
+    await db.exec("rollback to savepoint denied_family_budget");
+    expect((await one("select count(*) as n from user_words")).n).toBe(1);
+  });
+  it("enforces the canonical daily ceiling for an unmarked legacy Family lesson", async () => {
+    const today=(await one("select (now() at time zone 'Asia/Shanghai')::date::text as local_day")).local_day as string;
+    await db.query("update users set daily_new_word_limit=10 where id=$1",[u1]);
+    for(let i=1;i<=9;i++) {
+      const word=`capfixture${i}`;
+      await db.query("select ensure_user_word_v1($1,$2,$2,'test',false)",[u1,word]);
+    }
+    await db.query("update user_words set formally_introduced_date=$2::date where user_id=$1",[u1,today]);
+    const before=(await one("select count(*) as n from user_words where user_id=$1",[u1])).n;
+    const content=await lesson(), row=await start(content);
+    expect(row.lesson.new_word_budget_admitted).toBeUndefined();
+    for(let i=0;i<content.steps.length-1;i++) await answer(row.id,i,content.steps[i]!.answer,content);
+    await db.exec("savepoint legacy_family_ceiling");
+    await expect(answer(row.id,content.steps.length-1,content.steps.at(-1)!.answer,content))
+      .rejects.toThrow("FAMILY_BUDGET_REACHED");
+    await db.exec("rollback to savepoint legacy_family_ceiling");
+    expect((await one("select count(*) as n from user_words where user_id=$1",[u1])).n).toBe(before);
   });
   it("retries a lost answer response without duplicate attempts or FSRS logs", async () => {
     const content=await lesson(), row=await start(content);
