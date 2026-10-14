@@ -30,3 +30,8 @@ describe("Lesson Widget response privacy", () => {
     expect((safe as Record<string, any>).feedback.reference_answer).toBe("allocate resources");
   });
 });
+
+it('keeps the private frozen word server-side when serializing a lesson plan',()=>{
+ const original={mode:'exercise',plan:{private_source_word:'fixture',private_source_book_id:'ielts-zhenjing',target_sense:'SYNTHETIC PRIVATE SENSE'}};
+ const safe=lessonWidgetResponsePayload(original);expect(safe.plan).not.toHaveProperty('private_source_word');expect(original.plan.private_source_word).toBe('fixture');
+});

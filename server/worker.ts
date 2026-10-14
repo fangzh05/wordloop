@@ -1,6 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { authenticateWebUser, WebAuthError } from "./webAuth.js";
-import { getPublicAuthConfig, getLegacyOwnerId, withUserIdentity } from "./db.js";
+import { getNeonWorkerJwks, getPublicAuthConfig, isLegacyOwner, withUserIdentity } from "./db.js";
 import { configureRuntimeEnv } from "./db.js";
 import { createWordloopMcpServer, type WidgetKind } from "./mcpCore.js";
 import { LESSON_WIDGET_VERSION } from "../shared/toolContracts.js";
@@ -13,7 +13,13 @@ type WorkerEnv = {
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
+  NEON_DATA_API_URL?: string;
+  NEON_JWT_AUDIENCE?: string;
+  NEON_JWT_ISSUER?: string;
+  NEON_WORKER_JWT_PRIVATE_JWK?: string;
+  NEON_WORKER_ADDITIONAL_PUBLIC_JWKS?: string;
   DEV_USER_ID?: string;
+  WORDLOOP_STAGING_DIAGNOSTICS?: string;
   MERRIAM_WEBSTER_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
   WORDLOOP_WEB_TOKEN?: string;
@@ -63,6 +69,18 @@ export const worker = {
     if (request.method === "GET" && url.pathname === "/health") {
       return response(JSON.stringify({ name: "wordloop", status: "ok", mcp: "/api/mcp", version: "0.1.0" }), "application/json; charset=utf-8");
     }
+    if (url.pathname === "/.well-known/neon-data-api-jwks.json") {
+      configureRuntimeEnv(env as Record<string, unknown>);
+      if (request.method !== "GET") return response("Method not allowed", "text/plain; charset=utf-8", 405);
+      try {
+        return new Response(JSON.stringify(getNeonWorkerJwks()), {
+          headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=60", "access-control-allow-origin": "*" },
+        });
+      } catch (error) {
+        console.error("Neon JWKS endpoint is unavailable", error instanceof Error ? error.message : "unknown error");
+        return response(JSON.stringify({ error: "Neon JWT verification key is not configured." }), "application/json; charset=utf-8", 503);
+      }
+    }
     if (url.pathname.startsWith("/api/")) configureRuntimeEnv(env as Record<string, unknown>);
     if (request.method === "GET" && url.pathname === "/api/web/auth/config") {
       try { return new Response(JSON.stringify(getPublicAuthConfig()), { headers: { "content-type": "application/json", "cache-control": "no-store" } }); }
@@ -83,13 +101,13 @@ export const worker = {
       const calls = Array.isArray(body) ? body : [body];
       const needsIdentity = calls.some((call: { method?: string } | null) => call?.method === "tools/call");
       const userId = needsIdentity ? await authenticateWebUser(request) : undefined;
-      if (userId && userId !== getLegacyOwnerId() && calls.some((call: { params?: { name?: string } } | null) => call?.params?.name?.includes("shanbay"))) {
+      if (userId && !isLegacyOwner(userId) && calls.some((call: { params?: { name?: string } } | null) => call?.params?.name?.includes("shanbay"))) {
         throw new WebAuthError(403, "FORBIDDEN", "此导入仅供管理员使用。");
       }
       const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
       const server = createWordloopMcpServer((kind) => widgetHtml(kind, env.ASSETS));
       await server.connect(transport);
-      return withCors(await (userId ? withUserIdentity(userId, () => transport.handleRequest(request)) : transport.handleRequest(request)));
+      return withCors(await (userId ? withUserIdentity(userId, () => transport.handleRequest(request), url.origin) : transport.handleRequest(request)));
     } catch (error) {
       if (error instanceof WebAuthError) return response(JSON.stringify({ error: { code: error.code, message: error.message } }), "application/json", error.status);
       console.error("Wordloop MCP request failed", error instanceof Error ? error.message : "unknown error");

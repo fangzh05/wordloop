@@ -1,5 +1,7 @@
+import {privateSourceIds} from './sourceDictionary.js';
 import { z } from "zod";
 import { getDeepSeekApiKey } from "../db.js";
+import {privateBookLesson} from './privateBookLesson.js';
 import {
   ENGLISH_DEFINITION_GRADING_PROMPT,
   FULL_CN_TO_EN_CONSOLIDATION_PROMPT,
@@ -227,6 +229,25 @@ function canonicalWordTokens(value: string): string[] {
   return canonicalizeRecallForm(value).match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? [];
 }
 
+function blankContextTokens(value: string): string[] {
+  return value.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)?.map((token) => token.toLocaleLowerCase()) ?? [];
+}
+
+function repeatsVisibleBlankContext(prompt: string, answer: string): boolean {
+  const parts = prompt.split("___");
+  if (parts.length !== 2) return false;
+  const before = blankContextTokens(parts[0] ?? "");
+  const after = blankContextTokens(parts[1] ?? "");
+  const answerTokens = blankContextTokens(answer);
+  for (let count = Math.min(before.length, answerTokens.length); count > 0; count -= 1) {
+    if (before.slice(-count).every((token, index) => token === answerTokens[index])) return true;
+  }
+  for (let count = Math.min(after.length, answerTokens.length); count > 0; count -= 1) {
+    if (answerTokens.slice(-count).every((token, index) => token === after[index])) return true;
+  }
+  return false;
+}
+
 function containsTokenSequence(haystack: readonly string[], needle: readonly string[]): boolean {
   if (needle.length === 0 || needle.length > haystack.length) return false;
   return haystack.some((_, start) => needle.every((token, offset) => haystack[start + offset] === token));
@@ -294,6 +315,12 @@ export function validateGeneratedLessonExercise(
     }
     if (!exercise.accepted_answers?.length) {
       issues.push({ path: ["exercise", "accepted_answers"], message: "A fixed-answer exercise requires accepted_answers." });
+    }
+    if (exercise.accepted_answers?.some((answer) => repeatsVisibleBlankContext(exercise.prompt, answer))) {
+      issues.push({
+        path: ["exercise", "accepted_answers"],
+        message: "For a blank, accepted_answers must contain only the missing text and must not repeat words already shown beside it.",
+      });
     }
     if (promptContainsTarget(exercise.prompt, context.word)) {
       issues.push({ path: ["exercise", "prompt"], message: "The target word must not appear outside the blank." });
@@ -410,12 +437,17 @@ function repairFeedback(
   ].join("\n");
 }
 
+export function containsPrivateSource(value:unknown):boolean{return privateSourceIds(value).length>0;}
+
 async function deepSeekJson<T>(
   schema: z.ZodType<T>,
   prompt: string,
   input: unknown,
   options: DeepSeekJsonOptions,
 ): Promise<T> {
+  if(containsPrivateSource(input)) {
+    throw new DeepSeekError('PRIVATE_SOURCE_PROCESSING_DENIED',403,'Private source text cannot be sent to the model.');
+  }
   const apiKey = getDeepSeekApiKey();
   if (!apiKey) {
     const error = new DeepSeekError("DEEPSEEK_NOT_CONFIGURED", 503, "DeepSeek is not configured.");
@@ -576,6 +608,7 @@ export function generateLesson(input: {
   error_focus: LessonErrorFocus;
   plan: LessonExercisePlan;
 }): Promise<LessonGeneration> {
+  if(input.plan.private_source_book_id)return Promise.resolve(privateBookLesson(input.word,input.plan,input.part_of_speech,input.ipa??''));
   const prompt = `${LESSON_GENERATION_PROMPT}\n\n本次计划的 exercise.activity_type 唯一合法值是 ${JSON.stringify(input.plan.planned_activity_type)}。输出必须逐字相同。搭配和派生词的每个字符串都必须同时含英文表达和简体中文释义。`;
   return deepSeekJson(lessonGenerationSchemaFor(input), prompt, input, {
     task: "lesson_generation", maxTokens: 1200, timeoutMs: 30_000,
@@ -601,6 +634,7 @@ export function gradeSemanticAnswer(input: {
 }
 
 export function gradeEnglishDefinition(input: {
+  private_source_book_id?: string;
   word: string;
   part_of_speech?: string;
   meaning_zh: string;

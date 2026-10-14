@@ -1,26 +1,38 @@
 import "dotenv/config";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-// Credentials and passwords arrive through environment/stdin, never arguments or logs.
+// Passwords arrive through stdin and the owner credential through the environment;
+// account creation and Neon binding are performed together by the Worker API.
 const input = z.object({ email: z.string().email(), password: z.string().min(8), owner: z.boolean().default(false), words: z.array(z.string().trim().min(1).max(100)).max(5000).default([]) }).strict();
 let raw = "";
 for await (const chunk of process.stdin) raw += chunk;
 const account = input.parse(JSON.parse(raw));
-const url = z.string().url().parse(process.env.SUPABASE_URL);
-const key = z.string().min(20).parse(process.env.SUPABASE_SERVICE_ROLE_KEY);
-const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-const id = account.owner ? z.string().uuid().parse(process.env.DEV_USER_ID) : undefined;
-const created = await db.auth.admin.createUser({ email: account.email, password: account.password, email_confirm: true, ...(id ? { id } : {}) });
-if (created.error || !created.data.user) throw new Error("Account creation failed; no existing account was changed.");
-const userId = created.data.user.id;
-const profile = await db.from("users").upsert({ id: userId }, { onConflict: "id", ignoreDuplicates: true });
-if (profile.error) {
-  await db.auth.admin.deleteUser(userId);
-  throw new Error("Account setup failed; access was not enabled.");
+const apiOrigin = new URL(z.string().url().parse(process.env.WORDLOOP_API_URL));
+if (apiOrigin.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(apiOrigin.hostname)) {
+  throw new Error("WORDLOOP_API_URL must use HTTPS.");
 }
-if (account.words.length) {
-  const imported = await db.rpc("import_words_v1", { p_user_id: userId, p_words: account.words, p_date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date()), p_source: "private_beta" });
-  if (imported.error) throw new Error("Account created, but vocabulary import failed. Retry import separately.");
+if (apiOrigin.username || apiOrigin.password || apiOrigin.search || apiOrigin.hash) {
+  throw new Error("WORDLOOP_API_URL must be an origin URL without credentials, query, or fragment.");
 }
-console.log("Beta account created. Existing progress was preserved.");
+if (apiOrigin.pathname !== "/") {
+  throw new Error("WORDLOOP_API_URL must be the Worker origin without a path.");
+}
+const token = z.string().min(20).parse(process.env.WORDLOOP_WEB_TOKEN);
+const response = await fetch(new URL("/api/web/accounts", apiOrigin), {
+  method: "POST",
+  headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+  body: JSON.stringify(account),
+});
+const result = await response.json().catch(() => null) as {
+  created?: boolean;
+  vocabulary_imported?: boolean;
+  error?: { message?: string };
+  message?: string;
+} | null;
+if (!response.ok || !result?.created) {
+  throw new Error(result?.error?.message ?? result?.message ?? "Account creation failed; no unbound account was accepted.");
+}
+if (result.vocabulary_imported === false) {
+  throw new Error("The account was created and bound to Neon, but vocabulary import failed. Retry import separately.");
+}
+console.log("Beta account created and bound to the WordLoop database.");

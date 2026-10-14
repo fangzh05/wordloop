@@ -8,6 +8,7 @@ import { getRetrievability } from "./analytics.js";
 import { getPronunciationAudio } from "../tools/getPronunciationAudio.js";
 import { getUserTimeZone } from "./words.js";
 import {publicExamLexical} from './examCardDictionary.js';
+import {sourceDictionaryDetail} from './sourceDictionary.js';
 
 const PAGE_SIZE_MAX = 100;
 const userWordColumns = "id,user_id,word_id,status,source,first_seen_at,last_seen_at,last_reviewed_at,correct_count,wrong_count,consecutive_correct,meaning_error,collocation_error,grammar_error,pronunciation_error,spelling_error,mastered,next_review_at,fsrs_stability,fsrs_difficulty,fsrs_elapsed_days,fsrs_scheduled_days,fsrs_learning_steps,fsrs_reps,fsrs_lapses,fsrs_state,word:words!inner(id,normalized_word,display_word,ipa_us,ipa_uk,senses)";
@@ -175,6 +176,7 @@ export async function getVocabularyDetail(
       ipa_uk: row.source==='exam_book'?null:word.ipa_uk,
       audio_url: pronunciation.words[0]?.audio_url ?? null,
       senses: row.source==='exam_book'?(await publicExamLexical(word.normalized_word,db)).senses:Array.isArray(word.senses) ? word.senses : [],
+      ...await sourceDictionaryDetail(word.normalized_word,db,userId),
       status: row.status,
       source: row.source,
       first_seen_at: row.first_seen_at,

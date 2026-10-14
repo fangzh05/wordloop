@@ -217,13 +217,15 @@ export async function getTodayWords(
   date: string,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  options: { hydrateExamCards?: boolean } = {},
 ): Promise<VocabularyItem[]> {
   const { data, error } = await db.rpc("get_today_words_v2", {
     p_user_id: userId,
     p_date: date,
   });
   assertDatabaseResult(error);
-  return hydrateExamCards(((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc),db);
+  const items = ((data ?? []) as RpcVocabularyRow[]).map(vocabularyItemFromRpc);
+  return options.hydrateExamCards === false ? items : hydrateExamCards(items,db,userId);
 }
 
 /** Read only the persisted words needed to resume a session-aware lesson queue. */
@@ -240,7 +242,7 @@ export async function getVocabularyItemsByWords(
     .eq("user_id", userId)
     .in("word.normalized_word", normalizedWords);
   assertDatabaseResult(error);
-  return hydrateExamCards(((data ?? []) as unknown as JoinedUserWord[]).map((row) => toVocabularyItem(row, relationOne(row.word))),db);
+  return hydrateExamCards(((data ?? []) as unknown as JoinedUserWord[]).map((row) => toVocabularyItem(row, relationOne(row.word))),db,userId);
 }
 
 export async function getAllUserWords(
@@ -262,7 +264,7 @@ export async function getAllUserWords(
     rows.push(...page);
     if (page.length < pageSize) break;
   }
-  return hydrateExamCards(rows.map((row) => toVocabularyItem(row, relationOne(row.word))),db);
+  return hydrateExamCards(rows.map((row) => toVocabularyItem(row, relationOne(row.word))),db,userId,false);
 }
 
 export function toVocabularyItem(

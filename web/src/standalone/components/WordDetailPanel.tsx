@@ -7,6 +7,7 @@ function object(value: unknown): Record<string, unknown> {
 function list(value: unknown): Array<Record<string, unknown>> { return Array.isArray(value) ? value.map(object) : []; }
 function text(value: unknown, fallback = "—"): string { return typeof value === "string" && value ? value : fallback; }
 function num(value: unknown): string { return typeof value === "number" && Number.isFinite(value) ? String(value) : "—"; }
+const sourceNames:Record<string,string>={'ielts-zhenjing':'雅思词汇真经','ielts-wanglu-807-listening':'王陆807听力','cet6-xinghuo':'星火六级','ielts-xindongfang':'新东方雅思','ielts-youdao':'有道雅思（正序）','ielts-youdao-luan':'有道雅思（乱序）','ielts-niannian':'雅思词汇念念不忘','ielts-leiji':'IELTS词汇词以类记','ielts-jianqiao':'剑桥雅思词汇精典','toefl-xindongfang':'新东方托福','toefl-youdao':'有道托福','toefl-gaopin':'托福高频词汇精讲'};
 
 export function WordDetailPanel({ userWordId, onClose, tokenKey }: { userWordId: string; onClose: () => void; tokenKey: string | null }): React.JSX.Element {
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
@@ -64,6 +65,8 @@ export function WordDetailPanel({ userWordId, onClose, tokenKey }: { userWordId:
   const word = object(detail);
   const memory = object(word.memory);
   const senses = Array.isArray(word.senses) ? word.senses.map(object) : [];
+  const sourceDefinitions=list(word.current_book_definitions);
+  const dictionarySenses=list(word.dictionary_senses);
   const reviews = list(word.recent_formal_reviews);
   const errors = list(word.recent_error_attempts);
   const notes = list(word.captured_notes);
@@ -85,7 +88,12 @@ export function WordDetailPanel({ userWordId, onClose, tokenKey }: { userWordId:
             ? <audio controls preload="none" src={word.audio_url} aria-label={`${text(word.display_word)} 发音`} />
             : <button type="button" className="secondary-button" onClick={() => speak(text(word.display_word, ""))}>朗读</button>}
         </div>
-        <section className="word-detail-section"><h3>词义</h3>{senses.length ? <ul>{senses.map((sense, index) => <li key={index}><b>{text(sense.pos, "词性未标注")}</b> · {text(sense.definition_cn, "释义未录入")}</li>)}</ul> : <p>暂无保存的词义。</p>}</section>
+        {sourceDefinitions.length > 0 && <section className="word-detail-section"><h3>当前考试释义</h3><small>来源文件释义，尚未核实出版社原文。</small>{sourceDefinitions.map((source, index) => <details key={index} open={source.book_id === sourceDefinitions[0]?.book_id}><summary>{sourceNames[text(source.book_id)] ?? '已授权来源'}</summary>{((typeof source.ipa_uk === 'string' && source.ipa_uk) || (typeof source.ipa_us === 'string' && source.ipa_us)) && <small>{source.ipa_uk ? 'UK ' + text(source.ipa_uk) : ''} {source.ipa_us ? 'US ' + text(source.ipa_us) : ''}</small>}{list(source.senses).length ? <ul>{list(source.senses).map((sense, senseIndex) => {
+          const englishDefinition = sense.definition_en;
+          return <li key={senseIndex}><b>{text(sense.pos, '词性未标注')}</b> · <span style={{ whiteSpace: 'pre-wrap' }}>{text(sense.definition_cn, '')}</span>{typeof englishDefinition === 'string' && englishDefinition && <p>{englishDefinition}</p>}</li>;
+        })}</ul> : <p style={{ whiteSpace: 'pre-wrap' }}>{text(source.definition_raw)}</p>}{typeof source.chapter === 'string' && source.chapter && <small>{text(source.chapter)} · {text(source.category, '')}</small>}</details>)}</section>}
+        <details className="word-detail-section" open={!sourceDefinitions.length}><summary>词典释义</summary>{(sourceDefinitions.length?dictionarySenses:senses).length ? <ul>{(sourceDefinitions.length?dictionarySenses:senses).map((sense, index) => <li key={index}><b>{text(sense.pos, "词性未标注")}</b> · {text(sense.definition_cn, "释义未录入")}</li>)}</ul> : <p>暂无保存的词义。</p>}</details>
+        {sourceDefinitions.length>0&&word.source!=='exam_book'&&senses.length>0&&<details className="word-detail-section"><summary>我的已有释义</summary><ul>{senses.map((sense,index)=><li key={index}>{text(sense.pos,'')} · {text(sense.definition_cn)}</li>)}</ul></details>}
         <section className="word-detail-section"><h3>当前记忆</h3><dl className="word-memory-grid">
           <div><dt>难度 D</dt><dd>{num(memory.difficulty)}</dd></div>
           <div><dt>稳定性 S</dt><dd>{typeof memory.stability_days === "number" ? `${memory.stability_days.toFixed(2)} 天` : "—"}</dd></div>

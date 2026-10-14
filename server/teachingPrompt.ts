@@ -29,6 +29,11 @@ V1 计划边界优先于本 Prompt 中其他旧版题型建议：服务端 exerc
 
 每词恰好安排一道主要练习。题目必须检验目标词的实际掌握，答案唯一时使用 deterministic grader，开放语义题由 ChatGPT 批改。练习与例句使用不同语境，不可让用户机械复述例句。不要追加第二道题或追问。
 
+## 题干与空格答案必须一致
+- 对带有“___”的题，accepted_answers 和 feedback.reference_answer 只能包含替换空格的文字；判分只比较用户填入空格的内容，不能要求用户重复输入题干中已经给出的搭配部分。
+- 批改前核对原题空格前后的文字。例如“The route included a steep ___ into the valley.” 的答案是“descent”，不是“descent into”；“The route included a steep descent ___ the valley.” 的答案是“into”。
+- 若要考查完整搭配，题面必须明确要求输入完整搭配，并且不能把搭配的一部分预先写在题干里。反馈必须沿用本次已保存的原题和指令。
+
 ## Lesson 练习题型构造
 
 ### 题目指令必须匹配实际作答界面

@@ -394,6 +394,8 @@ export function lessonWidgetResponsePayload(payload: Record<string, unknown>): R
     if (typeof response[key] === "object" && response[key] !== null && !Array.isArray(response[key])) {
       const plan = { ...response[key] as Record<string, unknown> };
       delete plan.target_sense;
+      delete plan.private_source_word;
+      delete plan.private_source_entry_keys;
       delete plan.word_id;
       delete plan.target_word_ids;
       delete plan.skill_signals;
@@ -981,6 +983,7 @@ export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): Revi
   const partOfSpeech = formatPartOfSpeech(senses);
   return reviewWidgetItemSchema.parse({
     word: item.word,
+    ...(item.definition_source?{private_source_book_id:item.definition_source.book_id}:{}),
     meaning_zh: meaning,
     ...(partOfSpeech ? { part_of_speech: partOfSpeech } : {}),
     error_layers: item.error_layers,
@@ -990,6 +993,11 @@ export function reviewWidgetItemFromVocabulary(item: ReviewVocabularyItem): Revi
     direction: "cn_to_en",
   });
 }
+
+// Each review word may require a dictionary lookup and a source-definition RPC.
+// Keep a round below Cloudflare's per-invocation outbound request limit while
+// leaving the full due count and persisted review state unchanged.
+export const REVIEW_WIDGET_BATCH_SIZE = 12;
 
 export function buildReviewWidgetItems(
   candidates: ReviewVocabularyItem[],
@@ -1030,10 +1038,10 @@ export async function buildReviewWidgetPayload(currentIndex = 0, expectedRevisio
     ? active.state
     : null;
   if (completedReviewState) throw new Error("REVIEW_STAGE_COMPLETE: 本组复习已完成，请继续预测试或补学。");
-  const { rollingReview } = await getDueReviewSelection(REVIEW_SESSION_MAX, db, userId);
+  const { rollingReview } = await getDueReviewSelection(REVIEW_WIDGET_BATCH_SIZE, db, userId);
   const candidates = rollingReview;
   if (candidates.length === 0) throw new Error("No review words are currently due.");
-  const items = buildReviewWidgetItems(candidates, REVIEW_SESSION_MAX);
+  const items = buildReviewWidgetItems(candidates, REVIEW_WIDGET_BATCH_SIZE);
   if (items.length === 0) throw new Error("到期复习词缺少释义数据。");
   const payload = reviewWidgetPayloadSchema.parse({
     widget: "review",

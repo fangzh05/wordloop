@@ -6,7 +6,7 @@ it('fails closed before hydration and only exposes public dictionary glosses on 
  const row={word:'apple',source:'exam_book',senses:[{pos:'n.',definition_cn:'PRIVATE COMMERCIAL'}],ipa_us:'PRIVATE IPA'} as RpcVocabularyRow;
  const item=vocabularyItemFromRpc(row);expect(item.senses).toEqual([]);expect(item.ipa_us).toBeNull();
  const query:any={select:()=>query,eq:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:{parts_of_speech:[{label:'n.',definition_zh:'PUBLIC ECDICT'}]},error:null})};
- const [safe]=await hydrateExamCards([item],{from:()=>query} as unknown as SupabaseClient);
+ const [safe]=await hydrateExamCards([item],{from:()=>query,rpc:async()=>({data:[],error:null})} as unknown as SupabaseClient,'00000000-0000-4000-8000-000000000001');
  expect(JSON.stringify(safe)).not.toContain('PRIVATE');expect(safe!.senses![0]!.definition_cn).toBe('PUBLIC ECDICT');
  const owner=vocabularyItemFromRpc({...row,source:'shanbay'});expect(owner.senses).toEqual(row.senses);expect(owner.ipa_us).toBe('PRIVATE IPA');
 });

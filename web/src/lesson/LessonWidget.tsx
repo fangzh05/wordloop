@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowIcon, PlayIcon } from "../components/Icons.js";
 import { Button } from "../components/Button.js";
 import { FocusButton } from "../components/FocusButton.js";
+import { LexicalAtlas } from "./LexicalAtlas.js";
 import { callServerTool, sendUserMessage, subscribeToApp, toolResultData } from "../mcpBridge.js";
 import { loadDictionaryPronunciationAudio, playPronunciation, pronunciationButtonLabel, selectEnglishVoice } from "../pronunciation/audio.js";
 import { z } from "zod";
@@ -289,10 +290,25 @@ export function feedbackGuidanceLabel(reveal: boolean): string {
   return reveal ? "解释" : "错因与改法";
 }
 
+/** Keep the frozen original exercise visible while explaining the answer. */
+export function LessonFeedbackQuestion({ exercise }: { exercise: ExercisePayload }): React.JSX.Element {
+  return <section className="lesson-feedback-question" aria-label="本题原题">
+    <span>本题原题</span>
+    <strong>{exercise.instruction}</strong>
+    <p>{exercise.prompt}</p>
+  </section>;
+}
+
 export function lessonEyebrowLabel(progress?: string): string {
   if (progress?.startsWith("复习补学")) return "复习词";
   if (progress?.startsWith("新词学习")) return "新词";
   return "学习进度";
+}
+
+export function buildLessonExerciseHeader(input: {activityType:string;wrapup:boolean;progress?:string;title?:string}): {eyebrow:string;heading:string} {
+  if(input.wrapup)return {eyebrow:'长难句收尾',heading:'先找主干，再翻译'};
+  if(input.activityType==='exact_cloze')return {eyebrow:input.progress ?? '学习练习',heading:'填空练习'};
+  return {eyebrow:input.title??'练习',heading:input.progress??'当前练习'};
 }
 
 function modeForPhase(phase: Payload["phase"]): Mode | null {
@@ -455,6 +471,7 @@ export function LessonFeedbackNextStep({ canContinue, navigation }: {
 
 export function LessonWidget(): React.JSX.Element {
   const [payload, setPayload] = useState<Payload | null>(null);
+  const [lexicalAtlasOpen, setLexicalAtlasOpen] = useState(false);
   const [localMode, setLocalMode] = useState<Mode | null>(null);
   const [answer, setAnswer] = useState("");
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
@@ -808,13 +825,14 @@ export function LessonWidget(): React.JSX.Element {
 
   if (mode === "exercise") {
     const consolidation = payload.consolidation === true;
+    const exerciseHeader=buildLessonExerciseHeader({activityType,wrapup:payload.wrapup===true,progress:payload.progress,title:payload.title});
     const consolidationTitle = payload.consolidation_kind === "sentence" ? "情境造句"
       : payload.consolidation_kind === "translation_cn_to_en" ? "完整中译英" : "长难句英译中";
     return <section className="widget-card lesson-card" aria-labelledby="lesson-exercise-title">
       <header className="widget-header compact-header">
         <div>
-          <span className="eyebrow">{consolidation ? consolidationTitle : payload.title ?? "练习"}</span>
-          <h1 id="lesson-exercise-title">{consolidation ? payload.progress ?? (payload.consolidation_kind === "sentence" ? "应用巩固 · 情境造句" : payload.consolidation_kind === "translation_cn_to_en" ? "应用巩固 · 中译英" : "应用巩固 · 长难句英译中") : payload.progress ?? "当前练习"}</h1>
+          <span className="eyebrow">{consolidation ? consolidationTitle : exerciseHeader.eyebrow}</span>
+          <h1 id="lesson-exercise-title">{consolidation ? payload.progress ?? (payload.consolidation_kind === "sentence" ? "应用巩固 · 情境造句" : payload.consolidation_kind === "translation_cn_to_en" ? "应用巩固 · 中译英" : "应用巩固 · 长难句英译中") : exerciseHeader.heading}</h1>
         </div>
         <FocusButton />
       </header>
@@ -881,6 +899,7 @@ export function LessonWidget(): React.JSX.Element {
         </div>
         <FocusButton />
       </header>
+      <LessonFeedbackQuestion exercise={payload.exercise} />
       {feedback?.user_answer || answer ? <div className="lesson-answer"><span>你的答案</span><p>{feedback?.user_answer ?? answer}</p></div> : null}
       {!correct ? <div className="lesson-feedback">
         {feedback?.error_layer ? <p><strong>错误层：</strong>{feedback.error_layer}</p> : null}
@@ -920,7 +939,7 @@ export function LessonWidget(): React.JSX.Element {
     {payload.mode === "explain" && payload.ipa ? <div className="lesson-ipa">{payload.ipa}</div> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>核心义</h2><p>{payload.meaning_zh}</p></section> : null}
     {payload.mode === "explain" && payload.collocations.length ? <section className="lesson-section"><h2>高频搭配</h2><ul>{payload.collocations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
-    {payload.mode === "explain" && payload.derivations.length ? <section className="lesson-section"><h2>词族</h2><ul>{payload.derivations.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
+    {payload.mode === "explain" ? <section className="lesson-section lesson-family-section"><div className="lesson-family-heading"><h2>词族</h2><Button className="secondary family-entry" type="button" onClick={() => setLexicalAtlasOpen(true)}>词族</Button></div>{payload.derivations.length ? <ul>{payload.derivations.map((entry) => <li key={entry}>{entry}</li>)}</ul> : <p>暂无已核验的现代派生词。</p>}</section> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>例句</h2><p className="lesson-example">{payload.example_en}</p>{payload.example_zh ? <p className="lesson-example-translation">{payload.example_zh}</p> : null}</section> : null}
     {payload.mode === "explain" ? <section className="lesson-section"><h2>补充</h2><p>{payload.note}</p></section> : null}
     <button className="play-button lesson-audio" type="button" onClick={play} disabled={!dictionaryReady || (!dictionaryAudioAvailable && !speechPlaybackAvailable)} aria-label={"播放 " + payload.word}>
@@ -931,6 +950,7 @@ export function LessonWidget(): React.JSX.Element {
       <span>发音来自 Merriam-Webster's Learner's Dictionary</span>
     </div> : null}
     <Button onClick={() => void startExercise()}>开始练习 <ArrowIcon className="button-icon trailing" /></Button>
+    {payload.mode === "explain" && lexicalAtlasOpen ? <LexicalAtlas word={payload.word} derivations={payload.derivations} onClose={() => setLexicalAtlasOpen(false)} /> : null}
     {error ? <p className="error-text" role="alert">{error}</p> : null}
   </section>;
 }

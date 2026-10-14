@@ -73,6 +73,10 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
 
   const progress = today?.progress;
   const review = progress?.review;
+  const dueReviewCount = view?.progress?.fsrs.due_now;
+  const reviewProgressNote = review?.scope === "active_session"
+    ? "当前这一轮"
+    : number(review?.total) > 0 ? "今日已安排复习" : "今日尚未安排复习";
   const pretest = progress?.pretest;
   const lesson = progress?.formal_learning;
   const active = today?.active_session.active === true;
@@ -99,10 +103,10 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
         <h2>{view?.budget_paused ? "今日预计预算已完成" : view?.round_complete ? "本轮学习完成" : stage ? "把这一轮学完。" : tasksComplete ? "本轮任务已完成" : "先复习，再学一点新的。"}</h2>
         <p>{active ? `会话开始于 ${today?.active_session.started_at ? new Date(today.active_session.started_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: today.timezone }) : "今天"}。继续上次停下的位置。` : "从今天该做的任务开始。"}</p>
       </div>
-      <div className="today-cover-count" aria-label={today ? `目前剩余 ${number(review?.remaining)} 个待复习词` : "正在加载复习数量"}>
+      <div className="today-cover-count" aria-label={dueReviewCount === undefined ? "正在加载复习数量" : `目前有 ${dueReviewCount} 个到期词待复习`}>
         <span>WORDS TO REVIEW</span>
-        <strong>{today ? number(review?.remaining) : "—"}</strong>
-        <small>今日待复习</small>
+        <strong>{dueReviewCount ?? "—"}</strong>
+        <small>当前到期</small>
       </div>
       {view?.screen === "done" && number(view.progress?.fsrs.due_now) > 0 && <p>仍有 {number(view.progress?.fsrs.due_now)} 个到期词待复习，开始下一轮时安排。</p>}
       <Button className="primary today-primary-action" type="button" disabled={busy || !view} onClick={onContinue}>
@@ -127,7 +131,7 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
       {todayError && <p className="standalone-status error" role="alert">{todayError}</p>}
       {!today && !todayError && <p className="standalone-status" role="status">正在读取今日进度…</p>}
       {today && <div className="today-progress-list">
-        <ProgressRow title="正式复习" detail={`${number(review?.completed)} / ${number(review?.total)}`} note={review?.scope === "active_session" ? "当前这一轮" : "今日正式复习"} />
+        <ProgressRow title="正式复习" detail={`${number(review?.completed)} / ${number(review?.total)}`} note={reviewProgressNote} />
         <ProgressRow title="预测试" detail={`${number(pretest?.completed)} / ${number(pretest?.total)}`} note="先判断熟悉程度" />
         <ProgressRow title="正式学习" detail={`${number(lesson?.completed_distinct_words)} 个词`} note={`新词 ${number(lesson?.new_words)} · 复习补学 ${number(lesson?.relearn_words)}`} />
       </div>}

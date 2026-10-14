@@ -89,6 +89,9 @@ export const lessonExercisePlanSchema = z.object({
   word_id: z.string().uuid().optional(),
   target_word_ids: z.array(z.string().uuid()).min(1).max(3),
   target_sense: z.string().trim().min(1).max(240),
+  private_source_book_id: z.string().optional(),
+  private_source_entry_keys: z.array(z.string()).optional(),
+  private_source_word:z.string().optional(),
   planned_activity_type: plannedActivityTypeSchema,
   skill_goal: z.string().trim().min(1).max(300),
   error_focus: activeErrorLayerSchema.nullable(),
@@ -238,6 +241,7 @@ export type AdvanceStudySessionInput = z.output<typeof advanceStudySessionSchema
 export type ReviewAnswerInput = z.output<typeof reviewAnswerSchema>;
 
 export const reviewWidgetItemSchema = z.object({
+  private_source_book_id:z.string().optional(),
   word: z.string().trim().min(1).max(100),
   meaning_zh: z.string().trim().min(1).max(1000),
   part_of_speech: z.string().trim().max(120).optional(),

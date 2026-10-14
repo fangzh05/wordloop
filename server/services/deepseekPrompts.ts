@@ -5,6 +5,7 @@ export const LESSON_GENERATION_PROMPT = `为考研英语一与 IELTS Academic �
 所有题型均使用文本输入框，没有 options 或选择按钮。instruction 必须要求直接输入答案，禁止“从选项中选择”“选择最合适的词”、A/B/C/D、多选、匹配、点击或拖拽。填空直接填写空缺词或搭配；词义回忆输入英文词；派生输入派生词；翻译输入译文。不得把一种题型的作答要求混入另一种。
 
 严格按计划生成恰好一道短题：
+- 对所有含“___”的题，accepted_answers 只能包含将替换空格的内容，不能把空格旁已经显示的词加入答案。例如“The route included a steep ___ into the valley.” 的答案是“descent”，不能包含“into”；“The route included a steep descent ___ the valley.” 的答案是“into”。
 - exact_cloze：短英语新语境，只有一个 ___；目标词不出现在空格外；accepted_answers 非空。
 - word_recall：只给清晰的中文核心义提示，不出现目标词；accepted_answers 为目标词及必要的常见词形。
 - translation_cn_to_en：给明确、自然的中文句子，训练一个指定词义或搭配；要求用户输出约 5–12 个英文词；不要把目标词或答案写在 prompt；accepted_answers 省略，按语义批改。

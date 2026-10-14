@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   gradeSemanticAnswer: vi.fn(),
   gradeWrapupAnswer: vi.fn(),
   getDatabase: vi.fn(() => ({})),
+  getSupabaseAuthAdminClient: vi.fn(() => ({})),
   getAuthenticatedUserId: vi.fn(() => "00000000-0000-0000-0000-000000000001"),
 }));
 
@@ -55,9 +56,11 @@ vi.mock("../server/db.js", async () => {
   return {
     ...actual,
     getDatabase: mocks.getDatabase,
+    getSupabaseAuthAdminClient: mocks.getSupabaseAuthAdminClient,
     getAuthenticatedUserId: mocks.getAuthenticatedUserId,
     getWordloopWebToken: () => mocks.token,
     getLegacyOwnerId: () => "00000000-0000-0000-0000-000000000001",
+    isLegacyOwner: (userId: string) => userId === "00000000-0000-0000-0000-000000000001",
   };
 });
 
@@ -269,18 +272,19 @@ async function body(response: Response): Promise<any> {
 }
 
 describe("Standalone Web API shared-state boundaries", () => {
-  it("creates the owner Auth identity with the existing ID without replacing learning records", async () => {
-    const id = "00000000-0000-0000-0000-000000000001";
-    const createUser = vi.fn(async () => ({ data: { user: { id } }, error: null }));
+  it("binds a newly created Auth identity to the Neon users allowlist", async () => {
+    const newUserId = "00000000-0000-0000-0000-000000000003";
+    const createUser = vi.fn(async () => ({ data: { user: { id: newUserId } }, error: null }));
     const upsert = vi.fn(async () => ({ error: null }));
     const from = vi.fn(() => ({ upsert }));
-    mocks.getDatabase.mockReturnValue({ auth: { admin: { createUser } }, from });
-    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/accounts", { method: "POST", headers: { authorization: `Bearer ${mocks.token}`, "content-type": "application/json" }, body: JSON.stringify({ email: "owner@example.invalid", password: "test-password-only", owner: true }) }));
+    mocks.getSupabaseAuthAdminClient.mockReturnValue({ auth: { admin: { createUser } } });
+    mocks.getDatabase.mockReturnValue({ from });
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/accounts", { method: "POST", headers: { authorization: `Bearer ${mocks.token}`, "content-type": "application/json" }, body: JSON.stringify({ email: "learner@example.invalid", password: "test-password-only" }) }));
     expect(response.status).toBe(201);
-    expect(createUser).toHaveBeenCalledWith(expect.objectContaining({ id }));
+    expect(createUser).toHaveBeenCalledWith({ email: "learner@example.invalid", password: "test-password-only", email_confirm: true });
     expect(from).toHaveBeenCalledTimes(1);
     expect(from).toHaveBeenCalledWith("users");
-    expect(upsert).toHaveBeenCalledWith({ id }, { onConflict: "id", ignoreDuplicates: true });
+    expect(upsert).toHaveBeenCalledWith({ id: newUserId }, { onConflict: "id", ignoreDuplicates: true });
   });
   it("rejects a non-owner before creating or changing any account", async () => {
     mocks.getAuthenticatedUserId.mockReturnValue("00000000-0000-0000-0000-000000000002");
@@ -1558,6 +1562,8 @@ describe("Standalone Web API shared-state boundaries", () => {
     });
     mocks.active = row(reviewState);
     mocks.getTodayWords.mockResolvedValue(todayWords);
+    mocks.getVocabularyItemsByWords.mockImplementation(async (words: string[]) =>
+      words.map((word) => todayWords.find((item) => item.word === word)!).filter(Boolean));
     const actualBootstrap = await vi.importActual<typeof import("../server/services/studyBootstrap.js")>("../server/services/studyBootstrap.js");
     mocks.bootstrap.mockImplementation((options: any) => actualBootstrap.getStudyBootstrap(options));
 
@@ -1578,7 +1584,12 @@ describe("Standalone Web API shared-state boundaries", () => {
     expect(payload.state.flow).toEqual({ relearn_words: [], pretest_familiar_words: [] });
     expect(mocks.generateLesson).not.toHaveBeenCalled();
     expect(vi.mocked(sessions.freezeLessonQueueForSession)).not.toHaveBeenCalled();
-    expect(mocks.getTodayWords).toHaveBeenCalledWith(date, {}, userId);
+    expect(mocks.getTodayWords).toHaveBeenCalledWith(date, {}, userId, { hydrateExamCards: false });
+    expect(mocks.getVocabularyItemsByWords).toHaveBeenCalledWith(
+      todayWords.slice(0, 6).map((item) => item.word),
+      {},
+      userId,
+    );
   });
 
   it("does not freeze the Lesson queue in prepareBootstrap before Review progression is decided", async () => {

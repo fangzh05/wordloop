@@ -1,3 +1,4 @@
+import {privateSourceIds,PrivateBookAccessError} from './services/sourceDictionary.js';
 import { WebAuthError, authenticateWebUser } from "./webAuth.js";
 import {examBookId,listExamBooks,selectExamBook,listExamBookWords} from './services/examBooks.js';
 import { handleShanbayImportRequest } from "./shanbayImportApi.js";
@@ -5,7 +6,7 @@ import { withUserIdentity } from "./db.js";
 import { getLearningBudget, setLearningBudget, reserveLearningBudget, LearningBudgetReached } from "./services/learningBudget.js";
 import { getEvidenceEvaluation, labelEvidence } from "./services/learningModel.js";
 import { z } from "zod";
-import { getAuthenticatedUserId, getDatabase, getLegacyOwnerId } from "./db.js";
+import { getAuthenticatedUserId, getDatabase, getLegacyOwnerId, getSupabaseAuthAdminClient, isLegacyOwner, shouldExposeStagingDiagnostics } from "./db.js";
 import { getStudyBootstrap } from "./services/studyBootstrap.js";
 import { getProgress } from "./services/progress.js";
 import { AnalyticsServiceError, getAnalytics, getTodayOverview } from "./services/analytics.js";
@@ -74,6 +75,7 @@ import {
   type WrapupGrade,
 } from "./services/deepseek.js";
 import { normalizeWord } from "./services/wordNormalization.js";
+import {privateBookLesson} from './services/privateBookLesson.js';
 import { deriveLessonProfile } from "./services/lessonProfile.js";
 import { cadenceCandidatePlans, planLessonQueue } from "./services/exercisePlanner.js";
 import { perf } from "./services/perf.js";
@@ -173,7 +175,20 @@ function legacyCaptureResponse(note: CaptureNote) {
   };
 }
 
-function toApiError(error: unknown): WebApiError {
+function safeStagingErrorMessage(error: unknown): string | undefined {
+  if (!(error instanceof Error) || !error.message) return undefined;
+  return error.message
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[token]")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
+    .replace(/\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/gi, "[id]")
+    .replace(/https?:\/\/[^\s"'()]+/gi, "[url]")
+    .replace(/\b(?:password|token|secret|api[_-]?key)\b\s*[:=]?\s*[^\s,;]+/gi, "[redacted]")
+    .replace(/[\r\n\t]+/g, " ")
+    .slice(0, 180);
+}
+
+function toApiError(error: unknown, requestPath?: string, stagingDiagnostics = false): WebApiError {
   if (error instanceof FamilyServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof WebApiError) return error;
   if (error instanceof WebAuthError) return new WebApiError(error.status, error.code, error.message);
@@ -181,6 +196,7 @@ function toApiError(error: unknown): WebApiError {
   if (error instanceof NoteReviewServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof AnalyticsServiceError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof VocabularyServiceError) return new WebApiError(error.status, error.code, error.message);
+  if(error instanceof PrivateBookAccessError)return new WebApiError(403,error.code,'当前会话的私人词书授权已失效。');
   if (error instanceof DeepSeekError) return new WebApiError(error.status, error.code, error.message);
   if (error instanceof StaleStudyStateError || (error instanceof Error && ["STALE_STUDY_STATE", "STUDY_SESSION_REVISION_MISMATCH"].includes(error.message))) {
     return new WebApiError(409, "STALE_STUDY_STATE", "Study state changed in another client.");
@@ -211,15 +227,33 @@ function toApiError(error: unknown): WebApiError {
   if (message === "CAPTURE_NOT_LEARNABLE") {
     return new WebApiError(409, "CAPTURE_NOT_LEARNABLE", "当前只把单词或两词短语加入现有 WordLoop 学习队列；更长表达先保留在笔记库。");
   }
+  const rawDatabaseCode = error && typeof error === "object" ? Reflect.get(error, "code") : undefined;
+  const databaseCode = typeof rawDatabaseCode === "string" && /^[A-Z0-9_]{1,32}$/.test(rawDatabaseCode)
+    ? rawDatabaseCode : undefined;
   console.error("WordLoop Web API request failed", {
     code: "INTERNAL_SERVER_ERROR",
     error_type: error instanceof Error ? error.name : "unknown",
+    ...(requestPath ? { path: requestPath } : {}),
+    ...(databaseCode ? { database_code: databaseCode } : {}),
+    ...(stagingDiagnostics && safeStagingErrorMessage(error) ? { staging_error_message: safeStagingErrorMessage(error) } : {}),
   });
   return new WebApiError(500, "INTERNAL_SERVER_ERROR", "请求未完成，请重试。");
 }
 
-function failure(error: unknown): Response {
-  const apiError = toApiError(error);
+function failure(error: unknown, requestPath?: string, userId?: string): Response {
+  const stagingDiagnostics = shouldExposeStagingDiagnostics(userId);
+  const apiError = toApiError(error, requestPath, stagingDiagnostics);
+  if (apiError.code === "INTERNAL_SERVER_ERROR" && stagingDiagnostics) {
+    const rawDatabaseCode = error && typeof error === "object" ? Reflect.get(error, "code") : undefined;
+    const databaseCode = typeof rawDatabaseCode === "string" && /^[A-Z0-9_]{1,32}$/.test(rawDatabaseCode)
+      ? rawDatabaseCode : undefined;
+    const errorName = error instanceof Error ? error.name : "unknown";
+    const safeErrorName = /^[A-Za-z0-9_]{1,48}$/.test(errorName) ? errorName : "unknown";
+    const diagnostic = [safeErrorName, databaseCode].filter(Boolean).join(" ");
+    return jsonApiResponse({
+      error: { code: apiError.code, message: apiError.message + " [staging诊断: " + diagnostic + "]" },
+    }, apiError.status);
+  }
   return jsonApiResponse({ error: { code: apiError.code, message: apiError.message } }, apiError.status);
 }
 
@@ -244,6 +278,7 @@ export function buildPretestItems(words: VocabularyItem[]): Array<Record<string,
       meaning_zh: meaning,
       prompt: meaning,
       direction: "cn_to_en",
+      ...(item.definition_source?{private_source_book_id:item.definition_source.book_id}:{}),
     };
   });
 }
@@ -274,6 +309,8 @@ function resultForState(
     if (typeof payload.plan === "object" && payload.plan !== null && !Array.isArray(payload.plan)) {
       const plan = { ...payload.plan as Record<string, unknown> };
       delete plan.target_sense;
+      delete plan.private_source_word;
+      delete plan.private_source_entry_keys;
       delete plan.word_id;
       delete plan.target_word_ids;
       delete plan.skill_signals;
@@ -282,6 +319,8 @@ function resultForState(
     if (typeof payload.consolidation_plan === "object" && payload.consolidation_plan !== null && !Array.isArray(payload.consolidation_plan)) {
       const plan = { ...payload.consolidation_plan as Record<string, unknown> };
       delete plan.target_sense;
+      delete plan.private_source_word;
+      delete plan.private_source_entry_keys;
       delete plan.word_id;
       delete plan.target_word_ids;
       delete plan.skill_signals;
@@ -348,6 +387,10 @@ async function successForSession(
   audioUrl?: string | null,
 ): Promise<Record<string, unknown>> {
   const state = ensureState(session);
+  for(const id of privateSourceIds(state)){
+    const allowed=await getDatabase().rpc('can_access_private_source_v1',{p_user_id:getAuthenticatedUserId(),p_book_id:id});
+    if(allowed.error||allowed.data!==true)throw new WebApiError(403,'PRIVATE_BOOK_UNAVAILABLE','当前会话的私人词书授权已失效。');
+  }
   const displayState = state.widget === "lesson"
     ? { ...state, payload: await withLessonClozeHint(state.payload) }
     : state;
@@ -574,9 +617,9 @@ async function generateAndPersistLesson(input: {
   }
   await reserveLearningBudget(`exercise:${plan.exercise_id}`, plan.planned_activity_type, "lesson", db, userId);
   const [generated, audioUrl] = await Promise.all([
-    generateLesson({
+    plan.private_source_book_id?Promise.resolve(privateBookLesson(item.word,plan,pos,item.ipa_us??'')):generateLesson({
       word: item.word,
-      meaning_zh: meaning,
+      meaning_zh: plan.private_source_book_id?plan.target_sense:meaning,
       part_of_speech: pos,
       ...(item.ipa_us?.trim() ? { ipa: item.ipa_us.trim() } : {}),
       ...lessonProfile,
@@ -610,7 +653,7 @@ async function generateAndPersistLesson(input: {
       progress: lessonProgressLabel(input.flow.relearn_words, queue, input.index),
       ipa: generated.ipa,
       part_of_speech: persistedPos ?? generated.part_of_speech,
-      meaning_zh: meaning,
+      meaning_zh: plan.private_source_book_id?plan.target_sense:meaning,
       collocations: generated.collocations,
       derivations: generated.derivations,
       example_en: generated.example_en,
@@ -755,6 +798,7 @@ async function submitReview(action: Extract<WebAction, { action: "review_submit"
     grade = { is_correct: false, error_layer: "meaning", rating: "again", feedback: "已标记为不会。", graded_by: "deterministic" };
   } else if (item.direction === "en_definition") {
     const semantic = await gradeEnglishDefinition({
+      ...(item.private_source_book_id?{private_source_book_id:item.private_source_book_id}:{}),
       word: item.word,
       ...(item.part_of_speech ? { part_of_speech: item.part_of_speech } : {}),
       meaning_zh: item.meaning_zh,
@@ -1653,10 +1697,11 @@ async function performAction(action: WebAction): Promise<Record<string, unknown>
 }
 
 export async function handleWebApiRequest(request: Request): Promise<Response> {
+  let userId: string | undefined;
   try {
-    const userId = await authenticateWebUser(request);
-    return await withUserIdentity(userId, () => handleAuthenticatedWebRequest(request));
-  } catch (error) { return failure(error); }
+    userId = await authenticateWebUser(request);
+    return await withUserIdentity(userId, () => handleAuthenticatedWebRequest(request), new URL(request.url).origin);
+  } catch (error) { return failure(error, new URL(request.url).pathname, userId); }
 }
 
 async function handleAuthenticatedWebRequest(request: Request): Promise<Response> {
@@ -1716,17 +1761,18 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
       throw new WebApiError(404, "NOT_FOUND", "词族接口不存在。");
     }
     if (url.pathname.startsWith("/api/web/shanbay-import/")) return handleShanbayImportRequest(request);
-    if (request.method === "GET" && url.pathname === "/api/web/account") return jsonApiResponse({ is_owner: getAuthenticatedUserId() === getLegacyOwnerId() });
+    if (request.method === "GET" && url.pathname === "/api/web/account") return jsonApiResponse({ is_owner: isLegacyOwner(getAuthenticatedUserId()) });
     if (request.method === "POST" && url.pathname === "/api/web/accounts") {
-      if (getAuthenticatedUserId() !== getLegacyOwnerId()) throw new WebApiError(403, "FORBIDDEN", "只有管理员可以创建内测账号。");
+      if (!isLegacyOwner(getAuthenticatedUserId())) throw new WebApiError(403, "FORBIDDEN", "只有管理员可以创建内测账号。");
       const input = z.object({ email: z.email(), password: z.string().min(8).max(256), owner: z.boolean().default(false), words: z.array(z.string().trim().min(1).max(100)).max(5000).default([]) }).strict().safeParse(await request.json());
       if (!input.success) throw new WebApiError(400, "INVALID_REQUEST", "请输入有效邮箱和至少 8 位的密码。");
+      const authAdmin = getSupabaseAuthAdminClient();
       const db = getDatabase();
-      const created = await db.auth.admin.createUser({ email: input.data.email, password: input.data.password, email_confirm: true, ...(input.data.owner ? { id: getLegacyOwnerId() } : {}) });
+      const created = await authAdmin.auth.admin.createUser({ email: input.data.email, password: input.data.password, email_confirm: true, ...(input.data.owner ? { id: getLegacyOwnerId() } : {}) });
       if (created.error || !created.data.user) throw new WebApiError(409, "ACCOUNT_NOT_CREATED", "账号未创建，请检查邮箱是否已经使用。");
       const userId = created.data.user.id;
       const profile = await db.from("users").upsert({ id: userId }, { onConflict: "id", ignoreDuplicates: true });
-      if (profile.error) { await db.auth.admin.deleteUser(userId); throw new WebApiError(503, "ACCOUNT_NOT_CREATED", "账号设置失败，请稍后重试。"); }
+      if (profile.error) { await authAdmin.auth.admin.deleteUser(userId); throw new WebApiError(503, "ACCOUNT_NOT_CREATED", "账号设置失败，请稍后重试。"); }
       if (input.data.words.length) {
         const { importWords } = await import("./services/words.js");
         try { await importWords({ words: input.data.words, source: "private_beta" }, db, userId); }
@@ -1904,6 +1950,6 @@ async function handleAuthenticatedWebRequest(request: Request): Promise<Response
       const active = await getActiveStudySession();
       return jsonApiResponse({ ...await doneResponse(active?.updated_at ?? null), budget_paused: true });
     }
-    return failure(error);
+    return failure(error, new URL(request.url).pathname, getAuthenticatedUserId());
   }
 }

@@ -1,4 +1,5 @@
 import { tryConsumeSkillEvidence } from "./learningModel.js";
+import {assertPrivateSourceAccess} from './sourceDictionary.js';
 import { reserveLearningBudget } from "./learningBudget.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -368,6 +369,7 @@ export async function getActiveStudySession(
     .limit(1)
     .maybeSingle();
   assertStudySessionDatabaseResult(error);
+  if(data)await assertPrivateSourceAccess(data.state,db,userId);
   return data ? parseSession(data) : null;
 }
 

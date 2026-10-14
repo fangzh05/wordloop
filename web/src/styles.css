@@ -329,9 +329,14 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .lesson-section p { margin: 0.42rem 0 0; font-size: 0.94rem; line-height: 1.55; }
 .lesson-section ul { display: grid; gap: 0.28rem; margin: 0.45rem 0 0; padding-left: 1.1rem; color: var(--text); font-size: 0.9rem; line-height: 1.45; }
 .lesson-example { font-size: 1rem !important; }
+.lesson-family-section .family-entry { width: auto; min-height: 38px; padding: 0.42rem 0.78rem; }
 .lesson-example-translation { color: var(--muted); }
 .lesson-exercise-heading { margin-top: 0.5rem; color: var(--text); font-size: 1rem; line-height: 1.4; }
 .lesson-prompt { margin-top: 0.75rem; padding: 1rem; border-radius: 14px; background: var(--control); color: var(--text); font-size: 1.05rem; line-height: 1.65; white-space: pre-wrap; }
+.lesson-feedback-question { margin-top: 0.7rem; padding: 0.85rem; border: 1px solid var(--separator); border-radius: 14px; background: var(--material-raised); }
+.lesson-feedback-question > span { display: block; color: var(--muted); font-size: 0.78rem; font-weight: 650; }
+.lesson-feedback-question > strong { display: block; margin-top: 0.35rem; color: var(--text); font-size: 0.9rem; line-height: 1.45; }
+.lesson-feedback-question > p { margin: 0.45rem 0 0; color: var(--text); font-size: 1rem; line-height: 1.6; white-space: pre-wrap; }
 .lesson-answer { margin-top: 0.7rem; padding: 0.85rem; border-radius: 14px; background: var(--control); }
 .lesson-answer > span { color: var(--muted); font-size: 0.78rem; font-weight: 650; }
 .lesson-answer p { margin: 0.35rem 0 0; white-space: pre-wrap; font-size: 0.94rem; line-height: 1.55; }
@@ -339,6 +344,174 @@ input#book-id { box-sizing: border-box; width: 100%; min-height: 44px; padding: 
 .lesson-feedback p { margin: 0.25rem 0; }
 .lesson-feedback p:first-child { margin-top: 0; }
 .lesson-audio { margin-top: 0.85rem; }
+
+/* Lexical Atlas: the restored reference interaction for the learning card. */
+.lexical-atlas-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  overflow: auto;
+  background: rgba(20, 45, 61, 0.78);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.lexical-atlas {
+  width: min(540px, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  border: 1px solid rgba(221, 237, 245, 0.82);
+  border-radius: 30px;
+  background: #eff4f6;
+  color: #193042;
+  box-shadow: 0 24px 72px rgba(3, 20, 30, 0.34);
+}
+.lexical-atlas-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.75rem 1.55rem 1.45rem;
+  border-radius: 29px 29px 0 0;
+  background: #12334b;
+  color: #f3f8fa;
+}
+.lexical-atlas-header-copy { min-width: 0; }
+.lexical-atlas-eyebrow,
+.lexical-atlas-note > span {
+  display: block;
+  color: #9cb9c9;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.64rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  line-height: 1.3;
+}
+.lexical-atlas-header h2 {
+  margin: 0.6rem 0 0.35rem;
+  color: #f7fbfc;
+  font-family: "Iowan Old Style", "Baskerville", "Palatino Linotype", Georgia, serif;
+  font-size: clamp(3.1rem, 13vw, 4.4rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+.lexical-atlas-header p {
+  max-width: 23rem;
+  margin: 0;
+  color: #b8cbd3;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+.lexical-atlas-return {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0.42rem 0.72rem;
+  border: 1px solid #7390a0;
+  border-radius: 8px;
+  background: transparent;
+  color: #e8f2f5;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.lexical-atlas-return:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.lexical-atlas-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid #c9d2d6;
+  background: #f4f7f8;
+}
+.lexical-atlas-tabs button {
+  display: flex;
+  min-width: 0;
+  min-height: 72px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.75rem 0.4rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #61737d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.lexical-atlas-tabs button > span {
+  color: #78909b;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.62rem;
+}
+.lexical-atlas-tabs button[aria-pressed="true"] {
+  border-bottom-color: #527488;
+  color: #193042;
+  font-weight: 700;
+}
+.lexical-atlas-tabs button[aria-pressed="true"] > span { color: #527488; }
+.lexical-atlas-tabs button:focus-visible,
+.lexical-atlas-unavailable button:focus-visible { outline: 3px solid rgba(57, 111, 137, 0.42); outline-offset: -3px; }
+.lexical-atlas-note {
+  display: grid;
+  gap: 0.72rem;
+  padding: 1.55rem 1.55rem 1.15rem;
+  background: #eff4f6;
+}
+.lexical-atlas-note > span { color: #5d7887; }
+.lexical-atlas-note p {
+  margin: 0;
+  color: #708590;
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+.lexical-atlas-content {
+  min-height: 13rem;
+  padding: 0 1.55rem 1.65rem;
+  background: #eff4f6;
+}
+.lexical-atlas-content h3 {
+  margin: 0;
+  color: #193042;
+  font-family: "Iowan Old Style", "Baskerville", Georgia, serif;
+  font-size: 1.55rem;
+  font-weight: 500;
+}
+.lexical-atlas-content ul { margin: 0.8rem 0 0; padding-left: 1.15rem; line-height: 1.7; }
+.lexical-atlas-empty { margin: 0; color: #708590; font-size: 0.82rem; line-height: 1.6; }
+.lexical-atlas-unavailable {
+  display: flex;
+  min-height: 13rem;
+  align-items: flex-end;
+  gap: 0.4rem;
+  color: #263b47;
+  font-size: 0.9rem;
+}
+.lexical-atlas-unavailable p { margin: 0; line-height: 1.45; }
+.lexical-atlas-unavailable button {
+  flex: 0 0 auto;
+  padding: 0 0.18rem 0.08rem;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: #315e73;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+.lexical-atlas-unavailable button:disabled { cursor: wait; opacity: 0.6; }
+@media (max-width: 560px) {
+  .lexical-atlas-backdrop { align-items: center; padding: max(1rem, env(safe-area-inset-top)) 0.75rem max(1rem, env(safe-area-inset-bottom)); }
+  .lexical-atlas { width: calc(100vw - 1.5rem); max-height: calc(100dvh - 2rem); border-radius: 28px; }
+  .lexical-atlas-header { padding: 1.5rem 1.35rem 1.35rem; }
+  .lexical-atlas-header h2 { font-size: clamp(3rem, 16vw, 4.1rem); }
+  .lexical-atlas-header p { font-size: 0.73rem; }
+  .lexical-atlas-return { padding-inline: 0.6rem; font-size: 0.69rem; }
+  .lexical-atlas-tabs button { min-height: 64px; gap: 0.25rem; font-size: 0.72rem; }
+  .lexical-atlas-note { padding: 1.35rem 1.35rem 1.05rem; }
+  .lexical-atlas-content { padding: 0 1.35rem 1.4rem; }
+}
 
 .standalone-shell { display: flex; flex-direction: column; gap: 0.8rem; width: 100%; max-width: 680px; min-height: 100svh; margin: 0 auto; padding: max(0.6rem, env(safe-area-inset-top)) max(0.65rem, env(safe-area-inset-right)) max(0.8rem, env(safe-area-inset-bottom)) max(0.65rem, env(safe-area-inset-left)); }
 .standalone-layout { display: block; width: 100%; }

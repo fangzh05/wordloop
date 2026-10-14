@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { configureRuntimeEnv, getAuthenticatedUserId, resetDatabaseForTests, withUserIdentity } from "../server/db.js";
 import { authenticateWebUser } from "../server/webAuth.js";
 
-const users = vi.hoisted(() => ({ getUser: vi.fn(), profile: vi.fn() }));
-vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({ auth: { getUser: users.getUser }, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: users.profile }) }) }) }) }));
+const users = vi.hoisted(() => ({ getUser: vi.fn(), profile: vi.fn(), upsert: vi.fn() }));
+vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({ auth: { getUser: users.getUser }, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: users.profile }) }), upsert: users.upsert }) }) }));
 const owner = "00000000-0000-4000-8000-000000000001";
 const friend = "00000000-0000-4000-8000-000000000002";
 const request = (token?: string) => new Request("https://wordloop.test/api/web/bootstrap", { headers: token ? { authorization: `Bearer ${token}` } : {} });
@@ -21,8 +21,17 @@ describe("private beta authentication", () => {
     expect(await authenticateWebUser(request("signed.jwt.token"))).toBe(friend);
     users.profile.mockResolvedValue({ data: null, error: null });
     await expect(authenticateWebUser(request("signed.jwt.token"))).rejects.toMatchObject({ status: 403 });
+    expect(users.upsert).not.toHaveBeenCalled();
     users.getUser.mockResolvedValue({ data: { user: { id: friend, is_anonymous: true } }, error: null });
     await expect(authenticateWebUser(request("signed.jwt.token"))).rejects.toMatchObject({ status: 401 });
+  });
+  it("binds a missing profile only for the configured owner account", async () => {
+    users.getUser.mockResolvedValue({ data: { user: { id: owner } }, error: null });
+    users.profile.mockResolvedValue({ data: null, error: null });
+    users.upsert.mockResolvedValue({ error: null });
+
+    await expect(authenticateWebUser(request("signed.jwt.token"))).resolves.toBe(owner);
+    expect(users.upsert).toHaveBeenCalledWith({ id: owner }, { onConflict: "id", ignoreDuplicates: true });
   });
   it("rejects expired tokens without falling back to the owner", async () => {
     users.getUser.mockResolvedValue({ data: { user: null }, error: { message: "expired" } });

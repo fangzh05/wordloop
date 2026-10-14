@@ -1,0 +1,15 @@
+import express from 'express';
+import {build} from 'esbuild';
+import {mkdirSync,readFileSync} from 'node:fs';
+mkdirSync('.qa',{recursive:true});
+await build({entryPoints:['scripts/qa/privateBooksHarness.tsx'],outfile:'.qa/private-books.js',bundle:true,format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"development"'}});
+const app=express();app.use(express.json());app.get('/favicon.ico',(_,r)=>r.sendStatus(204));
+app.get('/',(_,r)=>r.type('html').send('<!doctype html><title>WordLoop private books local QA</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><div id="root"></div><script>localStorage.setItem("wordloop_web_token","LOCAL-FAKE-TOKEN")</script><script src="/private-books.js"></script>'));
+app.get('/styles.css',(_,r)=>r.type('css').send(readFileSync('web/src/styles.css','utf8')));
+app.get('/private-books.js',(_,r)=>r.type('js').send(readFileSync('.qa/private-books.js','utf8')));
+const books=[['cet4','大学英语四级',12],['cet6','大学英语六级',20],['kaoyan','考研英语',16],['ielts','雅思 IELTS',24],['toefl','托福 TOEFL',28]];
+let selected='ielts';
+app.get('/api/web/exam-books',(_,r)=>r.json({selected_book_id:selected,effective_date:'2026-10-12',books:books.map(([id,name,total])=>({id,name,total,available:true,is_public:String(id).length<6,scope:String(id).length<6?'public':'private',source:'LOCAL SYNTHETIC QA',source_version:'test',license:'私人学习候选',in_learning:1,mastered:0,not_enrolled:Number(total)-1}))}));
+app.put('/api/web/exam-books/selection',(req,r)=>{if(!books.some(([id])=>id===req.body.book_id)){r.sendStatus(403);return;}selected=req.body.book_id;r.json({book_id:selected,effective_date:'2026-10-12'});});
+app.get('/api/web/vocabulary/:id',(_,r)=>r.json({data:{display_word:'fixture',ipa_us:null,ipa_uk:null,senses:[{pos:'n.',definition_cn:'通用解释（合成测试）'}],dictionary_senses:[{pos:'n.',definition_cn:'通用解释（合成测试）'}],current_book_definitions:['ielts','cet6'].includes(selected)?[{book_id:selected==='ielts'?'ielts-zhenjing':'cet6-xinghuo',definition_raw:'n. 当前考试来源释义（合成测试）\nv. 第二词性（合成测试）',chapter:'测试章节',category:'测试分类'}]:[],memory:{},captured_notes:[]},as_of:new Date().toISOString(),timezone:'Asia/Shanghai'}));
+app.listen(4189,'127.0.0.1',()=>console.log('Private books synthetic QA http://127.0.0.1:4189'));
