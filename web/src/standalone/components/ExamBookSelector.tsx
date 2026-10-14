@@ -14,7 +14,7 @@ export function ExamBookProvider({tokenKey,children}:{tokenKey:string|null;child
  return <Context.Provider value={{data,error,loading,refresh,open:()=>{setOpen(true);void refresh();}}}>{children}
  <dialog ref={dialog} className="settings-sheet exam-book-sheet" aria-labelledby="exam-books-title" onCancel={event=>{event.preventDefault();if(!saving)setOpen(false);}} onClick={event=>{if(event.target===event.currentTarget&&!saving)setOpen(false);}}>
   <header><div><span className="eyebrow">LEARNING TARGET</span><h2 id="exam-books-title">学习词书</h2></div><button className="secondary-button" disabled={saving} onClick={()=>setOpen(false)}>关闭</button></header>
-  <p className="exam-book-note">新目标立即生效。已安排的新词和当前会话会保留；今天后续补入的新词按新目标安排，到期复习不受影响。</p>
+  <p className="exam-book-note">新目标从明天的新词任务生效。今日任务、当前会话和到期复习照常保留。</p>
   <fieldset disabled={saving} className="exam-book-options"><legend>选择学习目标</legend>{data?.books.map(book=><label key={book.id} className="exam-book-option">
    <input type="radio" name="exam-book" value={book.id} disabled={!book.available} checked={pending===book.id} onChange={()=>setPending(book.id)}/>
    <span><strong>{book.name}</strong><small>{book.scope==='private'?'我的私有词书并集':'公共词书'} · {book.total.toLocaleString()} 词</small>
