@@ -1073,15 +1073,25 @@ export default function StandaloneApp(): React.JSX.Element {
     let actionResponse: WebApiResponse | null = null;
     let actionError: unknown = null;
     await runForegroundRequest(requestInFlightRef, async () => {
+      const interactionStarted = performance.now();
+      const traceRequestId = crypto.randomUUID();
+      let actionMs = 0;
+      let telemetryAfterMs = 0;
+      const telemetryStarted = performance.now();
       if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) await flushLearningTime(false);
+      const telemetryBeforeMs = performance.now() - telemetryStarted;
       setBusy(actionName || "action");
       setErrorMessage("");
       setNotice("");
       setNoticeIndex(null);
       setRetryFields(stableFields);
       try {
-        const next = await postAction(action);
+        const actionStarted = performance.now();
+        const next = await postAction(action, traceRequestId);
+        actionMs = performance.now() - actionStarted;
+        const finalizeStarted = performance.now();
         if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) await flushLearningTime(true);
+        telemetryAfterMs = performance.now() - finalizeStarted;
         actionResponse = next;
         sessionRevisionRef.current = next.session_revision ?? sessionRevisionRef.current;
         if (actionName === "refresh_progress") {
@@ -1134,6 +1144,12 @@ export default function StandaloneApp(): React.JSX.Element {
         }
       } finally {
         setBusy(null);
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wordloop-request-performance", { detail: {
+          event: "wordloop_interaction_performance", request_id: traceRequestId, operation: actionName,
+          client_total_ms: Math.max(0, performance.now() - interactionStarted), action_ms: actionMs,
+          telemetry_before_ms: telemetryBeforeMs, telemetry_after_ms: telemetryAfterMs,
+          success: actionResponse !== null && actionError === null,
+        } }));
       }
     }, flushPendingRefresh);
     if (settingsActions.has(actionName) && actionError) {

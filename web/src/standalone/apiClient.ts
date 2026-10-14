@@ -151,9 +151,9 @@ export function clearToken(): void {
   }
 }
 
-export async function request<T = WebApiResponse>(path: string, init: RequestInit, tokenOverride?: string): Promise<T> {
+export async function request<T = WebApiResponse>(path: string, init: RequestInit, tokenOverride?: string, traceRequestId?: string): Promise<T> {
   const clientStarted = performance.now();
-  const requestId = globalThis.crypto.randomUUID();
+  const requestId = traceRequestId ?? globalThis.crypto.randomUUID();
   let httpStatus = 0;
   let succeeded = false;
   const token = await currentAccessToken() ?? tokenOverride ?? storedToken();
@@ -201,7 +201,7 @@ export async function request<T = WebApiResponse>(path: string, init: RequestIni
     throw error;
   } finally {
     clearTimeout(timer);
-    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wordloop-request-performance", { detail: { request_id: requestId, operation: path === "/api/web/action" ? "action" : path.split("/").slice(0, 4).join("/"), client_total_ms: Math.max(0, performance.now() - clientStarted), http_status: httpStatus, success: succeeded } }));
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wordloop-request-performance", { detail: { event: "wordloop_client_performance", request_id: requestId, operation: path === "/api/web/action" ? "action" : path.split("/").slice(0, 4).join("/"), client_total_ms: Math.max(0, performance.now() - clientStarted), http_status: httpStatus, success: succeeded } }));
     init.signal?.removeEventListener("abort", abort);
   }
 }
@@ -210,13 +210,13 @@ export function getBootstrap(tokenOverride?: string): Promise<WebApiResponse> {
   return request("/api/web/bootstrap", { method: "GET" }, tokenOverride);
 }
 
-export function postAction(action: WebAction): Promise<WebApiResponse> {
+export function postAction(action: WebAction, requestId?: string): Promise<WebApiResponse> {
   clearReadModelCache();
   return request("/api/web/action", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(action),
-  });
+  }, undefined, requestId);
 }
 
 

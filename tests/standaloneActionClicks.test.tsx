@@ -38,14 +38,19 @@ describe("standalone action click handlers", () => {
     }, "ready", null];
     harness.cursor = 0;
     harness.post.mockReset().mockResolvedValue({ screen: "done", state: {}, session_revision: "next" });
-    vi.stubGlobal("window", { location: { hash: "#study" }, history: { pushState: vi.fn() } });
+    vi.stubGlobal("window", { location: { hash: "#study" }, history: { pushState: vi.fn() }, dispatchEvent: vi.fn() });
   });
   it("sends lesson_next when completing the final feedback", async () => {
     const tree = StandaloneApp();
     const button = find(tree, node => node.type === StandaloneLessonFeedback);
     expect(button).toBeDefined();
     button!.props.onNext();
-    await vi.waitFor(() => expect(harness.post).toHaveBeenCalledWith({ action: "lesson_next", expected_revision: "revision" }));
+    await vi.waitFor(() => expect(harness.post).toHaveBeenCalledWith({ action: "lesson_next", expected_revision: "revision" }, expect.any(String)));
+    await vi.waitFor(() => expect(window.dispatchEvent).toHaveBeenCalled());
+    const event = vi.mocked(window.dispatchEvent).mock.calls[0]![0] as CustomEvent;
+    expect(event.detail).toMatchObject({ event: "wordloop_interaction_performance", request_id: harness.post.mock.calls[0]![1], operation: "lesson_next", success: true });
+    expect(event.detail.client_total_ms).toBeGreaterThanOrEqual(event.detail.action_ms);
+    expect(event.detail).not.toHaveProperty("answer");
   });
   it("sends consolidation_start from the Today screen", async () => {
     harness.values[0] = "dashboard"; harness.values[1] = "today";
@@ -53,7 +58,7 @@ describe("standalone action click handlers", () => {
     const today = find(tree, node => typeof node.props.onStartConsolidation === "function");
     expect(today).toBeDefined();
     today!.props.onStartConsolidation();
-    await vi.waitFor(() => expect(harness.post).toHaveBeenCalledWith({ action: "consolidation_start", expected_revision: "revision" }));
+    await vi.waitFor(() => expect(harness.post).toHaveBeenCalledWith({ action: "consolidation_start", expected_revision: "revision" }, expect.any(String)));
   });
   it("does not render vocabulary feedback as finished consolidation feedback", () => {
     const view = harness.values[7] as any;

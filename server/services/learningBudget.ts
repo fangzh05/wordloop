@@ -136,6 +136,9 @@ export function newWordAdmissionLimit(b: BudgetSnapshot): number {
   return Math.min(6, remaining);
 }
 export async function getLearningBudget(db = getDatabase(), userId = getAuthenticatedUserId()): Promise<BudgetSnapshot> {
+  return measure("budget_ms", () => readLearningBudget(db, userId));
+}
+async function readLearningBudget(db: ReturnType<typeof getDatabase>, userId: string): Promise<BudgetSnapshot> {
   const r = await db.rpc("learning_budget_snapshot_v1", { p_user_id: userId });
   assertDatabaseResult(r.error);
   if (!r.data || typeof r.data.remaining_seconds !== "number") throw new Error("BUDGET_SNAPSHOT_UNAVAILABLE");

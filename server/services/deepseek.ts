@@ -456,6 +456,7 @@ async function deepSeekJson<T>(
     throw error;
   }
 
+  const aiCallId = crypto.randomUUID();
   let repairMessage: string | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
@@ -585,7 +586,7 @@ async function deepSeekJson<T>(
       throw requestError;
     } finally {
       clearTimeout(timer);
-      recordAiAttempt({ task: options.task, attempt: attempt + 1, total_ms: Math.max(0, performance.now() - attemptStarted), outcome, retry_reason: retryReason, http_status: httpStatus });
+      recordAiAttempt({ call_id: aiCallId, task: options.task, attempt: attempt + 1, total_ms: Math.max(0, performance.now() - attemptStarted), outcome, retry_reason: retryReason, http_status: httpStatus });
       if (typeof process !== "undefined" && process.env.WORDLOOP_PERF_LOG === "1") {
         console.log("[wordloop deepseek]", {
           task: options.task, attempt: attempt + 1, retry: attempt > 0,

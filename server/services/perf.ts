@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 export type Stage = "auth_ms" | "db_read_ms" | "budget_ms" | "ai_generation_ms" | "ai_grading_ms" | "db_write_ms" | "bkt_ms" | "progress_ms" | "response_ms";
 const stages: Stage[] = ["auth_ms", "db_read_ms", "budget_ms", "ai_generation_ms", "ai_grading_ms", "db_write_ms", "bkt_ms", "progress_ms", "response_ms"];
-type AiAttempt = { task: string; attempt: number; total_ms: number; outcome: string; retry_reason?: string; http_status?: number };
+type AiAttempt = { call_id?: string; task: string; attempt: number; total_ms: number; outcome: string; retry_reason?: string; http_status?: number };
 type Trace = { request_id: string; operation: string; sampled: boolean; started: number; timings: Record<Stage, number>; db_calls: number; ai: AiAttempt[]; memo: WeakMap<object, Map<string, Promise<unknown>>> };
 const storage = new AsyncLocalStorage<Trace>();
 const rounded = (n: number) => Math.round(Math.max(0, n) * 100) / 100;
@@ -58,7 +58,7 @@ export async function traceWebRequest(request: Request, options: { sampleRate?: 
       if (options.serverTiming) headers.set("server-timing", [...stages.map(s => `${s};dur=${rounded(t.timings[s])}`), `worker_total_ms;dur=${rounded(performance.now() - t.started)}`].join(", "));
       return new Response(result.body, { status, statusText: result.statusText, headers });
     } finally {
-      if (t.sampled) console.log(JSON.stringify({ event: "wordloop_request_performance", request_id: requestId, operation: t.operation, worker_total_ms: rounded(performance.now() - t.started), ...Object.fromEntries(stages.map(s => [s, rounded(t.timings[s])])), db_calls: t.db_calls, ai_called: t.ai.length > 0, ai_model: t.ai.length ? "deepseek-flash" : null, ai_retry_count: t.ai.filter(a => a.attempt > 1).length, ai_attempts: t.ai, success: status < 400, http_status: status }));
+      if (t.sampled) console.log(JSON.stringify({ event: "wordloop_request_performance", request_id: requestId, operation: t.operation, worker_total_ms: rounded(performance.now() - t.started), ...Object.fromEntries(stages.map(s => [s, rounded(t.timings[s])])), db_calls: t.db_calls, ai_called: t.ai.length > 0, ai_model: t.ai.length ? "deepseek-flash" : null, ai_call_count: t.ai.filter(a => a.attempt === 1).length, ai_attempt_count: t.ai.length, ai_retry_count: t.ai.filter(a => a.attempt > 1).length, ai_attempts: t.ai, success: status < 400, http_status: status }));
     }
   });
 }
