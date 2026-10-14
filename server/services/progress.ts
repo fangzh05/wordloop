@@ -3,7 +3,6 @@ import { getAuthenticatedUserId, getDatabase } from "../db.js";
 import { STUDY_PHASES, type ProgressResult, type StudySessionRow, type StudyState, type StudyFlow, type VocabularyItem } from "../types.js";
 import { addCalendarDays, assertDatabaseResult, dateInTimeZone, localDateRange } from "./shared.js";
 import { perf } from "./perf.js";
-import { getActiveStudySession } from "./studySessions.js";
 import { getUserTimeZone } from "./words.js";
 import { z } from "zod";
 import { REVIEW_SESSION_MAX } from "../../shared/toolContracts.js";
@@ -137,28 +136,36 @@ async function getReviewTodayProgress(
   db: ReturnType<typeof getDatabase>,
   userId: string,
   now: Date,
-  knownActive?: StudySessionRow | null,
-): Promise<ProgressResult["review_today"]> {
-  const active = knownActive === undefined ? await getActiveStudySession(db, userId) : knownActive;
-  if (active?.state?.widget === "review") return calculateReviewTodayProgress(active, []);
-
+): Promise<number> {
   const timeZone = await getUserTimeZone(db, userId);
   const today = dateInTimeZone(timeZone, now);
   const { start, end } = localDateRange(today, timeZone);
-  const sessionResult = await db.from("study_sessions")
-    .select("review_words_count,widget:state->widget,phase:state->phase,current_index:state->current_index,relearn_words:state->flow->relearn_words,review_items:state->payload->items")
+  return getFormalReviewCountForDay(db, userId, start, end);
+}
+
+export async function getFormalReviewCountForDay(
+  db: ReturnType<typeof getDatabase>,
+  userId: string,
+  start: string,
+  end: string,
+): Promise<number> {
+  const result = await db.from("fsrs_review_logs")
+    .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .gte("started_at", start)
-    .lt("started_at", end);
-  assertDatabaseResult(sessionResult.error);
-  const sessions = ((sessionResult.data ?? []) as Array<{
-    review_words_count?: number; widget?: unknown; phase?: unknown; current_index?: unknown;
-    relearn_words?: unknown; review_items?: unknown;
-  }>).map(row => ({
-    state: parseStudyStateForReviewProgress(row),
-    review_words_count: row.review_words_count,
-  }));
-  return calculateReviewTodayProgressFromParsed(null, undefined, sessions);
+    .eq("review_source", "review")
+    .gte("reviewed_at", start)
+    .lt("reviewed_at", end);
+  assertDatabaseResult(result.error);
+  return Math.max(0, result.count ?? 0);
+}
+
+export function calculateDailyFormalReviewProgress(
+  completedReviews: number,
+  dueReviews: number,
+): ProgressResult["review_today"] {
+  const completed = Number.isFinite(completedReviews) ? Math.max(0, Math.floor(completedReviews)) : 0;
+  const remaining = Number.isFinite(dueReviews) ? Math.max(0, Math.floor(dueReviews)) : 0;
+  return { completed, total: completed + remaining, remaining };
 }
 
 export async function getProgress(
@@ -169,12 +176,14 @@ export async function getProgress(
   knownActive?: StudySessionRow | null,
 ): Promise<ProgressResult> {
   return perf("get_progress", async () => {
-    const [{ data, error }, review_today] = await Promise.all([
+    const [{ data, error }, completedReviews] = await Promise.all([
       db.rpc("get_progress_snapshot_v1", { p_user_id: userId, p_now: now.toISOString() }),
-      getReviewTodayProgress(db, userId, now, knownActive),
+      getReviewTodayProgress(db, userId, now),
     ]);
     assertDatabaseResult(error);
-    const progress = { ...(data as Omit<ProgressResult, "review_today">), review_today };
+    const progressData = data as Omit<ProgressResult, "review_today">;
+    const review_today = calculateDailyFormalReviewProgress(completedReviews, progressData.fsrs.due_now);
+    const progress = { ...progressData, review_today };
     return includeBudget ? { ...progress, budget: await getLearningBudget(db, userId) } : progress;
   });
 }

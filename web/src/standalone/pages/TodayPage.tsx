@@ -74,9 +74,9 @@ export function TodayPage({ view, busy, busyLabel, tokenKey, onBudgetAction, onC
   const progress = today?.progress;
   const review = progress?.review;
   const dueReviewCount = today?.progress.due_now ?? view?.progress?.fsrs.due_now;
-  const reviewProgressNote = review?.scope === "active_session"
-    ? "当前这一轮"
-    : number(review?.total) > 0 ? "今日已安排复习" : "今日尚未安排复习";
+  const reviewProgressNote = number(review?.total) > 0
+    ? "当日已复习 / 当日安排"
+    : "今日尚未安排复习";
   const pretest = progress?.pretest;
   const lesson = progress?.formal_learning;
   const active = today?.active_session.active === true;
