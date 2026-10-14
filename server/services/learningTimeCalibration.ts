@@ -79,7 +79,7 @@ export async function getUserLearningCostProfile(userId = getAuthenticatedUserId
     return value;
   } catch { return buildLearningCostProfile([]); }
 }
-export const timeObservationSchema = z.object({ session_id: z.string().uuid(), phase: z.string().min(1).max(50), index: z.number().int().min(0).max(500), retry: z.number().int().min(0).max(100), stage: z.enum(["answer", "feedback", "explanation"]), local_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), phase_started_at: z.string().datetime(), active_ms: z.number().int().min(0).max(600000), finalize: z.boolean(), rollover: z.boolean().optional() }).strict();
+export const timeObservationSchema = z.object({ session_id: z.string().uuid(), phase: z.string().min(1).max(50), index: z.number().int().min(0).max(500), retry: z.number().int().min(0).max(100), stage: z.enum(["answer", "feedback", "explanation"]), local_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), phase_started_at: z.string().datetime({ offset: true }), active_ms: z.number().int().min(0).max(600000), finalize: z.boolean(), rollover: z.boolean().optional() }).strict();
 export async function recordLearningTime(input: z.infer<typeof timeObservationSchema>, db = getDatabase(), userId = getAuthenticatedUserId()) {
   if (!learningTimeCalibrationEnabled()) return { recorded: false };
   const value = timeObservationSchema.parse(input);

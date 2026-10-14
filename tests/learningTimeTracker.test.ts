@@ -2,6 +2,28 @@ import { expect, it, vi } from "vitest";
 import { LearningTimeTracker } from "../web/src/learningTimeTracker.js";
 import { ActiveStudyClock, localStudyDayStart } from "../web/src/activeStudyClock.js";
 import type { Observation } from "../web/src/learningTimeTracker.js";
+import { timeObservationSchema } from "../server/services/learningTimeCalibration.js";
+it.each([undefined, "exercise", "feedback"] as const)("sends a schema-valid Neon checkpoint for consolidation status %s", async status => {
+  let now = 0;
+  const send = vi.fn(async (observation: Observation) => {
+    // Use the JSON boundary and timestamp format observed in production.
+    timeObservationSchema.parse(JSON.parse(JSON.stringify(observation)));
+    return { recorded: true };
+  });
+  const tracker = new LearningTimeTracker({
+    session_id: "00000000-0000-4000-8000-000000000004", phase: "lesson_exercise",
+    index: 2, retry: 0, stage: "answer", scope: status ? "consolidation" : "lesson",
+    consolidation: Boolean(status), consolidation_status: status,
+    phase_started_at: new Date(Date.now() - 60000).toISOString().replace("Z", "+00:00"),
+    local_date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()),
+    timezone: "Asia/Shanghai",
+  }, send, () => now);
+  expect(await tracker.flush()).toBe(true);
+  now = 5000;
+  expect(await tracker.flush(true)).toBe(true);
+  expect(send.mock.calls.at(-1)?.[0].active_ms).toBe(5000);
+  expect(send.mock.calls.at(-1)?.[0]).not.toHaveProperty("consolidation_status");
+});
 it("uses monotonic active time, caps unattended time, and excludes network waits", async () => {
   let now = 0; const send = vi.fn(async (_observation: Observation) => undefined);
   const tracker = new LearningTimeTracker({ session_id: "00000000-0000-4000-8000-000000000001", phase: "lesson_exercise", index: 0, retry: 0, stage: "answer", scope: "lesson", phase_started_at: new Date(Date.now()-60000).toISOString(), local_date: new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Shanghai",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()), timezone: "Asia/Shanghai" }, send, () => now);

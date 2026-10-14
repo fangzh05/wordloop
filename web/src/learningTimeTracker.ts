@@ -1,6 +1,6 @@
 import { ActiveStudyClock, localStudyDay, localStudyDayStart } from "./activeStudyClock.js";
 export interface TimeContext { session_id: string; phase: string; index: number; retry: number; stage: "answer" | "feedback" | "explanation"; scope: "review" | "pretest" | "lesson" | "consolidation"; consolidation?: boolean; consolidation_status?: "pending" | "exercise" | "feedback"; phase_started_at: string; local_date: string; timezone: string }
-export type Observation = Omit<TimeContext, "timezone" | "scope" | "consolidation"> & { active_ms: number; finalize: boolean; rollover?: boolean };
+export type Observation = Omit<TimeContext, "timezone" | "scope" | "consolidation" | "consolidation_status"> & { active_ms: number; finalize: boolean; rollover?: boolean };
 /** Web collector. Storage is a recovery checkpoint,
  * never authentication or evidence of a correct answer. */
 export class LearningTimeTracker {
@@ -18,7 +18,7 @@ export class LearningTimeTracker {
   }
   private storageKey() { return `wordloop-time-v2:${this.context.session_id}:${this.context.phase}:${this.context.index}:${this.context.retry}:${this.context.stage}:${this.context.phase_started_at}:${this.context.local_date}`; }
   private sendToServer(context: TimeContext, active_ms: number, finalize: boolean, rollover = false) {
-    const { timezone: _timezone, scope: _scope, consolidation: _consolidation, ...wire } = context;
+    const { timezone: _timezone, scope: _scope, consolidation: _consolidation, consolidation_status: _consolidationStatus, ...wire } = context;
     return this.sendObservation({ ...wire, active_ms, finalize, ...(rollover ? { rollover: true } : {}) });
   }
   private recoverPreviousDay() {

@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { buildLearningCostProfile } from "../server/services/learningTimeCalibration.js";
+import { buildLearningCostProfile, timeObservationSchema } from "../server/services/learningTimeCalibration.js";
 
 const db = new PGlite();
 const a = "00000000-0000-4000-8000-000000000001", b = "00000000-0000-4000-8000-000000000002";
@@ -28,6 +28,15 @@ beforeEach(async () => {
 });
 afterEach(async()=>{await db.exec("ROLLBACK");});
 describe("Neon time calibration migration",()=>{
+  it("accepts the real Neon offset timestamp through validation and persists a finalized sample", async () => {
+    await db.query("SELECT set_config('test.user',$1,true)", [a]);
+    const timing = await value("SELECT to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US') || '+00:00' AS started, (now() AT TIME ZONE 'Asia/Shanghai')::date::text AS day FROM study_sessions WHERE id=$1", [s]);
+    const observation = timeObservationSchema.parse({ session_id:s, phase:"lesson_exercise", index:0, retry:0, stage:"answer", phase_started_at:timing.started, local_date:timing.day, active_ms:5000, finalize:false });
+    expect((await value("SELECT record_learning_time_v2($1,$2::jsonb) accepted", [a, JSON.stringify(observation)])).accepted).toBe(true);
+    await db.query("UPDATE study_sessions SET state=jsonb_set(state,'{phase}','\"lesson_feedback\"'),updated_at=now() WHERE id=$1", [s]);
+    expect((await value("SELECT record_learning_time_v2($1,$2::jsonb) accepted", [a, JSON.stringify({...observation, finalize:true})])).accepted).toBe(true);
+    expect(await value("SELECT samples,total_ms FROM user_learning_time_daily WHERE user_id=$1", [a])).toEqual({samples:1,total_ms:5000});
+  });
   it("gives two users different same-activity estimates without sharing their samples",async()=>{
     await db.query(`INSERT INTO user_learning_time_daily(user_id,local_date,activity_type,scope,stage,model_version,samples,total_ms,histogram,updated_at)
       VALUES($1,current_date,'cloze','lesson','answer','personal-time-v2-pilot',30,675000,'{"4":30}'::jsonb,now()),
