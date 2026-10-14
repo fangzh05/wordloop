@@ -1,0 +1,26 @@
+{
+  "checked_at": "2026-10-14T17:23:52.751Z",
+  "worker": "wordloop-app",
+  "version": "ed0393ff-8b6c-410b-9445-acf1cfcd0698",
+  "main_sha": "5a972f27c6b68722ef03a185316fade83fa21ecf",
+  "baseline_bytes": 1399637,
+  "baseline_sha256": "05b0c3c696a6e1699dd830e64676974483f8834eaff5f8bdddf476bc4709e6ab",
+  "modules": [
+    {
+      "name": "index.js",
+      "bytes": 1829403,
+      "sha256": "bdc027d908b533e73e440f11da15595b7f7cb60890d9ac2122ec2b5a80310c12",
+      "matches_main": false
+    }
+  ],
+  "wrangler_bundle": {
+    "bytes": 1829403,
+    "sha256": "bdc027d908b533e73e440f11da15595b7f7cb60890d9ac2122ec2b5a80310c12",
+    "matches_production": true
+  },
+  "frontend": {
+    "sha256": "56b865558aeb01711ffc6f784513fe6d2525cb6cd60f2b6eb13851e42853136a",
+    "matches_main": true,
+    "bytes": 1129764
+  }
+}

@@ -1,0 +1,24 @@
+[
+  {
+    "path": "/health",
+    "status": 200,
+    "server_timing": null,
+    "request_id": null
+  },
+  {
+    "path": "/api/web/auth/config",
+    "status": 200,
+    "server_timing": null,
+    "request_id": null
+  },
+  {
+    "path": "/api/web/bootstrap",
+    "status": 401,
+    "server_timing": [
+      "auth_ms;dur=0, db_read_ms;dur=0, budget_ms;dur=0, ai_generation_ms;dur=0, ai_grading_ms;dur=0, db_write_ms;dur=0, bkt_ms;dur=0, progress_ms;dur=0, response_ms;dur=0, worker_total_ms;dur=2"
+    ],
+    "request_id": [
+      "00000000-0000-4000-8000-000000000001"
+    ]
+  }
+]
