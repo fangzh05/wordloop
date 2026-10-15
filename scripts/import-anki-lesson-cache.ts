@@ -198,7 +198,7 @@ interface Checkpoint {
   entries: Record<string, CheckpointEntry>;
 }
 
-function readArgs(argv: string[]): Args {
+export function readArgs(argv: string[]): Args {
   const values = new Map<string, string>();
   const flags = new Set<string>();
   for (let index = 0; index < argv.length; index += 1) {
@@ -259,7 +259,7 @@ function readArgs(argv: string[]): Args {
   };
 }
 
-function requireStagingEnvironment(): void {
+export function requireStagingEnvironment(): void {
   const branchId = process.env.WORDLOOP_STAGING_NEON_BRANCH_ID;
   const dataApi = process.env.WORDLOOP_STAGING_NEON_DATA_API_URL;
   const jwk = process.env.WORDLOOP_STAGING_NEON_WORKER_JWT_PRIVATE_JWK;
@@ -280,7 +280,7 @@ function requireStagingEnvironment(): void {
   });
 }
 
-function parseSenses(value: unknown): SenseRow[] {
+export function parseSenses(value: unknown): SenseRow[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((row) => {
     if (!row || typeof row !== "object") return [];
@@ -297,7 +297,7 @@ function targetSenseForWord(senses: SenseRow[]): string {
   return senses.map((sense) => sense.definition_cn.trim()).filter(Boolean).join("；").slice(0, 240).trim();
 }
 
-function normalizeSense(value: string): string {
+export function normalizeSense(value: string): string {
   return value.normalize("NFC").toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
 }
 
@@ -363,7 +363,7 @@ function collectAnkiMaterial(record: ExtractedAnkiRecord, row: WordRow, targetSe
   return { material, base, missingFields, senseMatched };
 }
 
-function buildPlan(input: {
+export function buildPlan(input: {
   wordId: string;
   word: string;
   targetSense: string;
@@ -446,7 +446,7 @@ function fieldJsonSchema(field: OutputField, activityType: string): Record<strin
   };
 }
 
-function outputJsonSchema(fields: OutputField[], activityType: string): string {
+export function outputJsonSchema(fields: OutputField[], activityType: string): string {
   return JSON.stringify({
     type: "object",
     additionalProperties: false,
@@ -457,7 +457,7 @@ function outputJsonSchema(fields: OutputField[], activityType: string): string {
 
 function codeBuddySafeEnv(): NodeJS.ProcessEnv {
   const allow = process.platform === "win32"
-    ? ["PATH", "PATHEXT", "SystemRoot", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "HOMEDRIVE", "HOMEPATH", "ComSpec"]
+    ? ["PATH", "PATHEXT", "SystemRoot", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "HOMEDRIVE", "HOMEPATH", "ComSpec", "http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "NODE_USE_ENV_PROXY"]
     : ["PATH", "HOME", "TMPDIR", "LANG"];
   return Object.fromEntries(allow.flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]]])) as NodeJS.ProcessEnv;
 }
@@ -512,7 +512,7 @@ export function parseCliResult(stdout: string): {
   };
 }
 
-function runCodeBuddy(input: {
+export function runCodeBuddy(input: {
   command: string;
   model: string;
   prompt: string;
@@ -537,6 +537,7 @@ function runCodeBuddy(input: {
       windowsHide: true,
     });
     const chunks: Buffer[] = [];
+    const errorChunks: Buffer[] = [];
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
@@ -552,17 +553,22 @@ function runCodeBuddy(input: {
       if (stdoutBytes > 256_000) child.kill();
       else chunks.push(chunk);
     });
-    child.stderr.on("data", (chunk: Buffer) => { stderrBytes += chunk.length; });
-    child.on("error", () => {
+    child.stderr.on("data", (chunk: Buffer) => { stderrBytes += chunk.length; if(stderrBytes<=64_000)errorChunks.push(chunk); });
+    child.on("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
-      if (!settled) { settled = true; rejectPromise(new Error("CODEBUDDY_EXIT")); }
+      if (!settled) { settled = true; rejectPromise(new Error(error.code === "ENOENT" ? "CODEBUDDY_NOT_FOUND" : error.code === "ENAMETOOLONG" || error.code === "E2BIG" ? "CODEBUDDY_COMMAND_TOO_LONG" : "CODEBUDDY_SPAWN_FAILED")); }
     });
     child.on("close", (code) => {
       clearTimeout(timer);
       if (settled) return;
       settled = true;
       if (stdoutBytes > 256_000 || stderrBytes > 64_000 || code !== 0) {
-        rejectPromise(new Error("CODEBUDDY_EXIT"));
+        const errorText=Buffer.concat([...errorChunks,...chunks]).toString('utf8');
+        const reason=/too long|输入行太长|命令行太长|ENAMETOOLONG/i.test(errorText)?'CODEBUDDY_COMMAND_TOO_LONG'
+          :/quota|insufficient|额度不足|余额不足/i.test(errorText)?'CODEBUDDY_QUOTA'
+          :/unauthorized|authentication required|please.*login|请.*登录/i.test(errorText)?'CODEBUDDY_AUTH'
+          :/fetch failed|ECONN|network|TLS|socket|timed out/i.test(errorText)?'CODEBUDDY_NETWORK':'CODEBUDDY_EXIT';
+        rejectPromise(new Error(reason));
         return;
       }
       try {
@@ -583,7 +589,7 @@ function runCodeBuddy(input: {
   });
 }
 
-function buildPrompt(input: {
+export function buildPrompt(input: {
   record: ExtractedAnkiRecord;
   material: AnkiLessonMaterial;
   base: Partial<LessonGeneration>;
@@ -642,7 +648,7 @@ export function assertOfflineLessonQuality(lesson: LessonGeneration, word: strin
   }
 }
 
-async function readJsonl(path: string): Promise<ExtractedAnkiRecord[]> {
+export async function readJsonl(path: string): Promise<ExtractedAnkiRecord[]> {
   const records: ExtractedAnkiRecord[] = [];
   const lines = createInterface({ input: createReadStream(path), crlfDelay: Infinity });
   for await (const line of lines) {
@@ -774,36 +780,36 @@ async function findCachedLessonWithRetry(
   throw new Error("PRIVATE_LESSON_CACHE_READ_FAILED");
 }
 
-async function loadWordsAndMembership(
+export async function loadWordsAndMembership(
   db: ReturnType<typeof getDatabase>,
   userId: string,
 ): Promise<{ wordRows: WordRow[]; hasFullUnion: boolean }> {
-  const [bookOne, bookTwo] = await Promise.all([
-    readDataApiWithRetry(() => db.from("word_sources").select("source_book_id").eq("user_id", userId)
-      .eq("source_book_id", "ougkp").limit(1).maybeSingle(), "PRIVATE_UNION_MEMBERSHIP_READ_FAILED"),
-    readDataApiWithRetry(() => db.from("word_sources").select("source_book_id").eq("user_id", userId)
-      .eq("source_book_id", "athgc").limit(1).maybeSingle(), "PRIVATE_UNION_MEMBERSHIP_READ_FAILED"),
-  ]);
-  const hasFullUnion = Boolean(bookOne && bookTwo);
-  const memberWordIds = new Set<string>();
+  const identity = await readDataApiWithRetry(() => db.rpc("wordloop_authenticated_user_id"), "PRIVATE_IDENTITY_READ_FAILED");
+  if (identity !== userId) throw new Error("PRIVATE_IDENTITY_MISMATCH");
+  let hasFullUnion = false;
+  for (let attempt = 0; attempt < 3 && !hasFullUnion; attempt += 1) {
+    const books = await Promise.all(["ougkp", "athgc"].map((book) =>
+      readDataApiWithRetry(() => db.from("word_sources").select("source_book_id").eq("user_id", userId)
+        .eq("source_book_id", book).limit(1), "PRIVATE_UNION_MEMBERSHIP_READ_FAILED")));
+    hasFullUnion = books.every((rows) => Array.isArray(rows) && rows.length > 0);
+    if (!hasFullUnion && attempt < 2) await new Promise((done) => setTimeout(done, 750 * 2 ** attempt));
+  }
   if (!hasFullUnion) return { wordRows: [], hasFullUnion };
+  const joinedWords = new Map<string, WordRow>();
   for (let offset = 0; ; offset += 500) {
-    const data = await readDataApiWithRetry(() => db.from("word_sources").select("word_id,source_book_id")
+    const data = await readDataApiWithRetry(() => db.from("word_sources").select("word_id,source_book_id,words(id,normalized_word,display_word,senses,ipa_us,ipa_uk)")
       .eq("user_id", userId).in("source_book_id", ["ougkp", "athgc"])
       .order("word_id", { ascending: true }).order("source_book_id", { ascending: true })
       .range(offset, offset + 499), "PRIVATE_UNION_WORDS_READ_FAILED");
-    for (const source of data ?? []) memberWordIds.add(String(source.word_id));
+    for (const source of data ?? []) {
+      const joined = source.words as unknown as WordRow | WordRow[] | null;
+      const word = Array.isArray(joined) ? joined[0] : joined;
+      if (!word || word.id !== source.word_id) throw new Error("PRIVATE_UNION_WORD_JOIN_MISSING");
+      joinedWords.set(word.id, word);
+    }
     if ((data ?? []).length < 500) break;
   }
-  const wordIds = [...memberWordIds];
-  const wordRows: WordRow[] = [];
-  for (let offset = 0; offset < wordIds.length; offset += 150) {
-    const data = await readDataApiWithRetry(() => db.from("words")
-      .select("id,normalized_word,display_word,senses,ipa_us,ipa_uk")
-      .in("id", wordIds.slice(offset, offset + 150)), "WORDLOOKUP_READ_FAILED");
-    wordRows.push(...((data ?? []) as WordRow[]));
-  }
-  return { wordRows, hasFullUnion };
+  return { wordRows: [...joinedWords.values()], hasFullUnion };
 }
 
 async function ensureExtracted(args: Args, privateDir: string): Promise<{ jsonlPath: string; manifestPath: string }> {
@@ -829,7 +835,7 @@ async function ensureExtracted(args: Args, privateDir: string): Promise<{ jsonlP
   return { jsonlPath, manifestPath };
 }
 
-function getCodeBuddyVersion(command: string): string {
+export function getCodeBuddyVersion(command: string): string {
   const result = crossSpawn.sync(command, ["--version"], {
     encoding: "utf8",
     windowsHide: true,

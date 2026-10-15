@@ -564,3 +564,7 @@ Experimental feature branches are not production releases until their code is me
 - `server/data/ATTRIBUTION.md` — lexical data provenance and licenses
 
 The human-readable teaching policy and `server/teachingPrompt.ts` should remain synchronized when learning behavior changes.
+
+## Private Anki Lesson cache (staging)
+
+Authorized private Anki material can be imported and completed offline with CodeBuddy DeepSeek low. The cache is scoped to the authenticated user and personal union, with exact plan/profile/sense/error/version matching. Existing Lesson UI and learning algorithms remain unchanged. See [private cache operations](docs/private-anki-lesson-cache.md) for extraction, resumable batches, read-only hit checks and rollback. No production rollout is performed by these scripts.

@@ -81,7 +81,7 @@ import {
 } from "./services/deepseek.js";
 import { normalizeWord } from "./services/wordNormalization.js";
 import {privateBookLesson} from './services/privateBookLesson.js';
-import {findCachedLesson, mergeAnkiMaterial, savePrivateLessonCache} from './services/lessonGenerationCache.js';
+import {findCachedLesson, mergeAnkiMaterial, savePrivateLessonCache, cacheContextWithAnkiMaterial} from './services/lessonGenerationCache.js';
 import { deriveLessonProfile } from "./services/lessonProfile.js";
 import { cadenceCandidatePlans, planLessonQueue } from "./services/exercisePlanner.js";
 import { measureSync, measure, traceWebRequest, setTraceOperation, perf } from "./services/perf.js";
@@ -701,7 +701,7 @@ async function generateAndPersistLesson(input: {
       try {
         await savePrivateLessonCache({
           db,
-          context: cacheContext,
+          context: cacheContextWithAnkiMaterial(cacheContext, cacheLookup.material),
           lesson: merged.lesson,
           sourceKind: merged.usedAnki ? "mixed" : "runtime_deepseek",
           generationMethod: "existing_runtime_fallback",

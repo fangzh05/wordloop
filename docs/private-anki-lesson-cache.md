@@ -53,3 +53,33 @@ COMMIT;
 ```
 
 This removes only the new cache table, its policies/triggers/indexes, and its access-check function. It does not alter vocabulary, source membership, user learning state, or sessions.
+
+## Resumable small batches
+
+After extracting and importing materials, resume the same private v4 checkpoint with:
+
+```powershell
+npm run lesson:complete-anki-cache -- --materials-jsonl "$privateDir/anki-lesson-materials.jsonl" --manifest "$privateDir/anki-lesson-materials.manifest.json" --private-data-dir "$privateDir" --user-id "$env:WORDLOOP_STAGING_USER_ID" --resume --retry-failed --batch-size 8 --report batch-report.json
+```
+
+This uses one CodeBuddy process at a time, DeepSeek `deepseek-v4.1-flash`, `--effort low`. The shared rules and deduplicated Schema apply independently to each word. Canonical `word_recall` exercises are constructed deterministically; AI supplies missing teaching fields only. There is no concurrency or quota bypass. Smaller batches may be needed when CLI output or command limits reject larger ones.
+
+Raw structured outputs are saved before validation/import. A per-word cache-key index allows recovery even when a later run regroups batches; invalid outputs are removed from the recovery queue before requesting corrections. Validated Lessons are also checkpointed before database writes. Retry counts accumulate across runs; reports separately describe this run's retry queue and CLI calls. An infrastructure failure keeps its own safe error code. Credentials, sessions and full CLI event streams are not saved.
+
+Create `STOP_AFTER_BATCH` inside the private data directory to stop after the current batch. Remove it before resuming. Keep this directory outside Git and public assets. Source JSONL and checkpoint versions are checked against the authorized user, APKG hash, model, profile and plan configuration. Never delete the current checkpoint or raw outputs to retry failed imports.
+
+`private-union-export.jsonl` and its manifest contain the exact authorized union, counts, sense count and SHA-256. They are private artifacts, not a new public vocabulary source.
+
+CLI token totals remain batch totals; individual database rows use null when exact per-word usage is unavailable. `cli_reported_model_cost_usd` is a CLI statistic, not an account invoice. Actual monetary cost and CodeBuddy credits are `unavailable` unless independently supplied by the provider. No estimated charge is reported as actual cost.
+
+## Read-only cache verification
+
+```powershell
+node --import tsx scripts/check-private-anki-cache.ts --materials-jsonl "$privateDir/anki-lesson-materials.jsonl" --private-data-dir "$privateDir" --user-id "$env:WORDLOOP_STAGING_USER_ID" --limit 20
+```
+
+This calls the real cache lookup in the staging user context. It checks matching conditions, new session plan IDs and a changed error focus. It writes no sessions and invokes no model. The report distinguishes union coverage from the sampled hit rate. Current offline runs cover the configured profile/activity; other planner conditions safely miss. Production traffic is not switched by these tools.
+
+## Historical checkpoints
+
+Earlier checkpoints must not be relabelled as v4. Old material-only entries remain useful source data; old Lessons need validation against their original frozen plan and the current canonical answer rules. A superseded revision can be marked non-valid while preserving its row and newer revision. Never remove learning history, sessions, user words, or unrelated checkout changes as cache cleanup.

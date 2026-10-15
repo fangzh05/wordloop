@@ -147,6 +147,12 @@ export async function lessonGenerationCacheKey(
   return { cacheKey, planFingerprint, senseFingerprint };
 }
 
+/** Both offline seeding and runtime lookup identify the same trusted material. */
+export function cacheContextWithAnkiMaterial(input: PrivateLessonCacheContext, material: AnkiLessonMaterial | null): PrivateLessonCacheContext {
+  return { ...input, ...(material?.ipa ? { ipa: material.ipa } : {}),
+    ...(material?.part_of_speech ? { partOfSpeech: material.part_of_speech } : {}) };
+}
+
 async function belongsToPersonalUnion(db: SupabaseClient, userId: string, wordId: string): Promise<boolean> {
   const { data, error } = await db.rpc("can_access_personal_kaoyan_union_v1", { p_word_id: wordId });
   if (error) throw new Error("PRIVATE_LESSON_CACHE_SCOPE_CHECK_FAILED");
@@ -182,6 +188,8 @@ export async function findCachedLesson(
     .eq("cache_kind", "materials")
     .eq("target_sense", input.plan.target_sense)
     .eq("source_version", ANKI_SOURCE_VERSION)
+    .eq("content_version", LESSON_CACHE_CONTENT_VERSION)
+    .eq("prompt_version", LESSON_CACHE_PROMPT_VERSION)
     .in("quality_status", ["valid", "partial"])
     .order("created_at", { ascending: false })
     .limit(1)
@@ -196,7 +204,7 @@ export async function findCachedLesson(
   for (const sourceVersion of material
     ? [ANKI_SOURCE_VERSION]
     : [ANKI_SOURCE_VERSION, PRIVATE_UNION_SOURCE_VERSION]) {
-    const keys = await lessonGenerationCacheKey(input, materialPayloadHash, sourceVersion);
+    const keys = await lessonGenerationCacheKey(cacheContextWithAnkiMaterial(input, material), materialPayloadHash, sourceVersion);
     const data = await readPrivateCacheQuery<{ id?: string; lesson_payload?: unknown }>(db.from("lesson_generation_cache")
       .select("id,lesson_payload")
       .eq("user_id", input.userId)
@@ -407,8 +415,7 @@ export async function savePrivateLessonCacheFailure(input: {
   missingFields: string[];
   retryCount: number;
   sourceVersion?: string;
-  errorCode: "CODEBUDDY_TIMEOUT" | "CODEBUDDY_EXIT" | "CODEBUDDY_INVALID_JSON" | "LESSON_SCHEMA_INVALID"
-    | "WORD_RECALL_ACCEPTED_ANSWER_NOT_CANONICAL" | "LESSON_ACTIVITY_TYPE_MISMATCH" | "CODEBUDDY_TOKEN_OUTLIER";
+  errorCode: string;
 }): Promise<void> {
   if (!isCacheablePrivatePlan(input.context.plan)) return;
   const sourceVersion = input.sourceVersion ?? ANKI_SOURCE_VERSION;
