@@ -471,9 +471,19 @@ export async function persistStudyStateIfRevision(
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
   expectedSessionId?: string,
+  knownActive?: StudySessionRow | null,
 ): Promise<StudySessionRow> {
   const nextState = assertState(state);
-  const active = await assertActiveStudySessionRevision(expectedRevision, expectedSessionId, db, userId);
+  // Callers that already performed the revision-safe read can reuse that
+  // snapshot. The final UPDATE still checks user/session/revision, so a
+  // concurrent writer remains rejected without another round trip.
+  const active = knownActive === undefined
+    ? await assertActiveStudySessionRevision(expectedRevision, expectedSessionId, db, userId)
+    : knownActive;
+  if (knownActive !== undefined && (
+    (expectedRevision !== null && (!active || active.updated_at !== expectedRevision))
+    || (expectedSessionId !== undefined && (!active || active.id !== expectedSessionId))
+  )) throw new StaleStudyStateError();
   if (!active) {
     const { data, error } = await db
       .from("study_sessions")
@@ -1133,15 +1143,21 @@ export async function advanceStudySessionIfRevision(
   expectedSessionId: string,
   db = getDatabase(),
   userId = getAuthenticatedUserId(),
+  knownActive?: StudySessionRow | null,
 ): Promise<StudySessionRow> {
-  const active = await assertActiveStudySessionRevision(expectedRevision, expectedSessionId, db, userId);
+  const active = knownActive === undefined
+    ? await assertActiveStudySessionRevision(expectedRevision, expectedSessionId, db, userId)
+    : knownActive;
+  if (knownActive !== undefined && (
+    !active || active.updated_at !== expectedRevision || active.id !== expectedSessionId
+  )) throw new StaleStudyStateError();
   if (!active?.state) throw new Error("NO_ACTIVE_SESSION");
   let nextState = advanceStudyState(active.state, event, requestedIndex);
   if (event === "lesson_complete" && nextState.widget === "lesson" && nextState.phase === "lesson_complete") {
     nextState = await decideLessonConsolidation(nextState, db, userId);
   }
   if (nextState === active.state) return active;
-  return persistStudyStateIfRevision(nextState, expectedRevision, db, userId, expectedSessionId);
+  return persistStudyStateIfRevision(nextState, expectedRevision, db, userId, expectedSessionId, active);
 }
 
 /**

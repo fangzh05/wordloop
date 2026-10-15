@@ -1090,7 +1090,12 @@ export default function StandaloneApp(): React.JSX.Element {
         const next = await postAction(action, traceRequestId);
         actionMs = performance.now() - actionStarted;
         const finalizeStarted = performance.now();
-        if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) await flushLearningTime(true);
+        if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) {
+          // The action already committed the learning state. Final telemetry
+          // is additive and idempotent, so let it finish in the background
+          // while the next Lesson state becomes interactive immediately.
+          void flushLearningTime(true).catch(() => undefined);
+        }
         telemetryAfterMs = performance.now() - finalizeStarted;
         actionResponse = next;
         sessionRevisionRef.current = next.session_revision ?? sessionRevisionRef.current;

@@ -305,53 +305,63 @@ export async function findCachedLesson(
     return { privateSetId: null, material: null, materialSourceVersion: null, materialPayloadHash: null, lesson: null };
   }
 
-  const materialRow = await readPrivateCacheQuery<{
-    material_payload?: unknown;
-    source_version?: string;
-    payload_hash?: string;
-  }>(db.from("lesson_generation_cache")
-    .select("material_payload,source_version,payload_hash")
-    .eq("user_id", input.userId)
-    .eq("private_set_id", PERSONAL_KAOYAN_SET_ID)
-    .eq("word_id", input.wordId)
-    .eq("cache_kind", "materials")
-    .eq("target_sense", input.plan.target_sense)
-    .eq("source_version", ANKI_SOURCE_VERSION)
-    .eq("content_version", LESSON_CACHE_CONTENT_VERSION)
-    .eq("prompt_version", LESSON_CACHE_PROMPT_VERSION)
-    .in("quality_status", ["valid", "partial"])
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle());
+  // Material and prior Lesson variants are independent reads. Starting them
+  // together removes one Data API round trip on the common private-cache path.
+  // The scope RPC above is still awaited first so every private read remains
+  // explicitly authorized in addition to the table RLS policy.
+  const [materialRow, candidateRows] = await Promise.all([
+    readPrivateCacheQuery<{
+      material_payload?: unknown;
+      source_version?: string;
+      payload_hash?: string;
+    }>(db.from("lesson_generation_cache")
+      .select("material_payload,source_version,payload_hash")
+      .eq("user_id", input.userId)
+      .eq("private_set_id", PERSONAL_KAOYAN_SET_ID)
+      .eq("word_id", input.wordId)
+      .eq("cache_kind", "materials")
+      .eq("target_sense", input.plan.target_sense)
+      .eq("source_version", ANKI_SOURCE_VERSION)
+      .eq("content_version", LESSON_CACHE_CONTENT_VERSION)
+      .eq("prompt_version", LESSON_CACHE_PROMPT_VERSION)
+      .in("quality_status", ["valid", "partial"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()),
+    readPrivateCacheQuery<Array<{
+      id?: string;
+      cache_key?: string;
+      lesson_payload?: unknown;
+      source_kind?: string;
+      source_version?: string;
+    }>>(db.from("lesson_generation_cache")
+      .select("id,cache_key,lesson_payload,source_kind,source_version")
+      .eq("user_id", input.userId)
+      .eq("private_set_id", PERSONAL_KAOYAN_SET_ID)
+      .eq("word_id", input.wordId)
+      .eq("cache_kind", "lesson")
+      .eq("target_sense", input.plan.target_sense)
+      .eq("content_version", LESSON_CACHE_CONTENT_VERSION)
+      .eq("prompt_version", LESSON_CACHE_PROMPT_VERSION)
+      .eq("quality_status", "valid")
+      .eq("is_valid", true)
+      .order("updated_at", { ascending: false })
+      .limit(64)),
+  ]);
 
   const materialResult = ankiLessonMaterialSchema.safeParse(materialRow?.material_payload);
   const material = materialResult.success ? materialResult.data : null;
   const materialSourceVersion = material && typeof materialRow?.source_version === "string" ? materialRow.source_version : null;
   const materialPayloadHash = material && typeof materialRow?.payload_hash === "string"
     ? String(materialRow.payload_hash).trim() : null;
-  let lessonRow: { id?: string; lesson_payload?: unknown } | null = null;
+  const exactCacheKeys = new Set<string>();
   for (const sourceVersion of material
     ? [ANKI_SOURCE_VERSION]
     : [ANKI_SOURCE_VERSION, PRIVATE_UNION_SOURCE_VERSION]) {
     const keys = await lessonGenerationCacheKey(cacheContextWithAnkiMaterial(input, material), materialPayloadHash, sourceVersion);
-    const data = await readPrivateCacheQuery<{ id?: string; lesson_payload?: unknown }>(db.from("lesson_generation_cache")
-      .select("id,lesson_payload")
-      .eq("user_id", input.userId)
-      .eq("private_set_id", PERSONAL_KAOYAN_SET_ID)
-      .eq("word_id", input.wordId)
-      .eq("cache_kind", "lesson")
-      .eq("cache_key", keys.cacheKey)
-      .eq("content_version", LESSON_CACHE_CONTENT_VERSION)
-      .eq("prompt_version", LESSON_CACHE_PROMPT_VERSION)
-      .eq("is_valid", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle());
-    if (data) {
-      lessonRow = data;
-      break;
-    }
+    exactCacheKeys.add(keys.cacheKey);
   }
+  let lessonRow = (candidateRows ?? []).find((row) => typeof row.cache_key === "string" && exactCacheKeys.has(row.cache_key)) ?? null;
   if (lessonRow?.lesson_payload) {
     const validated = safeParseLessonGenerationForPlan(planValidationContext(input), lessonRow.lesson_payload);
     let textValid = true;
@@ -379,25 +389,8 @@ export async function findCachedLesson(
     // A private cache can contain a valid Lesson for the same word and sense
     // under another activity variant. Rebuild only the plan-bound exercise
     // from that trusted payload instead of making a new DeepSeek request.
-    const fallbackRows = await readPrivateCacheQuery<Array<{
-      id?: string;
-      lesson_payload?: unknown;
-      source_kind?: string;
-      source_version?: string;
-    }>>(db.from("lesson_generation_cache")
-      .select("id,lesson_payload,source_kind,source_version")
-      .eq("user_id", input.userId)
-      .eq("private_set_id", PERSONAL_KAOYAN_SET_ID)
-      .eq("word_id", input.wordId)
-      .eq("cache_kind", "lesson")
-      .eq("target_sense", input.plan.target_sense)
-      .eq("content_version", LESSON_CACHE_CONTENT_VERSION)
-      .eq("prompt_version", LESSON_CACHE_PROMPT_VERSION)
-      .eq("quality_status", "valid")
-      .eq("is_valid", true)
-      .order("updated_at", { ascending: false })
-      .limit(24));
-    for (const fallbackRow of fallbackRows ?? []) {
+    for (const fallbackRow of candidateRows ?? []) {
+      if (fallbackRow === lessonRow) continue;
       const parsed = lessonGenerationSchema.safeParse(fallbackRow.lesson_payload);
       if (!parsed.success) continue;
       const adapted = adaptCachedLessonForPlan(parsed.data, input);

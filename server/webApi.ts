@@ -406,45 +406,64 @@ async function successForSession(
   // a second time while preparing the response.
   const state = session.state;
   if (!state) throw new WebApiError(409, "INVALID_STUDY_STATE", "The active study state is unavailable.");
-  if (learningTimeCalibrationEnabled()) {
+  const db = getDatabase();
+  const userId = getAuthenticatedUserId();
+  // These reads do not depend on one another or mutate the session. Starting
+  // them together avoids serializing the timezone, private-source, display,
+  // progress and cadence round trips behind the response path.
+  const learningTimePromise = (async () => {
+    if (!learningTimeCalibrationEnabled()) return null;
     try {
-      const timezone = await getUserTimeZone();
+      const timezone = await getUserTimeZone(db, userId);
       const stage = state.widget === "review" && state.phase === "review_complete" ? "feedback"
         : state.phase === "lesson_explain" ? "explanation"
           : state.phase.includes("feedback") || state.phase === "pretest_result" || state.payload.mode === "feedback" ? "feedback" : "answer";
       const scope = state.widget === "review" ? "review" : state.widget === "pretest" ? "pretest" : state.payload.consolidation === true ? "consolidation" : "lesson";
-      extra = { ...extra, learning_time: { session_id: session.id, phase: state.phase, index: state.current_index, retry: state.retry_count, stage, scope, consolidation: state.payload.consolidation === true, consolidation_status: state.payload.consolidation_status, phase_started_at: session.updated_at, local_date: dateInTimeZone(timezone), timezone } };
-    } catch { /* telemetry cannot interrupt learning */ }
-  }
-  for(const id of privateSourceIds(state)){
-    const allowed=await getDatabase().rpc('can_access_private_source_v1',{p_user_id:getAuthenticatedUserId(),p_book_id:id});
-    if(allowed.error||allowed.data!==true)throw new WebApiError(403,'PRIVATE_BOOK_UNAVAILABLE','当前会话的私人词书授权已失效。');
-  }
-  const displayState = state.widget === "lesson" && state.phase !== "lesson_complete"
-    ? { ...state, payload: await withLessonClozeHint(state.payload) }
-    : state;
+      return { session_id: session.id, phase: state.phase, index: state.current_index, retry: state.retry_count, stage, scope, consolidation: state.payload.consolidation === true, consolidation_status: state.payload.consolidation_status, phase_started_at: session.updated_at, local_date: dateInTimeZone(timezone), timezone };
+    } catch { return null; /* telemetry cannot interrupt learning */ }
+  })();
+  const privateAccessPromise = Promise.all(privateSourceIds(state).map(async (id) => {
+    const allowed = await db.rpc("can_access_private_source_v1", { p_user_id: userId, p_book_id: id });
+    if (allowed.error || allowed.data !== true) throw new WebApiError(403, "PRIVATE_BOOK_UNAVAILABLE", "当前会话的私人词书授权已失效。");
+  }));
+  const displayStatePromise = state.widget === "lesson" && state.phase !== "lesson_complete"
+    ? withLessonClozeHint(state.payload).then((payload) => ({ ...state, payload }))
+    : Promise.resolve(state);
+  const progressPromise = includeProgress ? progressIfAvailable(session) : Promise.resolve(undefined);
+  const pendingPromise = pendingConsolidationSummary(session);
+  const pretestResultsPromise = state.widget === "pretest"
+    && (state.phase === "pretest_result" || state.phase === "pretest_complete")
+    ? getPretestResults(session)
+    : Promise.resolve(null);
+  const pronunciationPromise = state.widget === "lesson" && state.phase === "lesson_explain" && state.payload.mode === "explain"
+    ? (audioUrl === undefined ? pronunciationUrl(state.current_word) : Promise.resolve(audioUrl))
+    : Promise.resolve(null);
+  const [learningTime, , displayState, progress, pendingConsolidation, pretestResults, responseAudioUrl] = await Promise.all([
+    learningTimePromise,
+    privateAccessPromise,
+    displayStatePromise,
+    progressPromise,
+    pendingPromise,
+    pretestResultsPromise,
+    pronunciationPromise,
+  ]);
+  if (learningTime) extra = { ...extra, learning_time: learningTime };
   const response = resultForState(session, displayState, extra);
-  if (state.widget === "lesson") response.pronunciation_audio_url = state.phase === "lesson_explain" && state.payload.mode === "explain"
-    ? audioUrl === undefined ? await pronunciationUrl(state.current_word) : audioUrl
-    : null;
-  if (state.widget === "pretest" && (state.phase === "pretest_result" || state.phase === "pretest_complete")) {
-    const results = await getPretestResults(session);
-    response.pretest_results = results;
+  if (state.widget === "lesson") response.pronunciation_audio_url = responseAudioUrl;
+  if (state.widget === "pretest" && pretestResults) {
+    response.pretest_results = pretestResults;
     if (state.phase === "pretest_result") {
-      response.pretest_result = results.find((result) => normalizeWord(result.word) === normalizeWord(state.current_word ?? ""));
+      response.pretest_result = pretestResults.find((result) => normalizeWord(result.word) === normalizeWord(state.current_word ?? ""));
     } else {
       const counts = { known: 0, uncertain: 0, unknown: 0 };
-      for (const result of results) {
+      for (const result of pretestResults) {
         if (result.status === "known" || result.status === "uncertain" || result.status === "unknown") counts[result.status] += 1;
       }
       response.pretest_summary = counts;
     }
   }
-  if (includeProgress) {
-    const progress = await progressIfAvailable(session);
-    if (progress !== undefined) response.progress = progress;
-  }
-  response.pending_consolidation = await pendingConsolidationSummary(session);
+  if (progress !== undefined) response.progress = progress;
+  response.pending_consolidation = pendingConsolidation;
   return response;
 }
 
@@ -458,6 +477,10 @@ function consolidationSummary(activity: string, estimatedSeconds: number): Recor
 
 async function pendingConsolidationSummary(active?: StudySessionRow | null): Promise<Record<string, unknown> | null> {
   const state = active?.state;
+  // An active Lesson response cannot start a cadence task yet. The Today page
+  // reads the cadence task separately; avoid an unrelated Neon read on every
+  // exercise, feedback and next-word response.
+  if (state?.widget === "lesson" && state.phase !== "lesson_complete") return null;
   const plan = state?.widget === "lesson" && state.phase === "lesson_complete"
     && state.payload.consolidation === true && state.payload.consolidation_status === "pending"
     ? state.payload.consolidation_plan
@@ -529,6 +552,7 @@ async function prepareBootstrap(expectedRevision?: string | null, startNewRound 
             index: reconciled.currentIndex,
             expectedRevision: revision,
             sessionId: active.id,
+            activeSession: active,
           });
           active = regenerated.session;
         } else {
@@ -594,6 +618,7 @@ async function generateAndPersistLesson(input: {
   index: number;
   expectedRevision: string | null;
   sessionId?: string;
+  activeSession?: StudySessionRow | null;
 }): Promise<{ session: StudySessionRow; audioUrl: string | null }> {
   const db = getDatabase();
   const userId = getAuthenticatedUserId();
@@ -638,6 +663,7 @@ async function generateAndPersistLesson(input: {
   }
   let expectedRevision = input.expectedRevision;
   let sessionId = input.sessionId;
+  let knownActive = input.activeSession;
   const needsPlanFreeze = plannedFlow !== input.flow;
   const generationState = makeStudyState({
     date: input.date,
@@ -660,11 +686,11 @@ async function generateAndPersistLesson(input: {
   });
   if (needsPlanFreeze) {
     // Freeze new plan IDs once for crash recovery. Subsequent words reuse them.
-    const plannedSession = await perf("lesson.freeze", () => persistStudyStateIfRevision(generationState, expectedRevision, db, userId, sessionId));
+    const plannedSession = await perf("lesson.freeze", () => persistStudyStateIfRevision(generationState, expectedRevision, db, userId, sessionId, input.activeSession));
     expectedRevision = plannedSession.updated_at;
     sessionId = plannedSession.id;
+    knownActive = plannedSession;
   }
-  await reserveLearningBudget(`exercise:${plan.exercise_id}`, plan.planned_activity_type, "lesson", db, userId);
   const cacheContext = {
     userId,
     wordId: itemWordId,
@@ -676,13 +702,18 @@ async function generateAndPersistLesson(input: {
     errorFocus: lessonProfile.error_focus,
     plan,
   };
-  let cacheLookup: Awaited<ReturnType<typeof findCachedLesson>> | null = null;
-  try {
-    cacheLookup = await findCachedLesson(db, cacheContext);
-  } catch {
+  // Budget admission, private-cache lookup and pronunciation are independent
+  // after the frozen plan and word have been validated. Start them together;
+  // budget failure still prevents generation, while a cache failure remains
+  // additive and falls back to the existing Lesson path.
+  const cacheLookupPromise = findCachedLesson(db, cacheContext).catch(() => {
     // Cache availability is additive; a read failure preserves the current generation path.
     console.warn("Private Lesson cache read failed; using the existing Lesson generation path.");
-  }
+    return null;
+  });
+  const pronunciationPromise = pronunciationUrl(item.word);
+  await reserveLearningBudget(`exercise:${plan.exercise_id}`, plan.planned_activity_type, "lesson", db, userId);
+  const cacheLookup = await cacheLookupPromise;
   const generatedPromise = cacheLookup?.lesson
     ? Promise.resolve(cacheLookup.lesson)
     : (async () => {
@@ -715,7 +746,7 @@ async function generateAndPersistLesson(input: {
     })();
   const [generated, audioUrl] = await Promise.all([
     generatedPromise,
-    pronunciationUrl(item.word),
+    pronunciationPromise,
   ]).catch(async (error: unknown) => {
     if (!needsPlanFreeze) {
       // A failed next word still has a durable retry cursor; CAS rejects stale clients.
@@ -754,7 +785,14 @@ async function generateAndPersistLesson(input: {
       navigation,
     },
   });
-  const session = await perf("lesson.persist", () => persistStudyStateIfRevision(state, expectedRevision, db, userId, sessionId));
+  const session = await perf("lesson.persist", () => persistStudyStateIfRevision(
+    state,
+    expectedRevision,
+    db,
+    userId,
+    sessionId,
+    knownActive,
+  ));
   return { session, audioUrl };
 }
 
@@ -796,6 +834,7 @@ async function createLessonFromBootstrap(
       index: 0,
       expectedRevision: revision,
       sessionId: active.id,
+      activeSession: active,
     });
   }
 
@@ -833,6 +872,7 @@ async function resolveBootstrap(expectedRevision?: string | null, startNewRound 
         index: active.state.current_index,
         expectedRevision: active.updated_at,
         sessionId: active.id,
+        activeSession: active,
       })).session, {}, undefined, includeProgress);
     }
     const consolidation = active.state?.widget === "lesson" ? lessonConsolidation(active.state) : null;
@@ -1390,10 +1430,11 @@ async function lessonNext(action: Extract<WebAction, { action: "lesson_next" }>,
       index: nextAction.next_index,
       expectedRevision: action.expected_revision,
       sessionId: active.id,
+      activeSession: active,
     });
     return successForSession(result.session, {}, result.audioUrl);
   }
-  const completed = await advanceStudySessionIfRevision("lesson_complete", state.current_index, action.expected_revision, active.id);
+  const completed = await advanceStudySessionIfRevision("lesson_complete", state.current_index, action.expected_revision, active.id, getDatabase(), getAuthenticatedUserId(), active);
   const consolidation = completed.state ? lessonConsolidation(completed.state) : null;
   if (consolidation?.consolidation_status === "pending") return successForSession(completed);
   if (consolidation) throw new WebApiError(409, "INVALID_STUDY_STATE", "The scheduled consolidation must be completed before continuing.");
@@ -1780,14 +1821,14 @@ async function performAction(action: WebAction): Promise<Record<string, unknown>
     case "lesson_start_exercise": {
       const state = activeState(active, "lesson");
       if (!active || state.phase !== "lesson_explain") throw new WebApiError(409, "INVALID_STUDY_STATE", "The Lesson is not ready for an exercise.");
-      const saved = await advanceStudySessionIfRevision("lesson_start_exercise", state.current_index, action.expected_revision ?? "", active.id);
+      const saved = await advanceStudySessionIfRevision("lesson_start_exercise", state.current_index, action.expected_revision ?? "", active.id, getDatabase(), getAuthenticatedUserId(), active);
       return successForSession(saved);
     }
     case "lesson_submit": return submitLesson(action, active);
     case "lesson_retry": {
       const state = activeState(active, "lesson");
       if (!active || state.phase !== "lesson_feedback") throw new WebApiError(409, "INVALID_STUDY_STATE", "There is no Lesson feedback to retry.");
-      const saved = await advanceStudySessionIfRevision("lesson_retry", state.current_index, action.expected_revision ?? "", active.id);
+      const saved = await advanceStudySessionIfRevision("lesson_retry", state.current_index, action.expected_revision ?? "", active.id, getDatabase(), getAuthenticatedUserId(), active);
       return successForSession(saved);
     }
     case "lesson_next": return lessonNext(action, active);

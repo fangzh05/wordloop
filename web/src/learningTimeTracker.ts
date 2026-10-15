@@ -7,6 +7,7 @@ export class LearningTimeTracker {
   private clock: ActiveStudyClock;
   private key: string;
   private finished = false;
+  private pendingFlush: Promise<boolean> | null = null;
   get isFinished() { return this.finished; }
   constructor(private context: TimeContext, private sendObservation: (v: Observation) => Promise<unknown>, private now = () => performance.now()) {
     this.key = this.storageKey();
@@ -58,7 +59,7 @@ export class LearningTimeTracker {
   activity() { this.reconcileLocalDay(); this.clock.activity(this.now()); }
   visible(value: boolean) { this.reconcileLocalDay(); this.clock.visibility(value, this.now()); }
   wait(value: boolean) { this.reconcileLocalDay(); this.clock.wait(value, this.now()); }
-  async flush(finalize = false): Promise<boolean> {
+  private async flushInternal(finalize: boolean): Promise<boolean> {
     if (this.finished) return true;
     this.reconcileLocalDay();
     const active_ms = this.clock.tick(this.now());
@@ -74,5 +75,23 @@ export class LearningTimeTracker {
     if (finalize && sent) this.finished = true;
     if(finalize&&sent)try{sessionStorage.removeItem(this.key);}catch{/* optional */}
     return sent;
+  }
+
+  async flush(finalize = false): Promise<boolean> {
+    // A response can replace the current page while the final telemetry
+    // request is still in flight. Reuse that request so the effect cleanup
+    // cannot send a duplicate observation. If a non-final checkpoint is in
+    // flight and a final flush arrives, finalize once the checkpoint settles.
+    const pending = this.pendingFlush;
+    if (pending) {
+      const recorded = await pending;
+      return finalize && !this.finished ? this.flush(true) : recorded;
+    }
+    const current = this.flushInternal(finalize);
+    const tracked = current.finally(() => {
+      if (this.pendingFlush === tracked) this.pendingFlush = null;
+    });
+    this.pendingFlush = tracked;
+    return tracked;
   }
 }
