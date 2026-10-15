@@ -83,3 +83,7 @@ This calls the real cache lookup in the staging user context. It checks matching
 ## Historical checkpoints
 
 Earlier checkpoints must not be relabelled as v4. Old material-only entries remain useful source data; old Lessons need validation against their original frozen plan and the current canonical answer rules. A superseded revision can be marked non-valid while preserving its row and newer revision. Never remove learning history, sessions, user words, or unrelated checkout changes as cache cleanup.
+
+Validated model batches are imported with one idempotent UPSERT of at most 32 rows. RLS and the authenticated-user trigger still validate every row. If a batch write fails, bounded individual writes isolate the failing row; all validated payloads remain checkpointed before the write.
+
+Language review may remove explicitly identified low-value generated array items using `scripts/apply-private-cache-reviews.ts --corrections <private-json>`, under the same staging identity. The review tool refuses to remove trusted Anki arrays, validates the replacement Lesson and preserves the old row as a superseded revision.

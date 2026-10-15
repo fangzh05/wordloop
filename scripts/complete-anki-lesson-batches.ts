@@ -7,7 +7,7 @@ import { LESSON_GENERATION_PROMPT } from '../server/services/deepseekPrompts.js'
 import { safeParseLessonGenerationForPlan, type LessonGeneration } from '../server/services/deepseek.js';
 import { formatPartOfSpeech } from '../shared/lexicalDisplay.js';
 import {
-  lessonCacheHash, lessonGenerationCacheKey, savePrivateLessonCache, savePrivateLessonCacheFailure,
+  lessonCacheHash, lessonGenerationCacheKey, savePrivateLessonCache, savePrivateLessonCacheBatch, savePrivateLessonCacheFailure,
   LESSON_CACHE_CONTENT_VERSION, LESSON_CACHE_PROMPT_VERSION, ANKI_SOURCE_VERSION,
   PRIVATE_UNION_SOURCE_VERSION, PERSONAL_KAOYAN_SET_ID, type PrivateLessonCacheContext,
 } from '../server/services/lessonGenerationCache.js';
@@ -142,16 +142,19 @@ async function main(){
     }
     const selected=args.limit?ready.slice(0,args.limit):ready;
     console.log(JSON.stringify({phase:'ready',...stats,pending:ready.length,selected:selected.length,database_writes:args.dryRun?0:'validated-only'}));
+    let staged:{r:Ready;entry:Entry;input:Parameters<typeof savePrivateLessonCache>[0]}[]|null=null;
     const persist=async(r:Ready,lesson:LessonGeneration,tokens?:{inputTokens?:number;outputTokens?:number})=>{
       const word=r.work.record.normalized_word,prior=checkpoint.entries[word];
       const entry:Entry={...prior,status:'generated_pending_import',word_id:r.work.row.id,source_note_id:r.work.record.source_note_id,
         retry_count:prior?.retry_count??0,input_fingerprint:r.key,lesson,updated_at:new Date().toISOString()};
       checkpoint.entries[word]=entry;await atomic(checkpointPath,checkpoint);
-      await retry(()=>savePrivateLessonCache({db,context:r.context,lesson,sourceKind:r.usedAnki?'mixed':'codebuddy_deepseek',generationMethod:'codebuddy_cli',
+      const input:Parameters<typeof savePrivateLessonCache>[0]={db,context:r.context,lesson,sourceKind:r.usedAnki?'mixed':'codebuddy_deepseek',generationMethod:'codebuddy_cli',
         sourceVersion:r.sourceVersion,modelName:args.codebuddyModel,modelEffort:'low',materialPayloadHash:r.materialHash,
         codebuddyRequestId:r.key,retryCount:entry.retry_count,
         // Batch totals cannot be attributed to individual words; null is intentional.
-      }));
+      };
+      if(staged){staged.push({r,entry,input});return;}
+      await retry(()=>savePrivateLessonCache(input));
       entry.status='valid';entry.error_code=undefined;stats.valid++;await atomic(checkpointPath,checkpoint);
     };
     const queue:Ready[]=[];
@@ -191,6 +194,7 @@ async function main(){
         const heads=[...new Set(derivativeValues.filter(x=>typeof x==='string').map(derivationHeadword).filter((x):x is string=>!!x))];
         const lexical=new Set<string>();
         if(heads.length){const q=await db.from('words').select('normalized_word').in('normalized_word',heads);if(q.error)throw new Error('DERIVATION_REFERENCE_READ_FAILED');for(const x of q.data??[])lexical.add(x.normalized_word);}
+        staged=[];
         for(const r of batch){
           try{
             const generated=response.result[r.work.row.id];if(!generated||typeof generated!=='object'||Array.isArray(generated))throw new Error('MISSING_BATCH_ITEM');
@@ -203,7 +207,20 @@ async function main(){
             await persist(r,parsed.data);
           }catch(e){if(!checkpoint.entries[r.work.record.normalized_word]?.lesson)recovered.delete(r.key);await fail(r,e);}
         }
+      if(staged.length){
+          const pending=staged;staged=null;
+          try{await retry(()=>savePrivateLessonCacheBatch(pending.map(x=>x.input)));
+            for(const x of pending){x.entry.status='valid';x.entry.error_code=undefined;stats.valid++;}
+            await atomic(checkpointPath,checkpoint);
+          }catch{
+            // A single row failure must not block the remaining validated rows.
+            for(const x of pending){try{await retry(()=>savePrivateLessonCache(x.input));x.entry.status='valid';x.entry.error_code=undefined;stats.valid++;}catch(e){await fail(x.r,e);}}
+            await atomic(checkpointPath,checkpoint);
+          }
+        }
+        staged=null;
       }catch(e){
+        staged=null;
         if(e instanceof Error&&['CODEBUDDY_TOKEN_OUTLIER','CODEBUDDY_COMMAND_TOO_LONG','CODEBUDDY_QUOTA','CODEBUDDY_AUTH'].includes(e.message)){await report();throw e;}
         stats.all_tokens_available=false;stats.all_credits_available=false;stats.all_cost_available=false;
         for(const r of batch)await fail(r,e);
