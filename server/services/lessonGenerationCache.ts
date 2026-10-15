@@ -188,7 +188,8 @@ function hideTargetInExample(example: string, word: string): { prompt: string; a
   if (!visibleForm) return null;
   const before = example.slice(0, match.index).trimEnd();
   const after = example.slice(match.index + match[0].length).trimStart();
-  const prompt = `In practice, ${before}___${after}`.replace(/\s+/gu, " ").trim();
+  const right = after && /^[,.;:!?)]/u.test(after) ? after : after ? ` ${after}` : "";
+  const prompt = `In practice, ${before ? `${before} ` : ""}___${right}`.replace(/\s+/gu, " ").trim();
   const answers = [...new Set([visibleForm, target].filter(Boolean))];
   return { prompt, answers };
 }

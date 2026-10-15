@@ -95,6 +95,7 @@ describe("private Lesson cache keys and Anki merge", () => {
     });
     expect(collocation?.exercise.activity_type).toBe("collocation");
     expect(collocation?.exercise.prompt).toContain("___");
+    expect(collocation?.exercise.prompt).toContain("committee ___ additional");
     expect(collocation?.exercise.prompt).not.toMatch(/\ballocate\b/iu);
     expect(collocation?.exercise.accepted_answers?.length).toBeGreaterThan(0);
   });
