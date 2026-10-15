@@ -378,6 +378,15 @@ function lessonGenerationSchemaFor(context: LessonExerciseValidationContext) {
   });
 }
 
+/** Reuse the runtime LessonGeneration and frozen-plan checks for private offline cache imports. */
+export function parseLessonGenerationForPlan(context: LessonExerciseValidationContext, input: unknown): LessonGeneration {
+  return lessonGenerationSchemaFor(context).parse(input);
+}
+
+export function safeParseLessonGenerationForPlan(context: LessonExerciseValidationContext, input: unknown) {
+  return lessonGenerationSchemaFor(context).safeParse(input);
+}
+
 interface DeepSeekJsonOptions {
   maxTokens: number;
   repairMaxTokens?: number;

@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   getCompletedLessonWords: vi.fn(async () => new Set<string>()),
   getLessonCadence: vi.fn(async () => ({ completion_credit: 0, rotation_cursor: 0, pending_task: null })),
   planLessonQueue: vi.fn(),
+  findCachedLesson: vi.fn(async (): Promise<any> => ({ privateSetId: null, material: null, materialSourceVersion: null, materialPayloadHash: null, lesson: null })),
+  savePrivateLessonCache: vi.fn(async () => undefined),
   recordPlannedSubmission: vi.fn(),
   getDueReviewSelection: vi.fn(),
   recordReviewSubmission: vi.fn(),
@@ -178,6 +180,14 @@ vi.mock("../server/services/deepseek.js", async () => {
 vi.mock("../server/services/exercisePlanner.js", async () => {
   const actual = await vi.importActual<typeof import("../server/services/exercisePlanner.js")>("../server/services/exercisePlanner.js");
   return { ...actual, planLessonQueue: mocks.planLessonQueue };
+});
+vi.mock("../server/services/lessonGenerationCache.js", async () => {
+  const actual = await vi.importActual<typeof import("../server/services/lessonGenerationCache.js")>("../server/services/lessonGenerationCache.js");
+  return {
+    ...actual,
+    findCachedLesson: mocks.findCachedLesson,
+    savePrivateLessonCache: mocks.savePrivateLessonCache,
+  };
 });
 
 import { buildPretestItems, handleWebApiRequest } from "../server/webApi.js";
@@ -396,6 +406,55 @@ describe("Standalone Web API shared-state boundaries", () => {
     const response = await handleWebApiRequest(post({ action:"set_exam_goal", target_date:null, coverage_target:null }));
     expect(response.status).toBe(409);
     expect(await body(response)).toMatchObject({ error:{ code:"EXAM_BOOK_REQUIRED" } });
+  });
+  it("uses a complete private Lesson cache hit without making a DeepSeek request", async () => {
+    const start = makeStudyState({
+      date, widget: "pretest", phase: "pretest_complete", current_word: null, current_index: 1, retry_count: 0,
+      flow: { relearn_words: [], lesson_words: ["fixture"] },
+      payload: { widget: "pretest", items: [{ word: "fixture", meaning_zh: "设施" }] },
+    });
+    mocks.active = row(start);
+    mocks.bootstrap.mockResolvedValue({ action: "lesson", word: { word: "fixture" } });
+    mocks.findCachedLesson.mockResolvedValueOnce({
+      privateSetId: "kaoyan-personal-union-v1",
+      material: null,
+      materialSourceVersion: null,
+      materialPayloadHash: null,
+      lesson: {
+        ipa: "/ˈfɪks.tʃər/", part_of_speech: "n.", meaning_zh: "设施；固定的事物",
+        collocations: ["a permanent fixture：固定设施"], derivations: ["fixtureless：无固定装置的"],
+        example_en: "The school installed a permanent fixture near the entrance so families could find the evening classes more easily.",
+        example_zh: "学校在入口附近安装了一处固定设施，方便家长更容易找到晚间课程。",
+        note: "fixture 可指固定安装的设备，也可指长期存在的人或事物。",
+        exercise: {
+          activity_type: "exact_cloze", instruction: "根据语境填入目标词。",
+          prompt: "The school added a ___ for families to use during evening events.",
+          multiline: false, accepted_answers: ["fixture"],
+        },
+      },
+    });
+
+    const response = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap", {
+      headers: { authorization: `Bearer ${mocks.token}` },
+    }));
+    const payload = await body(response);
+
+    expect(response.status).toBe(200);
+    expect(mocks.findCachedLesson).toHaveBeenCalledWith({}, expect.objectContaining({
+      userId,
+      wordId: "00000000-0000-4000-9000-000000000103",
+      lessonProfile: "reinforce",
+      plan: expect.objectContaining({ planned_activity_type: "exact_cloze", target_sense: "设施；固定的事物" }),
+    }));
+    expect(mocks.generateLesson).not.toHaveBeenCalled();
+    expect(mocks.savePrivateLessonCache).not.toHaveBeenCalled();
+    expect(payload.state.payload).toMatchObject({
+      mode: "explain", word: "fixture",
+      example_en: "The school installed a permanent fixture near the entrance so families could find the evening classes more easily.",
+      exercise: { activity_type: "exact_cloze" },
+    });
+    expect(payload.state.payload.exercise).not.toHaveProperty("accepted_answers");
+    expect(mocks.active.state.payload.exercise.accepted_answers).toEqual(["fixture"]);
   });
   it("requires a bearer token, returns no-store headers, and rejects client-owned cursor fields", async () => {
     const missing = await handleWebApiRequest(new Request("https://wordloop.test/api/web/bootstrap"));
