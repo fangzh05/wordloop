@@ -169,6 +169,133 @@ function planValidationContext(input: PrivateLessonCacheContext) {
   };
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function englishTokenCount(value: string): number {
+  return value.match(/[A-Za-z]+(?:['’][A-Za-z]+)?/gu)?.length ?? 0;
+}
+
+function hideTargetInExample(example: string, word: string): { prompt: string; answers: string[] } | null {
+  const target = word.trim();
+  if (!target) return null;
+  // Also accept an inflected form already present in the trusted cached example.
+  const matcher = new RegExp(`(?<![A-Za-z])${escapeRegExp(target)}(?:[A-Za-z]+)?(?![A-Za-z])`, "iu");
+  const match = matcher.exec(example);
+  if (!match || match.index === undefined) return null;
+  const visibleForm = match[0].trim();
+  if (!visibleForm) return null;
+  const before = example.slice(0, match.index).trimEnd();
+  const after = example.slice(match.index + match[0].length).trimStart();
+  const prompt = `In practice, ${before}___${after}`.replace(/\s+/gu, " ").trim();
+  const answers = [...new Set([visibleForm, target].filter(Boolean))];
+  return { prompt, answers };
+}
+
+function firstDerivedWord(derivations: readonly string[], word: string): string | null {
+  const base = word.trim().toLocaleLowerCase();
+  for (const derivation of derivations) {
+    const candidate = derivation.split(/[：:]/u)[0]?.trim().match(/[A-Za-z][A-Za-z'’-]*/u)?.[0] ?? "";
+    if (candidate && candidate.toLocaleLowerCase() !== base) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Reuse a validated Lesson from the same private set and target sense when the
+ * exact activity variant is absent. The plan remains authoritative: only the
+ * exercise is rebuilt and the result is checked against the current plan.
+ */
+export function adaptCachedLessonForPlan(
+  base: LessonGeneration,
+  input: PrivateLessonCacheContext,
+): LessonGeneration | null {
+  const activity = input.plan.planned_activity_type;
+  const meaning = input.plan.target_sense.trim() || input.meaningZh.trim();
+  const exerciseBase = {
+    multiline: false as const,
+  };
+  let exercise: LessonGeneration["exercise"] | null = null;
+
+  if (activity === "word_recall" || activity === "recall" || activity === "spelling") {
+    exercise = {
+      ...exerciseBase,
+      activity_type: activity,
+      instruction: activity === "spelling" ? "根据提示写出正确拼写。" : "根据中文释义写出英文单词。",
+      prompt: meaning,
+      accepted_answers: [input.word.trim()],
+    };
+  } else if (activity === "translation_cn_to_en") {
+    const chinesePrompt = /\p{Script=Han}/u.test(base.example_zh) && !new RegExp(escapeRegExp(input.word), "iu").test(base.example_zh)
+      ? base.example_zh
+      : `请将下列中文表达成英文：${meaning}`;
+    exercise = {
+      ...exerciseBase,
+      activity_type: activity,
+      instruction: "将中文表达翻译成英文。",
+      prompt: chinesePrompt,
+    };
+  } else if (activity === "translation_en_to_cn") {
+    exercise = {
+      ...exerciseBase,
+      activity_type: activity,
+      instruction: "将英文句子翻译成中文。",
+      prompt: `Translate into Chinese: ${base.example_en}`,
+    };
+  } else if (activity === "collocation" || activity === "exact_cloze" || activity === "cloze") {
+    const hidden = hideTargetInExample(base.example_en, input.word);
+    if (hidden) {
+      const validLength = activity !== "exact_cloze"
+        || (englishTokenCount(hidden.prompt) + 1 >= 6 && englishTokenCount(hidden.prompt) + 1 <= 20);
+      if (validLength) {
+        exercise = {
+          ...exerciseBase,
+          activity_type: activity,
+          instruction: activity === "collocation" ? "根据语境补全搭配。" : "根据语境补全句子。",
+          prompt: hidden.prompt,
+          accepted_answers: hidden.answers,
+        };
+      }
+    }
+  } else if (activity === "derivation") {
+    const derived = firstDerivedWord(base.derivations, input.word);
+    if (derived) {
+      exercise = {
+        ...exerciseBase,
+        activity_type: activity,
+        instruction: "根据提示写出合适的派生词。",
+        prompt: `请写出“${meaning}”对应的常用派生词。`,
+        accepted_answers: [derived],
+      };
+    }
+  } else if (activity === "sentence" || activity === "semantic_expression") {
+    exercise = {
+      ...exerciseBase,
+      activity_type: activity,
+      instruction: "用英文写一句包含目标词的句子。",
+      prompt: `请用英文写一句包含 ${input.word.trim()} 的句子。`,
+    };
+  }
+
+  if (!exercise) return null;
+  const candidate = {
+    ...base,
+    ...(input.ipa ? { ipa: input.ipa } : {}),
+    ...(input.partOfSpeech ? { part_of_speech: input.partOfSpeech } : {}),
+    meaning_zh: meaning,
+    exercise,
+  };
+  const validated = safeParseLessonGenerationForPlan(planValidationContext(input), candidate);
+  if (!validated.success) return null;
+  try {
+    assertLessonTextQuality(validated.data);
+  } catch {
+    return null;
+  }
+  return validated.data;
+}
+
 export async function findCachedLesson(
   db: SupabaseClient,
   input: PrivateLessonCacheContext,
@@ -225,6 +352,50 @@ export async function findCachedLesson(
     }
   }
   if (!lessonRow?.lesson_payload) {
+    // A private cache can contain a valid Lesson for the same word and sense
+    // under another activity variant. Rebuild only the plan-bound exercise
+    // from that trusted payload instead of making a new DeepSeek request.
+    const fallbackRows = await readPrivateCacheQuery<Array<{
+      id?: string;
+      lesson_payload?: unknown;
+      source_kind?: string;
+      source_version?: string;
+    }>>(db.from("lesson_generation_cache")
+      .select("id,lesson_payload,source_kind,source_version")
+      .eq("user_id", input.userId)
+      .eq("private_set_id", PERSONAL_KAOYAN_SET_ID)
+      .eq("word_id", input.wordId)
+      .eq("cache_kind", "lesson")
+      .eq("target_sense", input.plan.target_sense)
+      .eq("content_version", LESSON_CACHE_CONTENT_VERSION)
+      .eq("prompt_version", LESSON_CACHE_PROMPT_VERSION)
+      .eq("quality_status", "valid")
+      .eq("is_valid", true)
+      .order("updated_at", { ascending: false })
+      .limit(24));
+    for (const fallbackRow of fallbackRows ?? []) {
+      const parsed = lessonGenerationSchema.safeParse(fallbackRow.lesson_payload);
+      if (!parsed.success) continue;
+      const adapted = adaptCachedLessonForPlan(parsed.data, input);
+      if (!adapted) continue;
+      // Persist the plan-specific variant so subsequent sessions become an
+      // exact hit. A write failure must not turn an otherwise valid lesson into
+      // a user-visible generation error.
+      try {
+        await savePrivateLessonCache({
+          db,
+          context: cacheContextWithAnkiMaterial(input, material),
+          lesson: adapted,
+          sourceKind: material ? "mixed" : (fallbackRow.source_kind === "codebuddy_deepseek" ? "codebuddy_deepseek" : "runtime_deepseek"),
+          generationMethod: "existing_runtime_fallback",
+          sourceVersion: material ? ANKI_SOURCE_VERSION : PRIVATE_UNION_SOURCE_VERSION,
+          materialPayloadHash,
+        });
+      } catch {
+        // Cache persistence is best effort on the read path.
+      }
+      return { privateSetId: PERSONAL_KAOYAN_SET_ID, material, materialSourceVersion, materialPayloadHash, lesson: adapted };
+    }
     return { privateSetId: PERSONAL_KAOYAN_SET_ID, material, materialSourceVersion, materialPayloadHash, lesson: null };
   }
 

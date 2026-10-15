@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { lessonExercisePlanSchema } from "../shared/toolContracts.js";
 import {
   lessonGenerationCacheKey,
+  adaptCachedLessonForPlan,
   mergeAnkiMaterial,
   PrivateLessonCacheReadError,
   PERSONAL_KAOYAN_SET_ID,
@@ -69,6 +70,35 @@ function lesson(overrides: Partial<LessonGeneration> = {}): LessonGeneration {
 }
 
 describe("private Lesson cache keys and Anki merge", () => {
+  it("adapts a same-sense cached Lesson to a missing plan variant without DeepSeek", () => {
+    const base = {
+      userId: userA,
+      wordId: wordA,
+      word: "allocate",
+      meaningZh: "分配；拨给",
+      partOfSpeech: "v.",
+      ipa: "/ˈæləkeɪt/",
+      lessonProfile: "reinforce" as const,
+      errorFocus: null,
+    };
+    const translation = adaptCachedLessonForPlan(lesson(), {
+      ...base,
+      plan: plan({ planned_activity_type: "translation_cn_to_en" }),
+    });
+    expect(translation?.exercise.activity_type).toBe("translation_cn_to_en");
+    expect(translation?.exercise.accepted_answers).toBeUndefined();
+    expect(translation?.exercise.prompt).toMatch(/\p{Script=Han}/u);
+
+    const collocation = adaptCachedLessonForPlan(lesson(), {
+      ...base,
+      plan: plan({ planned_activity_type: "collocation" }),
+    });
+    expect(collocation?.exercise.activity_type).toBe("collocation");
+    expect(collocation?.exercise.prompt).toContain("___");
+    expect(collocation?.exercise.prompt).not.toMatch(/\ballocate\b/iu);
+    expect(collocation?.exercise.accepted_answers?.length).toBeGreaterThan(0);
+  });
+
   it("writes a validated same-user batch in one idempotent request and rejects mixed scopes", async () => {
     const writes:unknown[]=[];
     const db={from:()=>({upsert:async(rows:unknown,options:unknown)=>{writes.push({rows,options});return {error:null};}})} as never;
