@@ -8,6 +8,7 @@ import {
   PrivateLessonCacheReadError,
   PERSONAL_KAOYAN_SET_ID,
   PRIVATE_UNION_SOURCE_VERSION,
+  cacheContextWithAnkiMaterial,
 } from "../server/services/lessonGenerationCache.js";
 import type { LessonGeneration } from "../server/services/deepseek.js";
 
@@ -67,6 +68,15 @@ function lesson(overrides: Partial<LessonGeneration> = {}): LessonGeneration {
 }
 
 describe("private Lesson cache keys and Anki merge", () => {
+  it("uses the trusted Anki pronunciation for the same offline and runtime request", async () => {
+    const base={userId:userA,wordId:wordA,word:'allocate',meaningZh:'分配；拨给',partOfSpeech:'v.',
+      ipa:'database pronunciation',lessonProfile:'quick_recall' as const,errorFocus:null,plan:plan()};
+    const material={word:'allocate',ipa:'Anki pronunciation',source_fields:['Pronunciation']};
+    const offline=await lessonGenerationCacheKey({...base,ipa:material.ipa},'material-hash');
+    const runtime=await lessonGenerationCacheKey(cacheContextWithAnkiMaterial(base,material),'material-hash');
+    expect(runtime.cacheKey).toBe(offline.cacheKey);
+    expect(base.ipa).toBe('database pronunciation');
+  });
   it("ignores random plan ids but changes for profile, error, sense, user and activity", async () => {
     const base = {
       userId: userA,

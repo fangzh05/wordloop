@@ -562,3 +562,7 @@ GitHub `main` 是 Cloudflare Worker `wordloop-app` 的生产源码。生产版�
 - `server/data/ATTRIBUTION.md`：词汇数据来源与许可
 
 人类可读的教学规则和 `server/teachingPrompt.ts` 应该在学习行为变化时保持同步。
+
+## 私有 Anki Lesson 缓存（测试分支）
+
+可将已获授权的私人 Anki 资料导入缓存，并通过 CodeBuddy DeepSeek low 离线补齐缺失字段。缓存按认证用户与私人并集隔离，严格匹配计划、训练强度、目标义项、错误重点及版本。沿用原 Lesson UI 和学习算法。提取、批处理续跑、只读命中检查与回滚步骤见[私有缓存操作说明](docs/private-anki-lesson-cache.md)。这些脚本不会发布生产环境。
