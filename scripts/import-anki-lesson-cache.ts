@@ -95,7 +95,7 @@ interface ExtractedAnkiRecord {
   alternate_meanings_zh?: string[];
 }
 
-interface WordRow {
+export interface WordRow {
   id: string;
   normalized_word: string;
   display_word: string;
@@ -513,12 +513,35 @@ export function parseCliResult(stdout: string): {
   };
 }
 
+export function classifyCodeBuddyFailure(stderr:string,stdout:string,stdoutBytes:number,stderrBytes:number):string{
+  if(stdoutBytes>2_000_000)return 'CODEBUDDY_OUTPUT_LIMIT';
+  if(stderrBytes>64_000)return 'CODEBUDDY_STDERR_LIMIT';
+  let messages=stderr;
+  try{
+    const parsed:unknown=JSON.parse(stdout);
+    const events=Array.isArray(parsed)?parsed:[parsed];
+    for(const event of events){if(!event||typeof event!=='object')continue;
+      const e=event as Record<string,unknown>;
+      if(e.type==='error'||e.is_error===true||String(e.subtype??'').startsWith('error')){
+        if(/max.?turn/i.test(String(e.subtype??'')))return 'CODEBUDDY_TURN_LIMIT';
+        messages+=' '+JSON.stringify({error:e.error,message:e.message,errors:e.errors});
+      }
+    }
+  }catch{messages+=' '+stdout.split('\n').filter(line=>/^\s*(error|错误|失败)[:：]/i.test(line)).join(' ');}
+  return /too long|输入行太长|命令行太长|ENAMETOOLONG/i.test(messages)?'CODEBUDDY_COMMAND_TOO_LONG'
+    :/quota|insufficient|usage limit|payment required|\b402\b|积分不足|额度不足|余额不足/i.test(messages)?'CODEBUDDY_QUOTA'
+    :/rate.?limit|too many requests|\b429\b|concurren.*limit|并发.*(?:限制|上限)|频率限制|请求过于频繁/i.test(messages)?'CODEBUDDY_RATE_LIMIT'
+    :/unauthorized|authentication required|permission denied|access denied|\b403\b|please.*login|请.*登录/i.test(messages)?'CODEBUDDY_AUTH'
+    :/fetch failed|ECONN|network|TLS|socket|timed out/i.test(messages)?'CODEBUDDY_NETWORK':'CODEBUDDY_EXIT';
+}
+
 export function runCodeBuddy(input: {
   command: string;
   model: string;
   prompt: string;
   jsonSchema: string;
   timeoutMs: number;
+  workingDirectory?: string;
 }): Promise<{
   result: Record<string, unknown>;
   inputTokens?: number;
@@ -532,26 +555,34 @@ export function runCodeBuddy(input: {
       "--no-session-persistence", "--tools", "StructuredOutput", "--json-schema", input.jsonSchema,
       "--allowedTools", "StructuredOutput",
     ], {
-      cwd: process.env.LOCALAPPDATA ?? process.cwd(),
+      cwd: input.workingDirectory ?? process.env.LOCALAPPDATA ?? process.cwd(),
       env: codeBuddySafeEnv(),
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
+    let terminating=false;
+    const terminateTree=():Promise<void>=>{
+      if(terminating)return Promise.resolve();terminating=true;
+      if(process.platform!=='win32'||!child.pid){child.kill();return Promise.resolve();}
+      return new Promise(done=>{
+        const killer=crossSpawn('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,env:codeBuddySafeEnv()});
+        killer.once('error',()=>{child.kill();done();});killer.once('close',()=>done());
+      });
+    };
     const chunks: Buffer[] = [];
     const errorChunks: Buffer[] = [];
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
     const timer = setTimeout(() => {
-      child.kill();
       if (!settled) {
         settled = true;
-        rejectPromise(new Error("CODEBUDDY_TIMEOUT"));
+        void terminateTree().finally(()=>rejectPromise(new Error("CODEBUDDY_TIMEOUT")));
       }
     }, input.timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => {
       stdoutBytes += chunk.length;
-      if (stdoutBytes > 2_000_000) child.kill();
+      if (stdoutBytes > 2_000_000) void terminateTree();
       else chunks.push(chunk);
     });
     child.stderr.on("data", (chunk: Buffer) => { stderrBytes += chunk.length; if(stderrBytes<=64_000)errorChunks.push(chunk); });
@@ -564,12 +595,7 @@ export function runCodeBuddy(input: {
       if (settled) return;
       settled = true;
       if (stdoutBytes > 2_000_000 || stderrBytes > 64_000 || code !== 0) {
-        const errorText=Buffer.concat([...errorChunks,...chunks]).toString('utf8');
-        const reason=stdoutBytes>2_000_000?'CODEBUDDY_OUTPUT_LIMIT':stderrBytes>64_000?'CODEBUDDY_STDERR_LIMIT':/too long|输入行太长|命令行太长|ENAMETOOLONG/i.test(errorText)?'CODEBUDDY_COMMAND_TOO_LONG'
-          :/quota|insufficient|额度不足|余额不足/i.test(errorText)?'CODEBUDDY_QUOTA'
-          :/rate.?limit|too many requests|频率限制|请求过于频繁/i.test(errorText)?'CODEBUDDY_RATE_LIMIT'
-          :/unauthorized|authentication required|please.*login|请.*登录/i.test(errorText)?'CODEBUDDY_AUTH'
-          :/fetch failed|ECONN|network|TLS|socket|timed out/i.test(errorText)?'CODEBUDDY_NETWORK':'CODEBUDDY_EXIT';
+        const reason=classifyCodeBuddyFailure(Buffer.concat(errorChunks).toString('utf8'),Buffer.concat(chunks).toString('utf8'),stdoutBytes,stderrBytes);
         rejectPromise(new Error(reason));
         return;
       }
@@ -799,6 +825,8 @@ export async function loadWordsAndMembership(
   }
   if (!hasFullUnion) return { wordRows: [], hasFullUnion };
   const joinedWords = new Map<string, WordRow>();
+  for(let scan=0;scan<3;scan++){
+  joinedWords.clear();
   for (let offset = 0; ; offset += 500) {
     const data = await readDataApiWithRetry(() => db.from("word_sources").select("word_id,source_book_id,words(id,normalized_word,display_word,senses,ipa_us,ipa_uk)")
       .eq("user_id", userId).in("source_book_id", ["ougkp", "athgc"])
@@ -812,6 +840,10 @@ export async function loadWordsAndMembership(
     }
     if ((data ?? []).length < 500) break;
   }
+    if(joinedWords.size===7048)break;
+    if(scan<2)await new Promise(done=>setTimeout(done,750*2**scan));
+  }
+  if(joinedWords.size!==7048)throw new Error('PRIVATE_UNION_WORDS_INCOMPLETE');
   return { wordRows: [...joinedWords.values()], hasFullUnion };
 }
 

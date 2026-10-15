@@ -1,3 +1,4 @@
+import {PrivateImportPool} from './private-import-pool.js';
 import {readOnlyPlanningDatabase} from './private-lesson-planning.js';
 import { readFile, writeFile, mkdir, rename, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -19,7 +20,7 @@ import {
 import {
   readArgs, requireStagingEnvironment, loadWordsAndMembership, readJsonl, buildPrivateUnionWork,
   buildPlan, parseSenses, outputJsonSchema, buildPrompt, runCodeBuddy, assertOfflineLessonQuality,
-  safeReportPath, getCodeBuddyVersion,
+  safeReportPath, getCodeBuddyVersion, type WordRow,
 } from './import-anki-lesson-cache.js';
 
 type Work = ReturnType<typeof buildPrivateUnionWork>['entries'][number];
@@ -31,7 +32,12 @@ type Ready = {work:Work;context:PrivateLessonCacheContext;fixed:Partial<LessonGe
   materialHash:string|null;sourceVersion:string;key:string;usedAnki:boolean};
 const fields:Field[]=['ipa','part_of_speech','meaning_zh','collocations','derivations','example_en','example_zh','note','exercise'];
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
-async function atomic(path:string,value:unknown){await writeFile(path+'.tmp',JSON.stringify(value,null,2)+'\n',{mode:0o600});await rename(path+'.tmp',path);}
+const fileWrites=new Map<string,Promise<void>>();
+async function atomic(path:string,value:unknown){
+  const previous=fileWrites.get(path)??Promise.resolve();
+  const pending=previous.catch(()=>undefined).then(async()=>{await writeFile(path+'.tmp',JSON.stringify(value,null,2)+'\n',{mode:0o600});await rename(path+'.tmp',path);});
+  fileWrites.set(path,pending);try{await pending;}finally{if(fileWrites.get(path)===pending)fileWrites.delete(path);}
+}
 async function retry<T>(f:()=>PromiseLike<T>):Promise<T>{let last:unknown;for(let i=0;i<3;i++){try{return await f();}catch(e){last=e;if(i<2)await sleep(750*2**i);}}throw last;}
 export function prepare(work:Work,userId:string,args:ReturnType<typeof readArgs>):Omit<Ready,'key'|'materialHash'>{
   const senses=parseSenses(work.row.senses),pos=senses.find(s=>s.pos.trim())?.pos??'';
@@ -65,6 +71,9 @@ async function main(){
   if(!args.materialsJsonl||!args.manifest)throw new Error('EXTRACTED_SOURCE_REQUIRED');
   const value=(flag:string,fallback:number)=>{const i=process.argv.indexOf(flag);const n=i<0?fallback:Number(process.argv[i+1]);if(!Number.isInteger(n)||n<1||n>32)throw new Error('INVALID_BATCH_SIZE');return n;};
   const batchSize=value('--batch-size',8);
+  const importConcurrency=value('--import-concurrency',2);
+  const modelConcurrency=value('--concurrency',1);if(modelConcurrency>3)throw new Error('INVALID_MODEL_CONCURRENCY');
+  const imports=new PrivateImportPool(importConcurrency);
   const actualMode=process.argv[process.argv.indexOf('--variant-mode')+1]==='actual';
   const checkpointPath=resolve(dir,actualMode?'exercise-variant.checkpoint.json':'anki-lesson-cache.checkpoint.json');
   const manifest=JSON.parse(await readFile(args.manifest,'utf8')) as {apkg_sha256:string;source_version:string};
@@ -80,49 +89,106 @@ async function main(){
   const reportPath=safeReportPath(args.report??'batch-report.json',dir)!;
   const stats={private_union_words:0,anki_matched_words:0,without_anki:0,skipped_valid:0,valid:0,needs_review:0,failed:0,
     codebuddy_calls:0,model_retries:0,input_tokens:0,output_tokens:0,all_tokens_available:true,
-    credits:0,all_credits_available:true,cost_usd:0,all_cost_available:true,raw_cache_hits:0,derivations_removed:0,
-    model:args.codebuddyModel,effort:'low',cli_version:version,batch_size:batchSize,started_at:new Date().toISOString()};
+    cli_reported_credits:0,all_credits_available:true,cli_reported_cost_usd:0,all_cost_available:true,raw_cache_hits:0,derivations_removed:0,
+    model:args.codebuddyModel,effort:'low',cli_version:version,batch_size:batchSize,import_concurrency:importConcurrency,model_concurrency:modelConcurrency,active_model_calls:0,max_active_model_calls:0,parallel_support_url:'https://www.codebuddy.ai/docs/cli/best-practices',started_at:new Date().toISOString()};
   const report=async()=>{const entries=Object.values(checkpoint.entries);await atomic(reportPath,{...stats,
     total_valid:entries.filter(x=>x.status==='valid').length,total_needs_review:entries.filter(x=>x.status==='needs_review').length,
     total_failed:entries.filter(x=>x.status==='failed').length,content_version:LESSON_CACHE_CONTENT_VERSION,prompt_version:LESSON_CACHE_PROMPT_VERSION,
     batch_envelope_version:'missing-fields-batch-v1',input_tokens:stats.all_tokens_available?stats.input_tokens:'unavailable',
-    output_tokens:stats.all_tokens_available?stats.output_tokens:'unavailable',codebuddy_credits:stats.all_credits_available?stats.credits:'unavailable',
-    cli_reported_model_cost_usd:stats.all_cost_available?stats.cost_usd:'unavailable',
+    output_tokens:stats.all_tokens_available?stats.output_tokens:'unavailable',codebuddy_credits:stats.all_credits_available?stats.cli_reported_credits:'unavailable',
+    cli_reported_model_cost_usd:stats.all_cost_available?stats.cli_reported_cost_usd:'unavailable',
     actual_cost_usd:'unavailable',updated_at:new Date().toISOString()});};
   let interrupted=false;
   process.on('SIGINT',()=>{interrupted=true;});process.on('SIGTERM',()=>{interrupted=true;});
   await withUserIdentity(args.userId,async()=>{
-    const db=getDatabase(),lookup=await loadWordsAndMembership(db,args.userId);
+    const db=getDatabase();
+    let lookup:Awaited<ReturnType<typeof loadWordsAndMembership>>;
+    try{
+      lookup=await loadWordsAndMembership(db,args.userId);
+    }catch(error){
+      // Actual-plan coverage is a read-only follow-up to a completed base import.
+      // If Neon temporarily rejects the large membership scan, use the signed
+      // export produced by that completed scan; never use this fallback for an
+      // identity, permission, or membership mismatch.
+      if(!actualMode||!(error instanceof Error)||!error.message.startsWith('PRIVATE_UNION_WORDS_READ_FAILED'))throw error;
+      const exportPath=resolve(dir,'private-union-export.jsonl'),manifestPath=resolve(dir,'private-union-export.manifest.json');
+      const exportText=await readFile(exportPath,'utf8'),exportManifest=JSON.parse(await readFile(manifestPath,'utf8')) as {private_set_id?:string;branch_id?:string;rows?:number;sha256?:string};
+      const exported=exportText.split(/\r?\n/u).filter(Boolean).map(line=>{const row=JSON.parse(line) as WordRow&{word_id?:string};return {...row,id:row.id??row.word_id} as WordRow;});
+      const validExport=exportManifest.private_set_id===PERSONAL_KAOYAN_SET_ID&&exportManifest.branch_id===process.env.WORDLOOP_STAGING_NEON_BRANCH_ID
+        &&exportManifest.rows===7048&&exported.length===7048&&exportManifest.sha256===createHash('sha256').update(exportText).digest('hex')
+        &&exported.every(row=>row.id&&row.normalized_word&&row.display_word&&Array.isArray(row.senses));
+      if(!validExport)throw new Error('PRIVATE_UNION_EXPORT_INVALID');
+      lookup={wordRows:exported,hasFullUnion:true};
+      console.warn(JSON.stringify({phase:'membership-scan-fallback',source:'previously-verified-private-union-export',rows:exported.length}));
+    }
     if(!lookup.hasFullUnion||lookup.wordRows.length!==7048)throw new Error('PRIVATE_UNION_MEMBERSHIP_MISMATCH');
     const built=buildPrivateUnionWork(records,lookup.wordRows);
     stats.private_union_words=built.entries.length;stats.anki_matched_words=built.matchedWords;stats.without_anki=built.entries.length-built.matchedWords;
-    if(args.dryRun){console.log(JSON.stringify({phase:'dry-run',private_union_words:built.entries.length,anki_matched_words:built.matchedWords,selected_words:args.limit??built.entries.length,database_writes:0,codebuddy_calls:0}));return;}
-    const exportRows=[...lookup.wordRows].sort((a,b)=>a.normalized_word.localeCompare(b.normalized_word));
-    const exportText=exportRows.map(row=>JSON.stringify(row)).join('\n')+'\n';
+    // The complete private-union word export is already loaded and membership-checked
+    // above. Use it as the authoritative lexical universe for derivative validation;
+    // per-batch Data API lookups are both redundant and vulnerable to transient page
+    // failures during a long parallel run.
+    const lexicalUniverse=new Set(lookup.wordRows.map(row=>row.normalized_word.toLowerCase()));
+    const exportRows=[...lookup.wordRows].sort((a,b)=>a.normalized_word<b.normalized_word?-1:a.normalized_word>b.normalized_word?1:0);
+    const exportText=exportRows.map(row=>JSON.stringify({word_id:row.id,normalized_word:row.normalized_word,display_word:row.display_word,senses:row.senses,ipa_us:row.ipa_us,ipa_uk:row.ipa_uk})).join('\n')+'\n';
     await writeFile(resolve(dir,'private-union-export.jsonl'),exportText,{mode:0o600});
     await atomic(resolve(dir,'private-union-export.manifest.json'),{private_set_id:PERSONAL_KAOYAN_SET_ID,
-      rows:exportRows.length,unique_words:new Set(exportRows.map(r=>r.normalized_word)).size,
+      export_version:'wordloop-private-union-export-v1',source_version:PRIVATE_UNION_SOURCE_VERSION,rows:exportRows.length,unique_words:new Set(exportRows.map(r=>r.normalized_word)).size,
       senses:exportRows.reduce((n,r)=>n+parseSenses(r.senses).length,0),sha256:createHash('sha256').update(exportText).digest('hex'),
       membership_source:'authorized user word_sources: ougkp union athgc',branch_id:'br-spring-unit-azxctyf3'});
     const ready:Ready[]=[];let missingTeaching=0;
     const actual=new Map<string,PrivateLessonCacheContext>();
+    const planningFailures:number[]=[];
     const cached=new Map<string,{id:string;lesson_payload:LessonGeneration}>();
-    for(let offset=0;;offset+=500){
-      const q=await db.from('lesson_generation_cache').select('id,cache_key,lesson_payload').eq('user_id',args.userId)
-        .eq('private_set_id',PERSONAL_KAOYAN_SET_ID).eq('cache_kind','lesson').eq('content_version',LESSON_CACHE_CONTENT_VERSION)
-        .eq('prompt_version',LESSON_CACHE_PROMPT_VERSION).eq('is_valid',true).order('created_at',{ascending:true}).range(offset,offset+499);
-      if(q.error)throw new Error('PRIVATE_CACHE_PRELOAD_FAILED');
-      for(const r of q.data??[])cached.set(r.cache_key,{id:r.id,lesson_payload:r.lesson_payload});
-      if((q.data??[]).length<500)break;
+    try{
+      for(let offset=0;;offset+=500){
+        const q=await db.from('lesson_generation_cache').select('id,cache_key,lesson_payload').eq('user_id',args.userId)
+          .eq('private_set_id',PERSONAL_KAOYAN_SET_ID).eq('cache_kind','lesson').eq('content_version',LESSON_CACHE_CONTENT_VERSION)
+          .eq('prompt_version',LESSON_CACHE_PROMPT_VERSION).eq('is_valid',true).order('created_at',{ascending:true}).order('id',{ascending:true}).range(offset,offset+499);
+        if(q.error)throw new Error('PRIVATE_CACHE_PRELOAD_FAILED');
+        for(const r of q.data??[])cached.set(r.cache_key,{id:r.id,lesson_payload:r.lesson_payload});
+        if((q.data??[]).length<500)break;
+      }
+    }catch(error){
+      if(!actualMode)throw error;
+      for(const [word,entry] of Object.entries(baseCheckpoint.entries))if(entry.status==='valid'&&entry.input_fingerprint&&entry.lesson){
+        cached.set(entry.input_fingerprint,{id:'checkpoint:'+word,lesson_payload:entry.lesson});
+      }
+      console.warn(JSON.stringify({phase:'cache-preload-fallback',source:'completed-base-checkpoint',rows:cached.size}));
+    }
+    if(actualMode){
+      // Preserve already accepted actual-plan rows across a DB read outage;
+      // their deterministic cache keys are stored in the separate checkpoint.
+      for(const [word,entry] of Object.entries(checkpoint.entries))if(entry.status==='valid'&&entry.input_fingerprint&&entry.lesson){
+        cached.set(entry.input_fingerprint,{id:'actual-checkpoint:'+word,lesson_payload:entry.lesson});
+      }
     }
     if(actualMode){
       // Use the real read-only hydration and planner; no learner state or plan is persisted.
       const completed=new Set(Object.values(baseCheckpoint.entries).filter(e=>e.status==='valid').map(e=>e.word_id));
-      const eligible=built.entries.filter(work=>completed.has(work.row.id));
+      const wordFilter=args.wordList?new Set((await readFile(resolve(args.privateDataDir,args.wordList),'utf8')).split(/\r?\n/u).map(word=>word.trim().toLocaleLowerCase()).filter(Boolean)):null;
+      const eligible=built.entries.filter(work=>completed.has(work.row.id)&&(!wordFilter||wordFilter.has(work.record.normalized_word)));
       const chosen=args.limit?eligible.slice(0,args.limit):eligible;
       for(let offset=0;offset<chosen.length;offset+=100){
-        const items=await getVocabularyItemsByWords(chosen.slice(offset,offset+100).map(w=>w.record.normalized_word),db,args.userId);
-        const plans=await planLessonQueue(items.map(i=>i.word),[],readOnlyPlanningDatabase(db),args.userId,{vocabulary_items:items});
+        const batchWords=chosen.slice(offset,offset+100).map(w=>w.record.normalized_word);
+        let items:Awaited<ReturnType<typeof getVocabularyItemsByWords>>|undefined;
+        let plans:Awaited<ReturnType<typeof planLessonQueue>>|undefined;
+        let lastPlanningError:unknown;
+        for(let attempt=0;attempt<3;attempt++){
+          try{
+            items=await getVocabularyItemsByWords(batchWords,db,args.userId);
+            plans=await planLessonQueue(items.map(i=>i.word),[],readOnlyPlanningDatabase(db),args.userId,{vocabulary_items:items});
+            lastPlanningError=undefined;break;
+          }catch(error){
+            lastPlanningError=error;
+            if(attempt<2)await sleep(750*2**attempt);
+          }
+        }
+        if(lastPlanningError||!items||!plans){
+          planningFailures.push(offset);
+          console.warn(JSON.stringify({phase:'plan-read-failed',offset,batch_size:batchWords.length,retries:3}));
+          continue;
+        }
         for(const item of items){const plan=plans.find(p=>p.word_id===item.word_id)!;
           const profile=deriveLessonProfile({status:item.status,is_relearn:false,error_layers:item.error_layers});
           if(plan.private_source_book_id)continue;
@@ -151,7 +217,7 @@ async function main(){
         const check=safeParseLessonGenerationForPlan({word:p.context.word,lesson_profile:p.context.lessonProfile,error_focus:p.context.errorFocus,plan:p.context.plan},saved.lesson_payload);
         if(check.success){try{assertOfflineLessonQuality(check.data,p.context.word,p.context.plan.planned_activity_type);checkpoint.entries[work.record.normalized_word]={...prior,status:'valid',word_id:work.row.id,source_note_id:work.record.source_note_id,retry_count:prior?.retry_count??0,lesson:check.data,input_fingerprint:key,error_code:undefined,updated_at:new Date().toISOString()};stats.skipped_valid++;continue;}catch{/*repair below*/}}
       }
-      if(work.record.normalized_word==='acquaintance'&&saved){
+      if(!args.dryRun&&work.record.normalized_word==='acquaintance'&&saved){
         const lesson={...saved.lesson_payload,derivations:saved.lesson_payload.derivations.filter(v=>derivationHeadword(v)!=='acquaintanceship')};
         if(lesson.derivations.length!==saved.lesson_payload.derivations.length){
           await savePrivateLessonCache({db,context:p.context,lesson,sourceKind:p.usedAnki?'mixed':'codebuddy_deepseek',generationMethod:'codebuddy_cli',sourceVersion:p.sourceVersion,modelName:args.codebuddyModel,modelEffort:'low',materialPayloadHash:materialHash});
@@ -174,11 +240,12 @@ async function main(){
         if(value&&typeof value==='object')recovered.set(key,value);
       }
     }
-    await atomic(checkpointPath,checkpoint);
+    if(!args.dryRun)await atomic(checkpointPath,checkpoint);
     const selected=args.limit?ready.slice(0,args.limit):ready;
-    console.log(JSON.stringify({phase:'ready',...stats,pending:ready.length,selected:selected.length,variant_mode:actualMode?'actual':'base',missing_teaching:missingTeaching,database_writes:args.dryRun?0:'validated-only'}));
-    let staged:{r:Ready;entry:Entry;input:Parameters<typeof savePrivateLessonCache>[0]}[]|null=null;
-    const persist=async(r:Ready,lesson:LessonGeneration,tokens?:{inputTokens?:number;outputTokens?:number})=>{
+    if(args.dryRun){console.log(JSON.stringify({phase:'dry-run',private_union_words:built.entries.length,anki_matched_words:built.matchedWords,skipped_valid:stats.skipped_valid,pending:ready.length,selected_words:selected.length,database_writes:0,codebuddy_calls:0}));return;}
+    console.log(JSON.stringify({phase:'ready',...stats,pending:ready.length,selected:selected.length,variant_mode:actualMode?'actual':'base',missing_teaching:missingTeaching,...(actualMode?{planning_failed_batches:planningFailures.length,planning_failed_offsets:planningFailures}:{}),database_writes:args.dryRun?0:'validated-only'}));
+    type Staged={r:Ready;entry:Entry;input:Parameters<typeof savePrivateLessonCache>[0]};
+    const persist=async(r:Ready,lesson:LessonGeneration,staged?:Staged[])=>{
       const word=r.work.record.normalized_word,prior=checkpoint.entries[word];
       const entry:Entry={...prior,status:'generated_pending_import',word_id:r.work.row.id,source_note_id:r.work.record.source_note_id,
         retry_count:prior?.retry_count??0,input_fingerprint:r.key,lesson,updated_at:new Date().toISOString()};
@@ -200,8 +267,12 @@ async function main(){
         if(parsed.success){try{assertOfflineLessonQuality(parsed.data,r.context.word,r.context.plan.planned_activity_type);await persist(r,parsed.data);continue;}catch{/* regenerate invalid payload */}}}
       queue.push(r);
     }
-    const attempts=new Map<string,number>();
+    const attempts=new Map<string,number>();let fatal:unknown;
+    const worker=async(workerId:number)=>{
+    const workerDir=resolve(dir,'cli-workers','worker-'+workerId);await mkdir(workerDir,{recursive:true,mode:0o700});
+    if(workerId)await sleep(workerId*1500);
     while(queue.length&&!interrupted&&!existsSync(resolve(dir,'STOP_AFTER_BATCH'))){
+      imports.assertHealthy();
       const recovering=queue.some(r=>recovered.has(r.key));
       const batch=queue.filter(r=>recovered.has(r.key)===recovering).slice(0,batchSize);
       for(const r of batch)queue.splice(queue.indexOf(r),1);
@@ -218,20 +289,22 @@ async function main(){
         if(batch.every(r=>recovered.has(r.key))){response={result:Object.fromEntries(batch.map(r=>[r.work.row.id,recovered.get(r.key)!]))};stats.raw_cache_hits++;}
         else if(existsSync(rawPath)){response=JSON.parse(await readFile(rawPath,'utf8')).response;stats.raw_cache_hits++;}
         else{
-          stats.codebuddy_calls++;
-          response=await runCodeBuddy({command:args.codebuddyCommand,model:args.codebuddyModel,prompt,jsonSchema:schema,timeoutMs:Math.max(args.timeoutMs,300000)});
+          if(interrupted||fatal||existsSync(resolve(dir,'STOP_AFTER_BATCH'))){queue.unshift(...batch);break;}
+          stats.codebuddy_calls++;stats.active_model_calls++;stats.max_active_model_calls=Math.max(stats.max_active_model_calls,stats.active_model_calls);
+          try{response=await runCodeBuddy({command:args.codebuddyCommand,model:args.codebuddyModel,prompt,jsonSchema:schema,timeoutMs:Math.max(args.timeoutMs,300000),workingDirectory:workerDir});}
+          finally{stats.active_model_calls--;}
+
           await atomic(rawPath,{task_id:task,model:args.codebuddyModel,effort:'low',channel:'codebuddy_cli',items:Object.fromEntries(batch.map(r=>[r.key,r.work.row.id])),response,created_at:new Date().toISOString()});
           if(response.inputTokens!==undefined&&response.outputTokens!==undefined){stats.input_tokens+=response.inputTokens;stats.output_tokens+=response.outputTokens;}else stats.all_tokens_available=false;
-          if(response.codebuddyCredits!==undefined)stats.credits+=response.codebuddyCredits;else stats.all_credits_available=false;
-          if(response.modelCostUsd!==undefined)stats.cost_usd+=response.modelCostUsd;else stats.all_cost_available=false;
+          if(response.codebuddyCredits!==undefined)stats.cli_reported_credits+=response.codebuddyCredits;else stats.all_credits_available=false;
+          if(response.modelCostUsd!==undefined)stats.cli_reported_cost_usd+=response.modelCostUsd;else stats.all_cost_available=false;
           if((response.inputTokens??0)>150000||(response.outputTokens??0)>32000)throw new Error('CODEBUDDY_TOKEN_OUTLIER');
         }
         for(const r of batch){const item=response.result[r.work.row.id];if(item&&typeof item==='object')recovered.set(r.key,item as Record<string,unknown>);}
         const derivativeValues=batch.flatMap(r=>r.missing.includes('derivations')?((response.result[r.work.row.id] as Record<string,unknown>)?.derivations as string[]??[]):[]);
         const heads=[...new Set(derivativeValues.filter(x=>typeof x==='string').map(derivationHeadword).filter((x):x is string=>!!x))];
-        const lexical=new Set<string>();
-        if(heads.length){const q=await db.from('words').select('normalized_word').in('normalized_word',heads);if(q.error)throw new Error('DERIVATION_REFERENCE_READ_FAILED');for(const x of q.data??[])lexical.add(x.normalized_word);}
-        staged=[];
+        const lexical=new Set<string>(heads.filter(head=>lexicalUniverse.has(head)));
+        const staged:Staged[]=[];
         for(const r of batch){
           try{
             const generated=response.result[r.work.row.id];if(!generated||typeof generated!=='object'||Array.isArray(generated))throw new Error('MISSING_BATCH_ITEM');
@@ -241,34 +314,36 @@ async function main(){
             }
             const parsed=safeParseLessonGenerationForPlan({word:r.context.word,lesson_profile:r.context.lessonProfile,error_focus:r.context.errorFocus,plan:r.context.plan},mergeMissingFields(r.fixed,partial,r.missing));
             if(!parsed.success)throw new Error('LESSON_SCHEMA_INVALID');assertOfflineLessonQuality(parsed.data,r.context.word,r.context.plan.planned_activity_type);
-            await persist(r,parsed.data);
+            await persist(r,parsed.data,staged);
           }catch(e){if(!checkpoint.entries[r.work.record.normalized_word]?.lesson)recovered.delete(r.key);await fail(r,e);}
         }
       if(staged.length){
-          const pending=staged;staged=null;
-          try{await retry(()=>savePrivateLessonCacheBatch(pending.map(x=>x.input)));
+          const pending=staged;
+          await imports.submit(async()=>{try{await retry(()=>savePrivateLessonCacheBatch(pending.map(x=>x.input)));
             for(const x of pending){x.entry.status='valid';x.entry.error_code=undefined;stats.valid++;}
             await atomic(checkpointPath,checkpoint);
           }catch{
             // A single row failure must not block the remaining validated rows.
             for(const x of pending){try{await retry(()=>savePrivateLessonCache(x.input));x.entry.status='valid';x.entry.error_code=undefined;stats.valid++;}catch(e){await fail(x.r,e);}}
             await atomic(checkpointPath,checkpoint);
-          }
+          }});
         }
-        staged=null;
       }catch(e){
-        staged=null;
-        if(e instanceof Error&&['CODEBUDDY_TOKEN_OUTLIER','CODEBUDDY_COMMAND_TOO_LONG','CODEBUDDY_QUOTA','CODEBUDDY_AUTH','CODEBUDDY_RATE_LIMIT'].includes(e.message)){await report();throw e;}
+        if(e instanceof Error&&(e.message.startsWith('DERIVATION_REFERENCE_')||['CODEBUDDY_TOKEN_OUTLIER','CODEBUDDY_COMMAND_TOO_LONG','CODEBUDDY_QUOTA','CODEBUDDY_AUTH','CODEBUDDY_RATE_LIMIT'].includes(e.message))){fatal??=e;interrupted=true;await writeFile(resolve(dir,'STOP_AFTER_BATCH'),JSON.stringify({code:e.message,source:'generation',at:new Date().toISOString()}),{flag:'wx',mode:0o600}).catch(error=>{if(error.code!=='EEXIST')throw error;});await report();break;}
         stats.all_tokens_available=false;stats.all_credits_available=false;stats.all_cost_available=false;
         for(const r of batch)await fail(r,e);
         await sleep(Math.min(1000*2**Math.min(...batch.map(r=>attempts.get(r.key)??0)),8000));
       }
-      await report();console.log(JSON.stringify({phase:'progress',valid:stats.valid,skipped:stats.skipped_valid,failed:stats.failed,queue:queue.length,calls:stats.codebuddy_calls,retries:stats.model_retries,elapsed_seconds:Math.round((Date.now()-Date.parse(stats.started_at))/1000)}));
+      await report();console.log(JSON.stringify({phase:'progress',valid:stats.valid,skipped:stats.skipped_valid,failed:stats.failed,queue:queue.length,calls:stats.codebuddy_calls,retries:stats.model_retries,pending_import_batches:imports.activeCount,active_model_calls:stats.active_model_calls,worker_id:workerId,elapsed_seconds:Math.round((Date.now()-Date.parse(stats.started_at))/1000)}));
     }
+    };
+    await Promise.all(Array.from({length:modelConcurrency},(_,id)=>worker(id).catch(e=>{fatal??=e;interrupted=true;})));
+    await imports.drain();
+    if(fatal){await report();throw fatal;}
     async function fail(r:Ready,e:unknown){
       const n=(attempts.get(r.key)??0)+1;attempts.set(r.key,n);
       const word=r.work.record.normalized_word,prior=checkpoint.entries[word];
-      const code=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'CODEBUDDY_EXIT';
+      const code=e instanceof Error&&/^[A-Z0-9_]+$/.test(e.message)?e.message:'CODEBUDDY_EXIT';
       checkpoint.entries[word]={...prior,status:prior?.lesson?'generated_pending_import':'failed',word_id:r.work.row.id,source_note_id:r.work.record.source_note_id,retry_count:(prior?.retry_count??0)+1,error_code:code,updated_at:new Date().toISOString()};
       await atomic(checkpointPath,checkpoint);
       if(prior?.lesson){stats.failed++;return;}
@@ -278,7 +353,7 @@ async function main(){
       }
     }
   });
-  await report();console.log(JSON.stringify({phase:interrupted?'interrupted':'finished',...stats,report:basename(reportPath)}));
+  await report();console.log(JSON.stringify({phase:interrupted||existsSync(resolve(dir,'STOP_AFTER_BATCH'))?'interrupted':'finished',...stats,report:basename(reportPath)}));
 }
 
-if(process.argv[1]?.replaceAll('\\','/').endsWith('/complete-anki-lesson-batches.ts'))main().catch(e=>{console.error(JSON.stringify({status:'failed',code:e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'BATCH_FAILED'}));process.exitCode=1;});
+if(process.argv[1]?.replaceAll('\\','/').endsWith('/complete-anki-lesson-batches.ts'))main().catch(e=>{const raw=e instanceof Error?e.message:'';const detail=raw.replace(/[^A-Z0-9_:-]/gi,'_').slice(0,120);console.error(JSON.stringify({status:'failed',code:e instanceof Error&&/^[A-Z0-9_]+$/.test(raw)?raw:'BATCH_FAILED',detail:detail||'UNKNOWN'}));process.exitCode=1;});

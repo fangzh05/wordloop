@@ -105,3 +105,19 @@ npm run lesson:complete-anki-cache -- --materials-jsonl "$privateDir/anki-lesson
 This keeps a separate `exercise-variant.checkpoint.json`. Existing complete teaching fields are immutable inputs; only `exercise` is requested from CodeBuddy. Recall exercises are deterministic and need no model. A changed history, error focus, source definition or BKT signal can produce a different plan key and safely miss. Reports distinguish exact seeded-plan checks from actual planner sample hits; neither is universal coverage of every future learning state.
 
 `seed-private-lesson-variants.ts` additionally constructs and validates separate `reinforce + word_recall` variants from complete teaching data without AI. It does not copy an exercise across mismatched plans. The existing runtime DeepSeek fallback remains the compatibility path for conditions that were not precomputed; it is not described as a local CodeBuddy invocation.
+
+### Import pipeline concurrency
+
+`--import-concurrency 2` overlaps validated Neon imports with the next serial CodeBuddy request. Each database transaction contains at most 32 rows; the import pool accepts 1–3 simultaneous transactions. This flag never starts parallel model processes. Checkpoint writes are serialized per file, and shutdown drains outstanding imports. Validated pending payloads survive database failures and resume without another generation call.
+
+### Verified model parallelism
+
+CodeBuddy's official [best practices](https://www.codebuddy.ai/docs/cli/best-practices) explicitly support parallel sessions and fan-out across multiple headless invocations. After that capability was verified, the batch driver gained `--concurrency 1..3` (default 1). Start with 2 and a bounded pilot. Each worker uses a separate private working directory, the same pinned DeepSeek model and low effort, and disjoint words. Checkpoint writes stay serialized, and model outputs are saved before database import. Authentication, quota and rate-limit errors stop new dispatch; accepted in-flight outputs are preserved before exit. This does not raise or bypass account limits.
+
+For two model workers and two import transactions:
+
+```powershell
+npm run lesson:complete-anki-cache -- --materials-jsonl "$privateDir/anki-lesson-materials.jsonl" --manifest "$privateDir/anki-lesson-materials.manifest.json" --private-data-dir "$privateDir" --user-id "$env:WORDLOOP_STAGING_USER_ID" --resume --retry-failed --batch-size 32 --concurrency 2 --import-concurrency 2 --report parallel-run.json
+```
+
+The controlled pipeline may run two generation workers alongside one serial language reviewer, for at most three model requests overall. Do not launch another repair/review process while that third slot is occupied. All jobs use the same private `STOP_AFTER_BATCH` marker on authentication, account quota or rate-limit errors. In-flight successful outputs are checkpointed, then dispatch stops. Review defaults to read-only; only confirmed issues are applied or repaired. Actual credits and monetary cost remain unavailable when the CLI does not supply billing data.
