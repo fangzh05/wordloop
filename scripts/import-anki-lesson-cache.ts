@@ -67,6 +67,8 @@ interface Args {
   resume: boolean;
   retryFailed: boolean;
   importOnly: boolean;
+  replayValid: boolean;
+  environmentTarget: "staging" | "production";
   codebuddyCommand: string;
   codebuddyModel: string;
   timeoutMs: number;
@@ -205,7 +207,7 @@ export function readArgs(argv: string[]): Args {
   for (let index = 0; index < argv.length; index += 1) {
     const item = argv[index]!;
     if (!item.startsWith("--")) throw new Error("UNEXPECTED_ARGUMENT");
-    if (["--dry-run", "--resume", "--retry-failed", "--import-only"].includes(item)) flags.add(item);
+    if (["--dry-run", "--resume", "--retry-failed", "--import-only", "--replay-valid"].includes(item)) flags.add(item);
     else {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`MISSING_VALUE:${item}`);
@@ -237,6 +239,10 @@ export function readArgs(argv: string[]): Args {
   if (!/^deepseek-[a-z0-9.-]+$/i.test(model)) throw new Error("ONLY_CODEBUDDY_DEEPSEEK_MODELS_ALLOWED");
   if (flags.has("--dry-run") && flags.has("--retry-failed")) throw new Error("DRY_RUN_CANNOT_RETRY");
   if (flags.has("--retry-failed") && !flags.has("--resume")) throw new Error("RETRY_FAILED_REQUIRES_RESUME");
+  if (flags.has("--replay-valid") && !flags.has("--resume")) throw new Error("REPLAY_VALID_REQUIRES_RESUME");
+  if (flags.has("--import-only") && flags.has("--replay-valid")) throw new Error("IMPORT_ONLY_CANNOT_REPLAY_VALID");
+  const environmentTarget = values.get("--target") ?? "staging";
+  if (environmentTarget !== "staging" && environmentTarget !== "production") throw new Error("INVALID_IMPORT_TARGET");
   return {
     apkg: values.get("--apkg"),
     materialsJsonl: values.get("--materials-jsonl"),
@@ -249,6 +255,8 @@ export function readArgs(argv: string[]): Args {
     resume: flags.has("--resume"),
     retryFailed: flags.has("--retry-failed"),
     importOnly: flags.has("--import-only"),
+    replayValid: flags.has("--replay-valid"),
+    environmentTarget,
     codebuddyCommand: values.get("--codebuddy-command") ?? "codebuddy",
     codebuddyModel: model,
     timeoutMs: positiveInt("--timeout", 120_000, 600_000),
@@ -260,25 +268,35 @@ export function readArgs(argv: string[]): Args {
   };
 }
 
-export function requireStagingEnvironment(): void {
-  const branchId = process.env.WORDLOOP_STAGING_NEON_BRANCH_ID;
-  const dataApi = process.env.WORDLOOP_STAGING_NEON_DATA_API_URL;
-  const jwk = process.env.WORDLOOP_STAGING_NEON_WORKER_JWT_PRIVATE_JWK;
-  const supabaseUrl = process.env.WORDLOOP_STAGING_SUPABASE_URL;
-  if (!branchId || !dataApi || !jwk || !supabaseUrl) throw new Error("STAGING_NEON_ENV_REQUIRED");
-  if (branchId !== "br-spring-unit-azxctyf3") throw new Error("STAGING_BRANCH_ID_MISMATCH");
+export function requireImportEnvironment(target: "staging" | "production" = "staging"): void {
+  const prefix = target === "staging" ? "STAGING" : "PRODUCTION";
+  const branchId = process.env[`WORDLOOP_${prefix}_NEON_BRANCH_ID`];
+  const dataApi = process.env[`WORDLOOP_${prefix}_NEON_DATA_API_URL`];
+  const jwk = process.env[`WORDLOOP_${prefix}_NEON_WORKER_JWT_PRIVATE_JWK`];
+  const supabaseUrl = process.env[`WORDLOOP_${prefix}_SUPABASE_URL`];
+  if (!branchId || !dataApi || !jwk || !supabaseUrl) throw new Error(`${target.toUpperCase()}_NEON_ENV_REQUIRED`);
+  const expectedBranch = target === "staging" ? "br-spring-unit-azxctyf3" : "br-bold-pond-az6tjrpc";
+  const expectedHost = target === "staging"
+    ? "ep-soft-bar-azahdy4w.apirest.c-3.ap-southeast-1.aws.neon.tech"
+    : "ep-silent-paper-aznrjrrz.apirest.c-3.ap-southeast-1.aws.neon.tech";
+  if (branchId !== expectedBranch) throw new Error(`${target.toUpperCase()}_BRANCH_ID_MISMATCH`);
   const apiUrl = new URL(dataApi);
-  if (apiUrl.protocol !== "https:" || apiUrl.hostname !== "ep-soft-bar-azahdy4w.apirest.c-3.ap-southeast-1.aws.neon.tech"
-    || !apiUrl.pathname.endsWith("/neondb/rest/v1")) throw new Error("STAGING_ENDPOINT_MISMATCH");
+  if (apiUrl.protocol !== "https:" || apiUrl.hostname !== expectedHost || !apiUrl.pathname.endsWith("/neondb/rest/v1")) {
+    throw new Error(`${target.toUpperCase()}_ENDPOINT_MISMATCH`);
+  }
   configureRuntimeEnv({
     ...process.env,
     SUPABASE_URL: supabaseUrl,
     NEON_DATA_API_URL: dataApi,
     NEON_WORKER_JWT_PRIVATE_JWK: jwk,
-    NEON_JWT_AUDIENCE: process.env.WORDLOOP_STAGING_NEON_JWT_AUDIENCE ?? "wordloop-neon-api",
-    NEON_JWT_ISSUER: process.env.WORDLOOP_STAGING_NEON_JWT_ISSUER ?? `${new URL(supabaseUrl).origin}/auth/v1`,
+    NEON_JWT_AUDIENCE: process.env[`WORDLOOP_${prefix}_NEON_JWT_AUDIENCE`] ?? "wordloop-neon-api",
+    NEON_JWT_ISSUER: process.env[`WORDLOOP_${prefix}_NEON_JWT_ISSUER`] ?? `${new URL(supabaseUrl).origin}/auth/v1`,
     DEV_USER_ID: undefined,
   });
+}
+
+export function requireStagingEnvironment(): void {
+  requireImportEnvironment("staging");
 }
 
 export function parseSenses(value: unknown): SenseRow[] {
@@ -898,7 +916,7 @@ async function main(): Promise<void> {
   const sourceSha = typeof manifest.apkg_sha256 === "string" ? manifest.apkg_sha256 : await sha256File(extracted.jsonlPath);
   const records = await readJsonl(extracted.jsonlPath);
   if (args.dryRun) {
-    requireStagingEnvironment();
+    requireImportEnvironment(args.environmentTarget);
     const lookup = await withUserIdentity(args.userId, async () => loadWordsAndMembership(getDatabase(), args.userId));
     if (!lookup.hasFullUnion) throw new Error("PRIVATE_KAOYAN_UNION_NOT_AVAILABLE");
     const built = buildPrivateUnionWork(records, lookup.wordRows);
@@ -915,8 +933,8 @@ async function main(): Promise<void> {
     }));
     return;
   }
-  requireStagingEnvironment();
-  const codebuddyVersion = args.importOnly ? "not-used" : getCodeBuddyVersion(args.codebuddyCommand);
+  requireImportEnvironment(args.environmentTarget);
+  const codebuddyVersion = args.importOnly || args.replayValid ? "not-used" : getCodeBuddyVersion(args.codebuddyCommand);
   const checkpointPath = resolve(privateDir, "anki-lesson-cache.checkpoint.json");
   const generationConfig = [LESSON_CACHE_CONTENT_VERSION, LESSON_CACHE_PROMPT_VERSION, args.codebuddyModel,
     args.lessonProfile, args.activityType, args.errorFocus ?? "none"].join("|");
@@ -1060,6 +1078,62 @@ async function main(): Promise<void> {
 
     await saveCheckpoint(checkpointPath, checkpoint);
     if (args.importOnly) return;
+
+    if (args.replayValid) {
+      let replayedValid = 0;
+      for (const entry of work) {
+        const normalized = entry.record.normalized_word;
+        const previous = checkpointEntry(checkpoint, normalized);
+        if (previous?.status !== "valid" || !previous.lesson) continue;
+        if (entry.targetSense === "—") continue;
+        const senses = parseSenses(entry.row.senses);
+        const sensePos = formatPartOfSpeech(senses) ?? "未标注词性";
+        const plannerPos = senses.find((sense) => sense.pos.trim())?.pos ?? "";
+        const plan = buildPlan({
+          wordId: entry.row.id,
+          word: entry.record.normalized_word,
+          targetSense: entry.targetSense,
+          partOfSpeech: plannerPos,
+          activityType: args.activityType,
+          profile: args.lessonProfile,
+          errorFocus: args.errorFocus,
+        });
+        const context: PrivateLessonCacheContext = {
+          userId: args.userId,
+          wordId: entry.row.id,
+          word: entry.record.display_word,
+          meaningZh: entry.meaningZh,
+          partOfSpeech: entry.material.part_of_speech ?? sensePos,
+          ...((entry.material.ipa ?? entry.row.ipa_us) ? { ipa: entry.material.ipa ?? entry.row.ipa_us! } : {}),
+          lessonProfile: args.lessonProfile,
+          errorFocus: args.errorFocus as PrivateLessonCacheContext["errorFocus"],
+          plan,
+        };
+        const usedAnki = hasReusableAnkiMaterial(entry);
+        const sourceVersion = usedAnki ? SOURCE_VERSION : PRIVATE_UNION_SOURCE_VERSION;
+        const materialPayloadHash = usedAnki ? await lessonCacheHash(entry.material) : null;
+        try {
+          await savePrivateLessonCache({
+            db,
+            context,
+            lesson: parseLessonGenerationForPlan({ word: context.word, lesson_profile: context.lessonProfile, error_focus: context.errorFocus, plan }, previous.lesson),
+            sourceKind: usedAnki ? "mixed" : "codebuddy_deepseek",
+            generationMethod: "codebuddy_cli",
+            sourceVersion,
+            modelName: args.codebuddyModel,
+            modelEffort: "low",
+            materialPayloadHash,
+            retryCount: previous.retry_count,
+          });
+          replayedValid += 1;
+        } catch (error) {
+          totals.failed += 1;
+          totals.retry_codes[error instanceof Error ? error.message : "CACHE_REPLAY_FAILED"] = (totals.retry_codes[error instanceof Error ? error.message : "CACHE_REPLAY_FAILED"] ?? 0) + 1;
+        }
+      }
+      (totals as typeof totals & { replayed_valid?: number }).replayed_valid = replayedValid;
+      return;
+    }
 
     for (const entry of work) {
       const normalized = entry.record.normalized_word;
@@ -1329,10 +1403,11 @@ async function main(): Promise<void> {
     source_version: SOURCE_VERSION,
     source_sha256: sourceSha,
     private_set_id: "kaoyan-personal-union-v1",
+    target: args.environmentTarget,
     codebuddy_version: codebuddyVersion,
     model: args.importOnly ? "not-used" : args.codebuddyModel,
     effort: args.importOnly ? "not-used" : "low",
-    mode: args.importOnly ? "import-only" : "import-and-complete-missing",
+    mode: args.importOnly ? "import-only" : args.replayValid ? "replay-valid" : "import-and-complete-missing",
     content_version: LESSON_CACHE_CONTENT_VERSION,
     prompt_version: LESSON_CACHE_PROMPT_VERSION,
     selection: sampleWordList ? "private-word-list" : "normalized-word-order",
