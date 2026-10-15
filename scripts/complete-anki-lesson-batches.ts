@@ -1,3 +1,4 @@
+import {readOnlyPlanningDatabase} from './private-lesson-planning.js';
 import { readFile, writeFile, mkdir, rename, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -5,9 +6,13 @@ import { resolve, basename } from 'node:path';
 import { getDatabase, withUserIdentity } from '../server/db.js';
 import { LESSON_GENERATION_PROMPT } from '../server/services/deepseekPrompts.js';
 import { safeParseLessonGenerationForPlan, type LessonGeneration } from '../server/services/deepseek.js';
+import {getVocabularyItemsByWords} from '../server/services/words.js';
+import {planLessonQueue} from '../server/services/exercisePlanner.js';
+import {deriveLessonProfile} from '../server/services/lessonProfile.js';
+import {formatMeaningByPartOfSpeech} from '../shared/lexicalDisplay.js';
 import { formatPartOfSpeech } from '../shared/lexicalDisplay.js';
 import {
-  lessonCacheHash, lessonGenerationCacheKey, savePrivateLessonCache, savePrivateLessonCacheBatch, savePrivateLessonCacheFailure,
+  lessonCacheHash, lessonGenerationCacheKey, cacheContextWithAnkiMaterial, savePrivateLessonCache, savePrivateLessonCacheBatch, savePrivateLessonCacheFailure,
   LESSON_CACHE_CONTENT_VERSION, LESSON_CACHE_PROMPT_VERSION, ANKI_SOURCE_VERSION,
   PRIVATE_UNION_SOURCE_VERSION, PERSONAL_KAOYAN_SET_ID, type PrivateLessonCacheContext,
 } from '../server/services/lessonGenerationCache.js';
@@ -60,10 +65,12 @@ async function main(){
   if(!args.materialsJsonl||!args.manifest)throw new Error('EXTRACTED_SOURCE_REQUIRED');
   const value=(flag:string,fallback:number)=>{const i=process.argv.indexOf(flag);const n=i<0?fallback:Number(process.argv[i+1]);if(!Number.isInteger(n)||n<1||n>32)throw new Error('INVALID_BATCH_SIZE');return n;};
   const batchSize=value('--batch-size',8);
-  const checkpointPath=resolve(dir,'anki-lesson-cache.checkpoint.json');
+  const actualMode=process.argv[process.argv.indexOf('--variant-mode')+1]==='actual';
+  const checkpointPath=resolve(dir,actualMode?'exercise-variant.checkpoint.json':'anki-lesson-cache.checkpoint.json');
   const manifest=JSON.parse(await readFile(args.manifest,'utf8')) as {apkg_sha256:string;source_version:string};
-  const checkpoint=JSON.parse(await readFile(checkpointPath,'utf8')) as Checkpoint;
-  const config=[LESSON_CACHE_CONTENT_VERSION,LESSON_CACHE_PROMPT_VERSION,args.codebuddyModel,args.lessonProfile,args.activityType,args.errorFocus??'none'].join('|');
+  const baseCheckpoint=JSON.parse(await readFile(resolve(dir,'anki-lesson-cache.checkpoint.json'),'utf8')) as Checkpoint;
+  const checkpoint=(existsSync(checkpointPath)?JSON.parse(await readFile(checkpointPath,'utf8')):{...baseCheckpoint,generation_config:baseCheckpoint.generation_config+'|actual-plan-exercise-v1',entries:{}}) as Checkpoint;
+  const config=[LESSON_CACHE_CONTENT_VERSION,LESSON_CACHE_PROMPT_VERSION,args.codebuddyModel,args.lessonProfile,args.activityType,args.errorFocus??'none',...(actualMode?['actual-plan-exercise-v1']:[])].join('|');
   if(checkpoint.version!==3||checkpoint.generation_config!==config||checkpoint.user_id!==args.userId
     ||checkpoint.source_sha256!==manifest.apkg_sha256||manifest.source_version!==ANKI_SOURCE_VERSION)throw new Error('CHECKPOINT_SOURCE_OR_USER_MISMATCH');
   const records=await readJsonl(args.materialsJsonl);
@@ -97,7 +104,8 @@ async function main(){
       rows:exportRows.length,unique_words:new Set(exportRows.map(r=>r.normalized_word)).size,
       senses:exportRows.reduce((n,r)=>n+parseSenses(r.senses).length,0),sha256:createHash('sha256').update(exportText).digest('hex'),
       membership_source:'authorized user word_sources: ougkp union athgc',branch_id:'br-spring-unit-azxctyf3'});
-    const ready:Ready[]=[];
+    const ready:Ready[]=[];let missingTeaching=0;
+    const actual=new Map<string,PrivateLessonCacheContext>();
     const cached=new Map<string,{id:string;lesson_payload:LessonGeneration}>();
     for(let offset=0;;offset+=500){
       const q=await db.from('lesson_generation_cache').select('id,cache_key,lesson_payload').eq('user_id',args.userId)
@@ -107,15 +115,41 @@ async function main(){
       for(const r of q.data??[])cached.set(r.cache_key,{id:r.id,lesson_payload:r.lesson_payload});
       if((q.data??[]).length<500)break;
     }
+    if(actualMode){
+      // Use the real read-only hydration and planner; no learner state or plan is persisted.
+      const completed=new Set(Object.values(baseCheckpoint.entries).filter(e=>e.status==='valid').map(e=>e.word_id));
+      const eligible=built.entries.filter(work=>completed.has(work.row.id));
+      const chosen=args.limit?eligible.slice(0,args.limit):eligible;
+      for(let offset=0;offset<chosen.length;offset+=100){
+        const items=await getVocabularyItemsByWords(chosen.slice(offset,offset+100).map(w=>w.record.normalized_word),db,args.userId);
+        const plans=await planLessonQueue(items.map(i=>i.word),[],readOnlyPlanningDatabase(db),args.userId,{vocabulary_items:items});
+        for(const item of items){const plan=plans.find(p=>p.word_id===item.word_id)!;
+          const profile=deriveLessonProfile({status:item.status,is_relearn:false,error_layers:item.error_layers});
+          if(plan.private_source_book_id)continue;
+          actual.set(item.word_id!,{userId:args.userId,wordId:item.word_id!,word:item.word,meaningZh:formatMeaningByPartOfSpeech(item.senses)??'',partOfSpeech:formatPartOfSpeech(item.senses)??'词性未标注',...(item.ipa_us?{ipa:item.ipa_us}:{}),lessonProfile:profile.lesson_profile,errorFocus:profile.error_focus,plan});
+        }
+        console.log(JSON.stringify({phase:'plan-read',words:Math.min(offset+100,chosen.length),selected:chosen.length}));
+      }
+    }
     for(const work of built.entries){
-      const p=prepare(work,args.userId,args),materialHash=p.usedAnki?await lessonCacheHash(work.material):null;
+      let p=prepare(work,args.userId,args),materialHash=p.usedAnki?await lessonCacheHash(work.material):null;
+      if(actualMode){
+        const originalContext=actual.get(work.row.id);if(!originalContext)continue;
+        const context=cacheContextWithAnkiMaterial(originalContext,work.material);
+        if(context.plan.target_sense!==p.context.plan.target_sense||context.meaningZh!==p.context.meaningZh||context.partOfSpeech!==p.context.partOfSpeech){missingTeaching++;continue;}
+        const source=cached.get((await lessonGenerationCacheKey(p.context,materialHash,p.sourceVersion)).cacheKey);
+        if(!source){missingTeaching++;continue;}
+        const {exercise:unused,...teaching}=source.lesson_payload;
+        const fixed={...teaching,...(context.plan.planned_activity_type==='word_recall'?{exercise:{activity_type:'word_recall' as const,instruction:'根据中文释义写出英文单词。',prompt:recallCue(context.plan.target_sense),multiline:false,accepted_answers:[work.record.normalized_word]}}:{})};
+        p={...p,context:{...context,...(work.material.ipa?{ipa:work.material.ipa}:{})},fixed,missing:context.plan.planned_activity_type==='word_recall'?[]:['exercise']};
+      }
       const key=(await lessonGenerationCacheKey(p.context,materialHash,p.sourceVersion)).cacheKey;
       const r:Ready={...p,materialHash,key};
       const prior=checkpoint.entries[work.record.normalized_word];
       const saved=cached.get(key);
       if(saved&&(work.record.normalized_word!=='acquaintance'||!saved.lesson_payload.derivations.some(v=>derivationHeadword(v)==='acquaintanceship'))){
-        const check=safeParseLessonGenerationForPlan({word:p.context.word,lesson_profile:args.lessonProfile,error_focus:p.context.errorFocus,plan:p.context.plan},saved.lesson_payload);
-        if(check.success){try{assertOfflineLessonQuality(check.data,p.context.word,args.activityType);stats.skipped_valid++;continue;}catch{/*repair below*/}}
+        const check=safeParseLessonGenerationForPlan({word:p.context.word,lesson_profile:p.context.lessonProfile,error_focus:p.context.errorFocus,plan:p.context.plan},saved.lesson_payload);
+        if(check.success){try{assertOfflineLessonQuality(check.data,p.context.word,p.context.plan.planned_activity_type);checkpoint.entries[work.record.normalized_word]={...prior,status:'valid',word_id:work.row.id,source_note_id:work.record.source_note_id,retry_count:prior?.retry_count??0,lesson:check.data,input_fingerprint:key,error_code:undefined,updated_at:new Date().toISOString()};stats.skipped_valid++;continue;}catch{/*repair below*/}}
       }
       if(work.record.normalized_word==='acquaintance'&&saved){
         const lesson={...saved.lesson_payload,derivations:saved.lesson_payload.derivations.filter(v=>derivationHeadword(v)!=='acquaintanceship')};
@@ -140,8 +174,9 @@ async function main(){
         if(value&&typeof value==='object')recovered.set(key,value);
       }
     }
+    await atomic(checkpointPath,checkpoint);
     const selected=args.limit?ready.slice(0,args.limit):ready;
-    console.log(JSON.stringify({phase:'ready',...stats,pending:ready.length,selected:selected.length,database_writes:args.dryRun?0:'validated-only'}));
+    console.log(JSON.stringify({phase:'ready',...stats,pending:ready.length,selected:selected.length,variant_mode:actualMode?'actual':'base',missing_teaching:missingTeaching,database_writes:args.dryRun?0:'validated-only'}));
     let staged:{r:Ready;entry:Entry;input:Parameters<typeof savePrivateLessonCache>[0]}[]|null=null;
     const persist=async(r:Ready,lesson:LessonGeneration,tokens?:{inputTokens?:number;outputTokens?:number})=>{
       const word=r.work.record.normalized_word,prior=checkpoint.entries[word];
@@ -158,9 +193,11 @@ async function main(){
       entry.status='valid';entry.error_code=undefined;stats.valid++;await atomic(checkpointPath,checkpoint);
     };
     const queue:Ready[]=[];
-    for(const r of selected){const prior=checkpoint.entries[r.work.record.normalized_word];
-      if(prior?.lesson&&prior.input_fingerprint===r.key){const parsed=safeParseLessonGenerationForPlan({word:r.context.word,lesson_profile:args.lessonProfile,error_focus:r.context.errorFocus,plan:r.context.plan},prior.lesson);
-        if(parsed.success){try{assertOfflineLessonQuality(parsed.data,r.context.word,args.activityType);await persist(r,parsed.data);continue;}catch{/* regenerate invalid payload */}}}
+    for(const r of selected){
+      if(actualMode&&!r.missing.length){await persist(r,r.fixed as LessonGeneration);continue;}
+      const prior=checkpoint.entries[r.work.record.normalized_word];
+      if(prior?.lesson&&prior.input_fingerprint===r.key){const parsed=safeParseLessonGenerationForPlan({word:r.context.word,lesson_profile:r.context.lessonProfile,error_focus:r.context.errorFocus,plan:r.context.plan},prior.lesson);
+        if(parsed.success){try{assertOfflineLessonQuality(parsed.data,r.context.word,r.context.plan.planned_activity_type);await persist(r,parsed.data);continue;}catch{/* regenerate invalid payload */}}}
       queue.push(r);
     }
     const attempts=new Map<string,number>();
@@ -169,11 +206,11 @@ async function main(){
       const batch=queue.filter(r=>recovered.has(r.key)===recovering).slice(0,batchSize);
       for(const r of batch)queue.splice(queue.indexOf(r),1);
       const defs:Record<string,unknown>={},byFields=new Map<string,string>();
-      const schemas=Object.fromEntries(batch.map(r=>{const signature=r.missing.join(',');let name=byFields.get(signature);if(!name){name='s'+byFields.size;byFields.set(signature,name);defs[name]=JSON.parse(outputJsonSchema(r.missing,args.activityType));}return [r.work.row.id,{$ref:'#/$defs/'+name}];}));
+      const schemas=Object.fromEntries(batch.map(r=>{const signature=r.context.plan.planned_activity_type+':'+r.missing.join(',');let name=byFields.get(signature);if(!name){name='s'+byFields.size;byFields.set(signature,name);defs[name]=JSON.parse(outputJsonSchema(r.missing,r.context.plan.planned_activity_type));}return [r.work.row.id,{$ref:'#/$defs/'+name}];}));
       const schema=JSON.stringify({type:'object',additionalProperties:false,$defs:defs,properties:schemas,required:batch.map(r=>r.work.row.id)});
       const prompt='Retry feedback: '+JSON.stringify(batch.map(r=>({word_id:r.work.row.id,error:checkpoint.entries[r.work.record.normalized_word]?.error_code??null})))+'\n'+LESSON_GENERATION_PROMPT+'\n这是独立词条的小批次。共享规则对每个词分别生效。只补缺失字段，不得改写 existing_valid_fields。每个搭配和派生包含英文及中文；无可靠常用派生可返回空数组。外层 JSON 必须按批次 Schema 用 word_id 为键，每个值只包含该词 required_missing_fields；不要混用词义或覆盖已有字段。派生词只保留最常用且可靠的形式，宁缺毋滥。\n'+batch.map(r=>JSON.stringify({word_id:r.work.row.id,word:r.work.record.display_word,target_sense:r.context.plan.target_sense,
         existing_valid_fields:r.fixed,anki_source_fields:r.work.material.source_fields,required_missing_fields:r.missing,
-        lesson_profile:args.lessonProfile,planned_activity_type:args.activityType,error_focus:args.errorFocus,
+        lesson_profile:r.context.lessonProfile,planned_activity_type:r.context.plan.planned_activity_type,error_focus:r.context.errorFocus,
         skill_goal:r.context.plan.skill_goal,skill_ids:r.context.plan.skill_ids,hint_level:r.context.plan.hint_level})).join('\n');
       const task=await lessonCacheHash({prompt,schema,model:args.codebuddyModel,effort:'low'}),rawPath=resolve(dir,'raw-batches',task+'.json');
       let response:Awaited<ReturnType<typeof runCodeBuddy>>;
@@ -202,8 +239,8 @@ async function main(){
             if(r.missing.includes('derivations')&&Array.isArray(partial.derivations)){
               const before=partial.derivations.length;const kept=partial.derivations.filter(v=>typeof v==='string'&&lexical.has(derivationHeadword(v)??''));partial.derivations=kept;stats.derivations_removed+=before-kept.length;
             }
-            const parsed=safeParseLessonGenerationForPlan({word:r.context.word,lesson_profile:args.lessonProfile,error_focus:r.context.errorFocus,plan:r.context.plan},mergeMissingFields(r.fixed,partial,r.missing));
-            if(!parsed.success)throw new Error('LESSON_SCHEMA_INVALID');assertOfflineLessonQuality(parsed.data,r.context.word,args.activityType);
+            const parsed=safeParseLessonGenerationForPlan({word:r.context.word,lesson_profile:r.context.lessonProfile,error_focus:r.context.errorFocus,plan:r.context.plan},mergeMissingFields(r.fixed,partial,r.missing));
+            if(!parsed.success)throw new Error('LESSON_SCHEMA_INVALID');assertOfflineLessonQuality(parsed.data,r.context.word,r.context.plan.planned_activity_type);
             await persist(r,parsed.data);
           }catch(e){if(!checkpoint.entries[r.work.record.normalized_word]?.lesson)recovered.delete(r.key);await fail(r,e);}
         }
@@ -221,7 +258,7 @@ async function main(){
         staged=null;
       }catch(e){
         staged=null;
-        if(e instanceof Error&&['CODEBUDDY_TOKEN_OUTLIER','CODEBUDDY_COMMAND_TOO_LONG','CODEBUDDY_QUOTA','CODEBUDDY_AUTH'].includes(e.message)){await report();throw e;}
+        if(e instanceof Error&&['CODEBUDDY_TOKEN_OUTLIER','CODEBUDDY_COMMAND_TOO_LONG','CODEBUDDY_QUOTA','CODEBUDDY_AUTH','CODEBUDDY_RATE_LIMIT'].includes(e.message)){await report();throw e;}
         stats.all_tokens_available=false;stats.all_credits_available=false;stats.all_cost_available=false;
         for(const r of batch)await fail(r,e);
         await sleep(Math.min(1000*2**Math.min(...batch.map(r=>attempts.get(r.key)??0)),8000));

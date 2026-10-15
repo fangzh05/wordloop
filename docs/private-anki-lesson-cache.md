@@ -43,16 +43,22 @@ Cache entries are private per user and private-set ID. Complete Lesson rows incl
 
 ## Staging rollback
 
-No production migration or write is part of this task. To roll back this migration on the staging branch after exporting any desired test report, run the following as one transaction:
+No production migration or write is part of this task. Preserve existing cache revisions and learner tables. The preferred rollback is to disable only this run's generated version in the staging user's scope, after exporting its rows and recording the affected IDs:
 
 ```sql
-BEGIN;
-DROP TABLE public.lesson_generation_cache;
-DROP FUNCTION public.can_access_personal_kaoyan_union_v1(uuid);
-COMMIT;
+UPDATE public.lesson_generation_cache
+SET quality_status = 'needs_review', is_valid = false,
+    error_code = 'VERSION_DISABLED_FOR_ROLLBACK',
+    error_summary = 'This generated version was disabled; its payload is preserved.'
+WHERE user_id = :authorized_user_id
+  AND private_set_id = 'kaoyan-personal-union-v1'
+  AND content_version = 'lesson-generation-v4'
+  AND prompt_version = 'lesson-generation-prompt-v4'
+  AND generation_method = 'codebuddy_cli'
+  AND cache_kind = 'lesson' AND is_valid;
 ```
 
-This removes only the new cache table, its policies/triggers/indexes, and its access-check function. It does not alter vocabulary, source membership, user learning state, or sessions.
+Run scoped writes through the authorized user identity. Older v3 rows, Anki materials, runtime fallback rows and all learning records remain intact. Do not drop a populated cache table as routine rollback. Reversing migration 0011's index or removing migration 0010's table requires a complete private data backup and explicit confirmation that no preserved cache rows will be lost; it is not performed by these tools.
 
 ## Resumable small batches
 
@@ -87,3 +93,15 @@ Earlier checkpoints must not be relabelled as v4. Old material-only entries rema
 Validated model batches are imported with one idempotent UPSERT of at most 32 rows. RLS and the authenticated-user trigger still validate every row. If a batch write fails, bounded individual writes isolate the failing row; all validated payloads remain checkpointed before the write.
 
 Language review may remove explicitly identified low-value generated array items using `scripts/apply-private-cache-reviews.ts --corrections <private-json>`, under the same staging identity. The review tool refuses to remove trusted Anki arrays, validates the replacement Lesson and preserves the old row as a superseded revision.
+
+### Actual planner exercise completion
+
+After the teaching fields exist, use the same batch driver with `--variant-mode actual` and a separate report name. It reads current vocabulary hydration, profile, error focus, recent exercise history and BKT estimates, then asks the existing planner for plans in bounded groups. Database write methods are blocked around offline planning, including its normal runtime audit side effect. The resulting exercises are validated and saved under their actual plan keys, not the teaching seed key.
+
+```powershell
+npm run lesson:complete-anki-cache -- --materials-jsonl "$privateDir/anki-lesson-materials.jsonl" --manifest "$privateDir/anki-lesson-materials.manifest.json" --private-data-dir "$privateDir" --user-id "$env:WORDLOOP_STAGING_USER_ID" --resume --retry-failed --variant-mode actual --batch-size 8 --report actual-plan-exercises.json
+```
+
+This keeps a separate `exercise-variant.checkpoint.json`. Existing complete teaching fields are immutable inputs; only `exercise` is requested from CodeBuddy. Recall exercises are deterministic and need no model. A changed history, error focus, source definition or BKT signal can produce a different plan key and safely miss. Reports distinguish exact seeded-plan checks from actual planner sample hits; neither is universal coverage of every future learning state.
+
+`seed-private-lesson-variants.ts` additionally constructs and validates separate `reinforce + word_recall` variants from complete teaching data without AI. It does not copy an exercise across mismatched plans. The existing runtime DeepSeek fallback remains the compatibility path for conditions that were not precomputed; it is not described as a local CodeBuddy invocation.

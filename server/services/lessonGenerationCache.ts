@@ -1,3 +1,4 @@
+import {assertLessonTextQuality} from './lessonContentQuality.js';
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LessonExercisePlan } from "../../shared/toolContracts.js";
@@ -228,7 +229,9 @@ export async function findCachedLesson(
   }
 
   const validated = safeParseLessonGenerationForPlan(planValidationContext(input), lessonRow.lesson_payload);
-  if (!validated.success) {
+  let textValid=true;
+  if(validated.success){try{assertLessonTextQuality(validated.data);}catch{textValid=false;}}
+  if (!validated.success || !textValid) {
     await db.from("lesson_generation_cache").update({
       quality_status: "needs_review",
       is_valid: false,
@@ -285,6 +288,7 @@ export async function buildPrivateLessonCacheRow(input: {
   if (!isCacheablePrivatePlan(input.context.plan)) return null;
   const lesson = safeParseLessonGenerationForPlan(planValidationContext(input.context), input.lesson);
   if (!lesson.success) throw new Error("PRIVATE_LESSON_CACHE_VALIDATION_FAILED");
+  assertLessonTextQuality(lesson.data);
   const sourceVersion = input.sourceVersion ?? "wordloop-runtime-v1";
   const keys = await lessonGenerationCacheKey(
     input.context,
