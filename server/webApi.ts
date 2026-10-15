@@ -81,6 +81,7 @@ import {
 } from "./services/deepseek.js";
 import { normalizeWord } from "./services/wordNormalization.js";
 import {privateBookLesson} from './services/privateBookLesson.js';
+import {findCachedLesson, mergeAnkiMaterial, savePrivateLessonCache} from './services/lessonGenerationCache.js';
 import { deriveLessonProfile } from "./services/lessonProfile.js";
 import { cadenceCandidatePlans, planLessonQueue } from "./services/exercisePlanner.js";
 import { perf } from "./services/perf.js";
@@ -631,7 +632,8 @@ async function generateAndPersistLesson(input: {
       queue, input.flow.relearn_words, db, userId, { vocabulary_items: items },
     )) };
   const plan = plannedFlow.exercise_plans?.[input.index];
-  if (!plan || plan.scope !== "lesson" || plan.word_id !== item.word_id) {
+  const itemWordId = item.word_id;
+  if (!itemWordId || !plan || plan.scope !== "lesson" || plan.word_id !== itemWordId) {
     throw new WebApiError(409, "LESSON_PLAN_MISMATCH", "The saved Lesson plan does not match the active word.");
   }
   let expectedRevision = input.expectedRevision;
@@ -663,15 +665,56 @@ async function generateAndPersistLesson(input: {
     sessionId = plannedSession.id;
   }
   await reserveLearningBudget(`exercise:${plan.exercise_id}`, plan.planned_activity_type, "lesson", db, userId);
+  const cacheContext = {
+    userId,
+    wordId: itemWordId,
+    word: item.word,
+    meaningZh: meaning,
+    partOfSpeech: pos,
+    ...(item.ipa_us?.trim() ? {ipa: item.ipa_us.trim()} : {}),
+    lessonProfile: lessonProfile.lesson_profile,
+    errorFocus: lessonProfile.error_focus,
+    plan,
+  };
+  let cacheLookup: Awaited<ReturnType<typeof findCachedLesson>> | null = null;
+  try {
+    cacheLookup = await findCachedLesson(db, cacheContext);
+  } catch {
+    // Cache availability is additive; a read failure preserves the current generation path.
+    console.warn("Private Lesson cache read failed; using the existing Lesson generation path.");
+  }
+  const generatedPromise = cacheLookup?.lesson
+    ? Promise.resolve(cacheLookup.lesson)
+    : (async () => {
+      const generated = plan.private_source_book_id
+        ? privateBookLesson(item.word, plan, pos, item.ipa_us ?? '')
+        : await generateLesson({
+          word: item.word,
+          meaning_zh: meaning,
+          part_of_speech: pos,
+          ...(item.ipa_us?.trim() ? { ipa: item.ipa_us.trim() } : {}),
+          ...lessonProfile,
+          plan,
+        });
+      if (!cacheLookup?.privateSetId || plan.private_source_book_id) return generated;
+      const merged = mergeAnkiMaterial(generated, cacheLookup.material, plan.target_sense);
+      try {
+        await savePrivateLessonCache({
+          db,
+          context: cacheContext,
+          lesson: merged.lesson,
+          sourceKind: merged.usedAnki ? "mixed" : "runtime_deepseek",
+          generationMethod: "existing_runtime_fallback",
+          ...(cacheLookup.materialSourceVersion ? {sourceVersion: cacheLookup.materialSourceVersion} : {}),
+          materialPayloadHash: cacheLookup.materialPayloadHash,
+        });
+      } catch {
+        console.warn("Private Lesson cache write failed; the current Lesson remains available.");
+      }
+      return merged.lesson;
+    })();
   const [generated, audioUrl] = await Promise.all([
-    plan.private_source_book_id?Promise.resolve(privateBookLesson(item.word,plan,pos,item.ipa_us??'')):generateLesson({
-      word: item.word,
-      meaning_zh: plan.private_source_book_id?plan.target_sense:meaning,
-      part_of_speech: pos,
-      ...(item.ipa_us?.trim() ? { ipa: item.ipa_us.trim() } : {}),
-      ...lessonProfile,
-      plan,
-    }),
+    generatedPromise,
     pronunciationUrl(item.word),
   ]).catch(async (error: unknown) => {
     if (!needsPlanFreeze) {

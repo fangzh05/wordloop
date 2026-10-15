@@ -15,6 +15,7 @@ type RpcCheck = {
 };
 
 const checks: SchemaCheck[] = [
+  { table: "lesson_generation_cache", column: "private_set_id", migration: "0010_private_lesson_generation_cache" },
   { table: "lexical_etymons", column: "uncertain", migration: "20261008052820" },
   { table: "lexical_etymological_links", column: "provenance", migration: "20261008052820" },
   { table: "lexical_sense_relations", column: "source_sense_id", migration: "20261008052820" },
@@ -66,6 +67,7 @@ const checks: SchemaCheck[] = [
 ];
 
 const rpcChecks: RpcCheck[] = [
+  { name: "can_access_personal_kaoyan_union_v1", args: { p_word_id: "00000000-0000-0000-0000-000000000000" }, migration: "0010_private_lesson_generation_cache" },
   { name: "family_graph_schema_v1", args: {}, migration: "20261007053500", expectTrue: true },
   { name: "get_family_graph_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000", p_lexeme: "en:reconcile:v", p_limit: 1 }, migration: "20261007053500" },
   { name: "learning_budget_snapshot_v1", args: { p_user_id: "00000000-0000-0000-0000-000000000000" }, migration: "0007_adaptive_daily_budget_v2" },

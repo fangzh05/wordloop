@@ -23,6 +23,7 @@
     "test:inspector": "npm run build && node scripts/inspect-mcp.mjs",
     "check:shanbay": "node --import tsx scripts/check-shanbay.ts",
     "check:db": "node --import tsx scripts/check-db-schema.ts",
+    "lesson:import-anki-cache": "node --import tsx scripts/import-anki-lesson-cache.ts",
     "backtest:learning-time": "node --import tsx scripts/backtest-learning-time-calibration.ts",
     "predeploy:check": "npm run typecheck && npm test -- --maxWorkers=2 && npm run build && npm run check:db",
     "evidence:replay": "node --import tsx scripts/replay-learning-evidence.ts"
@@ -32,6 +33,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@neondatabase/postgrest-js": "^0.2.0-beta",
     "@supabase/supabase-js": "^2.57.4",
+    "cross-spawn": "^7.0.6",
     "cytoscape": "3.33.1",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
