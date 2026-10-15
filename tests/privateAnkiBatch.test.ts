@@ -1,7 +1,12 @@
+import {classifyCodeBuddyFailure} from '../scripts/import-anki-lesson-cache.js';
 import { describe, it, expect } from 'vitest';
 import { mergeMissingFields, derivationHeadword, recallCue } from '../scripts/complete-anki-lesson-batches.js';
 
 describe('private batch boundaries',()=>{
+  it('classifies CLI error events without treating vocabulary text as quota errors',()=>{
+    expect(classifyCodeBuddyFailure('',JSON.stringify([{type:'assistant',content:'quota means 配额'}]),40,0)).toBe('CODEBUDDY_EXIT');
+    expect(classifyCodeBuddyFailure('',JSON.stringify([{type:'error',message:'insufficient quota'}]),40,0)).toBe('CODEBUDDY_QUOTA');
+  });
   it('removes English answer labels from recall cues while preserving the original sense',()=>{
     const sense='n. 账户；解释；（account for）占据；说明原因';
     expect(recallCue(sense)).not.toMatch(/account/i);

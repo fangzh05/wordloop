@@ -17,7 +17,7 @@ async function main(){
   const known=new Set<string>();
   for(let offset=0;;offset+=500){
    const q=await db.from('lesson_generation_cache').select('word_id,cache_key,lesson_profile,lesson_payload,source_kind,source_version').eq('user_id',args.userId).eq('private_set_id',PERSONAL_KAOYAN_SET_ID)
-    .eq('content_version',LESSON_CACHE_CONTENT_VERSION).eq('prompt_version',LESSON_CACHE_PROMPT_VERSION).eq('cache_kind','lesson').eq('is_valid',true).order('created_at',{ascending:true}).range(offset,offset+499);
+    .eq('content_version',LESSON_CACHE_CONTENT_VERSION).eq('prompt_version',LESSON_CACHE_PROMPT_VERSION).eq('cache_kind','lesson').eq('is_valid',true).order('created_at',{ascending:true}).order('id',{ascending:true}).range(offset,offset+499);
    if(q.error)throw new Error('CACHE_READ_FAILED');
    for(const row of q.data??[]){known.add(row.cache_key);if(row.lesson_profile==='quick_recall'&&['mixed','codebuddy_deepseek'].includes(row.source_kind))existing.set(row.word_id,row);}
    if((q.data??[]).length<500)break;
