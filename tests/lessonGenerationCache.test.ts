@@ -9,6 +9,7 @@ import {
   PERSONAL_KAOYAN_SET_ID,
   PRIVATE_UNION_SOURCE_VERSION,
   cacheContextWithAnkiMaterial,
+  savePrivateLessonCacheBatch,
 } from "../server/services/lessonGenerationCache.js";
 import type { LessonGeneration } from "../server/services/deepseek.js";
 
@@ -68,6 +69,18 @@ function lesson(overrides: Partial<LessonGeneration> = {}): LessonGeneration {
 }
 
 describe("private Lesson cache keys and Anki merge", () => {
+  it("writes a validated same-user batch in one idempotent request and rejects mixed scopes", async () => {
+    const writes:unknown[]=[];
+    const db={from:()=>({upsert:async(rows:unknown,options:unknown)=>{writes.push({rows,options});return {error:null};}})} as never;
+    const context={userId:userA,wordId:wordA,word:'allocate',meaningZh:'分配；拨给',partOfSpeech:'v.',lessonProfile:'quick_recall' as const,errorFocus:null,plan:plan()};
+    const input={db,context,lesson:lesson(),sourceKind:'mixed' as const,generationMethod:'codebuddy_cli' as const};
+    await savePrivateLessonCacheBatch([input,input]);
+    expect(writes).toHaveLength(1);
+    expect((writes[0] as {rows:unknown[]}).rows).toHaveLength(2);
+    await expect(savePrivateLessonCacheBatch([input,{...input,context:{...context,userId:userB}}])).rejects.toThrow('PRIVATE_CACHE_BATCH_SCOPE_INVALID');
+    expect(writes).toHaveLength(1);
+  });
+
   it("uses the trusted Anki pronunciation for the same offline and runtime request", async () => {
     const base={userId:userA,wordId:wordA,word:'allocate',meaningZh:'分配；拨给',partOfSpeech:'v.',
       ipa:'database pronunciation',lessonProfile:'quick_recall' as const,errorFocus:null,plan:plan()};

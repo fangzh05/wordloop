@@ -267,7 +267,7 @@ export function mergeAnkiMaterial(
   };
 }
 
-export async function savePrivateLessonCache(input: {
+export async function buildPrivateLessonCacheRow(input: {
   db: SupabaseClient;
   context: PrivateLessonCacheContext;
   lesson: LessonGeneration;
@@ -281,8 +281,8 @@ export async function savePrivateLessonCache(input: {
   inputTokens?: number;
   outputTokens?: number;
   retryCount?: number;
-}): Promise<void> {
-  if (!isCacheablePrivatePlan(input.context.plan)) return;
+}) {
+  if (!isCacheablePrivatePlan(input.context.plan)) return null;
   const lesson = safeParseLessonGenerationForPlan(planValidationContext(input.context), input.lesson);
   if (!lesson.success) throw new Error("PRIVATE_LESSON_CACHE_VALIDATION_FAILED");
   const sourceVersion = input.sourceVersion ?? "wordloop-runtime-v1";
@@ -292,7 +292,7 @@ export async function savePrivateLessonCache(input: {
     sourceVersion === "wordloop-runtime-v1" ? ANKI_SOURCE_VERSION : sourceVersion,
   );
   const payloadHash = await lessonCacheHash(lesson.data);
-  const { error } = await input.db.from("lesson_generation_cache").upsert({
+  return {
     user_id: input.context.userId,
     private_set_id: PERSONAL_KAOYAN_SET_ID,
     word_id: input.context.wordId,
@@ -326,11 +326,28 @@ export async function savePrivateLessonCache(input: {
     error_code: null,
     error_summary: null,
     updated_at: new Date().toISOString(),
-  }, {
+  };
+}
+
+export async function savePrivateLessonCache(input: Parameters<typeof buildPrivateLessonCacheRow>[0]): Promise<void> {
+  const row=await buildPrivateLessonCacheRow(input);
+  if(!row)return;
+  const {error}=await input.db.from("lesson_generation_cache").upsert(row,{
     onConflict: "user_id,private_set_id,word_id,cache_kind,content_version,prompt_version,cache_key,payload_hash",
-    ignoreDuplicates: true,
+    ignoreDuplicates:true,
   });
-  if (error) throw new Error("PRIVATE_LESSON_CACHE_WRITE_FAILED");
+  if(error)throw new Error("PRIVATE_LESSON_CACHE_WRITE_FAILED");
+}
+
+export async function savePrivateLessonCacheBatch(inputs: Parameters<typeof buildPrivateLessonCacheRow>[0][]): Promise<void> {
+  if(!inputs.length)return;
+  if(inputs.length>32||inputs.some(i=>i.db!==inputs[0]!.db||i.context.userId!==inputs[0]!.context.userId))throw new Error("PRIVATE_CACHE_BATCH_SCOPE_INVALID");
+  const rows=(await Promise.all(inputs.map(buildPrivateLessonCacheRow))).filter((r):r is NonNullable<typeof r>=>r!==null);
+  const {error}=await inputs[0]!.db.from("lesson_generation_cache").upsert(rows,{
+    onConflict: "user_id,private_set_id,word_id,cache_kind,content_version,prompt_version,cache_key,payload_hash",
+    ignoreDuplicates:true,
+  });
+  if(error)throw new Error("PRIVATE_LESSON_CACHE_WRITE_FAILED");
 }
 
 export interface AnkiMaterialsCacheInput {
