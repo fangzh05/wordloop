@@ -1,3 +1,4 @@
+import {assertLessonTextQuality} from '../server/services/lessonContentQuality.js';
 import "dotenv/config";
 import { spawn as nodeSpawn, spawnSync } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
@@ -550,7 +551,7 @@ export function runCodeBuddy(input: {
     }, input.timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => {
       stdoutBytes += chunk.length;
-      if (stdoutBytes > 256_000) child.kill();
+      if (stdoutBytes > 2_000_000) child.kill();
       else chunks.push(chunk);
     });
     child.stderr.on("data", (chunk: Buffer) => { stderrBytes += chunk.length; if(stderrBytes<=64_000)errorChunks.push(chunk); });
@@ -562,10 +563,11 @@ export function runCodeBuddy(input: {
       clearTimeout(timer);
       if (settled) return;
       settled = true;
-      if (stdoutBytes > 256_000 || stderrBytes > 64_000 || code !== 0) {
+      if (stdoutBytes > 2_000_000 || stderrBytes > 64_000 || code !== 0) {
         const errorText=Buffer.concat([...errorChunks,...chunks]).toString('utf8');
-        const reason=/too long|输入行太长|命令行太长|ENAMETOOLONG/i.test(errorText)?'CODEBUDDY_COMMAND_TOO_LONG'
+        const reason=stdoutBytes>2_000_000?'CODEBUDDY_OUTPUT_LIMIT':stderrBytes>64_000?'CODEBUDDY_STDERR_LIMIT':/too long|输入行太长|命令行太长|ENAMETOOLONG/i.test(errorText)?'CODEBUDDY_COMMAND_TOO_LONG'
           :/quota|insufficient|额度不足|余额不足/i.test(errorText)?'CODEBUDDY_QUOTA'
+          :/rate.?limit|too many requests|频率限制|请求过于频繁/i.test(errorText)?'CODEBUDDY_RATE_LIMIT'
           :/unauthorized|authentication required|please.*login|请.*登录/i.test(errorText)?'CODEBUDDY_AUTH'
           :/fetch failed|ECONN|network|TLS|socket|timed out/i.test(errorText)?'CODEBUDDY_NETWORK':'CODEBUDDY_EXIT';
         rejectPromise(new Error(reason));
@@ -639,6 +641,7 @@ function buildPartialLesson(base: Partial<LessonGeneration>, generatedFields: Re
 }
 
 export function assertOfflineLessonQuality(lesson: LessonGeneration, word: string, activityType: string): void {
+  assertLessonTextQuality(lesson);
   if (lesson.exercise.activity_type !== activityType) throw new Error("LESSON_ACTIVITY_TYPE_MISMATCH");
   if (activityType !== "word_recall") return;
   const expected = word.normalize("NFKC").trim().toLocaleLowerCase();

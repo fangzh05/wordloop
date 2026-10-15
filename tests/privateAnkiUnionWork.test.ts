@@ -50,6 +50,7 @@ describe("private Anki Lesson quality gate", () => {
       exercise: { activity_type: "word_recall", accepted_answers: ["Abandon"], prompt: "放弃某项计划" },
     } as never;
     expect(() => assertOfflineLessonQuality(valid, "abandon", "word_recall")).not.toThrow();
+    expect(() => assertOfflineLessonQuality({...(valid as Record<string,unknown>),note:'{"note":"嵌套内容"}'} as never,"abandon","word_recall")).toThrow('LESSON_NESTED_JSON_FIELD');
 
     for (const accepted_answers of [["a", "an"], ["abandon", "abandons"], ["abandoner"]]) {
       const invalid = { exercise: { activity_type: "word_recall", accepted_answers } } as never;
