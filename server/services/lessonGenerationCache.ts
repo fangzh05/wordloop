@@ -351,6 +351,29 @@ export async function findCachedLesson(
       break;
     }
   }
+  if (lessonRow?.lesson_payload) {
+    const validated = safeParseLessonGenerationForPlan(planValidationContext(input), lessonRow.lesson_payload);
+    let textValid = true;
+    if (validated.success) {
+      try {
+        assertLessonTextQuality(validated.data);
+      } catch {
+        textValid = false;
+      }
+    }
+    if (validated.success && textValid) {
+      return { privateSetId: PERSONAL_KAOYAN_SET_ID, material, materialSourceVersion, materialPayloadHash, lesson: validated.data };
+    }
+    await db.from("lesson_generation_cache").update({
+      quality_status: "needs_review",
+      is_valid: false,
+      error_code: "CACHE_PLAN_VALIDATION_FAILED",
+      error_summary: "Saved Lesson payload no longer passes the current frozen-plan validator.",
+      updated_at: new Date().toISOString(),
+    }).eq("id", lessonRow.id).eq("user_id", input.userId).eq("private_set_id", PERSONAL_KAOYAN_SET_ID);
+    // Continue to the same-sense fallback below instead of calling DeepSeek.
+    lessonRow = null;
+  }
   if (!lessonRow?.lesson_payload) {
     // A private cache can contain a valid Lesson for the same word and sense
     // under another activity variant. Rebuild only the plan-bound exercise
@@ -399,20 +422,7 @@ export async function findCachedLesson(
     return { privateSetId: PERSONAL_KAOYAN_SET_ID, material, materialSourceVersion, materialPayloadHash, lesson: null };
   }
 
-  const validated = safeParseLessonGenerationForPlan(planValidationContext(input), lessonRow.lesson_payload);
-  let textValid=true;
-  if(validated.success){try{assertLessonTextQuality(validated.data);}catch{textValid=false;}}
-  if (!validated.success || !textValid) {
-    await db.from("lesson_generation_cache").update({
-      quality_status: "needs_review",
-      is_valid: false,
-      error_code: "CACHE_PLAN_VALIDATION_FAILED",
-      error_summary: "Saved Lesson payload no longer passes the current frozen-plan validator.",
-      updated_at: new Date().toISOString(),
-    }).eq("id", lessonRow.id).eq("user_id", input.userId).eq("private_set_id", PERSONAL_KAOYAN_SET_ID);
-    return { privateSetId: PERSONAL_KAOYAN_SET_ID, material, materialSourceVersion, materialPayloadHash, lesson: null };
-  }
-  return { privateSetId: PERSONAL_KAOYAN_SET_ID, material, materialSourceVersion, materialPayloadHash, lesson: validated.data };
+  return { privateSetId: PERSONAL_KAOYAN_SET_ID, material, materialSourceVersion, materialPayloadHash, lesson: null };
 }
 
 export function mergeAnkiMaterial(
