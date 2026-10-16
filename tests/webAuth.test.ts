@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { configureRuntimeEnv, getAuthenticatedUserId, resetDatabaseForTests, withUserIdentity } from "../server/db.js";
 import { authenticateWebUser } from "../server/webAuth.js";
 
-const users = vi.hoisted(() => ({ getUser: vi.fn(), profile: vi.fn(), upsert: vi.fn() }));
-vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({ auth: { getUser: users.getUser }, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: users.profile }) }), upsert: users.upsert }) }) }));
+const users = vi.hoisted(() => ({ getClaims: vi.fn(), profile: vi.fn(), upsert: vi.fn() }));
+vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({ auth: { getClaims: users.getClaims }, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: users.profile }) }), upsert: users.upsert }) }) }));
 const owner = "00000000-0000-4000-8000-000000000001";
 const friend = "00000000-0000-4000-8000-000000000002";
 const request = (token?: string) => new Request("https://wordloop.test/api/web/bootstrap", { headers: token ? { authorization: `Bearer ${token}` } : {} });
@@ -13,20 +13,21 @@ describe("private beta authentication", () => {
     expect(await authenticateWebUser(request("owner-secret"))).toBe(owner);
     await expect(authenticateWebUser(request())).rejects.toMatchObject({ status: 401 });
     await expect(authenticateWebUser(request("wrong"))).rejects.toMatchObject({ status: 401 });
-    expect(users.getUser).not.toHaveBeenCalled();
+    expect(users.getClaims).not.toHaveBeenCalled();
   });
   it("uses the verified identity and rejects uninvited and anonymous accounts", async () => {
-    users.getUser.mockResolvedValue({ data: { user: { id: friend } }, error: null });
+    users.getClaims.mockResolvedValue({ data: { claims: { sub: friend, is_anonymous: false } }, error: null });
     users.profile.mockResolvedValue({ data: { id: friend }, error: null });
     expect(await authenticateWebUser(request("signed.jwt.token"))).toBe(friend);
+    expect(users.getClaims).toHaveBeenCalledWith("signed.jwt.token");
     users.profile.mockResolvedValue({ data: null, error: null });
     await expect(authenticateWebUser(request("signed.jwt.token"))).rejects.toMatchObject({ status: 403 });
     expect(users.upsert).not.toHaveBeenCalled();
-    users.getUser.mockResolvedValue({ data: { user: { id: friend, is_anonymous: true } }, error: null });
+    users.getClaims.mockResolvedValue({ data: { claims: { sub: friend, is_anonymous: true } }, error: null });
     await expect(authenticateWebUser(request("signed.jwt.token"))).rejects.toMatchObject({ status: 401 });
   });
   it("binds a missing profile only for the configured owner account", async () => {
-    users.getUser.mockResolvedValue({ data: { user: { id: owner } }, error: null });
+    users.getClaims.mockResolvedValue({ data: { claims: { sub: owner, is_anonymous: false } }, error: null });
     users.profile.mockResolvedValue({ data: null, error: null });
     users.upsert.mockResolvedValue({ error: null });
 
@@ -34,7 +35,7 @@ describe("private beta authentication", () => {
     expect(users.upsert).toHaveBeenCalledWith({ id: owner }, { onConflict: "id", ignoreDuplicates: true });
   });
   it("rejects expired tokens without falling back to the owner", async () => {
-    users.getUser.mockResolvedValue({ data: { user: null }, error: { message: "expired" } });
+    users.getClaims.mockResolvedValue({ data: null, error: { message: "expired" } });
     await expect(authenticateWebUser(request("expired.jwt.token"))).rejects.toMatchObject({ status: 401 });
   });
   it("keeps concurrent asynchronous work and nested calls isolated", async () => {
