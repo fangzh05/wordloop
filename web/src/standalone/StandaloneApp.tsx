@@ -773,6 +773,9 @@ export default function StandaloneApp(): React.JSX.Element {
   const [notice, setNotice] = useState("");
   const [reviewFeedback, setReviewFeedback] = useState<{word:string; progress:string; feedback:Record<string,unknown>} | null>(null);
   const flushLearningTime = useLearningTime(view?.learning_time, page === "study" && appSection === "study", busy !== null, reviewFeedback !== null);
+  const flushLearningTimeInBackground = (finalize = true) => {
+    void flushLearningTime(finalize).catch(() => undefined);
+  };
   const [noticeIndex, setNoticeIndex] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [authError, setAuthError] = useState("");
@@ -1066,6 +1069,7 @@ export default function StandaloneApp(): React.JSX.Element {
     const stableFields = ["lesson_submit", "consolidation_submit", "wrapup_submit"].includes(actionName)
       ? { ...fields, submission_id: typeof fields.submission_id === "string" ? fields.submission_id : crypto.randomUUID() }
       : fields;
+    const timeTrackingExempt = ["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName);
     const revision = view?.session_revision ?? null;
     const action = { ...stableFields, expected_revision: revision } as WebAction;
     const submittedIndex = typeof view?.state.current_index === "number" ? view.state.current_index : null;
@@ -1073,7 +1077,7 @@ export default function StandaloneApp(): React.JSX.Element {
     let actionResponse: WebApiResponse | null = null;
     let actionError: unknown = null;
     await runForegroundRequest(requestInFlightRef, async () => {
-      if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) await flushLearningTime(false);
+      if (!timeTrackingExempt) flushLearningTimeInBackground(false);
       setBusy(actionName || "action");
       setErrorMessage("");
       setNotice("");
@@ -1081,7 +1085,7 @@ export default function StandaloneApp(): React.JSX.Element {
       setRetryFields(stableFields);
       try {
         const next = await postAction(action);
-        if (!["refresh_progress", "set_daily_time_budget", "set_exam_goal", "extend_daily_time_budget", "set_daily_new_word_limit", "continue_due_review", "continue_one_group"].includes(actionName)) await flushLearningTime(true);
+        if (!timeTrackingExempt) flushLearningTimeInBackground(true);
         actionResponse = next;
         sessionRevisionRef.current = next.session_revision ?? sessionRevisionRef.current;
         if (actionName === "refresh_progress") {
@@ -1276,7 +1280,7 @@ export default function StandaloneApp(): React.JSX.Element {
 
     {pageStatus === "ready" && !view && !errorMessage && <section className="widget-card standalone-card"><div className="widget-header"><h1>WordLoop</h1><p>正在加载今日学习…</p></div></section>}
 
-    {visiblePage === "study" && reviewFeedback && <section className="widget-card standalone-card lesson-card study-task-card"><StandaloneLessonFeedback word={reviewFeedback.word} progressLabel={reviewFeedback.progress} feedback={reviewFeedback.feedback} busy={busy !== null} busyLabel={busyLabel} notice="" nextWord={true} nextLabel="继续" continueOnly onBack={backToToday} onRetry={() => { void flushLearningTime().then(() => setReviewFeedback(null)); }} onNext={() => { void flushLearningTime().then(() => setReviewFeedback(null)); }} /></section>}
+    {visiblePage === "study" && reviewFeedback && <section className="widget-card standalone-card lesson-card study-task-card"><StandaloneLessonFeedback word={reviewFeedback.word} progressLabel={reviewFeedback.progress} feedback={reviewFeedback.feedback} busy={busy !== null} busyLabel={busyLabel} notice="" nextWord={true} nextLabel="继续" continueOnly onBack={backToToday} onRetry={() => { flushLearningTimeInBackground(true); setReviewFeedback(null); }} onNext={() => { flushLearningTimeInBackground(true); setReviewFeedback(null); }} /></section>}
 
     {visiblePage === "study" && !reviewFeedback && view?.screen === "done" && <section className="widget-card standalone-card study-task-card"><StandaloneLessonHeader title={view.budget_paused ? "今日预算已用完" : "本轮学习已完成"} progressLabel="今日学习" onBack={backToToday}/><div className="standalone-content"><p>{view.budget_paused ? "当前学习记录和未完成复习都已保留。你可以增加一组学习预算，或自主继续到期复习。" : "当前这一轮已经完成，可以继续下一轮，或返回今日首页。"}</p><div className="standalone-actions"><Button disabled={busy !== null} onClick={() => void dispatch(view.budget_paused ? {action:"continue_one_group",request_id:crypto.randomUUID()} : {action:"continue"})}>{view.budget_paused ? "继续学一组" : "继续学习"}</Button>{view.budget_paused && numberValue(record(record(view.progress).fsrs).due_now) > 0 && <Button className="secondary" disabled={busy !== null} onClick={() => void dispatch({action:"continue_due_review"})}>继续到期复习</Button>}<Button className="secondary" disabled={busy !== null} onClick={backToToday}>返回首页</Button></div></div></section>}
 

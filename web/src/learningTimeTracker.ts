@@ -7,6 +7,7 @@ export class LearningTimeTracker {
   private clock: ActiveStudyClock;
   private key: string;
   private finished = false;
+  private flushTail: Promise<boolean> = Promise.resolve(true);
   get isFinished() { return this.finished; }
   constructor(private context: TimeContext, private sendObservation: (v: Observation) => Promise<unknown>, private now = () => performance.now()) {
     this.key = this.storageKey();
@@ -58,7 +59,12 @@ export class LearningTimeTracker {
   activity() { this.reconcileLocalDay(); this.clock.activity(this.now()); }
   visible(value: boolean) { this.reconcileLocalDay(); this.clock.visibility(value, this.now()); }
   wait(value: boolean) { this.reconcileLocalDay(); this.clock.wait(value, this.now()); }
-  async flush(finalize = false): Promise<boolean> {
+  flush(finalize = false): Promise<boolean> {
+    const run = this.flushTail.catch(() => false).then(() => this.flushOnce(finalize));
+    this.flushTail = run;
+    return run;
+  }
+  private async flushOnce(finalize = false): Promise<boolean> {
     if (this.finished) return true;
     this.reconcileLocalDay();
     const active_ms = this.clock.tick(this.now());

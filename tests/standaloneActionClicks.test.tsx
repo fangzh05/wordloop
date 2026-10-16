@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
-const harness = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, post: vi.fn() }));
+const harness = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, post: vi.fn(), flushTime: vi.fn() }));
+vi.mock("../web/src/standalone/useLearningTime.js", () => ({ useLearningTime: () => harness.flushTime }));
 vi.mock("react", async (original) => ({
   ...await original<typeof import("react")>(),
   useState: (initial: unknown) => {
@@ -38,7 +39,8 @@ describe("standalone action click handlers", () => {
     }, "ready", null];
     harness.cursor = 0;
     harness.post.mockReset().mockResolvedValue({ screen: "done", state: {}, session_revision: "next" });
-    vi.stubGlobal("window", { location: { hash: "#study" }, history: { pushState: vi.fn() } });
+    harness.flushTime.mockReset().mockResolvedValue(true);
+    vi.stubGlobal("window", { location: { hash: "#study" }, history: { pushState: vi.fn() }, dispatchEvent: vi.fn() });
   });
   it("sends lesson_next when completing the final feedback", async () => {
     const tree = StandaloneApp();
@@ -54,6 +56,16 @@ describe("standalone action click handlers", () => {
     expect(today).toBeDefined();
     today!.props.onStartConsolidation();
     await vi.waitFor(() => expect(harness.post).toHaveBeenCalledWith({ action: "consolidation_start", expected_revision: "revision" }));
+  });
+  it("sends the next action and renders its result while time reporting is pending", async () => {
+    harness.flushTime.mockImplementation(() => new Promise(() => {}));
+    const tree = StandaloneApp();
+    const button = find(tree, node => node.type === StandaloneLessonFeedback);
+    button!.props.onNext();
+    await vi.waitFor(() => expect(harness.post).toHaveBeenCalledWith({ action: "lesson_next", expected_revision: "revision" }));
+    await vi.waitFor(() => expect(harness.values[7]).toMatchObject({ screen: "done" }));
+    expect(harness.values[7]).toMatchObject({ screen: "done", session_revision: "next" });
+    expect(harness.flushTime.mock.calls).toEqual([[false], [true]]);
   });
   it("does not render vocabulary feedback as finished consolidation feedback", () => {
     const view = harness.values[7] as any;
